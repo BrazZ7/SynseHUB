@@ -22,7 +22,7 @@ export function ProgressLineChart({
   return (
     <div style={{ height }} className="w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -18 }}>
+        <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
           <CartesianGrid vertical={false} stroke={palette.grid} strokeDasharray="3 3" />
           <XAxis
             dataKey="label"
@@ -34,7 +34,7 @@ export function ProgressLineChart({
           <YAxis
             tickLine={false}
             axisLine={false}
-            width={46}
+            width="auto"
             domain={['dataMin - 2', 'dataMax + 2']}
             tick={{ ...AXIS_TICK, fill: palette.axis }}
           />

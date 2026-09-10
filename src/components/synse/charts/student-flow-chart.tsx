@@ -23,7 +23,7 @@ export function StudentFlowChart({ data }: { data: StudentFlowPoint[] }) {
 
       <div className="h-56 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 8, right: 4, bottom: 0, left: -20 }} barGap={2}>
+          <BarChart data={data} margin={{ top: 8, right: 4, bottom: 0, left: 0 }} barGap={2}>
             <CartesianGrid vertical={false} stroke={palette.grid} strokeDasharray="3 3" />
             <XAxis
               dataKey="label"
@@ -35,7 +35,7 @@ export function StudentFlowChart({ data }: { data: StudentFlowPoint[] }) {
             <YAxis
               tickLine={false}
               axisLine={false}
-              width={40}
+              width="auto"
               allowDecimals={false}
               tick={{ ...AXIS_TICK, fill: palette.axis }}
             />

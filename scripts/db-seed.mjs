@@ -197,124 +197,214 @@ async function main() {
   console.log(`  planos             ✓  ${planIds.length}`)
 
   // ── Alunos ─────────────────────────────────────────────────────────────────
+  /*
+   * Volume igual ao da demonstração: o painel só convence quem está avaliando
+   * o produto se os números parecerem os de uma academia de verdade.
+   *
+   * Quase nenhum aluno ganha conta de autenticação. `auth.admin.createUser` não
+   * aceita lote, e criar 534 contas levaria minutos — além de não refletir a
+   * realidade, onde a maioria dos alunos nunca abriu o app. `auth_user_id` é
+   * anulável justamente por isso.
+   */
+  const ACTIVE_STUDENTS = 478
+  const OVERDUE_STUDENTS = 22
+  const INACTIVE_STUDENTS = 34
+  const TOTAL_STUDENTS = ACTIVE_STUDENTS + OVERDUE_STUDENTS + INACTIVE_STUDENTS
+  const CHECKINS_TODAY = 139
+
+  // PRNG determinístico: rodar o seed duas vezes produz a mesma academia.
+  let prngState = 0x53594e53
+  const random = () => {
+    prngState |= 0
+    prngState = (prngState + 0x6d2b79f5) | 0
+    let t = Math.imul(prngState ^ (prngState >>> 15), 1 | prngState)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+  const pick = (list) => list[Math.floor(random() * list.length)]
+
   const today = new Date()
-  let overdueCount = 0
 
-  for (let index = 0; index < 20; index += 1) {
-    const name = `${FIRST_NAMES[index % FIRST_NAMES.length]} ${LAST_NAMES[index % LAST_NAMES.length]}`
-    const email = `aluno${index + 1}@academiaalpha.demo`
-    const plan = planIds[index % planIds.length]
-    const trainer = trainers[index % Math.max(1, trainers.length)]
-    const overdue = index >= 18
+  /** Insere em blocos: 534 alunos numa requisição só estouraria o limite. */
+  async function insertMany(table, rows, { chunk = 500, select = null } = {}) {
+    const out = []
+    for (let start = 0; start < rows.length; start += chunk) {
+      const slice = rows.slice(start, start + chunk)
+      const query = supabase.from(table).insert(slice)
+      const { data, error } = select ? await query.select(select) : await query
+      if (error) throw new Error(`${table}: ${error.message}`)
+      if (data) out.push(...data)
+    }
+    return out
+  }
 
-    const { data: authUser } = await supabase.auth.admin.createUser({
-      email,
-      email_confirm: true,
-      user_metadata: { name, demo: true },
+  /*
+   * Limpa os alunos de execuções anteriores.
+   *
+   * Este trecho usa `insert`, não `upsert`: com 534 alunos e milhares de
+   * cobranças, resolver conflito linha a linha custaria caro e não faz
+   * sentido — o conjunto é gerado inteiro a cada vez. O padrão de e-mail
+   * atinge só alunos; equipe e proprietário ficam de fora, e o resto some
+   * por cascata (matrículas, cobranças, frequência, avaliações).
+   */
+  const { data: previous } = await supabase
+    .from('user_profiles')
+    .select('id')
+    .like('email', 'aluno%@academiaalpha.demo')
+
+  if (previous && previous.length > 0) {
+    const ids = previous.map((row) => row.id)
+    for (let start = 0; start < ids.length; start += 200) {
+      const { error } = await supabase
+        .from('user_profiles')
+        .delete()
+        .in('id', ids.slice(start, start + 200))
+      if (error) throw new Error(`limpeza: ${error.message}`)
+    }
+    console.log(`  limpeza            ✓  ${ids.length} alunos anteriores removidos`)
+  }
+
+  // Perfis
+  const profileRows = []
+  for (let index = 0; index < TOTAL_STUDENTS; index += 1) {
+    profileRows.push({
+      auth_user_id: null,
+      name: `${pick(FIRST_NAMES)} ${pick(LAST_NAMES)}`,
+      email: `aluno${index + 1}@academiaalpha.demo`,
+      phone: `11${9}${String(10000000 + index).slice(0, 8)}`,
     })
+  }
+  const profiles = await insertMany('user_profiles', profileRows, { select: 'id' })
 
-    const { data: profile, error: profileError } = await supabase
-      .from('user_profiles')
-      .upsert(
-        { auth_user_id: authUser?.user?.id ?? null, name, email, phone: `1199${100000 + index}` },
-        { onConflict: 'email' },
-      )
-      .select('id')
-      .single()
-    if (profileError) throw profileError
+  await insertMany(
+    'organization_members',
+    profiles.map((profile) => ({
+      organization_id: organizationId,
+      user_profile_id: profile.id,
+      role: 'STUDENT',
+    })),
+  )
 
-    await supabase.from('organization_members').upsert(
-      { organization_id: organizationId, user_profile_id: profile.id, role: 'STUDENT' },
-      { onConflict: 'organization_id,user_profile_id' },
-    )
+  // Matrículas. A situação define o que o painel mostra em cada indicador.
+  const studentRows = profiles.map((profile, index) => {
+    const status =
+      index < OVERDUE_STUDENTS
+        ? 'OVERDUE'
+        : index < OVERDUE_STUDENTS + INACTIVE_STUDENTS
+          ? 'INACTIVE'
+          : 'ACTIVE'
+    const monthsAgo = Math.floor(random() * 24)
+    const enrolledAt = new Date(today.getFullYear(), today.getMonth() - monthsAgo, 1 + Math.floor(random() * 27))
+    return {
+      organization_id: organizationId,
+      user_profile_id: profile.id,
+      status,
+      enrolled_at: enrolledAt.toISOString().slice(0, 10),
+      cancelled_at: status === 'INACTIVE' ? new Date(today.getTime() - Math.floor(random() * 120) * 86_400_000).toISOString().slice(0, 10) : null,
+      trainer_id: trainers.length > 0 ? pick(trainers).id : null,
+    }
+  })
+  const students = await insertMany('students', studentRows, { select: 'id, status, enrolled_at' })
 
-    const enrolledAt = new Date(today.getFullYear(), today.getMonth() - (index % 18), 10)
+  // Planos: os mais baratos concentram mais gente, como numa academia real.
+  const planWeights = [0.42, 0.24, 0.16, 0.12, 0.06]
+  const planFor = () => {
+    const roll = random()
+    let acc = 0
+    for (let i = 0; i < planIds.length; i += 1) {
+      acc += planWeights[i] ?? 1 / planIds.length
+      if (roll <= acc) return planIds[i]
+    }
+    return planIds[0]
+  }
 
-    const { data: student, error: studentError } = await supabase
-      .from('students')
-      .upsert(
-        {
-          organization_id: organizationId,
-          user_profile_id: profile.id,
-          status: overdue ? 'OVERDUE' : 'ACTIVE',
-          enrolled_at: enrolledAt.toISOString().slice(0, 10),
-          trainer_id: trainer?.id ?? null,
-        },
-        { onConflict: 'organization_id,user_profile_id' },
-      )
-      .select('id')
-      .single()
-    if (studentError) throw studentError
+  const membershipRows = students.map((student) => {
+    const plan = planFor()
+    return {
+      organization_id: organizationId,
+      student_id: student.id,
+      plan_id: plan.id,
+      price: plan.price,
+      billing_day: 1 + Math.floor(random() * 27),
+      status: student.status === 'INACTIVE' ? 'CANCELLED' : 'ACTIVE',
+    }
+  })
+  const memberships = await insertMany('memberships', membershipRows, {
+    select: 'id, student_id, price, billing_day',
+  })
 
-    const billingDay = 5 + (index % 20)
-    const { data: membership } = await supabase
-      .from('memberships')
-      .insert({
-        organization_id: organizationId,
-        student_id: student.id,
-        plan_id: plan.id,
-        price: plan.price,
-        billing_day: billingDay,
-      })
-      .select('id')
-      .single()
+  // Seis meses de mensalidades. Só quem está inadimplente deixa a do mês aberta.
+  const overdueStudentIds = new Set(
+    students.filter((student) => student.status === 'OVERDUE').map((student) => student.id),
+  )
+  const inactiveStudentIds = new Set(
+    students.filter((student) => student.status === 'INACTIVE').map((student) => student.id),
+  )
 
-    // 6 meses de mensalidades.
+  const chargeRows = []
+  for (const membership of memberships) {
+    const student = students.find((item) => item.id === membership.student_id)
+    const enrolledAt = new Date(student.enrolled_at)
+    const isOverdue = overdueStudentIds.has(membership.student_id)
+    const isInactive = inactiveStudentIds.has(membership.student_id)
+
     for (let offset = 5; offset >= 0; offset -= 1) {
-      const competence = new Date(today.getFullYear(), today.getMonth() - offset, billingDay)
+      const competence = new Date(today.getFullYear(), today.getMonth() - offset, membership.billing_day)
       if (competence < enrolledAt) continue
-      const isCurrent = offset === 0
-      const status = isCurrent && overdue ? 'OVERDUE' : 'PAID'
+      if (isInactive && offset < 2) continue // saiu: parou de ser cobrado
 
-      await supabase.from('charges').insert({
+      const isCurrent = offset === 0
+      const status = isCurrent && isOverdue ? 'OVERDUE' : 'PAID'
+      chargeRows.push({
         organization_id: organizationId,
-        student_id: student.id,
-        membership_id: membership?.id ?? null,
+        student_id: membership.student_id,
+        membership_id: membership.id,
         description: `Mensalidade ${competence.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`,
-        amount: plan.price,
+        amount: membership.price,
         due_date: competence.toISOString().slice(0, 10),
         status,
         paid_at: status === 'PAID' ? competence.toISOString() : null,
-        payment_method: 'PIX',
-        billing_reference: `${membership?.id}:${competence.getFullYear()}-${competence.getMonth() + 1}`,
-      })
-    }
-    if (overdue) overdueCount += 1
-
-    // Check-ins dos últimos 20 dias.
-    const checkIns = []
-    for (let day = 0; day < 20; day += 1) {
-      if ((day + index) % 3 !== 0) continue
-      const at = new Date(today.getTime() - day * 86_400_000)
-      at.setHours(7 + ((day + index) % 12), 15)
-      checkIns.push({
-        organization_id: organizationId,
-        student_id: student.id,
-        checked_in_at: at.toISOString(),
-        method: 'QR_CODE',
-      })
-    }
-    if (checkIns.length > 0) await supabase.from('check_ins').insert(checkIns)
-
-    // Avaliações trimestrais.
-    const height = 1.6 + (index % 30) / 100
-    for (let quarter = 1; quarter >= 0; quarter -= 1) {
-      const weight = 62 + (index % 30) - quarter
-      await supabase.from('assessments').insert({
-        organization_id: organizationId,
-        student_id: student.id,
-        assessed_by_staff_id: trainer?.id ?? null,
-        assessed_at: new Date(today.getFullYear(), today.getMonth() - quarter * 3, 12)
-          .toISOString()
-          .slice(0, 10),
-        weight,
-        height,
-        bmi: Number((weight / (height * height)).toFixed(2)),
+        payment_method: status === 'PAID' ? pick(['PIX', 'CREDIT_CARD', 'BOLETO']) : null,
+        billing_reference: `${membership.id}:${competence.getFullYear()}-${competence.getMonth() + 1}`,
       })
     }
   }
+  await insertMany('charges', chargeRows)
 
-  console.log(`  alunos             ✓  20 (${overdueCount} inadimplentes)`)
+  // Frequência dos últimos 30 dias, com o total de hoje batendo com o painel.
+  const activeStudents = students.filter((student) => student.status !== 'INACTIVE')
+  const checkInRows = []
+  for (let daysAgo = 29; daysAgo >= 0; daysAgo -= 1) {
+    const weekday = new Date(today.getTime() - daysAgo * 86_400_000).getDay()
+    const base = weekday === 0 ? 0.25 : weekday === 6 ? 0.55 : 1
+    const count = daysAgo === 0 ? CHECKINS_TODAY : Math.round(CHECKINS_TODAY * base * (0.85 + random() * 0.3))
+
+    // Sorteio sem repetição: um aluno não entra duas vezes no mesmo dia. Contar
+    // a tentativa em vez do acerto entregava menos check-ins que o pedido.
+    const seen = new Set()
+    let attempts = 0
+    const target = Math.min(count, activeStudents.length)
+    while (seen.size < target && attempts < target * 20) {
+      attempts += 1
+      const student = pick(activeStudents)
+      if (seen.has(student.id)) continue
+      seen.add(student.id)
+      const at = new Date(today.getTime() - daysAgo * 86_400_000)
+      at.setHours(6 + Math.floor(random() * 16), Math.floor(random() * 60), 0, 0)
+      if (at > today) at.setHours(today.getHours() - 1)
+      checkInRows.push({
+        organization_id: organizationId,
+        student_id: student.id,
+        checked_in_at: at.toISOString(),
+        method: random() < 0.8 ? 'QR_CODE' : 'MANUAL',
+      })
+    }
+  }
+  await insertMany('check_ins', checkInRows)
+
+  console.log(`  alunos             ✓  ${TOTAL_STUDENTS} (${OVERDUE_STUDENTS} inadimplentes, ${INACTIVE_STUDENTS} inativos)`)
+  console.log(`  cobranças          ✓  ${chargeRows.length}`)
+  console.log(`  check-ins          ✓  ${checkInRows.length}`)
 
   // ── Régua de cobrança ──────────────────────────────────────────────────────
   const rules = [

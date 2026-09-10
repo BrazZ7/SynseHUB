@@ -1,9 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Servidor autocontido para container (`.next/standalone`).
-  // `next start` continua funcionando normalmente em desenvolvimento.
-  output: 'standalone',
+  /*
+   * Servidor autocontido para container. Fica atrás de uma variável porque
+   * `next start` não funciona com `output: 'standalone'` — quem roda o projeto
+   * localmente continua usando `npm run build && npm start` normalmente, e o
+   * Dockerfile liga a flag para gerar `.next/standalone`.
+   */
+  output: process.env.BUILD_STANDALONE === '1' ? 'standalone' : undefined,
   poweredByHeader: false,
   images: {
     remotePatterns: [{ protocol: 'https', hostname: '**.supabase.co' }],

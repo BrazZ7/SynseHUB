@@ -12,7 +12,11 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,css,md}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css,md}\"",
     "db:migrate": "node scripts/db-migrate.mjs",
-    "db:seed": "node scripts/db-seed.mjs"
+    "db:seed": "node scripts/db-seed.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:unit": "vitest run tests/unit",
+    "test:db": "vitest run tests/db"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -47,17 +51,20 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.7",
     "@types/node": "^22.10.5",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.0.4",
     "@types/react-dom": "^19.0.2",
     "autoprefixer": "^10.4.20",
     "eslint": "^9.39.5",
     "eslint-config-next": "^15.1.4",
     "eslint-config-prettier": "^9.1.0",
+    "pg": "^8.23.0",
     "postcss": "^8.4.49",
     "prettier": "^3.4.2",
     "prettier-plugin-tailwindcss": "^0.6.9",
     "tailwindcss": "^3.4.17",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "vitest": "^5.0.0"
   },
   "engines": {
     "node": ">=22"

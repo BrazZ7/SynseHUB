@@ -433,6 +433,40 @@ apenas sobre dados que o usuário autorizou e não substitui diagnóstico médic
 
 ---
 
+## Testes
+
+```bash
+npm test          # tudo
+npm run test:unit # lógica pura, sem banco
+npm run test:db   # RLS e schema, exige PostgreSQL
+```
+
+Os testes de banco constroem o schema a partir das migrations reais — não há
+schema duplicado no diretório de testes, porque um schema paralelo divergiria
+justamente nos detalhes que os testes existem para proteger. Sem PostgreSQL
+disponível eles pulam com aviso, e a suíte de lógica pura continua rodando.
+
+Para rodar a suíte completa, aponte `TEST_DATABASE_URL` para um banco vazio:
+
+```bash
+TEST_DATABASE_URL=postgresql://postgres@localhost:5432/synse_test npm run test:db
+```
+
+O que a suíte cobre, e por quê:
+
+| Arquivo | Protege |
+|---|---|
+| `unit/split` | o cálculo do dinheiro: soma exata, arredondamento, as três estratégias de tarifa |
+| `unit/permissions` | quem enxerga o quê, incluindo o professor que não vê o financeiro |
+| `db/rls` | isolamento entre academias, acesso anônimo, nome dos alunos visível para a equipe |
+| `db/schema` | RLS ligada em toda tabela, e-mail único, formato do Synse ID, comissão vinda do banco |
+| `db/signup` | cadastro de academia: anônimo recusado, duplicidade recusada, isolamento preservado |
+| `db/rls-performance` | a forma do plano de execução, para a RLS não voltar a ser avaliada linha a linha |
+
+Cada teste de banco corresponde a uma falha que já aconteceu. O de desempenho
+verifica o plano, não o relógio: o que importa é a política ser avaliada uma vez
+por consulta, e não o número de milissegundos numa máquina específica.
+
 ## O que ainda não está pronto
 
 Honestidade sobre o estado atual:

@@ -623,7 +623,10 @@ export class SupabaseDataSource implements DataSource {
   ): Promise<CheckInWithStudent[]> {
     let query = this.client
       .from('check_ins')
-      .select('*, students ( user_profiles ( name ) )')
+      // Sem espaço em volta dos parênteses: o parser do PostgREST recusa
+      // `a ( b ( c ) )` numa linha só, embora aceite o mesmo texto quebrado
+      // em várias linhas. Aninhamento colado é a forma que sempre funciona.
+      .select('*,students(user_profiles(name))')
       .eq('organization_id', organizationId)
 
     if (options.since) query = query.gte('checked_in_at', options.since.toISOString())

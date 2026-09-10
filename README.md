@@ -258,12 +258,31 @@ supabase db push
 npm run db:seed
 ```
 
-Cria uma academia, seis profissionais, cinco planos, vinte alunos com mensalidades,
-check-ins e avaliações.
+Cria uma academia, seis profissionais, cinco planos, 534 alunos com mensalidades,
+check-ins e avaliações — volume suficiente para as consultas revelarem o que uma
+academia de vinte alunos esconde.
 
-**Nenhuma senha é gerada.** As contas de demonstração nascem no Supabase Auth com
-e-mail confirmado e sem senha — o acesso é por magic link. Não existe credencial
-fixa no repositório nem no banco.
+**Nenhuma senha é gerada.** As contas nascem no Supabase Auth com e-mail
+confirmado e sem senha — o acesso previsto é por link no e-mail. Não existe
+credencial fixa no repositório nem no banco.
+
+### Primeiro acesso
+
+Enquanto não houver SMTP próprio, o link do e-mail não chega a lugar nenhum.
+Para entrar sem depender de e-mail:
+
+```bash
+npm run db:set-password -- --gerar          # sorteia a senha e mostra uma vez
+npm run db:set-password                     # ou digite a sua
+npm run db:set-password -- voce@exemplo.com # em outra conta
+```
+
+O script exige `SUPABASE_SERVICE_ROLE_KEY` no `.env.local`, mostra o estado da
+conta (e-mail confirmado, provedores, último acesso) e **testa o login de
+verdade** antes de dizer que deu certo. Se a tela recusar depois de o teste
+passar, o problema não é a senha.
+
+A senha nunca vai por argumento — isso a gravaria no histórico do shell.
 
 ---
 

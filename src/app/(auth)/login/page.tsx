@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 
 import { LoginForm } from '@/features/auth/login-form'
 import { DemoPersonaPicker } from '@/features/auth/demo-persona-picker'
-import { DEMO_PERSONAS, getSession } from '@/lib/auth/session'
+import { getDemoPersonas, getSession } from '@/lib/auth/session'
 import { isDemoMode } from '@/lib/database/env'
 
 export const metadata: Metadata = { title: 'Entrar' }
@@ -24,7 +24,7 @@ export default async function LoginPage() {
       </header>
 
       {demo ? (
-        <DemoPersonaPicker personas={DEMO_PERSONAS} />
+        <DemoPersonaPicker personas={getDemoPersonas()} />
       ) : (
         <LoginForm />
       )}

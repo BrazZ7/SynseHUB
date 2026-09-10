@@ -32,6 +32,10 @@ export default async function OverduePage({ searchParams }: { searchParams: Sear
   const rows = filterByBucket(allOverdue, bucket)
 
   const canAct = can(session.role, 'finance:write')
+
+  // Um aluno pode ter mais de uma cobrança em atraso: as duas contagens são
+  // grandezas diferentes e o painel precisa dizer qual é qual.
+  const studentsInArrears = new Set(allOverdue.map((charge) => charge.studentId)).size
   const totalAmount = allOverdue.reduce((sum, charge) => sum + charge.amount, 0)
   const averageDays =
     allOverdue.length > 0
@@ -144,10 +148,20 @@ export default async function OverduePage({ searchParams }: { searchParams: Sear
       />
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Alunos em atraso" value={formatNumber(allOverdue.length)} accent="danger" />
+        <MetricCard
+          label="Alunos em atraso"
+          value={formatNumber(studentsInArrears)}
+          accent="danger"
+          hint={`${formatNumber(allOverdue.length)} cobranças em aberto`}
+        />
         <MetricCard label="Valor em aberto" value={formatCurrency(totalAmount)} accent="warning" />
         <MetricCard label="Atraso médio" value={`${averageDays} dias`} accent="default" />
-        <MetricCard label="Acima de 30 dias" value={formatNumber(critical)} accent="danger" />
+        <MetricCard
+          label="Acima de 30 dias"
+          value={formatNumber(critical)}
+          accent="danger"
+          hint="Cobranças, não alunos"
+        />
       </section>
 
       <FilterBar

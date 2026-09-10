@@ -5,14 +5,7 @@ import { cookies } from 'next/headers'
 import { getDataSource } from '@/lib/database'
 import { isDemoMode } from '@/lib/database/env'
 import { createSupabaseServerClient } from '@/lib/database/supabase-server'
-import {
-  DEMO_ORG_ID,
-  DEMO_STUDENT_ID,
-  demoOrganization,
-  demoOrganizationMembers,
-  demoStudents,
-  demoUserProfiles,
-} from '@/lib/database/demo-seed'
+import { DEMO_ORG_ID, getDemoDataset } from '@/lib/database/demo-seed'
 import type { UserRole } from '@/types/domain'
 
 export const DEMO_SESSION_COOKIE = 'synse_demo_session'
@@ -48,73 +41,78 @@ export type DemoPersona = {
   studentId?: string
 }
 
-export const DEMO_PERSONAS: DemoPersona[] = [
-  {
-    key: 'owner',
-    label: 'Emerson Braz',
-    description: 'Proprietário — acesso completo à Academia Alpha',
-    role: 'OWNER',
-    userProfileId: 'prof_staff_0001',
-  },
-  {
-    key: 'manager',
-    label: 'Marina Duarte',
-    description: 'Gerente — operação, alunos e financeiro',
-    role: 'MANAGER',
-    userProfileId: 'prof_staff_0002',
-  },
-  {
-    key: 'trainer',
-    label: 'Rafael Nunes',
-    description: 'Professor — treinos, avaliações e alunos atribuídos',
-    role: 'TRAINER',
-    userProfileId: 'prof_staff_0003',
-  },
-  {
-    key: 'receptionist',
-    label: 'Lucas Ferraz',
-    description: 'Recepção — check-in, matrículas e cobranças',
-    role: 'RECEPTIONIST',
-    userProfileId: 'prof_staff_0006',
-  },
-  {
-    key: 'student',
-    label: 'Aluno Synse App',
-    description: 'Experiência do aluno no Synse App',
-    role: 'STUDENT',
-    userProfileId: 'prof_0001',
-    studentId: DEMO_STUDENT_ID,
-  },
-  {
-    key: 'super-admin',
-    label: 'Synse Plataforma',
-    description: 'Super admin — visão de todas as organizações',
-    role: 'SUPER_ADMIN',
-    userProfileId: 'prof_super_0001',
-  },
-]
+export function getDemoPersonas(): DemoPersona[] {
+  const demo = getDemoDataset()
+  return [
+    {
+      key: 'owner',
+      label: 'Emerson Braz',
+      description: 'Proprietário — acesso completo à Academia Alpha',
+      role: 'OWNER',
+      userProfileId: 'prof_staff_0001',
+    },
+    {
+      key: 'manager',
+      label: 'Marina Duarte',
+      description: 'Gerente — operação, alunos e financeiro',
+      role: 'MANAGER',
+      userProfileId: 'prof_staff_0002',
+    },
+    {
+      key: 'trainer',
+      label: 'Rafael Nunes',
+      description: 'Professor — treinos, avaliações e alunos atribuídos',
+      role: 'TRAINER',
+      userProfileId: 'prof_staff_0003',
+    },
+    {
+      key: 'receptionist',
+      label: 'Lucas Ferraz',
+      description: 'Recepção — check-in, matrículas e cobranças',
+      role: 'RECEPTIONIST',
+      userProfileId: 'prof_staff_0006',
+    },
+    {
+      key: 'student',
+      label: 'Aluno Synse App',
+      description: 'Experiência do aluno no Synse App',
+      role: 'STUDENT',
+      userProfileId: 'prof_0001',
+      studentId: demo.studentIdForApp,
+    },
+    {
+      key: 'super-admin',
+      label: 'Synse Plataforma',
+      description: 'Super admin — visão de todas as organizações',
+      role: 'SUPER_ADMIN',
+      userProfileId: 'prof_super_0001',
+    },
+  ]
+}
 
 export function findDemoPersona(key: string | undefined | null): DemoPersona | null {
   if (!key) return null
-  return DEMO_PERSONAS.find((persona) => persona.key === key) ?? null
+  return getDemoPersonas().find((persona) => persona.key === key) ?? null
 }
 
 function demoSessionFor(persona: DemoPersona): SessionContext {
-  const profile = demoUserProfiles.find((p) => p.id === persona.userProfileId)
+  const demo = getDemoDataset()
+  const profile = demo.userProfiles.find((item) => item.id === persona.userProfileId)
   const student =
     persona.role === 'STUDENT'
-      ? (demoStudents.find((s) => s.userProfileId === persona.userProfileId) ?? demoStudents[0])
+      ? (demo.students.find((item) => item.userProfileId === persona.userProfileId) ??
+        demo.students[0])
       : null
 
   return {
-    userProfileId: persona.userProfileId,
+      userProfileId: persona.userProfileId,
     synseId: profile?.synseId ?? student?.synseId ?? 'SYN-DEMO0001',
     name: profile?.name ?? student?.name ?? persona.label,
     email: profile?.email ?? student?.email ?? 'demo@synse.com.br',
     avatarUrl: null,
-    role: persona.role,
+      role: persona.role,
     organizationId: DEMO_ORG_ID,
-    organizationName: demoOrganization.name,
+    organizationName: demo.organization.name,
     studentId: student?.id ?? null,
     isDemo: true,
   }
@@ -164,12 +162,12 @@ export async function getSession(): Promise<SessionContext | null> {
   const organizations = membership.organizations as { name?: string } | null
 
   return {
-    userProfileId: profile.id,
+      userProfileId: profile.id,
     synseId: profile.synse_id,
     name: profile.name,
     email: profile.email,
     avatarUrl: profile.avatar_url,
-    role: membership.role as UserRole,
+      role: membership.role as UserRole,
     organizationId: membership.organization_id,
     organizationName: organizations?.name ?? 'Minha organização',
     studentId: student?.id ?? null,
@@ -184,5 +182,5 @@ export async function getActiveOrganization(session: SessionContext) {
 }
 
 export function demoMemberCount() {
-  return demoOrganizationMembers.length
+  return getDemoDataset().organizationMembers.length
 }

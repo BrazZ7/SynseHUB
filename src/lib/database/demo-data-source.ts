@@ -8,27 +8,7 @@ import type {
   StudentFilters,
   StudentListItem,
 } from '@/lib/database/data-source'
-import {
-  DEMO_ORG_ID,
-  demoAssessments,
-  demoBillingSettings,
-  demoCharges,
-  demoCheckIns,
-  demoCollectionRules,
-  demoExercises,
-  demoLeads,
-  demoMemberships,
-  demoOrganization,
-  demoPaymentAccount,
-  demoPlans,
-  demoSecondOrganization,
-  demoStaff,
-  demoStudents,
-  demoWorkoutAssignments,
-  demoWorkoutExercises,
-  demoWorkoutLogs,
-  demoWorkoutPlans,
-} from '@/lib/database/demo-seed'
+import { DEMO_ORG_ID, getDemoDataset } from '@/lib/database/demo-seed'
 import type {
   Assessment,
   Charge,
@@ -58,11 +38,17 @@ import type {
 export class DemoDataSource implements DataSource {
   readonly kind = 'demo' as const
 
+  /**
+   * Dataset compartilhado por todo o processo. Precisa ser o primeiro campo:
+   * os índices abaixo são inicializados a partir dele.
+   */
+  private readonly db = getDemoDataset()
+
   // ── Índices ────────────────────────────────────────────────────────────────
-  private readonly membershipByStudent = new Map(demoMemberships.map((m) => [m.studentId, m]))
-  private readonly planById = new Map(demoPlans.map((p) => [p.id, p]))
-  private readonly staffById = new Map(demoStaff.map((s) => [s.id, s]))
-  private readonly studentById = new Map(demoStudents.map((s) => [s.id, s]))
+  private readonly membershipByStudent = new Map(this.db.memberships.map((m) => [m.studentId, m]))
+  private readonly planById = new Map(this.db.plans.map((p) => [p.id, p]))
+  private readonly staffById = new Map(this.db.staff.map((s) => [s.id, s]))
+  private readonly studentById = new Map(this.db.students.map((s) => [s.id, s]))
 
   private lastCheckInIndex: Map<string, string> | null = null
   private nextChargeIndex: Map<string, Charge> | null = null
@@ -75,8 +61,8 @@ export class DemoDataSource implements DataSource {
   private lastCheckInFor(studentId: string): string | null {
     if (!this.lastCheckInIndex) {
       const index = new Map<string, string>()
-      // demoCheckIns está ordenado do mais recente para o mais antigo.
-      for (const checkIn of demoCheckIns) {
+      // this.db.checkIns está ordenado do mais recente para o mais antigo.
+      for (const checkIn of this.db.checkIns) {
         if (!index.has(checkIn.studentId)) index.set(checkIn.studentId, checkIn.checkedInAt)
       }
       this.lastCheckInIndex = index
@@ -87,7 +73,7 @@ export class DemoDataSource implements DataSource {
   private nextChargeFor(studentId: string): Charge | null {
     if (!this.nextChargeIndex) {
       const index = new Map<string, Charge>()
-      const open = demoCharges
+      const open = this.db.charges
         .filter((c) => c.status === 'PENDING' || c.status === 'OVERDUE')
         .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
       for (const charge of open) {
@@ -121,30 +107,30 @@ export class DemoDataSource implements DataSource {
 
   // ── Organização ────────────────────────────────────────────────────────────
   async getOrganization(organizationId: string): Promise<Organization | null> {
-    if (organizationId === DEMO_ORG_ID) return demoOrganization
-    if (organizationId === demoSecondOrganization.id) return demoSecondOrganization
+    if (organizationId === DEMO_ORG_ID) return this.db.organization
+    if (organizationId === this.db.secondOrganization.id) return this.db.secondOrganization
     return null
   }
 
   async listOrganizations(): Promise<Organization[]> {
-    return [demoOrganization, demoSecondOrganization]
+    return [this.db.organization, this.db.secondOrganization]
   }
 
   async getBillingSettings(organizationId: string): Promise<OrganizationBillingSettings | null> {
-    return organizationId === DEMO_ORG_ID ? demoBillingSettings : null
+    return organizationId === DEMO_ORG_ID ? this.db.billingSettings : null
   }
 
   async getPaymentAccount(organizationId: string): Promise<PaymentAccount | null> {
-    return organizationId === DEMO_ORG_ID ? demoPaymentAccount : null
+    return organizationId === DEMO_ORG_ID ? this.db.paymentAccount : null
   }
 
   async listStaff(organizationId: string) {
-    return demoStaff.filter((s) => s.organizationId === organizationId)
+    return this.db.staff.filter((s) => s.organizationId === organizationId)
   }
 
   // ── Planos ─────────────────────────────────────────────────────────────────
   async listPlans(organizationId: string): Promise<MembershipPlan[]> {
-    return this.scoped(demoPlans, organizationId)
+    return this.scoped(this.db.plans, organizationId)
   }
 
   async getPlan(organizationId: string, planId: string): Promise<MembershipPlan | null> {
@@ -158,14 +144,14 @@ export class DemoDataSource implements DataSource {
       id: `plan_${generateSynseId().slice(4).toLowerCase()}`,
       createdAt: new Date().toISOString(),
     }
-    demoPlans.push(plan)
+    this.db.plans.push(plan)
     this.planById.set(plan.id, plan)
     return plan
   }
 
   async countStudentsByPlan(organizationId: string): Promise<Record<string, number>> {
     const counts: Record<string, number> = {}
-    for (const membership of this.scoped(demoMemberships, organizationId)) {
+    for (const membership of this.scoped(this.db.memberships, organizationId)) {
       if (membership.status !== 'ACTIVE') continue
       counts[membership.planId] = (counts[membership.planId] ?? 0) + 1
     }
@@ -187,7 +173,7 @@ export class DemoDataSource implements DataSource {
     const pageSize = Math.min(100, Math.max(5, filters.pageSize ?? 20))
 
     const search = filters.search?.trim().toLowerCase()
-    let rows = this.scoped(demoStudents, organizationId)
+    let rows = this.scoped(this.db.students, organizationId)
 
     if (filters.status && filters.status !== 'ALL') {
       rows = rows.filter((s) => s.status === filters.status)
@@ -279,14 +265,14 @@ export class DemoDataSource implements DataSource {
           status: 'ACTIVE',
           price: plan.price,
         }
-        demoMemberships.push(membership)
+        this.db.memberships.push(membership)
         this.membershipByStudent.set(studentId, membership)
         student.membershipId = membership.id
 
         // Primeira mensalidade já nasce em aberto.
         const now = new Date()
         const due = new Date(now.getFullYear(), now.getMonth() + 1, input.billingDay)
-        demoCharges.push({
+        this.db.charges.push({
           id: `chg_${suffix}`,
           organizationId: input.organizationId,
           studentId,
@@ -305,7 +291,7 @@ export class DemoDataSource implements DataSource {
       }
     }
 
-    demoStudents.push(student)
+    this.db.students.push(student)
     this.studentById.set(studentId, student)
     this.invalidate()
     return student
@@ -315,7 +301,7 @@ export class DemoDataSource implements DataSource {
   private toChargeWithStudent(charge: Charge): ChargeWithStudent {
     const student = this.studentById.get(charge.studentId)
     const membership = charge.membershipId
-      ? demoMemberships.find((m) => m.id === charge.membershipId)
+      ? this.db.memberships.find((m) => m.id === charge.membershipId)
       : undefined
     return {
       ...charge,
@@ -329,7 +315,7 @@ export class DemoDataSource implements DataSource {
     organizationId: string,
     filters: { status?: Charge['status'] | 'ALL'; studentId?: string; limit?: number },
   ): Promise<ChargeWithStudent[]> {
-    let rows = this.scoped(demoCharges, organizationId)
+    let rows = this.scoped(this.db.charges, organizationId)
     if (filters.status && filters.status !== 'ALL') rows = rows.filter((c) => c.status === filters.status)
     if (filters.studentId) rows = rows.filter((c) => c.studentId === filters.studentId)
     rows = [...rows].sort((a, b) => (b.paidAt ?? b.dueDate).localeCompare(a.paidAt ?? a.dueDate))
@@ -337,14 +323,14 @@ export class DemoDataSource implements DataSource {
   }
 
   async listOverdueCharges(organizationId: string): Promise<ChargeWithStudent[]> {
-    return this.scoped(demoCharges, organizationId)
+    return this.scoped(this.db.charges, organizationId)
       .filter((c) => c.status === 'OVERDUE')
       .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
       .map((c) => this.toChargeWithStudent(c))
   }
 
   async getChargesForStudent(organizationId: string, studentId: string): Promise<Charge[]> {
-    return this.scoped(demoCharges, organizationId)
+    return this.scoped(this.db.charges, organizationId)
       .filter((c) => c.studentId === studentId)
       .sort((a, b) => b.dueDate.localeCompare(a.dueDate))
   }
@@ -354,7 +340,7 @@ export class DemoDataSource implements DataSource {
     chargeId: string,
     input: { method: Charge['paymentMethod']; paidAt: string },
   ): Promise<Charge | null> {
-    const charge = demoCharges.find((c) => c.id === chargeId && c.organizationId === organizationId)
+    const charge = this.db.charges.find((c) => c.id === chargeId && c.organizationId === organizationId)
     if (!charge) return null
     charge.status = 'PAID'
     charge.paidAt = input.paidAt
@@ -362,7 +348,7 @@ export class DemoDataSource implements DataSource {
     charge.updatedAt = new Date().toISOString()
 
     // Se o aluno não tem mais cobrança vencida, ele deixa de ser inadimplente.
-    const stillOverdue = demoCharges.some(
+    const stillOverdue = this.db.charges.some(
       (c) => c.studentId === charge.studentId && c.status === 'OVERDUE',
     )
     const student = this.studentById.get(charge.studentId)
@@ -373,7 +359,7 @@ export class DemoDataSource implements DataSource {
   }
 
   async listCollectionRules(organizationId: string): Promise<CollectionRule[]> {
-    return this.scoped(demoCollectionRules, organizationId)
+    return this.scoped(this.db.collectionRules, organizationId)
   }
 
   // ── Check-in ───────────────────────────────────────────────────────────────
@@ -382,7 +368,7 @@ export class DemoDataSource implements DataSource {
     options: { since?: Date; limit?: number },
   ): Promise<CheckInWithStudent[]> {
     const sinceIso = options.since?.toISOString()
-    let rows = this.scoped(demoCheckIns, organizationId)
+    let rows = this.scoped(this.db.checkIns, organizationId)
     if (sinceIso) rows = rows.filter((c) => c.checkedInAt >= sinceIso)
     return rows.slice(0, options.limit ?? rows.length).map((c) => ({
       ...c,
@@ -391,7 +377,7 @@ export class DemoDataSource implements DataSource {
   }
 
   async listCheckInsForStudent(organizationId: string, studentId: string, limit = 60) {
-    return this.scoped(demoCheckIns, organizationId)
+    return this.scoped(this.db.checkIns, organizationId)
       .filter((c) => c.studentId === studentId)
       .slice(0, limit)
   }
@@ -409,31 +395,31 @@ export class DemoDataSource implements DataSource {
       method: input.method,
       deviceId: null,
     }
-    demoCheckIns.unshift(checkIn)
+    this.db.checkIns.unshift(checkIn)
     this.invalidate()
     return checkIn
   }
 
   // ── Treinos ────────────────────────────────────────────────────────────────
   async listExercises(organizationId: string): Promise<Exercise[]> {
-    return demoExercises.filter(
+    return this.db.exercises.filter(
       (e) => e.organizationId === null || e.organizationId === organizationId,
     )
   }
 
   async listWorkoutPlans(organizationId: string): Promise<WorkoutPlan[]> {
-    return this.scoped(demoWorkoutPlans, organizationId)
+    return this.scoped(this.db.workoutPlans, organizationId)
   }
 
   async getWorkoutPlan(organizationId: string, planId: string): Promise<WorkoutPlan | null> {
     return (
-      this.scoped(demoWorkoutPlans, organizationId).find((p) => p.id === planId) ?? null
+      this.scoped(this.db.workoutPlans, organizationId).find((p) => p.id === planId) ?? null
     )
   }
 
   async listWorkoutExercises(workoutPlanId: string) {
-    const exerciseById = new Map(demoExercises.map((e) => [e.id, e]))
-    return demoWorkoutExercises
+    const exerciseById = new Map(this.db.exercises.map((e) => [e.id, e]))
+    return this.db.workoutExercises
       .filter((we) => we.workoutPlanId === workoutPlanId)
       .sort((a, b) => a.order - b.order)
       .map((we) => ({ ...we, exercise: exerciseById.get(we.exerciseId)! }))
@@ -444,34 +430,34 @@ export class DemoDataSource implements DataSource {
     organizationId: string,
     studentId: string,
   ): Promise<WorkoutAssignment[]> {
-    return this.scoped(demoWorkoutAssignments, organizationId).filter(
+    return this.scoped(this.db.workoutAssignments, organizationId).filter(
       (a) => a.studentId === studentId,
     )
   }
 
   async countAssignments(organizationId: string): Promise<Record<string, number>> {
     const counts: Record<string, number> = {}
-    for (const assignment of this.scoped(demoWorkoutAssignments, organizationId)) {
+    for (const assignment of this.scoped(this.db.workoutAssignments, organizationId)) {
       counts[assignment.workoutPlanId] = (counts[assignment.workoutPlanId] ?? 0) + 1
     }
     return counts
   }
 
   async listWorkoutLogs(organizationId: string, studentId: string): Promise<WorkoutLog[]> {
-    return this.scoped(demoWorkoutLogs, organizationId)
+    return this.scoped(this.db.workoutLogs, organizationId)
       .filter((l) => l.studentId === studentId)
       .sort((a, b) => a.performedAt.localeCompare(b.performedAt))
   }
 
   // ── Avaliações ─────────────────────────────────────────────────────────────
   async listAssessments(organizationId: string, studentId: string): Promise<Assessment[]> {
-    return this.scoped(demoAssessments, organizationId)
+    return this.scoped(this.db.assessments, organizationId)
       .filter((a) => a.studentId === studentId)
       .sort((a, b) => a.assessedAt.localeCompare(b.assessedAt))
   }
 
   // ── CRM ────────────────────────────────────────────────────────────────────
   async listLeads(organizationId: string): Promise<Lead[]> {
-    return this.scoped(demoLeads, organizationId)
+    return this.scoped(this.db.leads, organizationId)
   }
 }

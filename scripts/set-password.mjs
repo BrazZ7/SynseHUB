@@ -107,6 +107,15 @@ async function main() {
     process.exit(1)
   }
 
+  // Digitada duas vezes porque o eco está desligado: sem conferência, um erro
+  // de digitação vira uma senha que ninguém conhece, e o login falha com a
+  // mesma mensagem genérica de senha errada.
+  const confirmation = await askHidden('Repita a senha: ')
+  if (confirmation !== password) {
+    console.error('\nAs duas senhas não coincidem. Nada foi alterado.\n')
+    process.exit(1)
+  }
+
   const { error } = await supabase.auth.admin.updateUserById(user.id, {
     password,
     email_confirm: true,
@@ -114,8 +123,44 @@ async function main() {
   if (error) throw error
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-  console.log(`
+
+  /*
+   * Prova o login em vez de supor.
+   *
+   * Definir a senha e falhar no login depois deixa a pessoa sem saber se o
+   * problema foi digitação, conta errada ou configuração — e a tela de login
+   * responde a mesma mensagem genérica em todos os casos.
+   */
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!anonKey) {
+    console.log(`
 Senha definida para ${email}.
+
+Sem NEXT_PUBLIC_SUPABASE_ANON_KEY no .env.local não deu para testar o login
+daqui. Entre em ${appUrl}/login e confira.
+`)
+    return
+  }
+
+  const asVisitor = createClient(url, anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+  const { data, error: loginError } = await asVisitor.auth.signInWithPassword({ email, password })
+
+  if (loginError || !data.session) {
+    console.error(`
+Senha definida, mas o login de teste falhou: ${loginError?.message ?? 'sem sessão'}
+
+A senha foi gravada. Se o login pela tela também falhar, o problema não é a
+senha — me mostre esta mensagem.
+`)
+    process.exit(1)
+  }
+
+  await asVisitor.auth.signOut()
+
+  console.log(`
+Senha definida e login testado com sucesso para ${email}.
 
 Entre em ${appUrl}/login com e-mail e senha — sem passar por e-mail nenhum.
 `)

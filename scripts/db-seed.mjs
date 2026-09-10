@@ -31,8 +31,16 @@ const supabase = createClient(url, serviceRoleKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 })
 
+/*
+ * O link de acesso só chega se o e-mail existir de verdade, e
+ * `@academiaalpha.demo` é um domínio inventado. Defina SEED_OWNER_EMAIL com o
+ * seu endereço para conseguir entrar como proprietário; os demais perfis
+ * seguem fictícios, e passam a existir quando houver convite de equipe.
+ */
+const ownerEmail = process.env.SEED_OWNER_EMAIL?.trim() || 'owner@academiaalpha.demo'
+
 const STAFF = [
-  { name: 'Emerson Braz', email: 'owner@academiaalpha.demo', role: 'OWNER' },
+  { name: 'Emerson Braz', email: ownerEmail, role: 'OWNER' },
   { name: 'Marina Duarte', email: 'gerente@academiaalpha.demo', role: 'MANAGER' },
   { name: 'Rafael Nunes', email: 'professor1@academiaalpha.demo', role: 'TRAINER', registration: 'CREF 012345-G/SP' },
   { name: 'Carolina Prado', email: 'professor2@academiaalpha.demo', role: 'TRAINER', registration: 'CREF 023456-G/SP' },
@@ -281,15 +289,24 @@ async function main() {
   }
   console.log('  régua de cobrança  ✓')
 
+  const fictional = STAFF.filter((member) => member.email.endsWith('@academiaalpha.demo'))
+
   console.log(`
 Seed concluído.
 
-As contas de demonstração não têm senha. Para entrar, peça um magic link:
+As contas não têm senha. Na tela de login use "Entrar com link por e-mail".
 
   ${STAFF.map((member) => `  ${member.role.padEnd(13)} ${member.email}`).join('\n')}
+${
+  fictional.length === STAFF.length
+    ? `
+Atenção: nenhum desses endereços existe, então nenhum link vai chegar.
+Rode de novo com o seu e-mail para conseguir entrar:
 
-Na tela de login, use "Entrar com link por e-mail" (Supabase Auth OTP).
-`)
+  SEED_OWNER_EMAIL=voce@exemplo.com npm run db:seed
+`
+    : ''
+}`)
 }
 
 main().catch((error) => {

@@ -1,0 +1,135 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==========================================================================
+   Synse Design Tokens
+   Natureza + tecnologia + saúde + confiança + inovação.
+   ========================================================================== */
+
+@layer base {
+  :root {
+    /* Superfícies */
+    --synse-bg: #f5faf8;
+    --synse-surface: #ffffff;
+    --synse-surface-2: #eef6f3;
+
+    /* Profundidade da marca */
+    --synse-dark: #062e2a;
+    --synse-dark-2: #083d38;
+
+    /* Cores primárias */
+    --synse-primary: #00a98f;
+    --synse-primary-light: #38d6b4;
+    --synse-cyan: #22c7d8;
+    --synse-mint: #bff5e5;
+
+    /* Texto */
+    --synse-text: #102b29;
+    --synse-muted: #69817d;
+
+    /* Estrutura */
+    --synse-border: rgba(16, 43, 41, 0.1);
+
+    /* Semânticas — deliberadamente dessaturadas */
+    --synse-success: #21b573;
+    --synse-warning: #e7a52b;
+    --synse-danger: #e45858;
+
+    /* Raios */
+    --radius-sm: 0.5rem;
+    --radius-md: 0.75rem;
+    --radius-lg: 1rem;
+    --radius-xl: 1.25rem;
+    --radius-2xl: 1.75rem;
+  }
+
+  .dark {
+    --synse-bg: #041d1b;
+    --synse-surface: #082925;
+    --synse-surface-2: #0c3631;
+
+    --synse-dark: #010e0d;
+    --synse-dark-2: #041d1b;
+
+    --synse-primary: #17c4a5;
+    --synse-primary-light: #4fe3c3;
+    --synse-cyan: #35d6e6;
+    --synse-mint: #9fe9d5;
+
+    --synse-text: #e6f5f1;
+    --synse-muted: #8faaa4;
+
+    --synse-border: rgba(191, 245, 229, 0.12);
+
+    --synse-success: #35c886;
+    --synse-warning: #f0b955;
+    --synse-danger: #f07272;
+  }
+
+  * {
+    @apply border-synse-border;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-synse-bg text-synse-text antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Acessibilidade: foco sempre visível e consistente */
+  :focus-visible {
+    @apply outline-none ring-2 ring-synse-primary ring-offset-2 ring-offset-synse-bg;
+  }
+
+  ::selection {
+    background: var(--synse-mint);
+    color: var(--synse-dark);
+  }
+
+  /* Respeita quem prefere menos movimento */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* Superfície padrão: bordas suaves, sombra discreta, sem excesso de contorno */
+  .synse-panel {
+    @apply rounded-xl border border-synse-border bg-synse-surface shadow-synse-sm;
+  }
+
+  /* Glassmorphism discreto — usado apenas em áreas institucionais e no App */
+  .synse-glass {
+    @apply rounded-2xl border border-white/15 bg-white/10 backdrop-blur-xl;
+  }
+
+  .synse-gradient-text {
+    @apply bg-synse-gradient bg-clip-text text-transparent;
+  }
+
+  /* Scrollbar leve */
+  .synse-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--synse-border) transparent;
+  }
+  .synse-scroll::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .synse-scroll::-webkit-scrollbar-thumb {
+    background-color: var(--synse-border);
+    border-radius: 999px;
+  }
+}

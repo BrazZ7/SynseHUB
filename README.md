@@ -185,6 +185,25 @@ Não existe senha em modo demonstração: a persona escolhida vira uma sessão e
 cookie, e as permissões de cada papel valem normalmente — inclusive as restrições.
 O modo só existe quando **não há** Supabase configurado.
 
+### Como a demonstração guarda o que você altera
+
+O dataset base é determinístico e **nunca é alterado**: ele é reconstruído
+idêntico em qualquer processo. O que o visitante muda — matricular um aluno, dar
+baixa numa cobrança, registrar presença — vira uma entrada num diário guardado
+em cookie, reaplicada sobre o dataset base a cada leitura.
+
+Essa separação resolve dois problemas de uma vez:
+
+- **Funciona em serverless.** Na Vercel cada requisição pode cair numa execução
+  diferente, com a própria memória. Uma escrita guardada em variável de módulo
+  sumiria na navegação seguinte. Viajando no cookie, ela acompanha o visitante.
+- **Isola quem testa.** Duas pessoas abrindo o mesmo link têm demonstrações
+  independentes. Ninguém estraga a demonstração de ninguém.
+
+O diário guarda no máximo 40 alterações e 3,5 KB. Ao estourar, as mais antigas
+saem. O botão **Reiniciar demonstração**, no topo do painel, apaga o diário e
+devolve tudo ao estado inicial.
+
 ---
 
 ## Variáveis de ambiente

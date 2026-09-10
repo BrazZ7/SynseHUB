@@ -1,8 +1,9 @@
-import { Bell } from 'lucide-react'
+import { Bell, RotateCcw } from 'lucide-react'
 
 import { ThemeToggle } from '@/components/synse/theme-toggle'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { resetDemoAction } from '@/features/demo/actions'
 import { isSimulatedProvider } from '@/lib/payments'
 import { isDemoMode } from '@/lib/database/env'
 
@@ -28,6 +29,19 @@ export function HubTopbar({ organizationName }: { organizationName: string }) {
       </div>
 
       <div className="flex items-center gap-1">
+        {demo && (
+          <form action={resetDemoAction}>
+            <Button
+              type="submit"
+              variant="ghost"
+              size="sm"
+              title="Apaga as alterações desta demonstração e volta ao estado inicial."
+            >
+              <RotateCcw className="size-4" />
+              Reiniciar demonstração
+            </Button>
+          </form>
+        )}
         <ThemeToggle />
         <Button variant="ghost" size="icon" aria-label="Notificações">
           <Bell className="size-4" />

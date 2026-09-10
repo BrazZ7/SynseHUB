@@ -19,7 +19,7 @@ entra em modo de demonstração, com uma academia completa em memória: 520 alun
 
 ### Na sua máquina
 
-Requer **Node 22**, a versão LTS de [nodejs.org](https://nodejs.org).
+Requer **Node 22 ou mais recente**, disponível em [nodejs.org](https://nodejs.org).
 
 ```bash
 git clone -b claude/kind-goldberg-c16nsx https://github.com/BrazZ7/SynseHUB.git

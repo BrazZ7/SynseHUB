@@ -39,10 +39,11 @@ import type {
  * relação à Row Level Security, e essa redundância é intencional: se uma
  * policy for afrouxada por engano, a aplicação continua isolada.
  *
- * ⚠️ ESTADO: escrito contra o schema em `src/db/migrations`, ainda não
- * exercitado contra uma instância real (o projeto roda em DEMO MODE até que
- * `NEXT_PUBLIC_SUPABASE_URL` seja configurada). Validar em staging antes de
- * produção — em especial os joins aninhados e o filtro de "sem frequência".
+ * ESTADO: as 26 consultas distintas deste arquivo já foram exercitadas contra
+ * um Supabase real e respondem 200 sobre o schema de `src/db/migrations`. O que
+ * ainda não foi verificado com dado real é o resultado delas — em especial os
+ * joins aninhados e o filtro de "sem frequência", que passam sintaticamente
+ * mas nunca foram conferidos contra uma academia em uso.
  */
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -210,6 +211,28 @@ export class SupabaseDataSource implements DataSource {
         .maybeSingle(),
     )
     return row ? this.mapPlan(row) : null
+  }
+
+  async createOrganization(input: {
+    name: string
+    slug: string
+    ownerName: string
+    legalName: string | null
+    taxId: string | null
+    city: string | null
+    state: string | null
+  }): Promise<string> {
+    const { data, error } = await this.client.rpc('create_organization_with_owner', {
+      p_org_name: input.name,
+      p_org_slug: input.slug,
+      p_owner_name: input.ownerName,
+      p_legal_name: input.legalName,
+      p_tax_id: input.taxId,
+      p_city: input.city,
+      p_state: input.state,
+    })
+    if (error) this.fail('createOrganization', error)
+    return data as string
   }
 
   async createPlan(input: Omit<MembershipPlan, 'id' | 'createdAt'>) {

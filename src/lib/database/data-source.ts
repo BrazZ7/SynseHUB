@@ -80,6 +80,22 @@ export interface DataSource {
   getPaymentAccount(organizationId: string): Promise<PaymentAccount | null>
   listStaff(organizationId: string): Promise<DemoStaff[]>
 
+  /**
+   * Cadastro de uma nova academia.
+   *
+   * Devolve o id da organização criada. A RLS não permite inserir organização
+   * diretamente — quem cria é a função `create_organization_with_owner`.
+   */
+  createOrganization(input: {
+    name: string
+    slug: string
+    ownerName: string
+    legalName: string | null
+    taxId: string | null
+    city: string | null
+    state: string | null
+  }): Promise<string>
+
   // Planos e matrículas
   listPlans(organizationId: string): Promise<MembershipPlan[]>
   getPlan(organizationId: string, planId: string): Promise<MembershipPlan | null>

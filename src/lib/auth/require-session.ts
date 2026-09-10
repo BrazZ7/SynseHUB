@@ -2,7 +2,7 @@ import 'server-only'
 
 import { redirect } from 'next/navigation'
 
-import { getSession, type SessionContext } from '@/lib/auth/session'
+import { getAuthenticatedUserId, getSession, type SessionContext } from '@/lib/auth/session'
 import { can, isHubRole, type Permission } from '@/lib/permissions/permissions'
 
 /**
@@ -14,8 +14,26 @@ import { can, isHubRole, type Permission } from '@/lib/permissions/permissions'
 
 export async function requireSession(): Promise<SessionContext> {
   const session = await getSession()
-  if (!session) redirect('/login')
-  return session
+  if (session) return session
+
+  // Autenticado sem academia é estado legítimo: a conta existe, falta o
+  // cadastro. Mandar essa pessoa para o login a devolveria a uma tela onde
+  // ela já está logada, sem saída.
+  if (await getAuthenticatedUserId()) redirect('/onboarding')
+  redirect('/login')
+}
+
+/**
+ * Portão do cadastro de academia.
+ *
+ * Não usa `requireSession` de propósito: aqui a ausência de organização é
+ * pré-condição, não erro. Devolve para o painel quem já tem academia.
+ */
+export async function requireOnboarding(): Promise<string> {
+  const authUserId = await getAuthenticatedUserId()
+  if (!authUserId) redirect('/login')
+  if (await getSession()) redirect('/dashboard')
+  return authUserId
 }
 
 /** Painel administrativo: nega aluno, mesmo autenticado. */

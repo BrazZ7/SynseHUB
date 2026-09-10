@@ -8,7 +8,7 @@ import { isDemoMode } from '@/lib/database/env'
 import { createSupabaseServerClient } from '@/lib/database/supabase-server'
 import { logger } from '@/lib/logger'
 import { rateLimit } from '@/lib/rate-limit'
-import { credentialsSchema, emailLinkSchema } from '@/lib/validations/auth'
+import { credentialsSchema, emailLinkSchema, signUpSchema } from '@/lib/validations/auth'
 import { APP } from '@/config/app'
 
 export type AuthActionState = { error?: string; sent?: boolean }
@@ -103,6 +103,58 @@ export async function signInWithEmailLink(
 
   // Resposta idêntica com ou sem erro: não revela quais e-mails existem.
   return { sent: true }
+}
+
+/**
+ * Criação de conta.
+ *
+ * Não cria academia aqui: com confirmação de e-mail ligada não existe sessão
+ * até a pessoa clicar no link, e a função de cadastro exige `auth.uid()`.
+ * A academia nasce depois, no onboarding, já autenticada.
+ */
+export async function signUpWithPassword(
+  _state: AuthActionState,
+  formData: FormData,
+): Promise<AuthActionState> {
+  const parsed = signUpSchema.safeParse({
+    name: formData.get('name'),
+    email: formData.get('email'),
+    password: formData.get('password'),
+  })
+
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Confira os dados informados.' }
+  }
+
+  const limit = rateLimit(`signup:${parsed.data.email}`, 3, 600_000)
+  if (!limit.allowed) {
+    return { error: 'Muitas tentativas de cadastro. Aguarde alguns minutos.' }
+  }
+
+  const supabase = await createSupabaseServerClient()
+  if (!supabase) {
+    return { error: 'Cadastro indisponível neste ambiente.' }
+  }
+
+  const { data, error } = await supabase.auth.signUp({
+    email: parsed.data.email,
+    password: parsed.data.password,
+    options: {
+      data: { name: parsed.data.name },
+      emailRedirectTo: `${APP.url}/auth/callback?next=/onboarding`,
+    },
+  })
+
+  if (error) {
+    logger.warn('auth:sign_up_failed', { reason: error.message })
+    // Genérica de propósito: não revela quais e-mails já têm conta.
+    return { sent: true }
+  }
+
+  // Com confirmação de e-mail ligada não vem sessão; a pessoa precisa do link.
+  if (!data.session) return { sent: true }
+
+  redirect('/onboarding')
 }
 
 export async function signOut() {

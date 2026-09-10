@@ -118,6 +118,27 @@ function demoSessionFor(persona: DemoPersona): SessionContext {
   }
 }
 
+/**
+ * Existe usuário autenticado, mesmo sem academia?
+ *
+ * `getSession` devolve null tanto para visitante anônimo quanto para quem
+ * acabou de criar a conta e ainda não tem organização. Os dois casos exigem
+ * destinos diferentes: um vai para o login, o outro para o cadastro da
+ * academia. Sem essa distinção, quem se cadastra é mandado de volta para uma
+ * tela de login onde já está logado.
+ */
+export async function getAuthenticatedUserId(): Promise<string | null> {
+  if (isDemoMode()) return null
+
+  const supabase = await createSupabaseServerClient()
+  if (!supabase) return null
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  return user?.id ?? null
+}
+
 // ── Resolução da sessão ─────────────────────────────────────────────────────
 export async function getSession(): Promise<SessionContext | null> {
   if (isDemoMode()) {

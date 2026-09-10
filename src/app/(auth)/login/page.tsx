@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
 import { LoginForm } from '@/features/auth/login-form'
@@ -26,7 +27,15 @@ export default async function LoginPage() {
       {demo ? (
         <DemoPersonaPicker personas={getDemoPersonas()} />
       ) : (
-        <LoginForm />
+        <>
+          <LoginForm />
+          <p className="text-center text-sm text-synse-muted">
+            Ainda não tem conta?{' '}
+            <Link href="/signup" className="text-synse-primary underline-offset-2 hover:underline">
+              Cadastre sua academia
+            </Link>
+          </p>
+        </>
       )}
     </div>
   )

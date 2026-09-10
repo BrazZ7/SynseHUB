@@ -342,6 +342,12 @@ export class DemoDataSource implements DataSource {
     return plan && plan.organizationId === organizationId ? plan : null
   }
 
+  async createOrganization(): Promise<string> {
+    // A demonstração roda sobre uma academia fixa e sem autenticação real.
+    // Cadastrar outra não teria onde existir.
+    throw new Error('Cadastro de academia não está disponível no modo de demonstração.')
+  }
+
   async createPlan(input: Omit<MembershipPlan, 'id' | 'createdAt'>): Promise<MembershipPlan> {
     const mutation: DemoMutation = {
       t: 'plan',

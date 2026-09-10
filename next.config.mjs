@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Servidor autocontido para container (`.next/standalone`).
+  // `next start` continua funcionando normalmente em desenvolvimento.
+  output: 'standalone',
   poweredByHeader: false,
   images: {
     remotePatterns: [{ protocol: 'https', hostname: '**.supabase.co' }],

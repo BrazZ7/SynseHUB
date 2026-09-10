@@ -11,6 +11,56 @@ treinos, check-in e pagamentos em um único produto.
 
 ---
 
+## Testar agora
+
+O projeto **sobe sem nenhuma configuração**. Sem credenciais de Supabase ele
+entra em modo de demonstração, com uma academia completa em memória: 520 alunos,
+12 meses de mensalidades, check-ins, treinos e avaliações.
+
+### Na sua máquina
+
+```bash
+git clone -b claude/kind-goldberg-c16nsx https://github.com/BrazZ7/SynseHUB.git
+cd SynseHUB
+npm install
+npm run dev
+```
+
+Abra `http://localhost:3000` e escolha um perfil na tela de login.
+
+### Com Docker
+
+```bash
+docker build -t synsehub .
+docker run -p 3000:3000 synsehub
+```
+
+### Na Vercel
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FBrazZ7%2FSynseHUB%2Ftree%2Fclaude%2Fkind-goldberg-c16nsx&project-name=synsehub&repository-name=synsehub)
+
+Ou, para publicar o seu próprio repositório: em **vercel.com → Add New → Project**,
+importe `BrazZ7/SynseHUB` e selecione o branch `claude/kind-goldberg-c16nsx`.
+O Next.js é detectado automaticamente e **nenhuma variável de ambiente é
+necessária** para o modo de demonstração.
+
+### Roteiro de teste
+
+| Perfil | O que vale a pena olhar |
+| --- | --- |
+| **Emerson Braz** (Proprietário) | Dashboard, financeiro, inadimplentes, Synse Pay |
+| **Rafael Nunes** (Professor) | O mesmo dashboard **sem** receita nem inadimplência — o RBAC em ação |
+| **Lucas Ferraz** (Recepção) | Check-in: busque um aluno e registre a presença |
+| **Aluno Synse App** | A experiência do aluno: treino do dia, check-in, progresso, PIX |
+| **Synse Plataforma** (Super admin) | `/synse-admin`: GMV, comissão e organizações |
+
+Vale testar também: cadastrar um aluno em **Alunos → Novo aluno** (ele nasce com
+Synse ID e primeira mensalidade), dar baixa numa cobrança em **Inadimplentes →
+Cobrar → Registrar pagamento** e ver o painel recalcular, e reduzir a janela do
+navegador até a largura de um celular.
+
+---
+
 ## Visão do Synse
 
 O Synse é um ecossistema de saúde, fitness e bem-estar operando em **B2B2C**:

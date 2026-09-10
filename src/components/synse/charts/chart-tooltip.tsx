@@ -1,10 +1,14 @@
 'use client'
 
-import type { TooltipProps } from 'recharts'
+import type { TooltipContentProps } from 'recharts'
 
 import { cn } from '@/lib/utils'
 
-type SynseTooltipProps = TooltipProps<number, string> & {
+/**
+ * `Partial` de propósito: quem monta o elemento é o JSX do gráfico, e o
+ * Recharts injeta `active`, `payload` e `label` só na hora de renderizar.
+ */
+type SynseTooltipProps = Partial<TooltipContentProps<number, string>> & {
   formatValue?: (value: number) => string
   className?: string
 }

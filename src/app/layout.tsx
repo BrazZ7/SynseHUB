@@ -52,7 +52,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap"
         />
         <style
-          // eslint-disable-next-line react/no-danger
+          // HTML literal e fixo, sem entrada de usuário: não há superfície de injeção.
           dangerouslySetInnerHTML={{
             __html: `:root{--font-sans:'Manrope','Inter',system-ui,-apple-system,'Segoe UI',sans-serif}`,
           }}

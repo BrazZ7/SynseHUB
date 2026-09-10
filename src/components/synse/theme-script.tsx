@@ -17,6 +17,6 @@ const script = `
 `
 
 export function ThemeScript() {
-  // eslint-disable-next-line react/no-danger
+  // Script literal e fixo, sem entrada de usuário: não há superfície de injeção.
   return <script dangerouslySetInnerHTML={{ __html: script }} />
 }

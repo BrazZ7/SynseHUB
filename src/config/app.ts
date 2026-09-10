@@ -11,10 +11,15 @@ export const APP = {
   version: '0.1.0',
   tagline: 'Saúde em equilíbrio com o seu futuro',
   url: env(process.env.NEXT_PUBLIC_APP_URL, 'http://localhost:3000'),
-  env: env(process.env.NEXT_PUBLIC_SYNSE_ENV, 'development') as
-    | 'development'
-    | 'staging'
-    | 'production',
+  /*
+   * Sem `NEXT_PUBLIC_SYNSE_ENV` declarado, o ambiente vem do build. Antes o
+   * padrão era sempre 'development', então um deploy de produção se dizia
+   * desenvolvimento e a página ficava marcada como não indexável.
+   */
+  env: env(
+    process.env.NEXT_PUBLIC_SYNSE_ENV,
+    process.env.NODE_ENV === 'production' ? 'production' : 'development',
+  ) as 'development' | 'staging' | 'production',
 } as const
 
 /** Produtos do ecossistema. Servem de namespace para features e permissões. */

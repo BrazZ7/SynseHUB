@@ -3,6 +3,7 @@ import 'server-only'
 import { AsaasPaymentProvider } from '@/lib/payments/providers/asaas'
 import { MockPaymentProvider } from '@/lib/payments/providers/mock'
 import type { PaymentProvider } from '@/lib/payments/provider'
+import { env } from '@/lib/env'
 
 /**
  * Fábrica do provedor de pagamentos.
@@ -14,7 +15,7 @@ let cached: PaymentProvider | null = null
 export function getPaymentProvider(): PaymentProvider {
   if (cached) return cached
 
-  const configured = (process.env.PAYMENT_PROVIDER ?? 'mock').toLowerCase()
+  const configured = env(process.env.PAYMENT_PROVIDER, 'mock').toLowerCase()
   switch (configured) {
     case 'asaas':
       cached = new AsaasPaymentProvider()

@@ -1,3 +1,4 @@
+import { envNumber } from '@/lib/env'
 import { roundMoney } from '@/lib/utils'
 import type { OrganizationBillingSettings } from '@/types/domain'
 
@@ -61,7 +62,7 @@ export function calculateSplit(
 }
 
 export const DEFAULT_BILLING_SETTINGS: Omit<OrganizationBillingSettings, 'organizationId'> = {
-  platformFeePercentage: Number(process.env.SYNSE_DEFAULT_PLATFORM_FEE_PERCENTAGE ?? 2),
-  platformFixedFee: Number(process.env.SYNSE_DEFAULT_PLATFORM_FIXED_FEE ?? 0),
+  platformFeePercentage: envNumber(process.env.SYNSE_DEFAULT_PLATFORM_FEE_PERCENTAGE, 2),
+  platformFixedFee: envNumber(process.env.SYNSE_DEFAULT_PLATFORM_FIXED_FEE, 0),
   paymentProviderFeeStrategy: 'ORGANIZATION_ABSORBS',
 }

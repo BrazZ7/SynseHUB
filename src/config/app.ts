@@ -1,3 +1,5 @@
+import { env } from '@/lib/env'
+
 /**
  * Configuração central do ecossistema Synse.
  * Nada aqui pode conter segredo — apenas metadados públicos e defaults.
@@ -8,8 +10,8 @@ export const APP = {
   ecosystem: 'Synse',
   version: '0.1.0',
   tagline: 'Saúde em equilíbrio com o seu futuro',
-  url: process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000',
-  env: (process.env.NEXT_PUBLIC_SYNSE_ENV ?? 'development') as
+  url: env(process.env.NEXT_PUBLIC_APP_URL, 'http://localhost:3000'),
+  env: env(process.env.NEXT_PUBLIC_SYNSE_ENV, 'development') as
     | 'development'
     | 'staging'
     | 'production',
@@ -30,8 +32,8 @@ export const SYNSE_PRODUCTS = {
 export type SynseProduct = (typeof SYNSE_PRODUCTS)[keyof typeof SYNSE_PRODUCTS]
 
 export const BRAND = {
-  logo: process.env.NEXT_PUBLIC_BRAND_LOGO ?? '/brand/synse-logo.svg',
-  symbol: process.env.NEXT_PUBLIC_BRAND_SYMBOL ?? '/brand/synse-symbol.svg',
+  logo: env(process.env.NEXT_PUBLIC_BRAND_LOGO, '/brand/synse-logo.svg'),
+  symbol: env(process.env.NEXT_PUBLIC_BRAND_SYMBOL, '/brand/synse-symbol.svg'),
 } as const
 
 export const LOCALE = 'pt-BR'

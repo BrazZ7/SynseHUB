@@ -15,6 +15,7 @@ import type {
   WebhookVerification,
 } from '@/lib/payments/provider'
 import type { PaymentMethod } from '@/types/domain'
+import { env } from '@/lib/env'
 
 /**
  * Adapter Asaas.
@@ -63,8 +64,8 @@ export class AsaasPaymentProvider implements PaymentProvider {
   private readonly apiKey: string
 
   constructor(config?: { apiUrl?: string; apiKey?: string }) {
-    this.apiUrl = config?.apiUrl ?? process.env.ASAAS_API_URL ?? 'https://api-sandbox.asaas.com/v3'
-    this.apiKey = config?.apiKey ?? process.env.ASAAS_API_KEY ?? ''
+    this.apiUrl = config?.apiUrl ?? env(process.env.ASAAS_API_URL, 'https://api-sandbox.asaas.com/v3')
+    this.apiKey = config?.apiKey ?? env(process.env.ASAAS_API_KEY, '')
   }
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -240,7 +241,7 @@ export class AsaasPaymentProvider implements PaymentProvider {
     headers: Record<string, string>
     rawBody: string
   }): Promise<WebhookVerification> {
-    const expected = process.env.ASAAS_WEBHOOK_TOKEN ?? ''
+    const expected = env(process.env.ASAAS_WEBHOOK_TOKEN, '')
     const received = input.headers['asaas-access-token'] ?? ''
 
     // Sem token configurado o webhook é rejeitado — nunca aceitar por omissão.

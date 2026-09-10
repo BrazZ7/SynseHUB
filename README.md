@@ -440,6 +440,14 @@ Honestidade sobre o estado atual:
 - **Escritas em produção não foram exercitadas.** O data source Supabase foi escrito
   contra o schema das migrations, mas nenhuma instância real foi provisionada. O que
   roda hoje é o data source de demonstração.
+- **O schema e a RLS já foram validados** contra um PostgreSQL 16 real: as cinco
+  migrations aplicam limpo (40 tabelas, 70 políticas, 91 índices, 69 chaves
+  estrangeiras) e o isolamento entre organizações foi exercitado com duas academias
+  concorrentes. Anônimo e usuário sem vínculo não leem nada; cada dono lê apenas a
+  própria academia. Falta exercitar as consultas do data source em si.
+- **As migrations não concedem privilégios de tabela.** Elas dependem do padrão que
+  o Supabase aplica ao schema `public` (`anon`, `authenticated`, `service_role`).
+  Em um PostgreSQL fora do Supabase é preciso conceder na mão.
 - **O adapter do Asaas não foi testado contra a API.** Sem credenciais, o provedor
   padrão é `mock`, e a interface sinaliza isso em tela.
 - **Não há suíte de testes automatizados.** A validação até aqui é typecheck, lint,

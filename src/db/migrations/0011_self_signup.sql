@@ -18,16 +18,20 @@
 
 -- ── Código de convite ────────────────────────────────────────────────────────
 /*
- * Alfabeto sem I, L, O, U, 0 e 1 — o mesmo do Synse ID.
+ * Alfabeto sem I, L, O, U, 0 e 1.
  *
  * Este código vai ser lido em voz alta na recepção, copiado de um cartaz e
- * digitado no celular. Os pares que se confundem nessas situações não podem
- * existir nele.
+ * digitado no celular. Zero e O se confundem; um, I e L também. É mais
+ * restrito que o alfabeto do Synse ID de propósito: o Synse ID é copiado da
+ * tela, este é ditado.
+ *
+ * Sobram 30 caracteres — 729 milhões de combinações em seis posições, muito
+ * além do necessário.
  */
 create or replace function generate_invite_code() returns text
 language sql volatile as $$
   select string_agg(
-    substr('0123456789ABCDEFGHJKMNPQRSTVWXYZ', (floor(random() * 32) + 1)::int, 1),
+    substr('23456789ABCDEFGHJKMNPQRSTVWXYZ', (floor(random() * 30) + 1)::int, 1),
     ''
   )
   from generate_series(1, 6)

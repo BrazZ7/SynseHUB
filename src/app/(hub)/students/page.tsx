@@ -9,6 +9,7 @@ import { PageHeader } from '@/components/synse/page-header'
 import { Pagination } from '@/components/synse/pagination'
 import { SearchInput } from '@/components/synse/search-input'
 import { StudentStatusBadge } from '@/components/synse/status-badge'
+import { ConfirmStudentButton } from '@/features/students/confirm-student-button'
 import { StudentAvatar } from '@/components/synse/student-avatar'
 import { Button } from '@/components/ui/button'
 import { requireHubSession } from '@/lib/auth/require-session'
@@ -25,6 +26,8 @@ const PAGE_SIZE = 20
 const STATUS_FILTERS: Array<{ value: string; label: string }> = [
   { value: 'ALL', label: 'Todos' },
   { value: 'ACTIVE', label: 'Ativos' },
+  // Quem entrou sozinho pelo código de convite e ainda espera confirmação.
+  { value: 'PENDING', label: 'Aguardando confirmação' },
   { value: 'OVERDUE', label: 'Inadimplentes' },
   { value: 'INACTIVE', label: 'Inativos' },
   { value: 'NEW', label: 'Novos' },
@@ -113,6 +116,12 @@ export default async function StudentsPage({ searchParams }: { searchParams: Sea
       ),
     },
     {
+      key: 'confirmacao',
+      header: '',
+      render: (student) =>
+        student.status === 'PENDING' ? <ConfirmStudentButton studentId={student.id} /> : null,
+    },
+    {
       key: 'status',
       header: 'Status',
       render: (student) => <StudentStatusBadge status={student.status} />,
@@ -154,7 +163,7 @@ export default async function StudentsPage({ searchParams }: { searchParams: Sea
   ]
 
   return (
-    <div className="space-y-5 animate-fade-in-up">
+    <div className="animate-fade-in-up space-y-5">
       <PageHeader
         title="Alunos"
         description="Base completa da academia, com plano, frequência e situação financeira."
@@ -172,7 +181,11 @@ export default async function StudentsPage({ searchParams }: { searchParams: Sea
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <SearchInput placeholder="Buscar por nome, e-mail ou Synse ID" />
-        <FilterBar aria-label="Filtrar alunos por situação" paramName="status" options={STATUS_FILTERS} />
+        <FilterBar
+          aria-label="Filtrar alunos por situação"
+          paramName="status"
+          options={STATUS_FILTERS}
+        />
       </div>
 
       {(plans.length > 0 || trainers.length > 0) && (

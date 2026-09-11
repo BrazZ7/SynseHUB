@@ -28,6 +28,7 @@ import type {
   WorkoutAssignment,
   WorkoutLog,
   WorkoutPlan,
+  StudentStatus,
 } from '@/types/domain'
 
 /**
@@ -343,6 +344,15 @@ export class DemoDataSource implements DataSource {
   /** Em demonstração não há código de convite a validar: a academia é uma só. */
   async joinOrganizationAsStudent(): Promise<string> {
     throw new Error('Entrada por código de convite não existe em modo de demonstração.')
+  }
+
+  async updateStudentStatus(input: {
+    organizationId: string
+    studentId: string
+    status: StudentStatus
+  }): Promise<void> {
+    const aluno = this.students().find((s) => s.id === input.studentId)
+    if (aluno) aluno.status = input.status
   }
 
   async listPlans(organizationId: string): Promise<MembershipPlan[]> {

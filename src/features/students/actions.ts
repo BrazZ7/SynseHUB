@@ -78,3 +78,45 @@ export async function createStudentAction(
     return { status: 'error', message: toUserMessage(error) }
   }
 }
+
+/**
+ * Confirma a matrícula de quem entrou pelo código de convite.
+ *
+ * A matrícula nasce pendente justamente para existir este passo: quem entra
+ * pelo código ainda não é aluno da academia até que alguém de lá diga que é.
+ * Sem a confirmação, qualquer pessoa com o código entraria na contagem de
+ * mensalidades e nos relatórios.
+ */
+export async function confirmStudentAction(
+  _state: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const session = await requireHubSession()
+
+  try {
+    requirePermission(session, 'students:write')
+
+    const studentId = formData.get('studentId')?.toString().trim()
+    if (!studentId) return { status: 'error', message: 'Matrícula inválida.' }
+
+    const dataSource = await getDataSource()
+    await dataSource.updateStudentStatus({
+      organizationId: session.organizationId,
+      studentId,
+      status: 'ACTIVE',
+    })
+
+    logger.info('students:confirmed', {
+      organizationId: session.organizationId,
+      studentId,
+      actorId: session.userProfileId,
+    })
+
+    revalidatePath('/students')
+    revalidatePath('/dashboard')
+
+    return { status: 'success', message: 'Matrícula confirmada.' }
+  } catch (error) {
+    return { status: 'error', message: toUserMessage(error) }
+  }
+}

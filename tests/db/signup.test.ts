@@ -127,7 +127,7 @@ describe.skipIf(!temBanco)('join_organization_as_student', () => {
       `select invite_code from organizations where invite_code is not null`,
     )
     for (const row of rows) {
-      expect(row.invite_code).toMatch(/^[0-9A-HJKMNPQRSTVWXYZ]{6}$/)
+      expect(row.invite_code).toMatch(/^[2-9A-HJKMNPQRSTVWXYZ]{6}$/)
       expect(row.invite_code).not.toMatch(/[ILOU01]/)
     }
   })

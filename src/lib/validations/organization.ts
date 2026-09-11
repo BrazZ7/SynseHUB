@@ -135,7 +135,7 @@ export const joinGymSchema = z.object({
     .string()
     .trim()
     .toUpperCase()
-    .refine((value) => /^[0-9A-HJKMNPQRSTVWXYZ]{6}$/.test(value), {
+    .refine((value) => /^[2-9A-HJKMNPQRSTVWXYZ]{6}$/.test(value), {
       message: 'O código tem 6 caracteres. Confira com a recepção.',
     }),
   studentName: z.string().trim().min(3, 'Informe seu nome completo.').max(120),

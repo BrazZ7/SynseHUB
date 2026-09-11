@@ -20,6 +20,7 @@ import { RevenueChart } from '@/components/synse/charts/revenue-chart'
 import { StudentFlowChart } from '@/components/synse/charts/student-flow-chart'
 import { ChartCard } from '@/components/synse/chart-card'
 import { EmptyState } from '@/components/synse/empty-state'
+import { getDataSource } from '@/lib/database'
 import { MetricCard } from '@/components/synse/metric-card'
 import { PageHeader } from '@/components/synse/page-header'
 import { PaymentStatus } from '@/components/synse/status-badge'
@@ -53,13 +54,20 @@ export default async function DashboardPage() {
   const showFinance = can(session.role, 'finance:read')
   const canEnroll = can(session.role, 'students:write')
 
+  // Só consulta quem pode agir: para o professor o aviso não teria botão.
+  const dataSource = await getDataSource()
+  const pendentes = canEnroll
+    ? (await dataSource.listStudents(session.organizationId, { status: 'PENDING', pageSize: 1 }))
+        .total
+    : 0
+
   // Alertas financeiros seguem a mesma regra dos blocos de receita.
   const alerts = showFinance
     ? data.alerts
     : data.alerts.filter((alert) => alert.id !== 'overdue' && alert.id !== 'upcoming')
 
   return (
-    <div className="space-y-6 animate-fade-in-up">
+    <div className="animate-fade-in-up space-y-6">
       <PageHeader
         eyebrow={data.competenceLabel}
         title={`${greeting()}, ${firstName(session.name)}`}
@@ -84,57 +92,88 @@ export default async function DashboardPage() {
         }
       />
 
+      {/*
+        Matrículas aguardando confirmação.
+        Quem entra pelo código de convite fica invisível até alguém da academia
+        confirmar — e uma pessoa esperando aprovação sem ninguém saber que ela
+        existe é a pior forma de estrear no produto. O aviso só aparece quando
+        há alguém esperando.
+      */}
+      {canEnroll && pendentes > 0 && (
+        <Link
+          href="/students?status=PENDING"
+          className="focus-visible:ring-synse-primary/25 border-synse-primary/30 bg-synse-primary/8 flex items-center gap-3 rounded-xl border p-4 transition hover:border-synse-primary focus-visible:outline-none focus-visible:ring-2"
+        >
+          <UserPlus className="size-4 shrink-0 text-synse-primary" aria-hidden />
+          <span className="min-w-0 flex-1 text-sm text-synse-text">
+            <strong className="font-medium">
+              {pendentes === 1
+                ? '1 pessoa entrou com o código e aguarda confirmação'
+                : `${pendentes} pessoas entraram com o código e aguardam confirmação`}
+            </strong>
+          </span>
+          <span className="shrink-0 text-sm text-synse-primary">Ver</span>
+        </Link>
+      )}
+
       {/* Resumo financeiro do mês */}
       {showFinance && (
-      <section
-        className="overflow-hidden rounded-2xl bg-synse-gradient-deep p-6 text-white shadow-synse-lg sm:p-7"
-        aria-labelledby="finance-summary"
-      >
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/50">
-              Financeiro
-            </p>
-            <h2 id="finance-summary" className="mt-1 text-lg font-medium capitalize text-white">
-              {data.competenceLabel}
-            </h2>
+        <section
+          className="overflow-hidden rounded-2xl bg-synse-gradient-deep p-6 text-white shadow-synse-lg sm:p-7"
+          aria-labelledby="finance-summary"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/50">
+                Financeiro
+              </p>
+              <h2 id="finance-summary" className="mt-1 text-lg font-medium capitalize text-white">
+                {data.competenceLabel}
+              </h2>
+            </div>
+            <Button
+              variant="ghost"
+              asChild
+              className="text-white/80 hover:bg-white/10 hover:text-white"
+            >
+              <Link href="/finance">
+                Ver financeiro
+                <ArrowUpRight className="size-4" />
+              </Link>
+            </Button>
           </div>
-          <Button variant="ghost" asChild className="text-white/80 hover:bg-white/10 hover:text-white">
-            <Link href="/finance">
-              Ver financeiro
-              <ArrowUpRight className="size-4" />
-            </Link>
-          </Button>
-        </div>
 
-        <dl className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          <SummaryFigure
-            label="Recebido"
-            value={formatCurrency(kpis.monthlyRevenue)}
-            detail={`${formatNumber(kpis.receivedCount)} pagamentos`}
-            emphasis
-          />
-          <SummaryFigure
-            label="Em aberto"
-            value={formatCurrency(kpis.monthlyPending)}
-            detail={`${formatNumber(kpis.overdueCount)} inadimplentes`}
-          />
-          <SummaryFigure
-            label="Adimplência"
-            value={formatPercent(kpis.paymentComplianceRate)}
-            detail={`${formatNumber(kpis.activeStudents)} alunos pagos`}
-          />
-          <SummaryFigure
-            label="Comissão Synse"
-            value={formatCurrency(kpis.platformFee)}
-            detail="Sobre o valor recebido"
-          />
-        </dl>
-      </section>
+          <dl className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            <SummaryFigure
+              label="Recebido"
+              value={formatCurrency(kpis.monthlyRevenue)}
+              detail={`${formatNumber(kpis.receivedCount)} pagamentos`}
+              emphasis
+            />
+            <SummaryFigure
+              label="Em aberto"
+              value={formatCurrency(kpis.monthlyPending)}
+              detail={`${formatNumber(kpis.overdueCount)} inadimplentes`}
+            />
+            <SummaryFigure
+              label="Adimplência"
+              value={formatPercent(kpis.paymentComplianceRate)}
+              detail={`${formatNumber(kpis.activeStudents)} alunos pagos`}
+            />
+            <SummaryFigure
+              label="Comissão Synse"
+              value={formatCurrency(kpis.platformFee)}
+              detail="Sobre o valor recebido"
+            />
+          </dl>
+        </section>
       )}
 
       {/* KPIs */}
-      <section aria-label="Indicadores" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section
+        aria-label="Indicadores"
+        className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
+      >
         <MetricCard
           label="Alunos ativos"
           value={formatNumber(kpis.activeStudents)}
@@ -157,7 +196,7 @@ export default async function DashboardPage() {
               value={formatNumber(kpis.overdueCount)}
               icon={TriangleAlert}
               accent="danger"
-                  hint={`${formatCurrency(kpis.overdueAmount)} em atraso no total`}
+              hint={`${formatCurrency(kpis.overdueAmount)} em atraso no total`}
               invertDelta
             />
           </>
@@ -255,79 +294,79 @@ export default async function DashboardPage() {
       {/* Listas operacionais */}
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         {showFinance && (
-        <Card>
-          <CardHeader className="flex-row items-center justify-between">
-            <CardTitle>Últimos pagamentos</CardTitle>
-            <Button variant="link" size="sm" asChild className="h-auto p-0">
-              <Link href="/finance">Ver tudo</Link>
-            </Button>
-          </CardHeader>
-          <CardContent className="space-y-1">
-            {data.latestPayments.length === 0 ? (
-              <EmptyState title="Nenhum pagamento registrado" className="py-8" />
-            ) : (
-              data.latestPayments.map((charge) => (
-                <Link
-                  key={charge.id}
-                  href={`/students/${charge.studentId}`}
-                  className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-synse-surface-2"
-                >
-                  <StudentAvatar name={charge.studentName} size="sm" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-synse-text">
-                      {charge.studentName}
-                    </p>
-                    <p className="text-xs text-synse-muted">{formatDate(charge.paidAt)}</p>
-                  </div>
-                  <span className="text-sm font-semibold tabular-nums text-synse-success">
-                    {formatCurrency(charge.amount)}
-                  </span>
-                </Link>
-              ))
-            )}
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex-row items-center justify-between">
+              <CardTitle>Últimos pagamentos</CardTitle>
+              <Button variant="link" size="sm" asChild className="h-auto p-0">
+                <Link href="/finance">Ver tudo</Link>
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-1">
+              {data.latestPayments.length === 0 ? (
+                <EmptyState title="Nenhum pagamento registrado" className="py-8" />
+              ) : (
+                data.latestPayments.map((charge) => (
+                  <Link
+                    key={charge.id}
+                    href={`/students/${charge.studentId}`}
+                    className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-synse-surface-2"
+                  >
+                    <StudentAvatar name={charge.studentName} size="sm" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-synse-text">
+                        {charge.studentName}
+                      </p>
+                      <p className="text-xs text-synse-muted">{formatDate(charge.paidAt)}</p>
+                    </div>
+                    <span className="text-sm font-semibold tabular-nums text-synse-success">
+                      {formatCurrency(charge.amount)}
+                    </span>
+                  </Link>
+                ))
+              )}
+            </CardContent>
+          </Card>
         )}
 
         {showFinance && (
-        <Card>
-          <CardHeader className="flex-row items-center justify-between">
-            <CardTitle>Inadimplentes</CardTitle>
-            <Button variant="link" size="sm" asChild className="h-auto p-0">
-              <Link href="/finance/overdue">Ver tudo</Link>
-            </Button>
-          </CardHeader>
-          <CardContent className="space-y-1">
-            {data.overdueCharges.length === 0 ? (
-              <EmptyState
-                tone="positive"
-                title="Nenhuma cobrança em atraso. Excelente!"
-                className="py-8"
-              />
-            ) : (
-              data.overdueCharges.map((charge) => (
-                <Link
-                  key={charge.id}
-                  href={`/students/${charge.studentId}`}
-                  className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-synse-surface-2"
-                >
-                  <StudentAvatar name={charge.studentName} size="sm" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-synse-text">
-                      {charge.studentName}
-                    </p>
-                    <p className="text-xs text-synse-danger">
-                      {daysOverdue(charge.dueDate)} dias em atraso
-                    </p>
-                  </div>
-                  <span className="text-sm font-semibold tabular-nums text-synse-text">
-                    {formatCurrency(charge.amount)}
-                  </span>
-                </Link>
-              ))
-            )}
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex-row items-center justify-between">
+              <CardTitle>Inadimplentes</CardTitle>
+              <Button variant="link" size="sm" asChild className="h-auto p-0">
+                <Link href="/finance/overdue">Ver tudo</Link>
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-1">
+              {data.overdueCharges.length === 0 ? (
+                <EmptyState
+                  tone="positive"
+                  title="Nenhuma cobrança em atraso. Excelente!"
+                  className="py-8"
+                />
+              ) : (
+                data.overdueCharges.map((charge) => (
+                  <Link
+                    key={charge.id}
+                    href={`/students/${charge.studentId}`}
+                    className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-synse-surface-2"
+                  >
+                    <StudentAvatar name={charge.studentName} size="sm" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-synse-text">
+                        {charge.studentName}
+                      </p>
+                      <p className="text-xs text-synse-danger">
+                        {daysOverdue(charge.dueDate)} dias em atraso
+                      </p>
+                    </div>
+                    <span className="text-sm font-semibold tabular-nums text-synse-text">
+                      {formatCurrency(charge.amount)}
+                    </span>
+                  </Link>
+                ))
+              )}
+            </CardContent>
+          </Card>
         )}
 
         <Card className={showFinance ? undefined : 'xl:col-span-3'}>
@@ -344,7 +383,7 @@ export default async function DashboardPage() {
               data.recentCheckIns.map((checkIn) => (
                 <div key={checkIn.id} className="flex items-center gap-3 px-0 py-2">
                   <span
-                    className="flex size-8 shrink-0 items-center justify-center rounded-full bg-synse-mint/50 text-synse-primary"
+                    className="bg-synse-mint/50 flex size-8 shrink-0 items-center justify-center rounded-full text-synse-primary"
                     aria-hidden
                   >
                     <QrCode className="size-3.5" />
@@ -352,7 +391,9 @@ export default async function DashboardPage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm text-synse-text">{checkIn.studentName}</p>
                     <p className="text-xs text-synse-muted">
-                      {checkIn.method === 'MANUAL' ? 'Registrado na recepção' : 'Check-in por QR Code'}
+                      {checkIn.method === 'MANUAL'
+                        ? 'Registrado na recepção'
+                        : 'Check-in por QR Code'}
                     </p>
                   </div>
                   <span className="text-xs tabular-nums text-synse-muted">
@@ -367,45 +408,45 @@ export default async function DashboardPage() {
 
       {/* Próximos vencimentos */}
       {showFinance && (
-      <Card>
-        <CardHeader className="flex-row items-center justify-between">
-          <CardTitle>Próximos vencimentos</CardTitle>
-          <Button variant="link" size="sm" asChild className="h-auto p-0">
-            <Link href="/finance">Ver cobranças</Link>
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {data.upcomingCharges.length === 0 ? (
-            <EmptyState
-              icon={CalendarClock}
-              title="Nenhum vencimento nos próximos dias"
-              description="As próximas mensalidades aparecerão aqui conforme a régua de cobrança."
-              className="py-8"
-            />
-          ) : (
-            <ul className="divide-y divide-synse-border">
-              {data.upcomingCharges.map((charge) => (
-                <li key={charge.id} className="flex flex-wrap items-center gap-3 py-3">
-                  <StudentAvatar name={charge.studentName} size="sm" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-synse-text">
-                      {charge.studentName}
-                    </p>
-                    <p className="text-xs text-synse-muted">{charge.planName ?? 'Sem plano'}</p>
-                  </div>
-                  <span className="text-xs text-synse-muted">
-                    vence {formatDate(charge.dueDate)}
-                  </span>
-                  <span className="text-sm font-semibold tabular-nums text-synse-text">
-                    {formatCurrency(charge.amount)}
-                  </span>
-                  <PaymentStatus status={charge.status} />
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+        <Card>
+          <CardHeader className="flex-row items-center justify-between">
+            <CardTitle>Próximos vencimentos</CardTitle>
+            <Button variant="link" size="sm" asChild className="h-auto p-0">
+              <Link href="/finance">Ver cobranças</Link>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {data.upcomingCharges.length === 0 ? (
+              <EmptyState
+                icon={CalendarClock}
+                title="Nenhum vencimento nos próximos dias"
+                description="As próximas mensalidades aparecerão aqui conforme a régua de cobrança."
+                className="py-8"
+              />
+            ) : (
+              <ul className="divide-y divide-synse-border">
+                {data.upcomingCharges.map((charge) => (
+                  <li key={charge.id} className="flex flex-wrap items-center gap-3 py-3">
+                    <StudentAvatar name={charge.studentName} size="sm" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-synse-text">
+                        {charge.studentName}
+                      </p>
+                      <p className="text-xs text-synse-muted">{charge.planName ?? 'Sem plano'}</p>
+                    </div>
+                    <span className="text-xs text-synse-muted">
+                      vence {formatDate(charge.dueDate)}
+                    </span>
+                    <span className="text-sm font-semibold tabular-nums text-synse-text">
+                      {formatCurrency(charge.amount)}
+                    </span>
+                    <PaymentStatus status={charge.status} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
       )}
     </div>
   )
@@ -457,9 +498,12 @@ function AlertRow({
   const Icon = config.icon
 
   return (
-    <div className="flex gap-3 rounded-lg bg-synse-surface-2/60 p-3">
+    <div className="bg-synse-surface-2/60 flex gap-3 rounded-lg p-3">
       <span
-        className={cn('flex size-8 shrink-0 items-center justify-center rounded-lg', config.className)}
+        className={cn(
+          'flex size-8 shrink-0 items-center justify-center rounded-lg',
+          config.className,
+        )}
         aria-hidden
       >
         <Icon className="size-4" />

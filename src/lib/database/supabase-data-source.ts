@@ -31,6 +31,7 @@ import type {
   WorkoutExercise,
   WorkoutLog,
   WorkoutPlan,
+  StudentStatus,
 } from '@/types/domain'
 
 /**
@@ -237,6 +238,19 @@ export class SupabaseDataSource implements DataSource {
     })
     if (error) this.fail('joinOrganizationAsStudent', error)
     return String(data)
+  }
+
+  async updateStudentStatus(input: {
+    organizationId: string
+    studentId: string
+    status: StudentStatus
+  }): Promise<void> {
+    const { error } = await this.client
+      .from('students')
+      .update({ status: input.status, updated_at: new Date().toISOString() })
+      .eq('organization_id', input.organizationId)
+      .eq('id', input.studentId)
+    if (error) this.fail('updateStudentStatus', error)
   }
 
   async listPlans(organizationId: string) {

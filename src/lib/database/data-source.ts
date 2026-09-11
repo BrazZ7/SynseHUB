@@ -129,6 +129,13 @@ export interface DataSource {
    */
   joinOrganizationAsStudent(input: { inviteCode: string; studentName: string }): Promise<string>
 
+  /** Muda a situação da matrícula. Usada para confirmar quem entrou por código. */
+  updateStudentStatus(input: {
+    organizationId: string
+    studentId: string
+    status: StudentStatus
+  }): Promise<void>
+
   // Planos e matrículas
   listPlans(organizationId: string): Promise<MembershipPlan[]>
   getPlan(organizationId: string, planId: string): Promise<MembershipPlan | null>

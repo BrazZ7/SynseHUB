@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { MailCheck, TriangleAlert } from 'lucide-react'
 import { useActionState } from 'react'
 import { useFormStatus } from 'react-dom'
@@ -22,17 +23,48 @@ export function SignUpForm({
   const [state, formAction] = useActionState(signUpWithPassword, initialState)
 
   if (state.sent) {
+    /*
+     * A mensagem é a mesma para e-mail novo e para e-mail que já tem conta.
+     *
+     * Dizer "esse endereço já está cadastrado" permitiria descobrir quem é
+     * cliente testando endereços, um por um. O preço é que quem esqueceu que já
+     * tinha conta fica esperando um e-mail que nunca vem — por isso a saída para
+     * o login aparece aqui, para todo mundo, sem revelar de quem é o caso.
+     */
     return (
-      <p
-        role="status"
-        className="bg-synse-primary/10 flex items-start gap-2.5 rounded-lg p-3 text-sm text-synse-text"
-      >
-        <MailCheck className="mt-0.5 size-4 shrink-0 text-synse-primary" aria-hidden />
-        <span>
-          Enviamos um link de confirmação para o seu e-mail. Abra o link para continuar o cadastro
-          da sua academia.
-        </span>
-      </p>
+      <div className="space-y-4">
+        <p
+          role="status"
+          className="bg-synse-primary/10 flex items-start gap-2.5 rounded-lg p-3 text-sm text-synse-text"
+        >
+          <MailCheck className="mt-0.5 size-4 shrink-0 text-synse-primary" aria-hidden />
+          <span>
+            Se este e-mail ainda não tiver conta, o link de confirmação está a caminho. Abra o link
+            para continuar.
+          </span>
+        </p>
+
+        <div className="space-y-2 rounded-lg border border-synse-border p-3.5 text-sm text-synse-muted">
+          <p className="font-medium text-synse-text">Não chegou?</p>
+          <ul className="list-inside list-disc space-y-1">
+            <li>Confira a caixa de spam e a aba de promoções.</li>
+            <li>
+              Se você já tinha conta com este endereço, não enviamos outro link —{' '}
+              <Link href="/login" className="text-synse-primary underline-offset-2 hover:underline">
+                entre por aqui
+              </Link>
+              .
+            </li>
+            <li>
+              Esqueceu a senha?{' '}
+              <Link href="/login" className="text-synse-primary underline-offset-2 hover:underline">
+                Entre com link por e-mail
+              </Link>
+              .
+            </li>
+          </ul>
+        </div>
+      </div>
     )
   }
 

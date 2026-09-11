@@ -97,6 +97,21 @@ function askHidden(question) {
   })
 }
 
+/**
+ * Encerra o script sinalizando falha, sem derrubar o processo na hora.
+ *
+ * `process.exit` mata o processo com os sockets do cliente HTTP ainda abertos.
+ * No Windows isso dispara uma asserção do libuv — `UV_HANDLE_CLOSING`, em
+ * async.c — logo depois da mensagem de erro, e o barulho faz parecer que o
+ * script quebrou quando ele apenas relatou o problema. Lançar deixa o `catch`
+ * de `main` cuidar da saída, com os handles fechando sozinhos.
+ */
+function encerrarComFalha() {
+  const parar = new Error('__saida_controlada__')
+  parar.silenciosa = true
+  throw parar
+}
+
 const supabase = createClient(url, serviceRoleKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 })
@@ -129,13 +144,13 @@ async function pedirSenha() {
     console.error(
       '\nA senha precisa ter ao menos 8 caracteres — o mesmo mínimo da tela de login.\n',
     )
-    process.exit(1)
+    encerrarComFalha()
   }
 
   const confirmacao = await askHidden('Repita a senha: ')
   if (confirmacao !== senha) {
     console.error('\nAs duas senhas não coincidem. Nada foi alterado.\n')
-    process.exit(1)
+    encerrarComFalha()
   }
 
   return senha
@@ -190,7 +205,8 @@ async function main() {
       `\nNenhuma conta com o e-mail ${email}.` +
         `\nRode 'npm run db:seed' antes, ou confira o endereço.\n`,
     )
-    process.exit(1)
+    process.exitCode = 1
+    return
   }
 
   /*
@@ -255,7 +271,7 @@ Senha definida, mas o login de teste falhou.
 A senha foi gravada. Se o login pela tela também falhar, o problema não é a
 senha — me mostre esta mensagem.
 `)
-    process.exit(1)
+    encerrarComFalha()
   }
 
   await asVisitor.auth.signOut()
@@ -285,7 +301,34 @@ Troque por uma sua assim que entrar.
 `)
 }
 
+/**
+ * Traduz os erros que não dizem o que fazer.
+ *
+ * "Invalid API key" e "Unregistered API key" chegam do Supabase sempre que a
+ * chave secreta do `.env.local` foi rotacionada e o arquivo ficou para trás —
+ * situação garantida logo depois de rotacionar, e a mensagem crua não dá
+ * nenhuma pista de onde mexer.
+ */
+function explicar(mensagem) {
+  if (!/invalid api key|unregistered api key/i.test(mensagem)) return null
+
+  return `
+O Supabase não reconhece a SUPABASE_SERVICE_ROLE_KEY do .env.local.
+
+Quase sempre é chave rotacionada: crie ou copie a chave secreta atual em
+Project Settings → API Keys e substitua a linha
+
+  SUPABASE_SERVICE_ROLE_KEY=...
+
+no .env.local. É a chave secreta (sb_secret_… ou eyJ…), não a publicável.
+`
+}
+
 main().catch((error) => {
-  console.error('\nFalha:', error.message ?? error)
-  process.exit(1)
+  // A saída controlada já imprimiu a explicação; aqui só o código de saída.
+  if (!error?.silenciosa) {
+    const mensagem = error?.message ?? String(error)
+    console.error(explicar(mensagem) ?? `\nFalha: ${mensagem}`)
+  }
+  process.exitCode = 1
 })

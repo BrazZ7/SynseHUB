@@ -117,9 +117,19 @@ export class AsaasPaymentProvider implements PaymentProvider {
   }
 
   private toProviderCharge(raw: Record<string, unknown>): ProviderCharge {
+    /*
+     * Cancelamento não aparece em `status`.
+     *
+     * Verificado contra o sandbox: depois de DELETE /payments/{id}, a consulta
+     * devolve a cobrança com `deleted: true` e o `status` intacto — PENDING, se
+     * era o caso. Confiar só no status faria a academia continuar cobrando um
+     * aluno cuja cobrança já foi cancelada.
+     */
+    const cancelada = raw.deleted === true
+
     return {
       providerChargeId: String(raw.id),
-      status: ASAAS_STATUS_MAP[String(raw.status)] ?? 'PENDING',
+      status: cancelada ? 'CANCELLED' : (ASAAS_STATUS_MAP[String(raw.status)] ?? 'PENDING'),
       amount: Number(raw.value ?? 0),
       dueDate: String(raw.dueDate ?? ''),
       method: (String(raw.billingType) as PaymentMethod) ?? 'PIX',

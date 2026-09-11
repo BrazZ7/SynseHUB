@@ -54,6 +54,15 @@ function exigirCobranca(): never {
   throw new Error('Cobrança não foi criada: corrija a falha anterior primeiro.')
 }
 
+/** Consulta crua, para a mensagem de falha mostrar o que o Asaas respondeu. */
+async function buscarBruto(id: string): Promise<Record<string, unknown>> {
+  const resposta = await fetch(`${apiUrl}/payments/${id}`, {
+    headers: { access_token: apiKey ?? '' },
+    cache: 'no-store',
+  })
+  return (await resposta.json()) as Record<string, unknown>
+}
+
 describe.skipIf(!rodar)('Asaas · sandbox', () => {
   const provider = new AsaasPaymentProvider({ apiUrl, apiKey })
   let customerId = ''
@@ -123,6 +132,16 @@ describe.skipIf(!rodar)('Asaas · sandbox', () => {
     await expect(provider.cancelCharge(chargeId)).resolves.toBeUndefined()
 
     const cobranca = await provider.getPayment(chargeId)
-    expect(cobranca.status).toBe('CANCELLED')
+    const bruto = await buscarBruto(chargeId)
+
+    /*
+     * A mensagem carrega o que o Asaas respondeu de fato. Se um dia o campo
+     * mudar de novo, a falha já diz qual é a nova forma, sem precisar de outra
+     * rodada de investigação.
+     */
+    expect(
+      cobranca.status,
+      `Asaas devolveu ${JSON.stringify({ status: bruto.status, deleted: bruto.deleted })}`,
+    ).toBe('CANCELLED')
   })
 })

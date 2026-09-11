@@ -62,6 +62,33 @@ describe('tradução de cobrança', () => {
     expect(cobranca.status).toBe('PAID')
   })
 
+  /*
+   * Pego contra o sandbox real: o Asaas não muda o `status` ao cancelar, marca
+   * `deleted`. O adapter olhava só o status e devolvia PENDENTE — a academia
+   * seguiria cobrando alguém que não deve mais nada.
+   */
+  it('reconhece cancelamento por `deleted`, mesmo com status PENDING', async () => {
+    responder({ id: 'pay_1', status: 'PENDING', deleted: true, value: 100, dueDate: '2026-10-01' })
+
+    const cobranca = await provider().getPayment('pay_1')
+
+    expect(cobranca.status).toBe('CANCELLED')
+  })
+
+  it('`deleted: false` não interfere no status normal', async () => {
+    responder({
+      id: 'pay_1',
+      status: 'RECEIVED',
+      deleted: false,
+      value: 100,
+      dueDate: '2026-10-01',
+    })
+
+    const cobranca = await provider().getPayment('pay_1')
+
+    expect(cobranca.status).toBe('PAID')
+  })
+
   it('não inventa status: o desconhecido vira PENDENTE, nunca PAGO', async () => {
     responder({
       id: 'pay_1',

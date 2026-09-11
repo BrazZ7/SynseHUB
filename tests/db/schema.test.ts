@@ -32,6 +32,13 @@ describe.skipIf(!temBanco)('Row Level Security', () => {
     expect(rows.map((row) => row.relname)).toEqual([])
   })
 
+  /*
+   * Tabela com RLS ligada e nenhuma política não devolve linha nenhuma. Quase
+   * sempre isso é esquecimento, e o sintoma — tela vazia sem erro — é péssimo
+   * de diagnosticar. A exceção é deliberada e está listada abaixo.
+   */
+  const SEM_POLITICA_DE_PROPOSITO = ['payment_account_secrets']
+
   it('toda tabela com organization_id tem ao menos uma política', async () => {
     const { rows } = await client.query<{ table_name: string }>(`
       select t.table_name from information_schema.tables t
@@ -42,7 +49,7 @@ describe.skipIf(!temBanco)('Row Level Security', () => {
         )
         and not exists (select 1 from pg_policies p where p.tablename = t.table_name)
     `)
-    expect(rows.map((row) => row.table_name)).toEqual([])
+    expect(rows.map((row) => row.table_name)).toEqual(SEM_POLITICA_DE_PROPOSITO)
   })
 })
 
@@ -73,7 +80,9 @@ describe.skipIf(!temBanco)('user_profiles', () => {
 
   it('recusa Synse ID fora do formato', async () => {
     await expect(
-      client.query(`insert into user_profiles (name, email, synse_id) values ('E','e@x.com','SYN-ILOU1234')`),
+      client.query(
+        `insert into user_profiles (name, email, synse_id) values ('E','e@x.com','SYN-ILOU1234')`,
+      ),
     ).rejects.toThrow(/synse_id_format/i)
   })
 })

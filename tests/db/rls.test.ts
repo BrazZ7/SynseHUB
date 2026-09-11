@@ -1,7 +1,15 @@
 import type { Client } from 'pg'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-import { ALPHA, BETA, applyMigrations, asUser, connect, databaseAvailable, seedTwoGyms } from './helpers'
+import {
+  ALPHA,
+  BETA,
+  applyMigrations,
+  asUser,
+  connect,
+  databaseAvailable,
+  seedTwoGyms,
+} from './helpers'
 
 /**
  * O isolamento entre academias é a promessa central do produto. Se ele falhar,
@@ -23,7 +31,11 @@ afterAll(async () => {
 })
 
 const contar = async (authId: string | null, tabela: string) => {
-  const rows = await asUser<{ n: string }>(client, authId, `select count(*)::text as n from ${tabela}`)
+  const rows = await asUser<{ n: string }>(
+    client,
+    authId,
+    `select count(*)::text as n from ${tabela}`,
+  )
   return Number(rows[0].n)
 }
 
@@ -44,8 +56,16 @@ describe.skipIf(!temBanco)('isolamento entre academias', () => {
   }
 
   it('organizations: cada dona vê apenas a própria', async () => {
-    const alpha = await asUser<{ slug: string }>(client, ALPHA.authId, 'select slug from organizations')
-    const beta = await asUser<{ slug: string }>(client, BETA.authId, 'select slug from organizations')
+    const alpha = await asUser<{ slug: string }>(
+      client,
+      ALPHA.authId,
+      'select slug from organizations',
+    )
+    const beta = await asUser<{ slug: string }>(
+      client,
+      BETA.authId,
+      'select slug from organizations',
+    )
 
     expect(alpha.map((row) => row.slug)).toEqual(['alpha'])
     expect(beta.map((row) => row.slug)).toEqual(['beta'])
@@ -104,5 +124,70 @@ describe.skipIf(!temBanco)('equipe enxerga o nome dos próprios alunos', () => {
       `select count(*)::text as n from user_profiles where email like 'b%@alunos.test'`,
     )
     expect(Number(rows[0].n)).toBe(0)
+  })
+})
+
+describe.skipIf(!temBanco)('credencial da subconta', () => {
+  /*
+   * A chave de API da subconta movimenta o dinheiro da academia. Ela vive numa
+   * tabela com RLS ligada e nenhuma política: só o service role, que existe
+   * apenas no servidor, alcança essas linhas.
+   *
+   * A ausência de política é a proteção. Este teste é o que impede alguém, mais
+   * adiante, "consertar" a tabela adicionando uma regra de leitura — e entregar
+   * a credencial a quem entrar no painel.
+   */
+  beforeAll(async () => {
+    await client.query(
+      `insert into payment_accounts (organization_id, provider, provider_account_id, status)
+       values ($1, 'asaas', 'wallet_alpha', 'ACTIVE')
+       on conflict (organization_id, provider) do nothing`,
+      [ALPHA.orgId],
+    )
+    await client.query(
+      `insert into payment_account_secrets (payment_account_id, organization_id, provider, api_key)
+       select id, organization_id, 'asaas', 'chave-da-subconta-alpha'
+       from payment_accounts where organization_id = $1 and provider = 'asaas'
+       on conflict (payment_account_id) do nothing`,
+      [ALPHA.orgId],
+    )
+  })
+
+  it('existe de fato — o teste seguinte só vale se houver linha para esconder', async () => {
+    const { rows } = await client.query<{ n: string }>(
+      `select count(*)::text as n from payment_account_secrets`,
+    )
+    expect(Number(rows[0].n)).toBeGreaterThan(0)
+  })
+
+  /*
+   * A recusa aqui é erro, não lista vazia — escolha oposta à da 0008.
+   *
+   * Lá, o visitante anônimo consulta tabelas legítimas e precisa receber nada
+   * em vez de erro 500. Aqui ninguém deveria consultar esta tabela pelo cliente
+   * em hipótese alguma, então falhar alto é o certo: uma tentativa acidental
+   * aparece no log em vez de passar despercebida como resultado vazio.
+   */
+  it('a dona da própria academia esbarra em permission denied', async () => {
+    await expect(
+      asUser(client, ALPHA.authId, 'select api_key from payment_account_secrets'),
+    ).rejects.toThrow(/permission denied/i)
+  })
+
+  it('visitante anônimo idem', async () => {
+    await expect(
+      asUser(client, null, 'select api_key from payment_account_secrets'),
+    ).rejects.toThrow(/permission denied/i)
+  })
+
+  it('nem escreve uma linha nova para si', async () => {
+    await expect(
+      asUser(
+        client,
+        ALPHA.authId,
+        `insert into payment_account_secrets (payment_account_id, organization_id, provider, api_key)
+         select id, organization_id, 'asaas', 'chave-plantada' from payment_accounts limit 1`,
+      ),
+    ).rejects.toThrow()
   })
 })

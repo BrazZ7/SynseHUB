@@ -15,7 +15,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const signInWithPassword = vi.fn()
 
 vi.mock('next/headers', () => ({
-  cookies: async () => ({ get: () => undefined, set: () => {}, delete: () => {}, getAll: () => [] }),
+  cookies: async () => ({
+    get: () => undefined,
+    set: () => {},
+    delete: () => {},
+    getAll: () => [],
+  }),
 }))
 
 vi.mock('next/navigation', () => ({
@@ -69,12 +74,37 @@ describe('signInWithPassword', () => {
 
   it('separa excesso de tentativas de credencial errada', async () => {
     signInWithPassword.mockResolvedValue({
-      error: { message: 'Request rate limit reached', code: 'over_request_rate_limit', status: 429 },
+      error: {
+        message: 'Request rate limit reached',
+        code: 'over_request_rate_limit',
+        status: 429,
+      },
     })
 
     const estado = await entrar({}, formulario(novoEmail(), 'senha-qualquer'))
 
     expect(estado.error).toContain('Muitas tentativas')
+  })
+
+  it('não chama de senha errada uma chave inválida do Supabase', async () => {
+    signInWithPassword.mockResolvedValue({
+      error: { message: 'Invalid API key', code: 'invalid_api_key', status: 401 },
+    })
+
+    const estado = await entrar({}, formulario(novoEmail(), 'senha-correta'))
+
+    expect(estado.error).toContain('indisponível')
+    expect(estado.error).not.toBe('E-mail ou senha incorretos.')
+  })
+
+  it('não chama de senha errada um projeto fora do ar', async () => {
+    signInWithPassword.mockResolvedValue({
+      error: { message: 'Service unavailable', code: undefined, status: 503 },
+    })
+
+    const estado = await entrar({}, formulario(novoEmail(), 'senha-correta'))
+
+    expect(estado.error).toContain('indisponível')
   })
 
   it('recusa senha menor que o mínimo antes de chamar o Supabase', async () => {

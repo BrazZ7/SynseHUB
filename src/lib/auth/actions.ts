@@ -84,6 +84,25 @@ export async function signInWithPassword(
       return { error: 'Muitas tentativas. Aguarde um minuto e tente novamente.' }
     }
 
+    /*
+     * Falha de infraestrutura não é senha errada.
+     *
+     * Uma chave do Supabase vencida ou de outro projeto responde 401, e o
+     * projeto pausado responde 5xx. Chamar isso de "senha incorreta" manda
+     * todo mundo procurar no lugar errado — foi o que aconteceu aqui, com uma
+     * build antiga no ar carregando a chave antiga embutida. A frase não
+     * revela nada sobre a conta, e o log sobe para `error`.
+     */
+    const infra = error.status === 401 || error.status === 403 || (error.status ?? 0) >= 500
+    if (infra) {
+      logger.error('auth:sign_in_unavailable', {
+        reason: error.message,
+        code: error.code,
+        status: error.status,
+      })
+      return { error: 'A autenticação está indisponível no momento. Tente novamente em instantes.' }
+    }
+
     // Genérica de propósito nos demais casos: não revela se o e-mail existe.
     return { error: 'E-mail ou senha incorretos.' }
   }

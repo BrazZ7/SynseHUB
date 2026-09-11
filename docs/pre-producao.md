@@ -30,12 +30,17 @@ Para conferir o estado sem abrir o arquivo e expor tudo de novo:
 npm run env:check
 ```
 
-## Ambiente separado
+## Ambiente separado — decidido: não
 
-- [ ] Criar um projeto Supabase só para desenvolvimento, com as mesmas
-      migrations e seed. Hoje `.env.local` guarda credencial de produção, e é
-      isso que torna arriscado mostrar a tela para pedir ajuda. Com ambientes
-      separados, o arquivo local passa a conter só credencial descartável.
+Avaliado e descartado. Um projeto Supabase só para desenvolvimento resolveria a
+raiz do problema — `.env.local` passaria a guardar apenas credencial
+descartável — mas custa manutenção dobrada de migrations, seed e configuração,
+e o projeto tem um desenvolvedor.
+
+A consequência de conviver com isso: **o `.env.local` contém credencial de
+produção**. Ele não aparece em print, em chamada compartilhada nem em mensagem.
+Para conferir o que está preenchido, use `npm run env:check`, que mostra estado
+sem mostrar valor.
 
 ## Plataforma
 

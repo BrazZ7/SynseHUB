@@ -104,6 +104,27 @@ export type WebhookVerification = {
   method?: PaymentMethod
 }
 
+/**
+ * Abrir subconta é abrir conta de pagamento: o provedor precisa saber quem é a
+ * empresa, onde ela fica e quanto movimenta. Descobrimos a lista na recusa da
+ * primeira tentativa real — CEP e tipo de empresa foram os primeiros a faltar.
+ */
+export type CreatePaymentAccountInput = {
+  organizationId: string
+  legalName: string
+  email: string
+  taxId: string
+  companyType?: string | null
+  postalCode?: string | null
+  address?: string | null
+  addressNumber?: string | null
+  district?: string | null
+  city?: string | null
+  state?: string | null
+  phone?: string | null
+  monthlyRevenue?: number | null
+}
+
 export interface PaymentProvider {
   readonly id: string
   /** Métodos que este provedor realmente suporta — a UI só mostra estes. */
@@ -117,12 +138,7 @@ export interface PaymentProvider {
   refundCharge(providerChargeId: string, amount?: number): Promise<void>
   getPayment(providerChargeId: string): Promise<ProviderCharge>
 
-  createPaymentAccount(input: {
-    organizationId: string
-    legalName: string
-    email: string
-    taxId: string
-  }): Promise<ProviderPaymentAccount>
+  createPaymentAccount(input: CreatePaymentAccountInput): Promise<ProviderPaymentAccount>
 
   configureSplit(providerChargeId: string, split: SplitConfiguration): Promise<void>
 

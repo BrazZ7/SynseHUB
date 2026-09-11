@@ -70,6 +70,15 @@ export async function connectPaymentAccountAction(
       legalName: organization.legalName ?? organization.name,
       email: session.email,
       taxId: organization.taxId,
+      companyType: organization.companyType,
+      postalCode: organization.postalCode,
+      address: organization.address,
+      addressNumber: organization.addressNumber,
+      district: organization.district,
+      city: organization.city,
+      state: organization.state,
+      phone: organization.phone,
+      monthlyRevenue: organization.monthlyRevenue,
     })
 
     const { data: row, error } = await admin

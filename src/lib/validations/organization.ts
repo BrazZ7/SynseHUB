@@ -72,6 +72,53 @@ export type CreateOrganizationInput = z.infer<typeof createOrganizationSchema>
 export const fiscalDataSchema = z.object({
   legalName: z.string().trim().max(120).optional().default(''),
   taxId: taxIdSchema.optional().default(''),
+  /*
+   * Natureza jurídica no vocabulário do provedor. A lista é dele, não nossa —
+   * por isso não virou enum do domínio Synse.
+   */
+  companyType: z.enum(['', 'MEI', 'LIMITED', 'INDIVIDUAL', 'ASSOCIATION']).optional().default(''),
+  postalCode: z
+    .string()
+    .trim()
+    .transform((value) => value.replace(/\D/g, ''))
+    .refine((value) => value === '' || value.length === 8, { message: 'O CEP tem 8 dígitos.' })
+    .optional()
+    .default(''),
+  address: z.string().trim().max(120).optional().default(''),
+  addressNumber: z.string().trim().max(20).optional().default(''),
+  district: z.string().trim().max(80).optional().default(''),
+  city: z.string().trim().max(80).optional().default(''),
+  state: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .refine((value) => value === '' || value.length === 2, {
+      message: 'Use a sigla, com 2 letras.',
+    })
+    .optional()
+    .default(''),
+  phone: z
+    .string()
+    .trim()
+    .transform((value) => value.replace(/\D/g, ''))
+    .refine((value) => value === '' || value.length === 10 || value.length === 11, {
+      message: 'Informe o telefone com DDD.',
+    })
+    .optional()
+    .default(''),
+  /** Faturamento mensal estimado. O provedor exige na abertura da conta. */
+  monthlyRevenue: z
+    .string()
+    .trim()
+    .transform((value) =>
+      value
+        .replace(/[^\d,.-]/g, '')
+        .replace(/\./g, '')
+        .replace(',', '.'),
+    )
+    .refine((value) => value === '' || Number(value) >= 0, { message: 'Informe um valor válido.' })
+    .optional()
+    .default(''),
 })
 
 export type FiscalDataInput = z.infer<typeof fiscalDataSchema>

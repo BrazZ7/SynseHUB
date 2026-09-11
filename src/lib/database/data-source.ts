@@ -60,6 +60,24 @@ export type StudentListItem = Student & {
   lastCheckInAt: string | null
 }
 
+/**
+ * O que o provedor de pagamento precisa saber para abrir a subconta da
+ * academia: quem é a empresa, onde fica e quanto movimenta.
+ */
+export type FiscalData = {
+  legalName: string | null
+  taxId: string | null
+  companyType: string | null
+  postalCode: string | null
+  address: string | null
+  addressNumber: string | null
+  district: string | null
+  city: string | null
+  state: string | null
+  phone: string | null
+  monthlyRevenue: number | null
+}
+
 export type ChargeWithStudent = Charge & {
   studentName: string
   studentPhone: string | null
@@ -81,14 +99,10 @@ export interface DataSource {
   listStaff(organizationId: string): Promise<DemoStaff[]>
 
   /**
-   * Dados fiscais da academia. É o documento gravado aqui que abre a subconta
-   * no provedor de pagamento — sem ele a academia não cobra.
+   * Dados fiscais da academia. É com o que está gravado aqui que a subconta é
+   * aberta no provedor — sem isso a academia não cobra.
    */
-  updateFiscalData(input: {
-    organizationId: string
-    legalName: string | null
-    taxId: string | null
-  }): Promise<void>
+  updateFiscalData(input: FiscalData & { organizationId: string }): Promise<void>
 
   /**
    * Cadastro de uma nova academia.

@@ -44,6 +44,19 @@ export type Organization = {
   logoUrl: string | null
   city: string | null
   state: string | null
+  /*
+   * Endereço, contato e natureza jurídica: o provedor de pagamento exige tudo
+   * isso para abrir a subconta da academia. Anuláveis porque quem usa o
+   * SynseHub só para gestão nunca precisa preencher.
+   */
+  postalCode: string | null
+  address: string | null
+  addressNumber: string | null
+  district: string | null
+  phone: string | null
+  /** Natureza jurídica no vocabulário do provedor: MEI, LIMITED, INDIVIDUAL, ASSOCIATION. */
+  companyType: string | null
+  monthlyRevenue: number | null
   timezone: string
   hubPlan: HubPlanTier
   status: 'ACTIVE' | 'TRIALING' | 'SUSPENDED' | 'CANCELLED'

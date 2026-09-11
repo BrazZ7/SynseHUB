@@ -4,6 +4,7 @@ import { AppError, providerRejected, providerUnavailable } from '@/lib/errors'
 import { logger } from '@/lib/logger'
 import type {
   CreateChargeInput,
+  CreatePaymentAccountInput,
   CreateCustomerInput,
   CreateSubscriptionInput,
   PaymentProvider,
@@ -245,12 +246,7 @@ export class AsaasPaymentProvider implements PaymentProvider {
     return this.toProviderCharge(raw)
   }
 
-  async createPaymentAccount(input: {
-    organizationId: string
-    legalName: string
-    email: string
-    taxId: string
-  }): Promise<ProviderPaymentAccount> {
+  async createPaymentAccount(input: CreatePaymentAccountInput): Promise<ProviderPaymentAccount> {
     /*
      * Aqui a recusa do provedor é repassada, ao contrário do resto do adapter.
      *
@@ -267,6 +263,13 @@ export class AsaasPaymentProvider implements PaymentProvider {
         email: input.email,
         cpfCnpj: input.taxId,
         externalReference: input.organizationId,
+        companyType: input.companyType ?? undefined,
+        postalCode: input.postalCode ?? undefined,
+        address: input.address ?? undefined,
+        addressNumber: input.addressNumber ?? undefined,
+        province: input.district ?? undefined,
+        mobilePhone: input.phone ?? undefined,
+        incomeValue: input.monthlyRevenue ?? undefined,
       }),
     })
     return {

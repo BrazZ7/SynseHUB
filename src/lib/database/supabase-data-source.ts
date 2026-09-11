@@ -11,6 +11,7 @@ import type {
   Paginated,
   StudentFilters,
   StudentListItem,
+  FiscalData,
 } from '@/lib/database/data-source'
 import type { DemoStaff } from '@/lib/database/demo-seed'
 import type {
@@ -82,6 +83,13 @@ export class SupabaseDataSource implements DataSource {
       logoUrl: row.logo_url,
       city: row.city,
       state: row.state,
+      postalCode: row.postal_code ?? null,
+      address: row.address ?? null,
+      addressNumber: row.address_number ?? null,
+      district: row.district ?? null,
+      phone: row.phone ?? null,
+      companyType: row.company_type ?? null,
+      monthlyRevenue: row.monthly_revenue != null ? Number(row.monthly_revenue) : null,
       timezone: row.timezone,
       hubPlan: row.hub_plan,
       status: row.status,
@@ -125,16 +133,21 @@ export class SupabaseDataSource implements DataSource {
     }
   }
 
-  async updateFiscalData(input: {
-    organizationId: string
-    legalName: string | null
-    taxId: string | null
-  }): Promise<void> {
+  async updateFiscalData(input: FiscalData & { organizationId: string }): Promise<void> {
     const { error } = await this.client
       .from('organizations')
       .update({
         legal_name: input.legalName,
         tax_id: input.taxId,
+        company_type: input.companyType,
+        postal_code: input.postalCode,
+        address: input.address,
+        address_number: input.addressNumber,
+        district: input.district,
+        city: input.city,
+        state: input.state,
+        phone: input.phone,
+        monthly_revenue: input.monthlyRevenue,
         updated_at: new Date().toISOString(),
       })
       .eq('id', input.organizationId)

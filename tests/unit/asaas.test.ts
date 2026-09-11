@@ -338,3 +338,61 @@ describe('abertura de subconta', () => {
     })
   })
 })
+
+describe('campos exigidos na abertura de subconta', () => {
+  /*
+   * A primeira tentativa real foi recusada por falta de CEP e tipo de empresa.
+   * Abrir subconta é abrir conta de pagamento: o provedor precisa saber quem é
+   * a empresa, onde fica e quanto movimenta. Este teste existe para nenhum
+   * desses campos se perder numa refatoração — a falha só apareceria de novo na
+   * primeira academia tentando conectar.
+   */
+  it('traduz endereço, contato e natureza jurídica para o vocabulário do Asaas', async () => {
+    responder({ walletId: 'wallet_alpha', apiKey: 'chave' })
+
+    await provider().createPaymentAccount({
+      organizationId: 'org-1',
+      legalName: 'Academia Alpha LTDA',
+      email: 'dona@alpha.com.br',
+      taxId: '11222333000181',
+      companyType: 'LIMITED',
+      postalCode: '01310100',
+      address: 'Avenida Paulista',
+      addressNumber: '1000',
+      district: 'Bela Vista',
+      city: 'São Paulo',
+      state: 'SP',
+      phone: '11988887777',
+      monthlyRevenue: 15000,
+    })
+
+    expect(corpoEnviado()).toMatchObject({
+      cpfCnpj: '11222333000181',
+      companyType: 'LIMITED',
+      postalCode: '01310100',
+      address: 'Avenida Paulista',
+      addressNumber: '1000',
+      // O Asaas chama bairro de `province`.
+      province: 'Bela Vista',
+      mobilePhone: '11988887777',
+      incomeValue: 15000,
+    })
+  })
+
+  it('omite o que não foi informado, em vez de mandar nulo', async () => {
+    responder({ walletId: 'wallet_alpha', apiKey: 'chave' })
+
+    await provider().createPaymentAccount({
+      organizationId: 'org-1',
+      legalName: 'Estúdio Beta',
+      email: 'dono@beta.com.br',
+      taxId: '24971563792',
+      companyType: null,
+      postalCode: null,
+    })
+
+    const corpo = corpoEnviado()
+    expect(corpo).not.toHaveProperty('companyType')
+    expect(corpo).not.toHaveProperty('postalCode')
+  })
+})

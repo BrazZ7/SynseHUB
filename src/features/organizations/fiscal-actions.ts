@@ -31,10 +31,23 @@ export async function updateFiscalDataAction(
   try {
     requirePermission(session, 'settings:write')
 
-    const parsed = fiscalDataSchema.safeParse({
-      legalName: formData.get('legalName') ?? '',
-      taxId: formData.get('taxId') ?? '',
-    })
+    const campos = [
+      'legalName',
+      'taxId',
+      'companyType',
+      'postalCode',
+      'address',
+      'addressNumber',
+      'district',
+      'city',
+      'state',
+      'phone',
+      'monthlyRevenue',
+    ] as const
+
+    const parsed = fiscalDataSchema.safeParse(
+      Object.fromEntries(campos.map((campo) => [campo, formData.get(campo) ?? ''])),
+    )
 
     if (!parsed.success) {
       return {
@@ -49,6 +62,15 @@ export async function updateFiscalDataAction(
       organizationId: session.organizationId,
       legalName: parsed.data.legalName || null,
       taxId: parsed.data.taxId || null,
+      companyType: parsed.data.companyType || null,
+      postalCode: parsed.data.postalCode || null,
+      address: parsed.data.address || null,
+      addressNumber: parsed.data.addressNumber || null,
+      district: parsed.data.district || null,
+      city: parsed.data.city || null,
+      state: parsed.data.state || null,
+      phone: parsed.data.phone || null,
+      monthlyRevenue: parsed.data.monthlyRevenue ? Number(parsed.data.monthlyRevenue) : null,
     })
 
     /*

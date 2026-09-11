@@ -101,8 +101,19 @@ export default async function SettingsPage() {
               <div className="border-t border-synse-border pt-4">
                 <h3 className="mb-3 text-sm font-semibold text-synse-text">Dados fiscais</h3>
                 <FiscalDataForm
-                  legalName={organization?.legalName ?? null}
-                  taxId={organization?.taxId ?? null}
+                  dados={{
+                    legalName: organization?.legalName ?? null,
+                    taxId: organization?.taxId ?? null,
+                    companyType: organization?.companyType ?? null,
+                    postalCode: organization?.postalCode ?? null,
+                    address: organization?.address ?? null,
+                    addressNumber: organization?.addressNumber ?? null,
+                    district: organization?.district ?? null,
+                    city: organization?.city ?? null,
+                    state: organization?.state ?? null,
+                    phone: organization?.phone ?? null,
+                    monthlyRevenue: organization?.monthlyRevenue ?? null,
+                  }}
                 />
               </div>
             </CardContent>

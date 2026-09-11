@@ -141,6 +141,48 @@ async function pedirSenha() {
   return senha
 }
 
+/**
+ * Confere — e conserta — o vínculo entre a conta de autenticação e a ficha.
+ *
+ * Entrar é só metade do caminho: quem passa pelo login mas cuja ficha não
+ * aponta para a conta cai no onboarding como se nunca tivesse tido academia,
+ * porque `auth_profile_id()` não acha nada e a RLS devolve vazio. O seed
+ * antigo desfazia esse vínculo toda vez que rodava pela segunda vez, então a
+ * chance de estar quebrado é alta em qualquer banco populado mais de uma vez.
+ */
+async function conferirVinculo(user) {
+  const { data: perfil, error } = await supabase
+    .from('user_profiles')
+    .select('id, auth_user_id')
+    .eq('email', user.email)
+    .maybeSingle()
+
+  if (error) throw error
+
+  if (!perfil) {
+    console.log(
+      'Ficha  não existe para este e-mail — o login vai levar ao onboarding,\n' +
+        '       onde a academia é criada. Se ela já deveria existir, rode o seed.\n',
+    )
+    return
+  }
+
+  if (perfil.auth_user_id === user.id) {
+    console.log('Ficha  vinculada corretamente.\n')
+    return
+  }
+
+  const { error: relinkError } = await supabase
+    .from('user_profiles')
+    .update({ auth_user_id: user.id })
+    .eq('id', perfil.id)
+  if (relinkError) throw relinkError
+
+  console.log(
+    `Ficha  estava ${perfil.auth_user_id ? 'apontando para outra conta' : 'sem vínculo'} — religada agora.\n`,
+  )
+}
+
 async function main() {
   const user = await findUser(email)
   if (!user) {
@@ -165,6 +207,8 @@ Conta encontrada
   provedores         ${(user.identities ?? []).map((i) => i.provider).join(', ') || 'nenhum'}
   último acesso      ${user.last_sign_in_at ?? 'nunca'}
 `)
+
+  await conferirVinculo(user)
 
   const password = gerar ? gerarSenha() : await pedirSenha()
 

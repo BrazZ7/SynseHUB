@@ -49,9 +49,24 @@ const ownerEmail = process.env.SEED_OWNER_EMAIL?.trim() || 'owner@academiaalpha.
 const STAFF = [
   { name: 'Emerson Braz', email: ownerEmail, role: 'OWNER' },
   { name: 'Marina Duarte', email: 'gerente@academiaalpha.demo', role: 'MANAGER' },
-  { name: 'Rafael Nunes', email: 'professor1@academiaalpha.demo', role: 'TRAINER', registration: 'CREF 012345-G/SP' },
-  { name: 'Carolina Prado', email: 'professor2@academiaalpha.demo', role: 'TRAINER', registration: 'CREF 023456-G/SP' },
-  { name: 'Bianca Rezende', email: 'nutri@academiaalpha.demo', role: 'NUTRITIONIST', registration: 'CRN 34567' },
+  {
+    name: 'Rafael Nunes',
+    email: 'professor1@academiaalpha.demo',
+    role: 'TRAINER',
+    registration: 'CREF 012345-G/SP',
+  },
+  {
+    name: 'Carolina Prado',
+    email: 'professor2@academiaalpha.demo',
+    role: 'TRAINER',
+    registration: 'CREF 023456-G/SP',
+  },
+  {
+    name: 'Bianca Rezende',
+    email: 'nutri@academiaalpha.demo',
+    role: 'NUTRITIONIST',
+    registration: 'CRN 34567',
+  },
   { name: 'Lucas Ferraz', email: 'recepcao@academiaalpha.demo', role: 'RECEPTIONIST' },
 ]
 
@@ -63,11 +78,40 @@ const PLANS = [
   { name: 'Personalizado', price: 159.9, billing_cycle: 'MONTHLY', enrollment_fee: 0 },
 ]
 
-const FIRST_NAMES = ['Ana', 'Bruno', 'Camila', 'Diego', 'Eduarda', 'Felipe', 'Gabriela', 'Henrique',
-  'Isabela', 'João', 'Larissa', 'Marcelo', 'Natália', 'Otávio', 'Patrícia', 'Rafael',
-  'Sofia', 'Thiago', 'Vanessa', 'Vinícius']
-const LAST_NAMES = ['Silva', 'Santos', 'Oliveira', 'Souza', 'Lima', 'Gomes', 'Ribeiro', 'Almeida',
-  'Carvalho', 'Fernandes']
+const FIRST_NAMES = [
+  'Ana',
+  'Bruno',
+  'Camila',
+  'Diego',
+  'Eduarda',
+  'Felipe',
+  'Gabriela',
+  'Henrique',
+  'Isabela',
+  'João',
+  'Larissa',
+  'Marcelo',
+  'Natália',
+  'Otávio',
+  'Patrícia',
+  'Rafael',
+  'Sofia',
+  'Thiago',
+  'Vanessa',
+  'Vinícius',
+]
+const LAST_NAMES = [
+  'Silva',
+  'Santos',
+  'Oliveira',
+  'Souza',
+  'Lima',
+  'Gomes',
+  'Ribeiro',
+  'Almeida',
+  'Carvalho',
+  'Fernandes',
+]
 
 async function main() {
   console.log('Semeando o SynseHub…\n')
@@ -102,31 +146,65 @@ async function main() {
     .upsert({ organization_id: organizationId, platform_fee_percentage: 2 })
   console.log('  configurações      ✓')
 
+  /**
+   * Devolve o id da conta de autenticação, criando-a se ainda não existir.
+   *
+   * A versão anterior engolia o erro "already been registered" e seguia com
+   * `authUser` nulo, gravando `auth_user_id: null` por cima do vínculo que já
+   * existia. Rodar o seed duas vezes — coisa que se faz o tempo todo — soltava
+   * todas as fichas da equipe das suas contas: o login até funcionava, mas
+   * `auth_profile_id()` não achava mais a ficha, a RLS devolvia vazio e a
+   * pessoa caía no onboarding como se nunca tivesse tido academia.
+   *
+   * Sem senha: o acesso é por link no e-mail, ou por `npm run db:set-password`.
+   */
+  async function ensureAuthUser(email, name) {
+    const { data, error } = await supabase.auth.admin.createUser({
+      email,
+      email_confirm: true,
+      user_metadata: { name, demo: true },
+    })
+
+    if (!error) return data.user.id
+    if (!error.message.includes('already been registered')) throw error
+
+    // Já existe: o admin não busca por e-mail, então pagina e filtra.
+    for (let page = 1; page <= 20; page += 1) {
+      const { data: lista, error: listError } = await supabase.auth.admin.listUsers({
+        page,
+        perPage: 200,
+      })
+      if (listError) throw listError
+
+      const achado = lista.users.find((user) => user.email?.toLowerCase() === email.toLowerCase())
+      if (achado) return achado.id
+      if (lista.users.length < 200) break
+    }
+
+    throw new Error(`${email}: conta já registrada, mas não encontrada na listagem.`)
+  }
+
   // ── Equipe ─────────────────────────────────────────────────────────────────
   const staffIds = []
   for (const member of STAFF) {
-    // Sem senha: o acesso é por magic link.
-    const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
-      email: member.email,
-      email_confirm: true,
-      user_metadata: { name: member.name, demo: true },
-    })
-    if (authError && !authError.message.includes('already been registered')) throw authError
+    const authUserId = await ensureAuthUser(member.email, member.name)
 
     const { data: profile, error: profileError } = await supabase
       .from('user_profiles')
       .upsert(
-        { auth_user_id: authUser?.user?.id ?? null, name: member.name, email: member.email },
+        { auth_user_id: authUserId, name: member.name, email: member.email },
         { onConflict: 'email' },
       )
       .select('id')
       .single()
     if (profileError) throw profileError
 
-    await supabase.from('organization_members').upsert(
-      { organization_id: organizationId, user_profile_id: profile.id, role: member.role },
-      { onConflict: 'organization_id,user_profile_id' },
-    )
+    await supabase
+      .from('organization_members')
+      .upsert(
+        { organization_id: organizationId, user_profile_id: profile.id, role: member.role },
+        { onConflict: 'organization_id,user_profile_id' },
+      )
 
     const { data: staffRow } = await supabase
       .from('staff')
@@ -153,7 +231,11 @@ async function main() {
   for (const plan of PLANS) {
     const { data, error } = await supabase
       .from('membership_plans')
-      .insert({ organization_id: organizationId, ...plan, benefits: ['Musculação', 'Aulas coletivas'] })
+      .insert({
+        organization_id: organizationId,
+        ...plan,
+        benefits: ['Musculação', 'Aulas coletivas'],
+      })
       .select('id, price')
       .single()
     if (error) throw error
@@ -259,13 +341,22 @@ async function main() {
           ? 'INACTIVE'
           : 'ACTIVE'
     const monthsAgo = Math.floor(random() * 24)
-    const enrolledAt = new Date(today.getFullYear(), today.getMonth() - monthsAgo, 1 + Math.floor(random() * 27))
+    const enrolledAt = new Date(
+      today.getFullYear(),
+      today.getMonth() - monthsAgo,
+      1 + Math.floor(random() * 27),
+    )
     return {
       organization_id: organizationId,
       user_profile_id: profile.id,
       status,
       enrolled_at: enrolledAt.toISOString().slice(0, 10),
-      cancelled_at: status === 'INACTIVE' ? new Date(today.getTime() - Math.floor(random() * 120) * 86_400_000).toISOString().slice(0, 10) : null,
+      cancelled_at:
+        status === 'INACTIVE'
+          ? new Date(today.getTime() - Math.floor(random() * 120) * 86_400_000)
+              .toISOString()
+              .slice(0, 10)
+          : null,
       trainer_id: trainers.length > 0 ? pick(trainers).id : null,
     }
   })
@@ -314,7 +405,11 @@ async function main() {
     const isInactive = inactiveStudentIds.has(membership.student_id)
 
     for (let offset = 5; offset >= 0; offset -= 1) {
-      const competence = new Date(today.getFullYear(), today.getMonth() - offset, membership.billing_day)
+      const competence = new Date(
+        today.getFullYear(),
+        today.getMonth() - offset,
+        membership.billing_day,
+      )
       if (competence < enrolledAt) continue
       if (isInactive && offset < 2) continue // saiu: parou de ser cobrado
 
@@ -342,7 +437,8 @@ async function main() {
   for (let daysAgo = 29; daysAgo >= 0; daysAgo -= 1) {
     const weekday = new Date(today.getTime() - daysAgo * 86_400_000).getDay()
     const base = weekday === 0 ? 0.25 : weekday === 6 ? 0.55 : 1
-    const count = daysAgo === 0 ? CHECKINS_TODAY : Math.round(CHECKINS_TODAY * base * (0.85 + random() * 0.3))
+    const count =
+      daysAgo === 0 ? CHECKINS_TODAY : Math.round(CHECKINS_TODAY * base * (0.85 + random() * 0.3))
 
     // Sorteio sem repetição: um aluno não entra duas vezes no mesmo dia. Contar
     // a tentativa em vez do acerto entregava menos check-ins que o pedido.
@@ -367,7 +463,9 @@ async function main() {
   }
   await insertMany('check_ins', checkInRows)
 
-  console.log(`  alunos             ✓  ${TOTAL_STUDENTS} (${OVERDUE_STUDENTS} inadimplentes, ${INACTIVE_STUDENTS} inativos)`)
+  console.log(
+    `  alunos             ✓  ${TOTAL_STUDENTS} (${OVERDUE_STUDENTS} inadimplentes, ${INACTIVE_STUDENTS} inativos)`,
+  )
   console.log(`  cobranças          ✓  ${chargeRows.length}`)
   console.log(`  check-ins          ✓  ${checkInRows.length}`)
 
@@ -379,10 +477,17 @@ async function main() {
     [7, 'Sua mensalidade está atrasada há uma semana.'],
   ]
   for (const [offset, template] of rules) {
-    await supabase.from('collection_rules').upsert(
-      { organization_id: organizationId, offset_days: offset, template, channels: ['PUSH', 'EMAIL'] },
-      { onConflict: 'organization_id,offset_days' },
-    )
+    await supabase
+      .from('collection_rules')
+      .upsert(
+        {
+          organization_id: organizationId,
+          offset_days: offset,
+          template,
+          channels: ['PUSH', 'EMAIL'],
+        },
+        { onConflict: 'organization_id,offset_days' },
+      )
   }
   console.log('  régua de cobrança  ✓')
 

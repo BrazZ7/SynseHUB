@@ -6,6 +6,7 @@ import { AccountTypePicker } from '@/features/auth/account-type-picker'
 import { parseAccountType } from '@/features/auth/account-type'
 import { JoinGymForm } from '@/features/onboarding/join-gym-form'
 import { OnboardingForm } from '@/features/onboarding/onboarding-form'
+import { SoloStartForm } from '@/features/onboarding/solo-start-form'
 import { requireOnboarding } from '@/lib/auth/require-session'
 import { createSupabaseServerClient } from '@/lib/database/supabase-server'
 
@@ -30,6 +31,10 @@ const COPY = {
   aluno: {
     titulo: 'Entre na sua academia',
     descricao: 'Conta criada. Informe o código que a academia te passou.',
+  },
+  pessoal: {
+    titulo: 'Comece por conta própria',
+    descricao: 'Sem academia vinculada. Você já sai daqui com treino e desafio do mês.',
   },
 } as const
 
@@ -86,9 +91,9 @@ export default async function OnboardingPage({
         <p className="text-sm text-synse-muted">{copy.descricao}</p>
       </header>
 
-      {tipo === 'aluno' ? (
-        <JoinGymForm defaultName={suggestedName} />
-      ) : (
+      {tipo === 'aluno' && <JoinGymForm defaultName={suggestedName} />}
+      {tipo === 'pessoal' && <SoloStartForm defaultName={suggestedName} />}
+      {(tipo === 'academia' || tipo === 'profissional') && (
         <OnboardingForm defaultOwnerName={suggestedName} accountType={tipo} />
       )}
 

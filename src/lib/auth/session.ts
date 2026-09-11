@@ -6,6 +6,7 @@ import { getDataSource } from '@/lib/database'
 import { isDemoMode } from '@/lib/database/env'
 import { createSupabaseServerClient } from '@/lib/database/supabase-server'
 import { DEMO_ORG_ID, getDemoDataset } from '@/lib/database/demo-seed'
+import { isSoloOrganization, SOLO_ORGANIZATION_LABEL } from '@/lib/organizations/solo'
 import type { UserRole } from '@/types/domain'
 
 export const DEMO_SESSION_COOKIE = 'synse_demo_session'
@@ -21,6 +22,8 @@ export type SessionContext = {
   organizationName: string
   /** Preenchido quando o usuário é aluno de alguma academia. */
   studentId: string | null
+  /** Aluno sem academia vinculada: a matrícula está na organização reservada. */
+  isSoloStudent: boolean
   isDemo: boolean
 }
 
@@ -114,6 +117,7 @@ function demoSessionFor(persona: DemoPersona): SessionContext {
     organizationId: DEMO_ORG_ID,
     organizationName: demo.organization.name,
     studentId: student?.id ?? null,
+    isSoloStudent: false,
     isDemo: true,
   }
 }
@@ -185,17 +189,28 @@ export async function getSession(): Promise<SessionContext | null> {
    * pessoa pertence à organização?" e responde olhando só para a equipe.
    */
   if (!membership) {
-    const { data: enrolment } = await supabase
+    const { data: enrolments } = await supabase
       .from('students')
-      .select('id,organization_id,organizations(name)')
+      .select('id,organization_id,status,organizations(name)')
       .eq('user_profile_id', profile.id)
       .order('enrolled_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+      .limit(5)
+
+    /*
+     * Academia de verdade ganha da organização reservada.
+     *
+     * Quem entrou sozinho e depois recebeu o código da academia tem duas
+     * matrículas, criadas possivelmente no mesmo dia — ordenar por data
+     * decidiria no empate, e no dia seguinte poderia decidir diferente. Aqui a
+     * regra é explícita: existindo academia, é nela que a pessoa está.
+     */
+    const enrolment =
+      enrolments?.find((row) => !isSoloOrganization(row.organization_id)) ?? enrolments?.[0]
 
     if (!enrolment) return null
 
     const gym = enrolment.organizations as { name?: string } | null
+    const solo = isSoloOrganization(enrolment.organization_id)
 
     return {
       userProfileId: profile.id,
@@ -205,8 +220,9 @@ export async function getSession(): Promise<SessionContext | null> {
       avatarUrl: profile.avatar_url,
       role: 'STUDENT' as UserRole,
       organizationId: enrolment.organization_id,
-      organizationName: gym?.name ?? 'Minha academia',
+      organizationName: solo ? SOLO_ORGANIZATION_LABEL : (gym?.name ?? 'Minha academia'),
       studentId: enrolment.id,
+      isSoloStudent: solo,
       isDemo: false,
     }
   }
@@ -230,6 +246,7 @@ export async function getSession(): Promise<SessionContext | null> {
     organizationId: membership.organization_id,
     organizationName: organizations?.name ?? 'Minha organização',
     studentId: student?.id ?? null,
+    isSoloStudent: false,
     isDemo: false,
   }
 }

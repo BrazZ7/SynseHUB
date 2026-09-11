@@ -130,6 +130,12 @@ export interface DataSource {
    */
   joinOrganizationAsStudent(input: { inviteCode: string; studentName: string }): Promise<string>
 
+  /**
+   * Entrada de quem não tem academia vinculada — ou treina numa que não usa o
+   * Synse. A matrícula nasce ativa: não há quem confirme.
+   */
+  joinSynseAsSoloStudent(input: { studentName: string }): Promise<string>
+
   /** Muda a situação da matrícula. Usada para confirmar quem entrou por código. */
   updateStudentStatus(input: {
     organizationId: string

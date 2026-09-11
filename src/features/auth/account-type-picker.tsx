@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Building2, Dumbbell, UserRound } from 'lucide-react'
+import { Building2, Dumbbell, Sparkles, UserRound } from 'lucide-react'
 
 /**
  * Escolha do perfil, depois de a conta existir e o e-mail estar confirmado.
@@ -30,6 +30,16 @@ const OPCOES = [
     icone: UserRound,
     titulo: 'Sou aluno',
     descricao: 'Entre com o código da sua academia e acompanhe seus treinos.',
+  },
+  /*
+   * Sem esta opção, quem treina numa academia que não usa o Synse não tinha
+   * código para digitar — e era expulso do produto na primeira tela.
+   */
+  {
+    tipo: 'pessoal',
+    icone: Sparkles,
+    titulo: 'Treino por conta própria',
+    descricao: 'Sem academia, ou numa que ainda não usa o Synse. Comece agora mesmo.',
   },
 ] as const
 

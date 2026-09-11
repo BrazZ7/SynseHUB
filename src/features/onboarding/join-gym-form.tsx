@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { TriangleAlert } from 'lucide-react'
 import { useActionState } from 'react'
 import { useFormStatus } from 'react-dom'
@@ -54,6 +55,20 @@ export function JoinGymForm({ defaultName }: { defaultName: string }) {
       </div>
 
       <SubmitButton />
+
+      {/*
+        Saída para quem não tem código nenhum: a academia dele não usa o Synse,
+        ou não há academia. Sem isto, essa pessoa trava aqui.
+      */}
+      <p className="text-center text-sm text-synse-muted">
+        Sua academia não usa o Synse?{' '}
+        <Link
+          href="/onboarding?tipo=pessoal"
+          className="text-synse-primary underline-offset-2 hover:underline"
+        >
+          Treine por conta própria
+        </Link>
+      </p>
     </form>
   )
 }

@@ -142,3 +142,10 @@ export const joinGymSchema = z.object({
 })
 
 export type JoinGymInput = z.infer<typeof joinGymSchema>
+
+/** Entrada sem academia: só o nome, e o nome já veio do cadastro da conta. */
+export const soloStartSchema = z.object({
+  studentName: z.string().trim().min(3, 'Informe seu nome completo.').max(120),
+})
+
+export type SoloStartInput = z.infer<typeof soloStartSchema>

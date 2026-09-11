@@ -1,11 +1,11 @@
 /**
- * Os três perfis que podem criar conta.
+ * Os quatro perfis que podem criar conta.
  *
  * A escolha vem antes da senha porque cada caminho pede dados diferentes logo
  * em seguida: academia e estúdio informam os dados do negócio, o aluno informa
  * o código de convite. Perguntar depois obrigaria a voltar.
  */
-export const ACCOUNT_TYPES = ['academia', 'profissional', 'aluno'] as const
+export const ACCOUNT_TYPES = ['academia', 'profissional', 'aluno', 'pessoal'] as const
 
 export type AccountType = (typeof ACCOUNT_TYPES)[number]
 
@@ -33,6 +33,12 @@ export const ACCOUNT_COPY: Record<
     titulo: 'Criar conta de aluno',
     descricao:
       'Primeiro criamos a sua conta. Depois você entra na sua academia com o código que ela te passou.',
+    emailExemplo: 'voce@exemplo.com',
+  },
+  pessoal: {
+    titulo: 'Treinar por conta própria',
+    descricao:
+      'Sem academia, ou numa que ainda não usa o Synse. Você começa com treino, alimentação e desafio do mês.',
     emailExemplo: 'voce@exemplo.com',
   },
 }

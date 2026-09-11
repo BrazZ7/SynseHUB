@@ -16,12 +16,16 @@ const tabelas: Record<string, unknown> = {}
 
 function construirClient() {
   const encadeado = (tabela: string) => {
+    // A consulta de matrículas é aguardada direto (devolve lista); a de equipe
+    // termina em `maybeSingle`. O `then` cobre a primeira forma.
     const alvo = {
       select: () => alvo,
       eq: () => alvo,
       order: () => alvo,
       limit: () => alvo,
       maybeSingle: async () => ({ data: tabelas[tabela] ?? null }),
+      then: (resolver: (valor: { data: unknown }) => unknown) =>
+        Promise.resolve(resolver({ data: tabelas[tabela] ?? null })),
     }
     return alvo
   }
@@ -40,6 +44,8 @@ vi.mock('next/headers', () => ({ cookies: async () => ({ get: () => undefined })
 
 const { getSession } = await import('@/lib/auth/session')
 
+const SOLO = '00000000-0000-0000-0000-000000000001'
+
 const PERFIL = {
   id: 'perfil-1',
   synse_id: 'SYN-ABCD2345',
@@ -56,11 +62,14 @@ describe('getSession', () => {
   it('reconhece o aluno que só tem matrícula, sem vínculo de equipe', async () => {
     tabelas.user_profiles = PERFIL
     tabelas.organization_members = null
-    tabelas.students = {
-      id: 'aluno-1',
-      organization_id: 'org-1',
-      organizations: { name: 'Academia Alpha' },
-    }
+    tabelas.students = [
+      {
+        id: 'aluno-1',
+        organization_id: 'org-1',
+        status: 'ACTIVE',
+        organizations: { name: 'Academia Alpha' },
+      },
+    ]
 
     const sessao = await getSession()
 
@@ -69,13 +78,59 @@ describe('getSession', () => {
       organizationId: 'org-1',
       organizationName: 'Academia Alpha',
       studentId: 'aluno-1',
+      isSoloStudent: false,
+    })
+  })
+
+  it('quem entrou sem academia é aluno, na organização reservada', async () => {
+    tabelas.user_profiles = PERFIL
+    tabelas.organization_members = null
+    tabelas.students = [
+      {
+        id: 'aluno-solo',
+        organization_id: SOLO,
+        status: 'ACTIVE',
+        organizations: { name: 'Synse' },
+      },
+    ]
+
+    expect(await getSession()).toMatchObject({
+      role: 'STUDENT',
+      studentId: 'aluno-solo',
+      isSoloStudent: true,
+      organizationName: 'Por conta própria',
+    })
+  })
+
+  /*
+   * Quem entrou sozinho e depois recebeu o código da academia tem as duas
+   * matrículas, possivelmente criadas no mesmo dia. Ordenar por data decidiria
+   * no empate — e poderia decidir diferente amanhã.
+   */
+  it('academia de verdade ganha da organização reservada', async () => {
+    tabelas.user_profiles = PERFIL
+    tabelas.organization_members = null
+    tabelas.students = [
+      { id: 'aluno-solo', organization_id: SOLO, status: 'ACTIVE', organizations: { name: 'Synse' } },
+      {
+        id: 'aluno-1',
+        organization_id: 'org-1',
+        status: 'PENDING',
+        organizations: { name: 'Academia Alpha' },
+      },
+    ]
+
+    expect(await getSession()).toMatchObject({
+      studentId: 'aluno-1',
+      organizationName: 'Academia Alpha',
+      isSoloStudent: false,
     })
   })
 
   it('sem matrícula e sem vínculo, não há sessão', async () => {
     tabelas.user_profiles = PERFIL
     tabelas.organization_members = null
-    tabelas.students = null
+    tabelas.students = []
 
     expect(await getSession()).toBeNull()
   })
@@ -87,7 +142,7 @@ describe('getSession', () => {
       role: 'OWNER',
       organizations: { name: 'Academia Alpha' },
     }
-    tabelas.students = null
+    tabelas.students = []
 
     const sessao = await getSession()
 

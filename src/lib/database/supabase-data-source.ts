@@ -241,6 +241,14 @@ export class SupabaseDataSource implements DataSource {
     return String(data)
   }
 
+  async joinSynseAsSoloStudent(input: { studentName: string }): Promise<string> {
+    const { data, error } = await this.client.rpc('join_synse_as_solo_student', {
+      p_student_name: input.studentName,
+    })
+    if (error) this.fail('joinSynseAsSoloStudent', error)
+    return String(data)
+  }
+
   async updateStudentStatus(input: {
     organizationId: string
     studentId: string

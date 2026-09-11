@@ -7,7 +7,11 @@ import { getDataSource } from '@/lib/database'
 import { logger } from '@/lib/logger'
 import { rateLimit } from '@/lib/rate-limit'
 import { slugify } from '@/lib/utils'
-import { createOrganizationSchema, joinGymSchema } from '@/lib/validations/organization'
+import {
+  createOrganizationSchema,
+  joinGymSchema,
+  soloStartSchema,
+} from '@/lib/validations/organization'
 import type { OnboardingState } from '@/features/onboarding/state'
 
 /** Cadastro da academia, logo após a criação da conta. */
@@ -109,6 +113,38 @@ export async function joinGymAction(
     }
     logger.error('onboarding:join_failed', { authUserId, error: mensagem })
     return { error: 'Não foi possível entrar agora. Tente novamente.' }
+  }
+
+  redirect('/app')
+}
+
+/**
+ * Entrada de quem não tem academia vinculada.
+ *
+ * A matrícula vai para a organização reservada do Synse (migration 0013) e
+ * nasce ativa — não há academia para confirmar, e deixar pendente seria uma
+ * espera que nunca termina.
+ */
+export async function startSoloAction(
+  _state: OnboardingState,
+  formData: FormData,
+): Promise<OnboardingState> {
+  const authUserId = await requireOnboarding()
+
+  const parsed = soloStartSchema.safeParse({ studentName: formData.get('studentName') })
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Confira os dados informados.' }
+  }
+
+  const limit = rateLimit(`solo:${authUserId}`, 5, 600_000)
+  if (!limit.allowed) return { error: 'Muitas tentativas. Aguarde alguns minutos.' }
+
+  try {
+    const dataSource = await getDataSource()
+    await dataSource.joinSynseAsSoloStudent({ studentName: parsed.data.studentName })
+  } catch (error) {
+    logger.error('onboarding:solo_failed', { authUserId, error: String(error) })
+    return { error: 'Não foi possível começar agora. Tente novamente.' }
   }
 
   redirect('/app')

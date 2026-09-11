@@ -90,6 +90,7 @@ export class SupabaseDataSource implements DataSource {
       phone: row.phone ?? null,
       companyType: row.company_type ?? null,
       monthlyRevenue: row.monthly_revenue != null ? Number(row.monthly_revenue) : null,
+      inviteCode: row.invite_code ?? null,
       timezone: row.timezone,
       hubPlan: row.hub_plan,
       status: row.status,
@@ -221,6 +222,23 @@ export class SupabaseDataSource implements DataSource {
     }
   }
 
+  async joinOrganizationAsStudent(input: {
+    inviteCode: string
+    studentName: string
+  }): Promise<string> {
+    /*
+     * Função com `security definer` no banco: o aluno não tem — e não deve ter
+     * — permissão de inserir em `students` de uma academia à qual ainda não
+     * pertence. A função valida o código e é a única porta.
+     */
+    const { data, error } = await this.client.rpc('join_organization_as_student', {
+      p_invite_code: input.inviteCode,
+      p_student_name: input.studentName,
+    })
+    if (error) this.fail('joinOrganizationAsStudent', error)
+    return String(data)
+  }
+
   async listPlans(organizationId: string) {
     const rows =
       (await this.select<Row[]>(
@@ -255,6 +273,7 @@ export class SupabaseDataSource implements DataSource {
     taxId: string | null
     city: string | null
     state: string | null
+    type?: 'GYM' | 'STUDIO'
   }): Promise<string> {
     const { data, error } = await this.client.rpc('create_organization_with_owner', {
       p_org_name: input.name,
@@ -264,6 +283,7 @@ export class SupabaseDataSource implements DataSource {
       p_tax_id: input.taxId,
       p_city: input.city,
       p_state: input.state,
+      p_type: input.type ?? 'GYM',
     })
     if (error) this.fail('createOrganization', error)
     return data as string

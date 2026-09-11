@@ -122,3 +122,23 @@ export const fiscalDataSchema = z.object({
 })
 
 export type FiscalDataInput = z.infer<typeof fiscalDataSchema>
+
+/**
+ * Entrada do aluno pelo código de convite.
+ *
+ * Maiúsculas e sem espaço porque é assim que o código existe no banco, e quem
+ * digita no celular manda minúscula com espaço sobrando o tempo todo. Corrigir
+ * aqui evita recusar um código que estava certo.
+ */
+export const joinGymSchema = z.object({
+  inviteCode: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .refine((value) => /^[0-9A-HJKMNPQRSTVWXYZ]{6}$/.test(value), {
+      message: 'O código tem 6 caracteres. Confira com a recepção.',
+    }),
+  studentName: z.string().trim().min(3, 'Informe seu nome completo.').max(120),
+})
+
+export type JoinGymInput = z.infer<typeof joinGymSchema>

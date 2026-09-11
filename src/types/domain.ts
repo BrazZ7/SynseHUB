@@ -57,6 +57,8 @@ export type Organization = {
   /** Natureza jurídica no vocabulário do provedor: MEI, LIMITED, INDIVIDUAL, ASSOCIATION. */
   companyType: string | null
   monthlyRevenue: number | null
+  /** Código que o aluno digita para entrar nesta academia. */
+  inviteCode: string | null
   timezone: string
   hubPlan: HubPlanTier
   status: 'ACTIVE' | 'TRIALING' | 'SUSPENDED' | 'CANCELLED'

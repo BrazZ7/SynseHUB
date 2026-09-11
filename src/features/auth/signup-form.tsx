@@ -8,17 +8,24 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { signUpWithPassword, type AuthActionState } from '@/lib/auth/actions'
+import type { AccountType } from '@/features/auth/account-type'
 
 const initialState: AuthActionState = {}
 
-export function SignUpForm() {
+export function SignUpForm({
+  accountType,
+  emailPlaceholder,
+}: {
+  accountType: AccountType
+  emailPlaceholder: string
+}) {
   const [state, formAction] = useActionState(signUpWithPassword, initialState)
 
   if (state.sent) {
     return (
       <p
         role="status"
-        className="flex items-start gap-2.5 rounded-lg bg-synse-primary/10 p-3 text-sm text-synse-text"
+        className="bg-synse-primary/10 flex items-start gap-2.5 rounded-lg p-3 text-sm text-synse-text"
       >
         <MailCheck className="mt-0.5 size-4 shrink-0 text-synse-primary" aria-hidden />
         <span>
@@ -31,10 +38,15 @@ export function SignUpForm() {
 
   return (
     <form action={formAction} className="space-y-4">
+      {/*
+        O tipo segue com o cadastro porque a etapa seguinte depende dele: dados
+        do negócio para academia e profissional, código de convite para aluno.
+      */}
+      <input type="hidden" name="accountType" value={accountType} />
       {state.error && (
         <p
           role="alert"
-          className="flex items-start gap-2.5 rounded-lg bg-synse-danger/10 p-3 text-sm text-synse-danger"
+          className="bg-synse-danger/10 flex items-start gap-2.5 rounded-lg p-3 text-sm text-synse-danger"
         >
           <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
           {state.error}
@@ -43,7 +55,13 @@ export function SignUpForm() {
 
       <div className="space-y-1.5">
         <Label htmlFor="signup-name">Seu nome</Label>
-        <Input id="signup-name" name="name" required autoComplete="name" placeholder="Como você se chama" />
+        <Input
+          id="signup-name"
+          name="name"
+          required
+          autoComplete="name"
+          placeholder="Como você se chama"
+        />
       </div>
 
       <div className="space-y-1.5">
@@ -54,7 +72,7 @@ export function SignUpForm() {
           type="email"
           required
           autoComplete="email"
-          placeholder="voce@academia.com.br"
+          placeholder={emailPlaceholder}
         />
       </div>
 

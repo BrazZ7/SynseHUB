@@ -118,7 +118,16 @@ export interface DataSource {
     taxId: string | null
     city: string | null
     state: string | null
+    /** GYM para academia, STUDIO para profissional independente. */
+    type?: 'GYM' | 'STUDIO'
   }): Promise<string>
+
+  /**
+   * Vincula a pessoa autenticada a uma academia existente pelo código de
+   * convite. A matrícula nasce pendente de confirmação — só a academia decide
+   * quem de fato é aluno dela.
+   */
+  joinOrganizationAsStudent(input: { inviteCode: string; studentName: string }): Promise<string>
 
   // Planos e matrículas
   listPlans(organizationId: string): Promise<MembershipPlan[]>

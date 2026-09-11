@@ -12,15 +12,37 @@ import type { OnboardingState } from '@/features/onboarding/state'
 
 const initialState: OnboardingState = {}
 
-export function OnboardingForm({ defaultOwnerName }: { defaultOwnerName: string }) {
+/**
+ * Academia e profissional preenchem os mesmos campos — o que muda é o nome das
+ * coisas. Um estúdio de personal não se reconhece em "nome da academia", e essa
+ * estranheza no primeiro minuto de uso custa mais do que parece.
+ */
+const ROTULOS = {
+  academia: { nome: 'Nome da academia', exemplo: 'Academia Alpha', botao: 'Abrir minha academia' },
+  profissional: {
+    nome: 'Nome do seu espaço',
+    exemplo: 'Studio Ana Ribeiro',
+    botao: 'Abrir meu espaço',
+  },
+} as const
+
+export function OnboardingForm({
+  defaultOwnerName,
+  accountType,
+}: {
+  defaultOwnerName: string
+  accountType: 'academia' | 'profissional'
+}) {
+  const rotulos = ROTULOS[accountType]
   const [state, formAction] = useActionState(createOrganizationAction, initialState)
 
   return (
     <form action={formAction} className="space-y-4">
+      <input type="hidden" name="accountType" value={accountType} />
       {state.error && (
         <p
           role="alert"
-          className="flex items-start gap-2.5 rounded-lg bg-synse-danger/10 p-3 text-sm text-synse-danger"
+          className="bg-synse-danger/10 flex items-start gap-2.5 rounded-lg p-3 text-sm text-synse-danger"
         >
           <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
           {state.error}
@@ -28,8 +50,8 @@ export function OnboardingForm({ defaultOwnerName }: { defaultOwnerName: string 
       )}
 
       <div className="space-y-1.5">
-        <Label htmlFor="org-name">Nome da academia</Label>
-        <Input id="org-name" name="name" required placeholder="Academia Alpha" />
+        <Label htmlFor="org-name">{rotulos.nome}</Label>
+        <Input id="org-name" name="name" required placeholder={rotulos.exemplo} />
       </div>
 
       <div className="space-y-1.5">
@@ -71,16 +93,16 @@ export function OnboardingForm({ defaultOwnerName }: { defaultOwnerName: string 
         </p>
       </div>
 
-      <SubmitButton />
+      <SubmitButton rotulo={rotulos.botao} />
     </form>
   )
 }
 
-function SubmitButton() {
+function SubmitButton({ rotulo }: { rotulo: string }) {
   const { pending } = useFormStatus()
   return (
     <Button type="submit" variant="gradient" size="lg" className="w-full" disabled={pending}>
-      {pending ? 'Criando academia…' : 'Concluir cadastro'}
+      {pending ? 'Criando…' : rotulo}
     </Button>
   )
 }

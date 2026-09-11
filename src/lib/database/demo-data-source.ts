@@ -340,6 +340,11 @@ export class DemoDataSource implements DataSource {
   }
 
   // ── Planos ─────────────────────────────────────────────────────────────────
+  /** Em demonstração não há código de convite a validar: a academia é uma só. */
+  async joinOrganizationAsStudent(): Promise<string> {
+    throw new Error('Entrada por código de convite não existe em modo de demonstração.')
+  }
+
   async listPlans(organizationId: string): Promise<MembershipPlan[]> {
     return this.scoped(this.plans(), organizationId)
   }

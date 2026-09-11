@@ -4,6 +4,7 @@ import { Bell, Building2, CreditCard, ShieldCheck, Users, Wallet } from 'lucide-
 
 import { PageHeader } from '@/components/synse/page-header'
 import { FiscalDataForm } from '@/features/organizations/fiscal-data-form'
+import { InviteCodeCard } from '@/features/organizations/invite-code-card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -91,6 +92,19 @@ export default async function SettingsPage() {
                 label="Criada em"
                 value={organization ? formatDate(organization.createdAt) : '—'}
               />
+
+              {/*
+                O código de convite vem antes dos dados fiscais porque é o que
+                se usa toda semana — mandar para um aluno novo —, enquanto o
+                CNPJ se preenche uma vez e nunca mais.
+              */}
+              <div className="border-t border-synse-border pt-4">
+                <h3 className="mb-1 text-sm font-semibold text-synse-text">Código de convite</h3>
+                <p className="mb-3 text-sm text-synse-muted">
+                  Passe este código para o aluno criar a conta dele e entrar na academia.
+                </p>
+                <InviteCodeCard code={organization?.inviteCode ?? null} />
+              </div>
 
               {/*
                 Razão social e documento saem da lista de leitura e viram

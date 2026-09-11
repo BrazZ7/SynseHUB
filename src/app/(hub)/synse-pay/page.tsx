@@ -26,6 +26,7 @@ import { getDashboardData } from '@/features/dashboard/service'
 import { getPaySummary } from '@/features/payments/service'
 import { requireHubSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
+import { ConnectAccountButton } from '@/features/payments/connect-account-button'
 import { getPaymentProvider, isSimulatedProvider } from '@/lib/payments'
 import { DEFAULT_BILLING_SETTINGS } from '@/lib/payments/split'
 import { formatCurrency, formatDate, formatNumber, formatPercent } from '@/lib/utils'
@@ -54,22 +55,27 @@ export default async function SynsePayPage() {
   const session = await requireHubSession('finance:read')
   const dataSource = await getDataSource()
 
-  const [summary, dashboard, account, billing, rules, paidCharges, openCharges] = await Promise.all([
-    getPaySummary(session.organizationId),
-    getDashboardData(session.organizationId),
-    dataSource.getPaymentAccount(session.organizationId),
-    dataSource.getBillingSettings(session.organizationId),
-    dataSource.listCollectionRules(session.organizationId),
-    dataSource.listCharges(session.organizationId, { status: 'PAID', limit: 12 }),
-    dataSource.listCharges(session.organizationId, { status: 'PENDING', limit: 12 }),
-  ])
+  const [summary, dashboard, account, billing, rules, paidCharges, openCharges] = await Promise.all(
+    [
+      getPaySummary(session.organizationId),
+      getDashboardData(session.organizationId),
+      dataSource.getPaymentAccount(session.organizationId),
+      dataSource.getBillingSettings(session.organizationId),
+      dataSource.listCollectionRules(session.organizationId),
+      dataSource.listCharges(session.organizationId, { status: 'PAID', limit: 12 }),
+      dataSource.listCharges(session.organizationId, { status: 'PENDING', limit: 12 }),
+    ],
+  )
 
   const provider = getPaymentProvider()
   const simulated = isSimulatedProvider()
-  const settings = billing ?? { organizationId: session.organizationId, ...DEFAULT_BILLING_SETTINGS }
+  const settings = billing ?? {
+    organizationId: session.organizationId,
+    ...DEFAULT_BILLING_SETTINGS,
+  }
 
   return (
-    <div className="space-y-5 animate-fade-in-up">
+    <div className="animate-fade-in-up space-y-5">
       <PageHeader
         eyebrow="Synse Pay"
         title="Você cuida da academia. O Synse cuida das cobranças."
@@ -87,27 +93,54 @@ export default async function SynsePayPage() {
       {simulated && (
         <div
           role="status"
-          className="flex flex-wrap items-start gap-3 rounded-xl border border-synse-warning/30 bg-synse-warning/8 p-4"
+          className="border-synse-warning/30 bg-synse-warning/8 flex flex-wrap items-start gap-3 rounded-xl border p-4"
         >
           <TriangleAlert className="mt-0.5 size-4 shrink-0 text-synse-warning" aria-hidden />
           <div className="min-w-0 text-sm">
             <p className="font-medium text-synse-text">Provedor simulado</p>
             <p className="text-synse-muted">
-              Nenhum valor real é movimentado. Configure <code className="break-all">PAYMENT_PROVIDER=asaas</code> e a
-              chave de API para operar com cobranças reais.
+              Nenhum valor real é movimentado. Configure{' '}
+              <code className="break-all">PAYMENT_PROVIDER=asaas</code> e a chave de API para operar
+              com cobranças reais.
             </p>
           </div>
         </div>
       )}
 
-      <section aria-label="Indicadores do Synse Pay" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Total recebido" value={formatCurrency(summary.totalReceived)} icon={BadgeDollarSign} accent="success" />
-        <MetricCard label="A receber" value={formatCurrency(summary.totalPending)} icon={Receipt} accent="warning" />
-        <MetricCard label="Inadimplência" value={formatCurrency(summary.overdueAmount)} icon={TriangleAlert} accent="danger" />
-        <MetricCard label="Taxa de pagamento" value={formatPercent(summary.paymentRate)} icon={Percent} accent="primary" />
+      <section
+        aria-label="Indicadores do Synse Pay"
+        className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
+      >
+        <MetricCard
+          label="Total recebido"
+          value={formatCurrency(summary.totalReceived)}
+          icon={BadgeDollarSign}
+          accent="success"
+        />
+        <MetricCard
+          label="A receber"
+          value={formatCurrency(summary.totalPending)}
+          icon={Receipt}
+          accent="warning"
+        />
+        <MetricCard
+          label="Inadimplência"
+          value={formatCurrency(summary.overdueAmount)}
+          icon={TriangleAlert}
+          accent="danger"
+        />
+        <MetricCard
+          label="Taxa de pagamento"
+          value={formatPercent(summary.paymentRate)}
+          icon={Percent}
+          accent="primary"
+        />
       </section>
 
-      <ChartCard title="Movimentação financeira" description="Recebido e em aberto por competência.">
+      <ChartCard
+        title="Movimentação financeira"
+        description="Recebido e em aberto por competência."
+      >
         <RevenueChart data={dashboard.revenueSeries} />
       </ChartCard>
 
@@ -218,8 +251,14 @@ export default async function SynsePayPage() {
               </p>
               <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <ReconciliationFigure label="GMV processado" value={formatCurrency(summary.gmv)} />
-                <ReconciliationFigure label="Comissão Synse" value={formatCurrency(summary.platformFee)} />
-                <ReconciliationFigure label="Tarifas do provedor" value={formatCurrency(summary.providerFees)} />
+                <ReconciliationFigure
+                  label="Comissão Synse"
+                  value={formatCurrency(summary.platformFee)}
+                />
+                <ReconciliationFigure
+                  label="Tarifas do provedor"
+                  value={formatCurrency(summary.providerFees)}
+                />
               </dl>
             </CardContent>
           </Card>
@@ -245,6 +284,10 @@ export default async function SynsePayPage() {
                 }
               />
               <SettingRow label="Onboarding" value={account?.onboardingStatus ?? 'NOT_STARTED'} />
+              <ConnectAccountButton
+                connected={Boolean(account?.providerAccountId)}
+                simulated={simulated}
+              />
               <p className="text-xs text-synse-muted">
                 Nenhum dado bancário sensível é armazenado pelo Synse. Guardamos apenas a referência
                 opaca da subconta criada no provedor.
@@ -286,15 +329,17 @@ export default async function SynsePayPage() {
                   return (
                     <li
                       key={method}
-                      className="flex items-center gap-2.5 rounded-lg bg-synse-surface-2/60 px-3 py-2.5"
+                      className="bg-synse-surface-2/60 flex items-center gap-2.5 rounded-lg px-3 py-2.5"
                     >
                       <Icon
-                        className={supported ? 'size-4 text-synse-primary' : 'size-4 text-synse-muted/50'}
+                        className={
+                          supported ? 'size-4 text-synse-primary' : 'text-synse-muted/50 size-4'
+                        }
                         aria-hidden
                       />
                       <span
                         className={
-                          supported ? 'text-sm text-synse-text' : 'text-sm text-synse-muted/70'
+                          supported ? 'text-sm text-synse-text' : 'text-synse-muted/70 text-sm'
                         }
                       >
                         {meta.label}
@@ -383,7 +428,7 @@ function SettingRow({ label, value }: { label: string; value: React.ReactNode })
 
 function ReconciliationFigure({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg bg-synse-surface-2/60 px-3 py-2.5">
+    <div className="bg-synse-surface-2/60 rounded-lg px-3 py-2.5">
       <dt className="text-xs text-synse-muted">{label}</dt>
       <dd className="mt-0.5 text-base font-semibold tabular-nums text-synse-text">{value}</dd>
     </div>

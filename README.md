@@ -486,6 +486,13 @@ Cada teste de banco corresponde a uma falha que já aconteceu. O de desempenho
 verifica o plano, não o relógio: o que importa é a política ser avaliada uma vez
 por consulta, e não o número de milissegundos numa máquina específica.
 
+## Antes do primeiro cliente pagante
+
+Credenciais a rotacionar, ambiente de desenvolvimento separado, plano da Vercel
+e a verificação do Synse Pay ponta a ponta estão em
+[`docs/pre-producao.md`](docs/pre-producao.md). Durante a construção é comum
+adiar esses itens — a lista existe para que adiar não vire esquecer.
+
 ## O que ainda não está pronto
 
 Honestidade sobre o estado atual:

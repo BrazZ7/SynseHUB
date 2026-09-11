@@ -49,6 +49,18 @@ export const providerUnavailable = (provider: string, detail?: string) =>
     detail ? `provider: ${provider} — ${detail}` : `provider: ${provider}`,
   )
 
+/**
+ * O provedor respondeu — e recusou.
+ *
+ * Diferente de `providerUnavailable`, que é "não deu para falar com ele".
+ * Tratar recusa como indisponibilidade manda a pessoa tentar de novo para
+ * sempre, quando o que falta é corrigir um dado. A mensagem aqui carrega o que
+ * o provedor apontou, então só é usada onde o dado recusado pertence a quem
+ * está olhando a tela.
+ */
+export const providerRejected = (userMessage: string, detail?: string) =>
+  new AppError('provider_rejected', userMessage, 422, detail)
+
 /** Converte qualquer erro em uma mensagem segura de exibir. */
 export function toUserMessage(error: unknown): string {
   if (error instanceof AppError) return error.userMessage

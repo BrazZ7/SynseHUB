@@ -261,3 +261,80 @@ describe('falhas de rede e da API', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })
+
+describe('abertura de subconta', () => {
+  /*
+   * Recusa do provedor não é indisponibilidade. Tratar as duas igual manda a
+   * dona da academia tentar de novo para sempre, quando o que falta é corrigir
+   * um dado que só ela pode corrigir.
+   */
+  it('repassa o motivo quando o provedor recusa os dados da academia', async () => {
+    responder(
+      { errors: [{ code: 'invalid_birthDate', description: 'Data de nascimento é obrigatória.' }] },
+      false,
+      400,
+    )
+
+    const erro = await provider()
+      .createPaymentAccount({
+        organizationId: 'org-1',
+        legalName: 'Academia Alpha LTDA',
+        email: 'dona@alpha.com.br',
+        taxId: '11222333000181',
+      })
+      .catch((e) => e)
+
+    expect(erro).toMatchObject({ code: 'provider_rejected' })
+    expect(erro.userMessage).toContain('Data de nascimento é obrigatória.')
+  })
+
+  it('continua genérico quando o provedor está fora do ar', async () => {
+    responder({}, false, 503)
+
+    const erro = await provider()
+      .createPaymentAccount({
+        organizationId: 'org-1',
+        legalName: 'Academia Alpha LTDA',
+        email: 'dona@alpha.com.br',
+        taxId: '11222333000181',
+      })
+      .catch((e) => e)
+
+    expect(erro).toMatchObject({ code: 'provider_unavailable' })
+  })
+
+  /*
+   * A recusa em cobrança cita dado do pagador — CPF, nome. Essa continua
+   * escondida atrás da mensagem genérica, ao contrário da abertura de conta.
+   */
+  it('cobrança recusada não expõe o motivo, que fala do pagador', async () => {
+    responder(
+      { errors: [{ code: 'invalid_customer', description: 'CPF do pagador inválido: 123...' }] },
+      false,
+      400,
+    )
+
+    const erro = await provider()
+      .getPayment('pay_1')
+      .catch((e) => e)
+
+    expect(erro).toMatchObject({ code: 'provider_unavailable' })
+    expect(erro.userMessage).not.toContain('123')
+  })
+
+  it('guarda a credencial devolvida na criação', async () => {
+    responder({ walletId: 'wallet_alpha', apiKey: '$aact_chave_da_subconta' })
+
+    const conta = await provider().createPaymentAccount({
+      organizationId: 'org-1',
+      legalName: 'Academia Alpha LTDA',
+      email: 'dona@alpha.com.br',
+      taxId: '11222333000181',
+    })
+
+    expect(conta).toMatchObject({
+      providerAccountId: 'wallet_alpha',
+      apiKey: '$aact_chave_da_subconta',
+    })
+  })
+})

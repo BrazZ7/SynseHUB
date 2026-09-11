@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { providerUnavailable } from '@/lib/errors'
+import { AppError, providerRejected, providerUnavailable } from '@/lib/errors'
 import { logger } from '@/lib/logger'
 import type {
   CreateChargeInput,
@@ -67,6 +67,8 @@ export class AsaasPaymentProvider implements PaymentProvider {
 
   private readonly apiUrl: string
   private readonly apiKey: string
+  /** Última recusa 4xx em texto legível, para quem optar por expô-la. */
+  private ultimaRecusa: string | null = null
 
   constructor(config?: { apiUrl?: string; apiKey?: string }) {
     this.apiUrl =
@@ -97,12 +99,29 @@ export class AsaasPaymentProvider implements PaymentProvider {
     if (!response.ok) {
       // O corpo pode conter dado do pagador — não propagar para a UI.
       logger.error('asaas:http_error', { path, status: response.status, body: text.slice(0, 500) })
+      this.ultimaRecusa = response.status < 500 ? motivoLegivel(text) : null
       throw providerUnavailable(
         'asaas',
         `HTTP ${response.status} em ${init?.method ?? 'GET'} ${path}${descreverErro(text)}`,
       )
     }
     return (text ? JSON.parse(text) : {}) as T
+  }
+
+  /**
+   * Como `request`, mas devolve o motivo da recusa em vez de escondê-lo.
+   *
+   * Só para operações cujos dados pertencem a quem está olhando a tela.
+   */
+  private async requestExpondoRecusa<T>(path: string, init?: RequestInit): Promise<T> {
+    try {
+      return await this.request<T>(path, init)
+    } catch (error) {
+      if (!(error instanceof AppError) || error.code !== 'provider_unavailable') throw error
+      if (!this.ultimaRecusa) throw error
+
+      throw providerRejected(`O provedor recusou os dados: ${this.ultimaRecusa}`, error.message)
+    }
   }
 
   private splitPayload(split?: SplitConfiguration) {
@@ -232,7 +251,16 @@ export class AsaasPaymentProvider implements PaymentProvider {
     email: string
     taxId: string
   }): Promise<ProviderPaymentAccount> {
-    const raw = await this.request<Record<string, unknown>>('/accounts', {
+    /*
+     * Aqui a recusa do provedor é repassada, ao contrário do resto do adapter.
+     *
+     * Os dados recusados são da própria academia — nome, documento, e-mail — e
+     * quem vê a tela é quem pode corrigi-los. Esconder isso atrás de "o provedor
+     * não respondeu" mandaria a dona tentar de novo indefinidamente sem nunca
+     * saber o que falta. Em cobrança é o contrário: lá a recusa cita dado do
+     * pagador, e continua genérica.
+     */
+    const raw = await this.requestExpondoRecusa<Record<string, unknown>>('/accounts', {
       method: 'POST',
       body: JSON.stringify({
         name: input.legalName,
@@ -307,6 +335,22 @@ function descreverErro(corpo: string): string {
     return codigos.length ? ` (${codigos.join(', ')})` : ''
   } catch {
     return ''
+  }
+}
+
+/**
+ * Descrições da recusa, como o Asaas as devolve.
+ *
+ * Usado só onde o dado recusado é de quem está olhando — nunca em cobrança,
+ * onde a descrição cita o pagador.
+ */
+function motivoLegivel(corpo: string): string | null {
+  try {
+    const parsed = JSON.parse(corpo) as { errors?: Array<{ description?: string }> }
+    const descricoes = (parsed.errors ?? []).map((e) => e.description).filter(Boolean)
+    return descricoes.length ? descricoes.join(' ') : null
+  } catch {
+    return null
   }
 }
 

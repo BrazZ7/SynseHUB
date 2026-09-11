@@ -22,8 +22,7 @@ import { formatCurrency } from '@/lib/utils'
 
 export const metadata: Metadata = {
   title: 'SynseHub — uma nova forma de conectar academia, gestão e saúde',
-  description:
-    'Gestão, pagamentos, treinos, relacionamento e bem-estar em um único ecossistema.',
+  description: 'Gestão, pagamentos, treinos, relacionamento e bem-estar em um único ecossistema.',
 }
 
 const CAPABILITIES = [
@@ -90,16 +89,22 @@ export default function LandingPage() {
   return (
     <div className="min-h-svh bg-synse-bg">
       {/* Cabeçalho */}
-      <header className="sticky top-0 z-40 border-b border-synse-border bg-synse-bg/85 backdrop-blur-md">
+      <header className="bg-synse-bg/85 sticky top-0 z-40 border-b border-synse-border backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3.5 sm:px-8">
           <SynseLogo size="sm" />
           <nav className="flex items-center gap-2">
             <ThemeToggle />
-            <Button variant="ghost" size="sm" asChild className="hidden sm:inline-flex">
-              <Link href="#recursos">Conhecer SynseHub</Link>
+            {/*
+              Duas portas, sempre visíveis. Antes só havia "Entrar", e quem
+              chegava sem conta caía numa tela de login para então procurar um
+              link pequeno de cadastro — o visitante novo, que é o público da
+              página, era o único mal atendido.
+            */}
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/login">Entrar</Link>
             </Button>
             <Button size="sm" asChild>
-              <Link href="/login">Entrar</Link>
+              <Link href="/signup">Criar conta</Link>
             </Button>
           </nav>
         </div>
@@ -110,15 +115,15 @@ export default function LandingPage() {
         <section className="relative overflow-hidden">
           <div
             aria-hidden
-            className="pointer-events-none absolute -right-40 -top-40 size-[32rem] rounded-full bg-synse-primary/12 blur-3xl"
+            className="bg-synse-primary/12 pointer-events-none absolute -right-40 -top-40 size-[32rem] rounded-full blur-3xl"
           />
           <div
             aria-hidden
-            className="pointer-events-none absolute -bottom-52 -left-40 size-[28rem] rounded-full bg-synse-cyan/10 blur-3xl"
+            className="bg-synse-cyan/10 pointer-events-none absolute -bottom-52 -left-40 size-[28rem] rounded-full blur-3xl"
           />
 
           <div className="relative mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
-            <div className="max-w-3xl space-y-6 animate-fade-in-up">
+            <div className="max-w-3xl animate-fade-in-up space-y-6">
               <Badge variant="primary" className="gap-1.5">
                 <Heart className="size-3" aria-hidden />
                 Saúde em equilíbrio com o seu futuro
@@ -135,8 +140,8 @@ export default function LandingPage() {
 
               <div className="flex flex-wrap items-center gap-3 pt-2">
                 <Button variant="gradient" size="lg" asChild>
-                  <Link href="/login">
-                    COMEÇAR AGORA
+                  <Link href="/signup">
+                    CRIAR CONTA GRÁTIS
                     <ArrowRight className="size-4" />
                   </Link>
                 </Button>
@@ -206,7 +211,7 @@ export default function LandingPage() {
                   className="group rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-synse"
                 >
                   <span
-                    className="flex size-10 items-center justify-center rounded-xl bg-synse-mint/50 text-synse-primary transition-transform duration-200 group-hover:scale-105"
+                    className="bg-synse-mint/50 flex size-10 items-center justify-center rounded-xl text-synse-primary transition-transform duration-200 group-hover:scale-105"
                     aria-hidden
                   >
                     <Icon className="size-4.5" />
@@ -222,7 +227,7 @@ export default function LandingPage() {
         </section>
 
         {/* Ecossistema */}
-        <section className="border-y border-synse-border bg-synse-surface/50">
+        <section className="bg-synse-surface/50 border-y border-synse-border">
           <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8">
             <div className="max-w-2xl space-y-3">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-synse-primary">
@@ -314,7 +319,7 @@ export default function LandingPage() {
                   className="mt-5 w-full"
                   asChild
                 >
-                  <Link href="/login">Começar agora</Link>
+                  <Link href="/signup">Começar agora</Link>
                 </Button>
               </article>
             ))}
@@ -335,12 +340,17 @@ export default function LandingPage() {
               Comece pelo SynseHub e leve a sua academia para um ecossistema completo de saúde e
               bem-estar.
             </p>
-            <Button variant="gradient" size="lg" asChild className="mt-7">
-              <Link href="/login">
-                COMEÇAR AGORA
-                <ArrowRight className="size-4" />
-              </Link>
-            </Button>
+            <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
+              <Button variant="gradient" size="lg" asChild>
+                <Link href="/signup">
+                  CRIAR CONTA GRÁTIS
+                  <ArrowRight className="size-4" />
+                </Link>
+              </Button>
+              <Button variant="outline" size="lg" asChild>
+                <Link href="/login">JÁ TENHO CONTA</Link>
+              </Button>
+            </div>
           </div>
         </section>
       </main>

@@ -7,6 +7,7 @@ import { isDemoMode } from '@/lib/database/env'
 import { createSupabaseServerClient } from '@/lib/database/supabase-server'
 import { DEMO_ORG_ID, getDemoDataset } from '@/lib/database/demo-seed'
 import { isSoloOrganization, SOLO_ORGANIZATION_LABEL } from '@/lib/organizations/solo'
+import type { UserTier } from '@/lib/plans/tiers'
 import type { UserRole } from '@/types/domain'
 
 export const DEMO_SESSION_COOKIE = 'synse_demo_session'
@@ -24,6 +25,8 @@ export type SessionContext = {
   studentId: string | null
   /** Aluno sem academia vinculada: a matrícula está na organização reservada. */
   isSoloStudent: boolean
+  /** Plano da conta da pessoa (Synse ou Synse+), não o plano da academia. */
+  tier: UserTier
   isDemo: boolean
 }
 
@@ -118,6 +121,7 @@ function demoSessionFor(persona: DemoPersona): SessionContext {
     organizationName: demo.organization.name,
     studentId: student?.id ?? null,
     isSoloStudent: false,
+    tier: 'FREE',
     isDemo: true,
   }
 }
@@ -161,7 +165,7 @@ export async function getSession(): Promise<SessionContext | null> {
 
   const { data: profile } = await supabase
     .from('user_profiles')
-    .select('id, synse_id, name, email, avatar_url')
+    .select('id, synse_id, name, email, avatar_url, tier')
     .eq('auth_user_id', user.id)
     .maybeSingle()
 
@@ -223,6 +227,7 @@ export async function getSession(): Promise<SessionContext | null> {
       organizationName: solo ? SOLO_ORGANIZATION_LABEL : (gym?.name ?? 'Minha academia'),
       studentId: enrolment.id,
       isSoloStudent: solo,
+      tier: (profile.tier ?? 'FREE') as UserTier,
       isDemo: false,
     }
   }
@@ -247,6 +252,7 @@ export async function getSession(): Promise<SessionContext | null> {
     organizationName: organizations?.name ?? 'Minha organização',
     studentId: student?.id ?? null,
     isSoloStudent: false,
+    tier: (profile.tier ?? 'FREE') as UserTier,
     isDemo: false,
   }
 }

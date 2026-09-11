@@ -18,7 +18,8 @@ export type UserRole =
   | 'STUDENT'
   | 'PROFESSIONAL'
 
-export type OrganizationType = 'GYM' | 'NETWORK' | 'BRANCH' | 'CLINIC' | 'STUDIO' | 'BOX' | 'COMPANY'
+export type OrganizationType =
+  'GYM' | 'NETWORK' | 'BRANCH' | 'CLINIC' | 'STUDIO' | 'BOX' | 'COMPANY'
 
 export type UserProfile = {
   id: string
@@ -153,7 +154,8 @@ export type Membership = {
 
 export type ChargeStatus = 'PENDING' | 'PAID' | 'OVERDUE' | 'CANCELLED' | 'REFUNDED' | 'FAILED'
 
-export type PaymentMethod = 'PIX' | 'PIX_AUTOMATIC' | 'CREDIT_CARD' | 'CREDIT_CARD_RECURRING' | 'BOLETO' | 'CASH'
+export type PaymentMethod =
+  'PIX' | 'PIX_AUTOMATIC' | 'CREDIT_CARD' | 'CREDIT_CARD_RECURRING' | 'BOLETO' | 'CASH'
 
 export type Charge = {
   id: string
@@ -223,15 +225,7 @@ export type CheckIn = {
 // ---------------------------------------------------------------------------
 
 export type MuscleGroup =
-  | 'CHEST'
-  | 'BACK'
-  | 'LEGS'
-  | 'SHOULDERS'
-  | 'ARMS'
-  | 'CORE'
-  | 'GLUTES'
-  | 'CARDIO'
-  | 'FULL_BODY'
+  'CHEST' | 'BACK' | 'LEGS' | 'SHOULDERS' | 'ARMS' | 'CORE' | 'GLUTES' | 'CARDIO' | 'FULL_BODY'
 
 export type Exercise = {
   id: string
@@ -369,13 +363,7 @@ export type Consent = {
 // Notificações
 // ---------------------------------------------------------------------------
 
-export type NotificationCategory =
-  | 'PAYMENT'
-  | 'WORKOUT'
-  | 'GYM'
-  | 'CONTENT'
-  | 'PROGRAM'
-  | 'SYSTEM'
+export type NotificationCategory = 'PAYMENT' | 'WORKOUT' | 'GYM' | 'CONTENT' | 'PROGRAM' | 'SYSTEM'
 
 /**
  * Aviso destinado a uma pessoa, não a uma organização.
@@ -394,4 +382,45 @@ export type AppNotification = {
   actionUrl: string | null
   readAt: string | null
   createdAt: string
+}
+
+// ---------------------------------------------------------------------------
+// Desafios base e medalhas
+// ---------------------------------------------------------------------------
+
+export type ChallengeMetric = 'DISTANCE_KM' | 'SESSIONS' | 'LOAD_PERCENT' | 'CHECKINS' | 'MINUTES'
+
+export type MedalLevel = 'PARTICIPACAO' | 'BRONZE' | 'PRATA' | 'OURO'
+
+/** Item do catálogo — igual para todo mundo, sem dono. */
+export type BaselineChallenge = {
+  code: string
+  title: string
+  description: string
+  metric: ChallengeMetric
+  unit: string
+  targetValue: number
+  minTier: 'FREE' | 'PRO'
+  position: number
+}
+
+/** A escolha de uma pessoa num ciclo. `cycle` é sempre o primeiro dia do mês. */
+export type ChallengeEntry = {
+  id: string
+  challengeCode: string
+  cycle: string
+  targetValue: number
+  progressValue: number
+  chosenAt: string
+  closedAt: string | null
+}
+
+export type ChallengeMedal = {
+  id: string
+  challengeCode: string
+  cycle: string
+  level: MedalLevel
+  progressValue: number
+  targetValue: number
+  awardedAt: string
 }

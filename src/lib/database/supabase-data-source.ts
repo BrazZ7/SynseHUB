@@ -17,6 +17,9 @@ import type { DemoStaff } from '@/lib/database/demo-seed'
 import type {
   AppNotification,
   Assessment,
+  BaselineChallenge,
+  ChallengeEntry,
+  ChallengeMedal,
   Charge,
   CheckIn,
   CollectionRule,
@@ -1150,6 +1153,100 @@ export class SupabaseDataSource implements DataSource {
     // escolhe de quem são os avisos que vai marcar.
     const { data, error } = await this.client.rpc('mark_notifications_read')
     if (error) this.fail('markNotificationsRead', error)
+    return Number(data ?? 0)
+  }
+
+  // ── Desafios base ──────────────────────────────────────────────────────────
+  async listBaselineChallenges() {
+    const rows =
+      (await this.select<Row[]>(
+        'listBaselineChallenges',
+        this.client
+          .from('baseline_challenges')
+          .select('*')
+          .eq('active', true)
+          .order('position', { ascending: true }),
+      )) ?? []
+
+    return rows.map((row) => ({
+      code: row.code,
+      title: row.title,
+      description: row.description,
+      metric: row.metric,
+      unit: row.unit,
+      targetValue: Number(row.target_value),
+      minTier: row.min_tier,
+      position: row.position,
+    })) satisfies BaselineChallenge[]
+  }
+
+  async listChallengeEntries(userProfileId: string) {
+    const rows =
+      (await this.select<Row[]>(
+        'listChallengeEntries',
+        this.client
+          .from('challenge_entries')
+          .select('*')
+          .eq('user_profile_id', userProfileId)
+          .order('cycle', { ascending: false }),
+      )) ?? []
+
+    return rows.map((row) => ({
+      id: row.id,
+      challengeCode: row.challenge_code,
+      cycle: row.cycle,
+      targetValue: Number(row.target_value),
+      progressValue: Number(row.progress_value),
+      chosenAt: row.chosen_at,
+      closedAt: row.closed_at,
+    })) satisfies ChallengeEntry[]
+  }
+
+  async listChallengeMedals(userProfileId: string) {
+    const rows =
+      (await this.select<Row[]>(
+        'listChallengeMedals',
+        this.client
+          .from('challenge_medals')
+          .select('*')
+          .eq('user_profile_id', userProfileId)
+          .order('cycle', { ascending: false }),
+      )) ?? []
+
+    return rows.map((row) => ({
+      id: row.id,
+      challengeCode: row.challenge_code,
+      cycle: row.cycle,
+      level: row.level,
+      progressValue: Number(row.progress_value),
+      targetValue: Number(row.target_value),
+      awardedAt: row.awarded_at,
+    })) satisfies ChallengeMedal[]
+  }
+
+  /*
+   * As três escritas abaixo são RPC porque a regra mora no banco: o limite do
+   * plano gratuito, o desafio que é só do Pro e o nível da medalha. Deixar
+   * qualquer uma delas na aplicação abriria a porta de escrever direto na
+   * tabela — e a medalha de ouro viraria um POST.
+   */
+  async chooseBaselineChallenge(code: string) {
+    const { error } = await this.client.rpc('choose_baseline_challenge', { p_code: code })
+    if (error) this.fail('chooseBaselineChallenge', error)
+  }
+
+  async recordChallengeProgress(code: string, delta: number) {
+    const { data, error } = await this.client.rpc('record_challenge_progress', {
+      p_code: code,
+      p_delta: delta,
+    })
+    if (error) this.fail('recordChallengeProgress', error)
+    return Number(data ?? 0)
+  }
+
+  async closeOwnChallengeCycles() {
+    const { data, error } = await this.client.rpc('close_own_challenge_cycles')
+    if (error) this.fail('closeOwnChallengeCycles', error)
     return Number(data ?? 0)
   }
 }

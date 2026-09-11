@@ -234,7 +234,7 @@ Copie `.env.example` para `.env.local`. Nenhum segredo é versionado.
 
 ### Migrations
 
-Quatro arquivos versionados em `src/db/migrations`, aplicados em ordem:
+Arquivos versionados em `src/db/migrations`, aplicados em ordem:
 
 | Arquivo | Conteúdo |
 | --- | --- |
@@ -242,6 +242,16 @@ Quatro arquivos versionados em `src/db/migrations`, aplicados em ordem:
 | `0002_payments.sql` | Contas, cobranças, pagamentos, split, webhooks, régua |
 | `0003_training_health_content.sql` | Check-in, treinos, avaliações, nutrição, conteúdo, CRM, LGPD |
 | `0004_rls.sql` | Row Level Security em todas as tabelas |
+| `0005_student_profile_visibility.sql` | Equipe lê o perfil de quem tem matrícula |
+| `0006_unique_profile_email.sql` | E-mail único por perfil |
+| `0007_organization_signup.sql` | Cadastro de academia pela própria dona |
+| `0008_rls_performance.sql` | Políticas em forma de conjunto: 997 ms → 23 ms |
+| `0009_payment_marketplace.sql` | Subconta por academia e segredo do provedor |
+| `0010_organization_fiscal_address.sql` | Dados fiscais exigidos pelo provedor |
+| `0011_self_signup.sql` | Código de convite, entrada do aluno, tipo da organização |
+| `0012_notification_events.sql` | Gatilhos que enchem o sino |
+| `0013_synse_solo.sql` | Organização reservada: treinar sem academia vinculada |
+| `0014_baseline_experience.sql` | Plano da conta, desafios base, progresso e medalhas |
 
 ```bash
 npm run db:migrate                      # lista as migrations e como aplicá-las

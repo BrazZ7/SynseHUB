@@ -7,7 +7,9 @@ import {
   Dumbbell,
   Footprints,
   Moon,
+  Salad,
   Sparkles,
+  Trophy,
   Wallet,
 } from 'lucide-react'
 
@@ -17,6 +19,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { AppCheckInButton } from '@/features/checkin/app-checkin-button'
+import { getChallengeBoard } from '@/features/challenges/service'
 import { NotificationsBell } from '@/features/notifications/notifications-bell'
 import { getStudentHome } from '@/features/students/app-service'
 import { requireStudentSession } from '@/lib/auth/require-session'
@@ -26,10 +29,15 @@ export const metadata: Metadata = { title: 'Hoje' }
 
 export default async function StudentHomePage() {
   const session = await requireStudentSession()
-  const home = await getStudentHome(session.organizationId, session.studentId)
+  const [home, challenges] = await Promise.all([
+    getStudentHome(session.organizationId, session.studentId),
+    getChallengeBoard(session),
+  ])
+
+  const desafio = challenges.active[0] ?? null
 
   return (
-    <div className="space-y-5 animate-fade-in-up">
+    <div className="animate-fade-in-up space-y-5">
       <header className="flex items-center justify-between gap-3">
         <div>
           <p className="text-sm text-synse-muted">{greeting()},</p>
@@ -47,13 +55,11 @@ export default async function StudentHomePage() {
       <section className="relative overflow-hidden rounded-2xl bg-synse-gradient-deep p-6 text-white shadow-synse-lg">
         <div
           aria-hidden
-          className="pointer-events-none absolute -right-16 -top-16 size-52 rounded-full bg-synse-primary/25 blur-3xl"
+          className="bg-synse-primary/25 pointer-events-none absolute -right-16 -top-16 size-52 rounded-full blur-3xl"
         />
 
         <div className="relative">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/50">
-            Seu dia
-          </p>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/50">Seu dia</p>
 
           {home.todayWorkout ? (
             <>
@@ -61,7 +67,8 @@ export default async function StudentHomePage() {
                 {home.todayWorkout.name.replace(/^Treino [A-Z]+ — /, '')}
               </h2>
               <p className="mt-1 text-sm text-white/60">
-                Divisão {home.todayWorkout.splitLabel} · {home.todayWorkout.exerciseCount} exercícios
+                Divisão {home.todayWorkout.splitLabel} · {home.todayWorkout.exerciseCount}{' '}
+                exercícios
               </p>
               <Button
                 asChild
@@ -75,11 +82,28 @@ export default async function StudentHomePage() {
               </Button>
             </>
           ) : (
+            /*
+              Antes aqui dizia "nenhum treino atribuído, fale com o professor".
+              Deixava de pé quem não tem academia — e mandava quem tem esperar.
+              O treino base existe desde o primeiro minuto.
+            */
             <>
-              <h2 className="mt-2 text-xl font-semibold text-white">Nenhum treino atribuído</h2>
+              <h2 className="mt-2 text-2xl font-semibold leading-tight text-white">
+                Treino base Synse
+              </h2>
               <p className="mt-1 text-sm text-white/60">
-                Fale com o seu professor para receber o plano de treino.
+                Corpo inteiro, 3× por semana. Vale até sua academia montar o seu.
               </p>
+              <Button
+                asChild
+                variant="ghost"
+                className="mt-4 bg-white/15 text-white hover:bg-white/25"
+              >
+                <Link href="/app/workout">
+                  Ver treino base
+                  <ArrowRight className="size-4" />
+                </Link>
+              </Button>
             </>
           )}
         </div>
@@ -90,11 +114,7 @@ export default async function StudentHomePage() {
       {/* Indicadores da semana */}
       <section className="grid grid-cols-2 gap-3">
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
-          <ProgressRing
-            value={home.weeklyGoal.percentage}
-            size={104}
-            caption="da meta"
-          />
+          <ProgressRing value={home.weeklyGoal.percentage} size={104} caption="da meta" />
           <p className="text-center text-xs text-synse-muted">
             Meta semanal
             <span className="mt-0.5 block text-sm font-medium text-synse-text">
@@ -118,6 +138,64 @@ export default async function StudentHomePage() {
           </div>
         </div>
       </section>
+
+      {/* Desafio do mês */}
+      <section className="rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
+        <div className="flex items-center justify-between gap-3">
+          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-synse-primary">
+            <Trophy className="size-3.5" aria-hidden />
+            Desafio do mês
+          </p>
+          {desafio && (
+            <Badge variant="primary" className="tabular-nums">
+              {desafio.percentage}%
+            </Badge>
+          )}
+        </div>
+
+        {desafio ? (
+          <>
+            <p className="mt-1.5 text-lg font-semibold text-synse-text">
+              {desafio.challenge.title}
+            </p>
+            <p className="text-sm text-synse-muted">
+              {desafio.progressValue.toLocaleString('pt-BR')} de{' '}
+              {desafio.targetValue.toLocaleString('pt-BR')} {desafio.challenge.unit}
+            </p>
+            <Progress value={desafio.percentage} className="mt-3" />
+          </>
+        ) : (
+          <p className="mt-1.5 text-sm text-synse-muted">
+            Escolha um objetivo para este mês. No fim, você recebe a análise e a medalha.
+          </p>
+        )}
+
+        <Button variant="outline" asChild className="mt-4 w-full">
+          <Link href="/app/challenges">
+            {desafio ? 'Registrar progresso' : 'Escolher meu desafio'}
+          </Link>
+        </Button>
+      </section>
+
+      {/* Alimentação base */}
+      <Link
+        href="/app/nutrition"
+        className="group flex items-center gap-4 rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm transition-colors hover:border-synse-primary"
+      >
+        <span
+          className="bg-synse-mint/50 flex size-11 shrink-0 items-center justify-center rounded-xl text-synse-primary"
+          aria-hidden
+        >
+          <Salad className="size-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-medium text-synse-text">Plano alimentar base</span>
+          <span className="block text-xs text-synse-muted">
+            Cinco refeições, com trocas para o dia corrido.
+          </span>
+        </span>
+        <ArrowRight className="size-4 shrink-0 text-synse-muted transition-transform duration-200 group-hover:translate-x-0.5" />
+      </Link>
 
       {/* Programa Synse */}
       <section className="rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
@@ -175,9 +253,7 @@ export default async function StudentHomePage() {
         </div>
 
         <Button variant="outline" asChild className="mt-4 w-full">
-          <Link href="/app/finance">
-            {home.nextCharge ? 'PAGAR AGORA' : 'Ver financeiro'}
-          </Link>
+          <Link href="/app/finance">{home.nextCharge ? 'PAGAR AGORA' : 'Ver financeiro'}</Link>
         </Button>
       </section>
 

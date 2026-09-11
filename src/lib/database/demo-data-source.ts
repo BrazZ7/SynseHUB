@@ -10,11 +10,15 @@ import type {
 } from '@/lib/database/data-source'
 import { DEMO_ORG_ID, getDemoDataset } from '@/lib/database/demo-seed'
 import { appendDemoMutation, type DemoMutation } from '@/lib/database/demo-journal'
+import { BASELINE_CHALLENGES, currentCycle } from '@/lib/baseline/challenges'
 const MONTH_YEAR = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' })
 
 import type {
   AppNotification,
   Assessment,
+  BaselineChallenge,
+  ChallengeEntry,
+  ChallengeMedal,
   Charge,
   CheckIn,
   CollectionRule,
@@ -65,6 +69,7 @@ export class DemoDataSource implements DataSource {
   private readonly studentStatusPatches = new Map<string, Student['status']>()
   /** Instante em que o visitante abriu o sino. Antes disso, tudo lido. */
   private notificationsReadAt: string | null = null
+  private readonly challengeEntries: ChallengeEntry[] = []
 
   // ── Índices ────────────────────────────────────────────────────────────────
   private readonly planById = new Map(this.db.plans.map((p) => [p.id, p]))
@@ -175,6 +180,26 @@ export class DemoDataSource implements DataSource {
         break
       }
 
+      case 'chal': {
+        this.challengeEntries.push({
+          id: `entry_${mutation.code}_${mutation.cycle}`,
+          challengeCode: mutation.code,
+          cycle: mutation.cycle,
+          targetValue:
+            BASELINE_CHALLENGES.find((item) => item.code === mutation.code)?.targetValue ?? 0,
+          progressValue: 0,
+          chosenAt: mutation.at,
+          closedAt: null,
+        })
+        break
+      }
+      case 'chalprog': {
+        const entrada = this.challengeEntries.find(
+          (item) => item.challengeCode === mutation.code && item.cycle === mutation.cycle,
+        )
+        if (entrada) entrada.progressValue += mutation.delta
+        break
+      }
       case 'notifread': {
         this.notificationsReadAt = mutation.at
         break
@@ -742,7 +767,8 @@ export class DemoDataSource implements DataSource {
           organizationId: DEMO_ORG_ID,
           userProfileId,
           category: 'PAYMENT',
-          title: charge.status === 'PAID' ? 'Pagamento confirmado' : `Cobrança de ${charge.description}`,
+          title:
+            charge.status === 'PAID' ? 'Pagamento confirmado' : `Cobrança de ${charge.description}`,
           body: `R$ ${charge.amount.toFixed(2).replace('.', ',')} · vence em ${charge.dueDate
             .split('-')
             .reverse()
@@ -823,5 +849,55 @@ export class DemoDataSource implements DataSource {
     const unread = await this.countUnreadNotifications(userProfileId)
     await appendDemoMutation({ t: 'notifread', at: new Date().toISOString() })
     return unread
+  }
+
+  // ── Desafios base ──────────────────────────────────────────────────────────
+  /*
+   * O catálogo vem da cópia em `@/lib/baseline/challenges`, que
+   * `tests/db/challenges.test.ts` compara com o SQL. A escolha e o progresso
+   * do visitante viajam no diário, como todo o resto da demonstração.
+   *
+   * Medalha não é simulada: ela nasce do fechamento de um ciclo passado, e uma
+   * demonstração que dura minutos não tem mês anterior. Inventar uma seria
+   * mostrar conquista que não aconteceu.
+   */
+  async listBaselineChallenges(): Promise<BaselineChallenge[]> {
+    return BASELINE_CHALLENGES
+  }
+
+  async listChallengeEntries(): Promise<ChallengeEntry[]> {
+    return this.challengeEntries
+  }
+
+  async listChallengeMedals(): Promise<ChallengeMedal[]> {
+    return []
+  }
+
+  async chooseBaselineChallenge(code: string): Promise<void> {
+    const challenge = BASELINE_CHALLENGES.find((item) => item.code === code)
+    if (!challenge) throw new Error('Desafio não encontrado.')
+
+    const cycle = currentCycle()
+    if (challenge.minTier === 'PRO') throw new Error('Este desafio é do plano Pro.')
+    if (this.challengeEntries.some((item) => item.cycle === cycle)) {
+      throw new Error('No plano gratuito você escolhe um desafio por mês.')
+    }
+
+    await appendDemoMutation({ t: 'chal', code, cycle, at: new Date().toISOString() })
+  }
+
+  async recordChallengeProgress(code: string, delta: number): Promise<number> {
+    const cycle = currentCycle()
+    const entrada = this.challengeEntries.find(
+      (item) => item.challengeCode === code && item.cycle === cycle,
+    )
+    if (!entrada) throw new Error('Você não tem este desafio em andamento.')
+
+    await appendDemoMutation({ t: 'chalprog', code, cycle, delta })
+    return entrada.progressValue + delta
+  }
+
+  async closeOwnChallengeCycles(): Promise<number> {
+    return 0
   }
 }

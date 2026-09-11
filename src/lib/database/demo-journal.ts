@@ -63,6 +63,20 @@ export type DemoMutation =
       at: string
     }
   | {
+      /** Desafio do mês escolhido na demonstração. */
+      t: 'chal'
+      code: string
+      cycle: string
+      at: string
+    }
+  | {
+      /** Progresso lançado num desafio. */
+      t: 'chalprog'
+      code: string
+      cycle: string
+      delta: number
+    }
+  | {
       /** Sino aberto: tudo criado antes deste instante conta como lido. */
       t: 'notifread'
       at: string
@@ -95,7 +109,7 @@ function decode(raw: string): DemoMutation[] {
     (item): item is DemoMutation =>
       typeof item === 'object' &&
       item !== null &&
-      ['student', 'plan', 'paid', 'checkin', 'notifread'].includes(
+      ['student', 'plan', 'paid', 'checkin', 'notifread', 'chal', 'chalprog'].includes(
         (item as { t?: unknown }).t as string,
       ),
   )

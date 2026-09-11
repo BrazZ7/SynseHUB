@@ -30,6 +30,33 @@ Para conferir o estado sem abrir o arquivo e expor tudo de novo:
 npm run env:check
 ```
 
+## Migrations a aplicar no SQL Editor
+
+Com o trabalho sem terminal, migração nova só entra em produção quando alguém
+cola o arquivo no SQL Editor do Supabase. As que ainda podem não ter sido
+aplicadas, na ordem:
+
+- [ ] `0012_notification_events.sql` — sem ela o sino continua vazio, mas nada
+      quebra: a leitura de notificações falha em silêncio e a tela mostra
+      "nada por aqui ainda".
+- [ ] `0013_synse_solo.sql` — sem ela, quem escolher "treino por conta própria"
+      recebe erro ao concluir. O resto do cadastro segue funcionando.
+- [ ] `0014_baseline_experience.sql` — sem ela, a tela de desafios não abre.
+      Treino base e plano alimentar base não dependem de banco e continuam de pé.
+
+Cada arquivo é independente e pode ser colado inteiro. Aplicar duas vezes é
+inofensivo: são `create or replace`, `if not exists` e `on conflict do nothing`.
+
+Para liberar o Synse+ numa conta de teste, com a chave de serviço:
+
+```sql
+select set_user_tier('<id do user_profiles>', 'PRO');
+```
+
+A função é a única porta para mudar o plano — pela tela, nem o dono da conta
+consegue, e é de propósito: senão bastaria um PATCH em `user_profiles` para
+virar assinante sem pagar.
+
 ## Ambiente separado — decidido: não
 
 Avaliado e descartado. Um projeto Supabase só para desenvolvimento resolveria a

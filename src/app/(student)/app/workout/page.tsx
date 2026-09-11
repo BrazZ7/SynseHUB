@@ -1,8 +1,8 @@
 import type { Metadata } from 'next'
-import { Dumbbell, Timer } from 'lucide-react'
+import { Timer } from 'lucide-react'
 
-import { EmptyState } from '@/components/synse/empty-state'
 import { Badge } from '@/components/ui/badge'
+import { BaselineWorkout } from '@/features/workouts/baseline-workout'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 import { MUSCLE_GROUP_LABELS } from '@/features/workouts/labels'
@@ -32,27 +32,28 @@ export default async function StudentWorkoutPage() {
   )
 
   return (
-    <div className="space-y-5 animate-fade-in-up">
+    <div className="animate-fade-in-up space-y-5">
       <header>
         <h1 className="text-2xl font-semibold text-synse-text">Seus treinos</h1>
         <p className="text-sm text-synse-muted">
-          Montados pelo seu professor. Registre a carga a cada série para acompanhar a evolução.
+          Registre a carga a cada série para acompanhar a evolução.
         </p>
       </header>
 
+      {/*
+        Sem plano atribuído não é mais tela vazia: o treino base do Synse vale
+        desde o primeiro minuto, com ou sem academia. Ele some no instante em
+        que a academia atribuir um plano.
+      */}
       {withExercises.length === 0 ? (
-        <EmptyState
-          icon={Dumbbell}
-          title="Nenhum treino ainda"
-          description="Seu professor ainda não atribuiu um plano. Procure a equipe na academia."
-        />
+        <BaselineWorkout />
       ) : (
         withExercises.map(({ plan, exercises }) => (
           <section
             key={plan.id}
             className="overflow-hidden rounded-2xl border border-synse-border bg-synse-surface shadow-synse-sm"
           >
-            <header className="flex items-center justify-between gap-3 border-b border-synse-border bg-synse-surface-2/60 px-5 py-4">
+            <header className="bg-synse-surface-2/60 flex items-center justify-between gap-3 border-b border-synse-border px-5 py-4">
               <div className="min-w-0">
                 <h2 className="truncate text-base font-semibold text-synse-text">
                   {plan.name.replace(/^Treino [A-Z]+ — /, '')}
@@ -68,7 +69,7 @@ export default async function StudentWorkoutPage() {
               {exercises.map((item) => (
                 <li key={item.id} className="flex items-center gap-3.5 px-5 py-3.5">
                   <span
-                    className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-synse-mint/50 text-xs font-semibold tabular-nums text-synse-dark"
+                    className="bg-synse-mint/50 flex size-9 shrink-0 items-center justify-center rounded-xl text-xs font-semibold tabular-nums text-synse-dark"
                     aria-hidden
                   >
                     {item.order}

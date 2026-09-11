@@ -1,6 +1,9 @@
 import type {
   AppNotification,
   Assessment,
+  BaselineChallenge,
+  ChallengeEntry,
+  ChallengeMedal,
   Charge,
   CheckIn,
   CollectionRule,
@@ -249,4 +252,19 @@ export interface DataSource {
   countUnreadNotifications(userProfileId: string): Promise<number>
   /** Marca como lidos todos os avisos não lidos da pessoa. Devolve quantos. */
   markNotificationsRead(userProfileId: string): Promise<number>
+
+  /*
+   * Desafios base
+   *
+   * Também sem `organizationId`: o desafio é da pessoa e a acompanha quando ela
+   * troca de academia — ou quando não tem nenhuma.
+   */
+  listBaselineChallenges(): Promise<BaselineChallenge[]>
+  listChallengeEntries(userProfileId: string): Promise<ChallengeEntry[]>
+  listChallengeMedals(userProfileId: string): Promise<ChallengeMedal[]>
+  /** Escolhe o desafio do ciclo. O limite do plano é decidido no banco. */
+  chooseBaselineChallenge(code: string): Promise<void>
+  recordChallengeProgress(code: string, delta: number): Promise<number>
+  /** Fecha ciclos passados de quem está autenticado e entrega as medalhas. */
+  closeOwnChallengeCycles(): Promise<number>
 }

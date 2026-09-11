@@ -125,6 +125,22 @@ export class SupabaseDataSource implements DataSource {
     }
   }
 
+  async updateFiscalData(input: {
+    organizationId: string
+    legalName: string | null
+    taxId: string | null
+  }): Promise<void> {
+    const { error } = await this.client
+      .from('organizations')
+      .update({
+        legal_name: input.legalName,
+        tax_id: input.taxId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', input.organizationId)
+    if (error) this.fail('updateFiscalData', error)
+  }
+
   async getPaymentAccount(organizationId: string): Promise<PaymentAccount | null> {
     const row = await this.select<Row>(
       'getPaymentAccount',

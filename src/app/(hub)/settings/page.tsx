@@ -1,15 +1,9 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import {
-  Bell,
-  Building2,
-  CreditCard,
-  ShieldCheck,
-  Users,
-  Wallet,
-} from 'lucide-react'
+import { Bell, Building2, CreditCard, ShieldCheck, Users, Wallet } from 'lucide-react'
 
 import { PageHeader } from '@/components/synse/page-header'
+import { FiscalDataForm } from '@/features/organizations/fiscal-data-form'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -51,11 +45,14 @@ export default async function SettingsPage() {
     dataSource.listStaff(session.organizationId),
   ])
 
-  const settings = billing ?? { organizationId: session.organizationId, ...DEFAULT_BILLING_SETTINGS }
+  const settings = billing ?? {
+    organizationId: session.organizationId,
+    ...DEFAULT_BILLING_SETTINGS,
+  }
   const provider = getPaymentProvider()
 
   return (
-    <div className="space-y-5 animate-fade-in-up">
+    <div className="animate-fade-in-up space-y-5">
       <PageHeader
         title="Configurações"
         description="Academia, equipe, permissões, financeiro e privacidade."
@@ -82,7 +79,6 @@ export default async function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <Row label="Nome" value={organization?.name ?? '—'} />
-              <Row label="Razão social" value={organization?.legalName ?? '—'} />
               <Row label="Tipo" value={organization?.type ?? '—'} />
               <Row
                 label="Localização"
@@ -95,6 +91,20 @@ export default async function SettingsPage() {
                 label="Criada em"
                 value={organization ? formatDate(organization.createdAt) : '—'}
               />
+
+              {/*
+                Razão social e documento saem da lista de leitura e viram
+                formulário: é o documento daqui que abre a subconta no provedor,
+                e antes disto o Synse Pay recusava conectar apontando para uma
+                tela onde não havia campo nenhum para preencher.
+              */}
+              <div className="border-t border-synse-border pt-4">
+                <h3 className="mb-3 text-sm font-semibold text-synse-text">Dados fiscais</h3>
+                <FiscalDataForm
+                  legalName={organization?.legalName ?? null}
+                  taxId={organization?.taxId ?? null}
+                />
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -136,7 +146,7 @@ export default async function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {ROLES_TO_SHOW.map((role) => (
-                <div key={role} className="rounded-lg bg-synse-surface-2/60 p-3.5">
+                <div key={role} className="bg-synse-surface-2/60 rounded-lg p-3.5">
                   <p className="mb-2 text-sm font-medium text-synse-text">{ROLE_LABELS[role]}</p>
                   <div className="flex flex-wrap gap-1.5">
                     {permissionsForRole(role).map((permission) => (
@@ -210,7 +220,10 @@ export default async function SettingsPage() {
               </p>
               <ul className="list-inside list-disc space-y-1">
                 <li>Consentimento versionado por finalidade, com data de aceite e de revogação.</li>
-                <li>Trilha de auditoria em operações críticas: mensalidade, treino, permissão, estorno.</li>
+                <li>
+                  Trilha de auditoria em operações críticas: mensalidade, treino, permissão,
+                  estorno.
+                </li>
                 <li>Minimização: nenhum dado de cartão trafega ou é armazenado pelo Synse.</li>
                 <li>Exportação e exclusão de dados pessoais mediante solicitação do titular.</li>
               </ul>

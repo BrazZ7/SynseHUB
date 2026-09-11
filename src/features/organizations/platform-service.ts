@@ -40,7 +40,12 @@ export const HUB_PLAN_CATALOG = [
     name: 'SynseHub Start',
     price: 149,
     highlight: false,
-    features: ['Até 150 alunos', 'Gestão de alunos e planos', 'Check-in por QR Code', 'Synse App para alunos'],
+    features: [
+      'Até 150 alunos',
+      'Gestão de alunos e planos',
+      'Check-in por QR Code',
+      'Synse App para alunos',
+    ],
   },
   {
     tier: 'PRO' as const,
@@ -66,7 +71,12 @@ export const HUB_PLAN_CATALOG = [
     name: 'SynseHub Network',
     price: 0,
     highlight: false,
-    features: ['Redes e filiais', 'Consolidação multi-unidade', 'Permissões por unidade', 'Suporte dedicado'],
+    features: [
+      'Redes e filiais',
+      'Consolidação multi-unidade',
+      'Permissões por unidade',
+      'Suporte dedicado',
+    ],
   },
 ]
 

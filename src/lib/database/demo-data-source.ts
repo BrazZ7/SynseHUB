@@ -328,6 +328,9 @@ export class DemoDataSource implements DataSource {
     return organizationId === DEMO_ORG_ID ? this.db.billingSettings : null
   }
 
+  /** Em demonstração o dado fiscal não abre subconta nenhuma: aceita e ignora. */
+  async updateFiscalData(): Promise<void> {}
+
   async getPaymentAccount(organizationId: string): Promise<PaymentAccount | null> {
     return organizationId === DEMO_ORG_ID ? this.db.paymentAccount : null
   }

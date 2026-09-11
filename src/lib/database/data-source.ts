@@ -81,6 +81,16 @@ export interface DataSource {
   listStaff(organizationId: string): Promise<DemoStaff[]>
 
   /**
+   * Dados fiscais da academia. É o documento gravado aqui que abre a subconta
+   * no provedor de pagamento — sem ele a academia não cobra.
+   */
+  updateFiscalData(input: {
+    organizationId: string
+    legalName: string | null
+    taxId: string | null
+  }): Promise<void>
+
+  /**
    * Cadastro de uma nova academia.
    *
    * Devolve o id da organização criada. A RLS não permite inserir organização

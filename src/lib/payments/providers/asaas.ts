@@ -119,9 +119,24 @@ export class AsaasPaymentProvider implements PaymentProvider {
       return await this.request<T>(path, init)
     } catch (error) {
       if (!(error instanceof AppError) || error.code !== 'provider_unavailable') throw error
-      if (!this.ultimaRecusa) throw error
 
-      throw providerRejected(`O provedor recusou os dados: ${this.ultimaRecusa}`, error.message)
+      /*
+       * Quando o provedor explica a recusa, essa explicação é o que aparece.
+       * Quando não explica — erro 5xx, corpo em outro formato, queda de rede —
+       * aparece a referência técnica: método, caminho e código. Não é bonito,
+       * mas é o que permite agir; "tente novamente em instantes" sozinho manda
+       * a pessoa repetir um clique que nunca vai funcionar.
+       *
+       * A referência não carrega dado de ninguém: só verbo, rota e status.
+       */
+      if (this.ultimaRecusa) {
+        throw providerRejected(`O provedor recusou os dados: ${this.ultimaRecusa}`, error.message)
+      }
+
+      throw providerRejected(
+        `O provedor não aceitou a abertura da conta e não explicou o motivo (${error.message}).`,
+        error.message,
+      )
     }
   }
 

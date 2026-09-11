@@ -288,7 +288,12 @@ describe('abertura de subconta', () => {
     expect(erro.userMessage).toContain('Data de nascimento é obrigatória.')
   })
 
-  it('continua genérico quando o provedor está fora do ar', async () => {
+  /*
+   * Sem explicação do provedor, a referência técnica é o que sobra — e é
+   * melhor que "tente novamente", que manda repetir um clique que nunca vai
+   * funcionar. Verbo, rota e status não são dado de ninguém.
+   */
+  it('mostra a referência técnica quando o provedor não explica', async () => {
     responder({}, false, 503)
 
     const erro = await provider()
@@ -300,7 +305,9 @@ describe('abertura de subconta', () => {
       })
       .catch((e) => e)
 
-    expect(erro).toMatchObject({ code: 'provider_unavailable' })
+    expect(erro).toMatchObject({ code: 'provider_rejected' })
+    expect(erro.userMessage).toContain('HTTP 503')
+    expect(erro.userMessage).toContain('/accounts')
   })
 
   /*

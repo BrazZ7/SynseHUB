@@ -17,7 +17,8 @@
     "test:watch": "vitest",
     "test:unit": "vitest run tests/unit",
     "test:db": "vitest run tests/db",
-    "db:set-password": "node scripts/set-password.mjs"
+    "db:set-password": "node scripts/set-password.mjs",
+    "test:asaas": "vitest run tests/integration/asaas.test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

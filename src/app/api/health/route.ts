@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { APP } from '@/config/app'
 import { SUPABASE_ANON_KEY, SUPABASE_URL, isDemoMode } from '@/lib/database/env'
 import { getPaymentProvider } from '@/lib/payments'
+import { env } from '@/lib/env'
 
 export const dynamic = 'force-dynamic'
 
@@ -52,6 +53,19 @@ async function databaseReachable(): Promise<{ ok: boolean; status: number | null
   }
 }
 
+/**
+ * Contra qual ambiente do provedor de pagamento o app fala.
+ *
+ * "Está batendo no sandbox ou em produção?" é a primeira pergunta de qualquer
+ * suporte de gateway, e responder de memória erra. O host não é segredo — é
+ * endereço público documentado — e o valor aqui é prova, não afirmação.
+ */
+function paymentEnvironment(): string | null {
+  const url = env(process.env.ASAAS_API_URL, '')
+  if (!url || !URL.canParse(url)) return null
+  return new URL(url).hostname
+}
+
 /** Sonda de saúde. Não expõe segredo nem detalhe de infraestrutura. */
 export async function GET(request: Request) {
   const demo = isDemoMode()
@@ -68,6 +82,7 @@ export async function GET(request: Request) {
     databaseKey: demo ? null : databaseKey(),
     ...(deep && !demo ? { databaseAuth: await databaseReachable() } : {}),
     paymentProvider: getPaymentProvider().id,
+    paymentProviderHost: paymentEnvironment(),
     timestamp: new Date().toISOString(),
   })
 }

@@ -20,7 +20,7 @@ export function DemoPersonaPicker({ personas }: { personas: DemoPersona[] }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start gap-2.5 rounded-lg bg-synse-mint/40 p-3 text-sm text-synse-dark">
+      <div className="bg-synse-mint/40 flex items-start gap-2.5 rounded-lg p-3 text-sm text-synse-dark">
         <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
         <p>
           Nenhum banco de dados conectado. Escolha um perfil para explorar o produto com dados de
@@ -41,7 +41,7 @@ export function DemoPersonaPicker({ personas }: { personas: DemoPersona[] }) {
               )}
             >
               <span
-                className="flex size-10 shrink-0 items-center justify-center rounded-full bg-synse-mint/60 text-xs font-semibold text-synse-dark"
+                className="bg-synse-mint/60 flex size-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-synse-dark"
                 aria-hidden
               >
                 {initials(persona.label)}

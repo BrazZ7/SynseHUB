@@ -9,17 +9,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { signUpWithPassword, type AuthActionState } from '@/lib/auth/actions'
-import type { AccountType } from '@/features/auth/account-type'
 
 const initialState: AuthActionState = {}
 
-export function SignUpForm({
-  accountType,
-  emailPlaceholder,
-}: {
-  accountType: AccountType
-  emailPlaceholder: string
-}) {
+export function SignUpForm() {
   const [state, formAction] = useActionState(signUpWithPassword, initialState)
 
   if (state.sent) {
@@ -70,11 +63,6 @@ export function SignUpForm({
 
   return (
     <form action={formAction} className="space-y-4">
-      {/*
-        O tipo segue com o cadastro porque a etapa seguinte depende dele: dados
-        do negócio para academia e profissional, código de convite para aluno.
-      */}
-      <input type="hidden" name="accountType" value={accountType} />
       {state.error && (
         <p
           role="alert"
@@ -104,7 +92,7 @@ export function SignUpForm({
           type="email"
           required
           autoComplete="email"
-          placeholder={emailPlaceholder}
+          placeholder="voce@exemplo.com.br"
         />
       </div>
 

@@ -9,7 +9,6 @@ import { createSupabaseServerClient } from '@/lib/database/supabase-server'
 import { logger } from '@/lib/logger'
 import { rateLimit } from '@/lib/rate-limit'
 import { credentialsSchema, emailLinkSchema, signUpSchema } from '@/lib/validations/auth'
-import { parseAccountType } from '@/features/auth/account-type'
 import { APP } from '@/config/app'
 
 export type AuthActionState = { error?: string; sent?: boolean }
@@ -179,25 +178,11 @@ export async function signUpWithPassword(
     return { error: 'Cadastro indisponível neste ambiente.' }
   }
 
-  /*
-   * O perfil escolhido viaja nos metadados da conta, não na URL de retorno.
-   *
-   * A etapa seguinte depende dele — dados do negócio para academia e
-   * profissional, código de convite para aluno — e entre uma coisa e outra a
-   * pessoa sai do site para abrir a caixa de entrada.
-   *
-   * A URL de retorno fica sem query string de propósito: o Supabase compara o
-   * endereço inteiro contra a lista de permitidos, e qualquer parâmetro extra
-   * faz o retorno ser recusado — o token não é consumido e o clique no link de
-   * confirmação simplesmente não faz nada, sem erro visível. Já aconteceu.
-   */
-  const tipo = parseAccountType(formData.get('accountType')?.toString()) ?? 'academia'
-
   const { data, error } = await supabase.auth.signUp({
     email: parsed.data.email,
     password: parsed.data.password,
     options: {
-      data: { name: parsed.data.name, accountType: tipo },
+      data: { name: parsed.data.name },
       emailRedirectTo: `${APP.url}/auth/callback`,
     },
   })
@@ -211,7 +196,7 @@ export async function signUpWithPassword(
   // Com confirmação de e-mail ligada não vem sessão; a pessoa precisa do link.
   if (!data.session) return { sent: true }
 
-  redirect(`/onboarding?tipo=${tipo}`)
+  redirect('/onboarding')
 }
 
 export async function signOut() {

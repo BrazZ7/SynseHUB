@@ -7,11 +7,7 @@ import { useFormStatus } from 'react-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  signInWithEmailLink,
-  signInWithPassword,
-  type AuthActionState,
-} from '@/lib/auth/actions'
+import { signInWithEmailLink, signInWithPassword, type AuthActionState } from '@/lib/auth/actions'
 
 const initialState: AuthActionState = {}
 
@@ -85,12 +81,12 @@ function EmailLinkForm({ onBack }: { onBack: () => void }) {
       <div className="space-y-4">
         <p
           role="status"
-          className="flex items-start gap-2.5 rounded-lg bg-synse-primary/10 p-3 text-sm text-synse-text"
+          className="bg-synse-primary/10 flex items-start gap-2.5 rounded-lg p-3 text-sm text-synse-text"
         >
           <MailCheck className="mt-0.5 size-4 shrink-0 text-synse-primary" aria-hidden />
           <span>
-            Se esse e-mail estiver cadastrado, o link de acesso chega em instantes. Ele vale por
-            uma hora e só pode ser usado uma vez.
+            Se esse e-mail estiver cadastrado, o link de acesso chega em instantes. Ele vale por uma
+            hora e só pode ser usado uma vez.
           </span>
         </p>
         <Button type="button" variant="outline" size="lg" className="w-full" onClick={onBack}>
@@ -139,7 +135,7 @@ function ErrorMessage({ error }: { error?: string }) {
   return (
     <p
       role="alert"
-      className="flex items-start gap-2.5 rounded-lg bg-synse-danger/10 p-3 text-sm text-synse-danger"
+      className="bg-synse-danger/10 flex items-start gap-2.5 rounded-lg p-3 text-sm text-synse-danger"
     >
       <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
       {error}

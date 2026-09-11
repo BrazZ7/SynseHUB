@@ -2,11 +2,15 @@ import Link from 'next/link'
 import { Building2, Dumbbell, UserRound } from 'lucide-react'
 
 /**
- * Escolha do perfil, antes de qualquer dado.
+ * Escolha do perfil, depois de a conta existir e o e-mail estar confirmado.
  *
- * Antes desta tela, "criar conta" significava uma coisa só: abrir academia.
- * Quem chegava aluno ou profissional não tinha caminho — e o site nem oferecia
- * o botão.
+ * Perguntar antes parecia natural, mas obrigava a escolha a atravessar a
+ * criação de senha, o e-mail de confirmação e a volta para o site — e ela se
+ * perdia em cada um desses trechos. Quem escolhia "sou aluno" e voltava por um
+ * link de e-mail caía num formulário pedindo CNPJ.
+ *
+ * Aqui a pessoa já está autenticada: a resposta vai direto para onde precisa,
+ * sem viajar por lugar nenhum.
  */
 const OPCOES = [
   {
@@ -35,7 +39,7 @@ export function AccountTypePicker() {
       {OPCOES.map(({ tipo, icone: Icone, titulo, descricao }) => (
         <Link
           key={tipo}
-          href={`/signup?tipo=${tipo}`}
+          href={`/onboarding?tipo=${tipo}`}
           className="focus-visible:ring-synse-primary/25 flex items-start gap-3.5 rounded-xl border border-synse-border bg-synse-surface p-4 transition hover:border-synse-primary hover:shadow-synse-sm focus-visible:outline-none focus-visible:ring-2"
         >
           <span className="bg-synse-primary/10 mt-0.5 grid size-9 shrink-0 place-items-center rounded-lg">

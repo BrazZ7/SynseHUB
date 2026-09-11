@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
 
-import { parseAccountType } from '@/features/auth/account-type'
 import { createSupabaseServerClient } from '@/lib/database/supabase-server'
 import { logger } from '@/lib/logger'
 
@@ -29,26 +28,20 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/login?erro=indisponivel`)
   }
 
-  const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+  const { error } = await supabase.auth.exchangeCodeForSession(code)
   if (error) {
     logger.warn('auth:callback_failed', { reason: error.message })
     return NextResponse.redirect(`${origin}/login?erro=link-expirado`)
   }
 
   /*
-   * O perfil escolhido no cadastro vem nos metadados da conta, não na URL.
+   * Sem sessão anterior a pessoa vai para o onboarding, que pergunta o perfil.
    *
-   * Antes ele viajava como `?next=/onboarding?tipo=aluno`, e o Supabase compara
-   * o endereço de retorno inteiro contra a lista de permitidos: com a query
-   * string, o endereço deixava de bater, o retorno era recusado e o token nem
-   * chegava a ser consumido. O clique no link de confirmação não fazia nada, e
-   * a conta seguia sem confirmar — sem nenhum erro visível.
-   *
-   * Guardar no metadado tira a configuração do caminho crítico: o endereço de
-   * retorno passa a ser sempre o mesmo, exato, e o destino se resolve aqui.
+   * A escolha não viaja mais por aqui: ela é feita depois deste ponto, com a
+   * pessoa já autenticada. Antes ela ia na query string do endereço de retorno,
+   * e o Supabase — que compara o endereço inteiro contra a lista de permitidos
+   * — recusava o retorno sem consumir o token. O clique no link de confirmação
+   * não fazia nada, sem erro nenhum à vista.
    */
-  const tipo = parseAccountType(data.user?.user_metadata?.accountType as string | undefined)
-  const destinoPadrao = tipo ? `/onboarding?tipo=${tipo}` : '/dashboard'
-
-  return NextResponse.redirect(`${origin}${destinoPedido ?? destinoPadrao}`)
+  return NextResponse.redirect(`${origin}${destinoPedido ?? '/onboarding'}`)
 }

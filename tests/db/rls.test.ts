@@ -191,3 +191,62 @@ describe.skipIf(!temBanco)('credencial da subconta', () => {
     ).rejects.toThrow()
   })
 })
+
+describe.skipIf(!temBanco)('aluno enxerga a própria academia — e só ela', () => {
+  /*
+   * `organizations_read` exigia vínculo em organization_members, e aluno não é
+   * membro: ele tem matrícula. Sem isto o Synse App mostra o nome da academia
+   * em branco. O defeito era anterior e só apareceria em produção, porque a
+   * demonstração não passa pela RLS.
+   */
+  const ALUNO_ALPHA = '77777777-7777-7777-7777-777777777777'
+
+  beforeAll(async () => {
+    await client.query(
+      `insert into auth.users (id, email) values ($1,'aluno.alpha@x.com') on conflict do nothing`,
+      [ALUNO_ALPHA],
+    )
+    await client.query(
+      `insert into user_profiles (auth_user_id, name, email)
+       values ($1, 'Aluno Alpha', 'aluno.alpha@x.com')
+       on conflict (auth_user_id) do nothing`,
+      [ALUNO_ALPHA],
+    )
+    await client.query(
+      `insert into students (organization_id, user_profile_id, status)
+       select $1, id, 'ACTIVE' from user_profiles where auth_user_id = $2
+       on conflict do nothing`,
+      [ALPHA.orgId, ALUNO_ALPHA],
+    )
+  })
+
+  it('lê o nome da academia em que está matriculado', async () => {
+    const rows = await asUser<{ name: string }>(
+      client,
+      ALUNO_ALPHA,
+      'select name from organizations',
+    )
+    expect(rows).toHaveLength(1)
+    expect(rows[0].name).toBeTruthy()
+  })
+
+  it('não lê a base de alunos da academia — matrícula não é acesso de equipe', async () => {
+    const rows = await asUser<{ n: string }>(
+      client,
+      ALUNO_ALPHA,
+      'select count(*)::text as n from students',
+    )
+    // Enxerga a própria matrícula, nunca a dos colegas.
+    expect(Number(rows[0].n)).toBe(1)
+  })
+
+  it('não enxerga a academia concorrente', async () => {
+    const rows = await asUser<{ n: string }>(
+      client,
+      ALUNO_ALPHA,
+      'select count(*)::text as n from organizations where id = $1',
+      [BETA.orgId],
+    )
+    expect(Number(rows[0].n)).toBe(0)
+  })
+})

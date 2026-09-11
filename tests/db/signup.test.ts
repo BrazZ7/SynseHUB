@@ -17,10 +17,10 @@ beforeAll(async () => {
   if (!temBanco) return
   client = await connect()
   await applyMigrations(client)
-  await client.query(`insert into auth.users (id, email) values ($1,'novo@x.com'), ($2,'outro@x.com')`, [
-    NOVO,
-    OUTRO,
-  ])
+  await client.query(
+    `insert into auth.users (id, email) values ($1,'novo@x.com'), ($2,'outro@x.com')`,
+    [NOVO, OUTRO],
+  )
 }, 60_000)
 
 afterAll(async () => {
@@ -80,5 +80,105 @@ describe.skipIf(!temBanco)('create_organization_with_owner', () => {
 
     expect(doNovo.map((row) => row.name)).toEqual(['Academia Nova'])
     expect(doOutro.map((row) => row.name)).toEqual(['Academia Outra'])
+  })
+})
+
+describe.skipIf(!temBanco)('join_organization_as_student', () => {
+  const ALUNO = '55555555-5555-5555-5555-555555555555'
+  const INTRUSO = '66666666-6666-6666-6666-666666666666'
+  let codigo = ''
+
+  beforeAll(async () => {
+    if (!temBanco) return
+    await client.query(
+      `insert into auth.users (id, email) values ($1,'aluno@x.com'), ($2,'intruso@x.com')
+       on conflict do nothing`,
+      [ALUNO, INTRUSO],
+    )
+    const { rows } = await client.query<{ invite_code: string }>(
+      `select invite_code from organizations where slug = 'nova'`,
+    )
+    codigo = rows[0].invite_code
+  })
+
+  const entrar = (authId: string | null, code: string) =>
+    asUser<{ join_organization_as_student: string }>(
+      client,
+      authId,
+      `select join_organization_as_student($1, 'Aluno Teste') as join_organization_as_student`,
+      [code],
+    )
+
+  it('toda academia tem código, e ele não se repete', async () => {
+    const { rows } = await client.query<{ total: string; distintos: string }>(
+      `select count(invite_code)::text as total, count(distinct invite_code)::text as distintos
+       from organizations`,
+    )
+    expect(Number(rows[0].total)).toBeGreaterThan(0)
+    expect(rows[0].total).toBe(rows[0].distintos)
+  })
+
+  /*
+   * Sem letras que se confundem faladas ou lidas de um cartaz: nada de I, L, O,
+   * U, zero ou um. O código vai ser ditado na recepção.
+   */
+  it('o código não usa caracteres ambíguos', async () => {
+    const { rows } = await client.query<{ invite_code: string }>(
+      `select invite_code from organizations where invite_code is not null`,
+    )
+    for (const row of rows) {
+      expect(row.invite_code).toMatch(/^[0-9A-HJKMNPQRSTVWXYZ]{6}$/)
+      expect(row.invite_code).not.toMatch(/[ILOU01]/)
+    }
+  })
+
+  it('anônimo não entra em academia nenhuma', async () => {
+    await expect(entrar(null, codigo)).rejects.toThrow(/permission denied/i)
+  })
+
+  it('código inválido é recusado', async () => {
+    await expect(entrar(ALUNO, 'ZZZZZZ')).rejects.toThrow(/Código de convite inválido/i)
+  })
+
+  it('com o código certo, a matrícula nasce pendente de confirmação', async () => {
+    const rows = await entrar(ALUNO, codigo)
+    expect(rows[0].join_organization_as_student).toMatch(/^[0-9a-f-]{36}$/)
+
+    const { rows: matricula } = await client.query<{ status: string; name: string }>(
+      `select s.status, p.name from students s
+       join user_profiles p on p.id = s.user_profile_id
+       where p.auth_user_id = $1`,
+      [ALUNO],
+    )
+    // Nascer ATIVA colocaria o aluno na contagem de mensalidades de uma
+    // academia que nunca o cadastrou.
+    expect(matricula[0].status).toBe('PENDING')
+    expect(matricula[0].name).toBe('Aluno Teste')
+  })
+
+  it('entrar duas vezes com o mesmo código não duplica a matrícula', async () => {
+    await entrar(ALUNO, codigo)
+
+    const { rows } = await client.query<{ n: string }>(
+      `select count(*)::text as n from students s
+       join user_profiles p on p.id = s.user_profile_id
+       where p.auth_user_id = $1`,
+      [ALUNO],
+    )
+    expect(Number(rows[0].n)).toBe(1)
+  })
+
+  it('o código aceita minúsculas e espaço sobrando, como quem digita no celular', async () => {
+    const rows = await entrar(INTRUSO, `  ${codigo.toLowerCase()}  `)
+    expect(rows[0].join_organization_as_student).toMatch(/^[0-9a-f-]{36}$/)
+  })
+
+  /*
+   * A entrada pelo código dá acesso àquela academia e a nenhuma outra. Se a RLS
+   * falhasse aqui, um aluno veria a base de alunos de quem nunca o convidou.
+   */
+  it('o aluno passa a enxergar só a academia do código', async () => {
+    const visiveis = await asUser<{ name: string }>(client, ALUNO, 'select name from organizations')
+    expect(visiveis.map((row) => row.name)).toEqual(['Academia Nova'])
   })
 })

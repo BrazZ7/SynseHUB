@@ -289,6 +289,27 @@ describe('abertura de subconta', () => {
   })
 
   /*
+   * 403 tem um significado só: a chave vale, mas a conta não tem o recurso de
+   * abrir subconta. Nenhuma tentativa resolve, então dizer "tente novamente"
+   * seria mentira — e foi o que a tela dizia antes.
+   */
+  it('nomeia a falta de permissão para abrir subconta', async () => {
+    responder({}, false, 403)
+
+    const erro = await provider()
+      .createPaymentAccount({
+        organizationId: 'org-1',
+        legalName: 'Academia Alpha LTDA',
+        email: 'dona@alpha.com.br',
+        taxId: '11222333000181',
+      })
+      .catch((e) => e)
+
+    expect(erro.userMessage).toContain('não tem permissão para abrir subcontas')
+    expect(erro.userMessage).toContain('não adianta tentar de novo')
+  })
+
+  /*
    * Sem explicação do provedor, a referência técnica é o que sobra — e é
    * melhor que "tente novamente", que manda repetir um clique que nunca vai
    * funcionar. Verbo, rota e status não são dado de ninguém.

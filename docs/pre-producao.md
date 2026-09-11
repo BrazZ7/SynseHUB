@@ -63,6 +63,28 @@ lista do Synse Pay, abaixo.
       (US$ 20/mês) antes do primeiro cliente pagante.
 - [ ] Reativar "Confirm email" no Supabase, agora que o SMTP funciona.
 
+## Synse Pay — bloqueado aguardando o provedor
+
+**Estado atual:** a abertura de subconta responde **HTTP 403**. A chave é
+válida; o que falta é o recurso de criar subcontas, que no Asaas pertence ao
+produto white label e precisa ser liberado para a conta da plataforma.
+
+Enquanto não for liberado, nenhuma academia conecta, e sem conta conectada não
+há como emitir cobrança. O resto do SynseHub — alunos, check-in, treinos,
+painel — não depende disso e segue funcionando.
+
+**O que pedir ao Asaas:** habilitar a criação de subcontas via API
+(`POST /accounts`) para a conta da plataforma. O caso de uso é marketplace: cada
+academia opera na própria subconta, recebe a mensalidade nela, e o split desvia
+a comissão do Synse. Vale dizer que o modelo foi escolhido justamente para o
+dinheiro não passar pela plataforma.
+
+**Alternativa avaliada e não escolhida:** cada academia criar a própria conta no
+Asaas e colar a chave de API no SynseHub. O fluxo do dinheiro seria idêntico e
+funcionaria hoje, sem depender de liberação — o custo é um passo manual na
+entrada de cada academia. Fica registrado como saída caso a liberação demore ou
+não venha.
+
 ## Synse Pay
 
 - [ ] `SYNSE_PLATFORM_WALLET_ID` apontando para a carteira real da plataforma —

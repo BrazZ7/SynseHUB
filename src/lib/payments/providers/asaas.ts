@@ -129,6 +129,23 @@ export class AsaasPaymentProvider implements PaymentProvider {
        *
        * A referência não carrega dado de ninguém: só verbo, rota e status.
        */
+      /*
+       * 403 em /accounts tem um significado só, e vale nomear.
+       *
+       * A chave é válida — inválida daria 401. O que falta é o recurso de abrir
+       * subconta, que no Asaas pertence ao produto white label e precisa ser
+       * liberado para a conta. Nenhuma quantidade de tentativa ou ajuste de
+       * campo resolve isso, então mandar "tente novamente" seria mentira.
+       */
+      if (error.message.includes('HTTP 403')) {
+        throw providerRejected(
+          'A conta da plataforma no provedor não tem permissão para abrir subcontas. ' +
+            'É um recurso que precisa ser liberado pelo provedor (produto white label) — ' +
+            'não adianta tentar de novo.',
+          error.message,
+        )
+      }
+
       if (this.ultimaRecusa) {
         throw providerRejected(`O provedor recusou os dados: ${this.ultimaRecusa}`, error.message)
       }

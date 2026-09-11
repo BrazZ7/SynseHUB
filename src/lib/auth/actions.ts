@@ -60,8 +60,31 @@ export async function signInWithPassword(
 
   const { error } = await supabase.auth.signInWithPassword(parsed.data)
   if (error) {
-    logger.warn('auth:sign_in_failed', { reason: error.message })
-    // Mensagem propositalmente genérica: não revela se o e-mail existe.
+    logger.warn('auth:sign_in_failed', {
+      reason: error.message,
+      code: error.code,
+      status: error.status,
+    })
+
+    /*
+     * `email_not_confirmed` pode ser dito em voz alta.
+     *
+     * O GoTrue confere a senha antes de olhar a confirmação: esse código só
+     * aparece quando a senha está certa. Quem o recebe já provou que a conta é
+     * dele, então a mensagem não revela nada a mais — e sem ela a pessoa fica
+     * tentando de novo com a senha correta, lendo "senha incorreta".
+     */
+    if (error.code === 'email_not_confirmed') {
+      return {
+        error: 'Confirme seu e-mail antes de entrar. Use "Entrar com link por e-mail" abaixo.',
+      }
+    }
+
+    if (error.code === 'over_request_rate_limit' || error.status === 429) {
+      return { error: 'Muitas tentativas. Aguarde um minuto e tente novamente.' }
+    }
+
+    // Genérica de propósito nos demais casos: não revela se o e-mail existe.
     return { error: 'E-mail ou senha incorretos.' }
   }
 

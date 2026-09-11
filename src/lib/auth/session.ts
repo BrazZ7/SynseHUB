@@ -105,12 +105,12 @@ function demoSessionFor(persona: DemoPersona): SessionContext {
       : null
 
   return {
-      userProfileId: persona.userProfileId,
+    userProfileId: persona.userProfileId,
     synseId: profile?.synseId ?? student?.synseId ?? 'SYN-DEMO0001',
     name: profile?.name ?? student?.name ?? persona.label,
     email: profile?.email ?? student?.email ?? 'demo@synse.com.br',
     avatarUrl: null,
-      role: persona.role,
+    role: persona.role,
     organizationId: DEMO_ORG_ID,
     organizationName: demo.organization.name,
     studentId: student?.id ?? null,
@@ -171,7 +171,45 @@ export async function getSession(): Promise<SessionContext | null> {
     .limit(1)
     .maybeSingle()
 
-  if (!membership) return null
+  /*
+   * Sem vínculo de equipe, ainda pode haver matrícula.
+   *
+   * Ser aluno e ser equipe são coisas diferentes: a equipe vive em
+   * `organization_members`, o aluno em `students`. Exigir a primeira para
+   * montar qualquer sessão fazia o aluno ser tratado como quem não tem conta —
+   * entrava, era devolvido para o onboarding, e da tela parecia que o botão não
+   * funcionava.
+   *
+   * É o mesmo engano que impedia o aluno de ler o nome da própria academia na
+   * RLS. Vale a pena repetir onde ele mora: em todo lugar que pergunta "essa
+   * pessoa pertence à organização?" e responde olhando só para a equipe.
+   */
+  if (!membership) {
+    const { data: enrolment } = await supabase
+      .from('students')
+      .select('id,organization_id,organizations(name)')
+      .eq('user_profile_id', profile.id)
+      .order('enrolled_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (!enrolment) return null
+
+    const gym = enrolment.organizations as { name?: string } | null
+
+    return {
+      userProfileId: profile.id,
+      synseId: profile.synse_id,
+      name: profile.name,
+      email: profile.email,
+      avatarUrl: profile.avatar_url,
+      role: 'STUDENT' as UserRole,
+      organizationId: enrolment.organization_id,
+      organizationName: gym?.name ?? 'Minha academia',
+      studentId: enrolment.id,
+      isDemo: false,
+    }
+  }
 
   const { data: student } = await supabase
     .from('students')
@@ -183,12 +221,12 @@ export async function getSession(): Promise<SessionContext | null> {
   const organizations = membership.organizations as { name?: string } | null
 
   return {
-      userProfileId: profile.id,
+    userProfileId: profile.id,
     synseId: profile.synse_id,
     name: profile.name,
     email: profile.email,
     avatarUrl: profile.avatar_url,
-      role: membership.role as UserRole,
+    role: membership.role as UserRole,
     organizationId: membership.organization_id,
     organizationName: organizations?.name ?? 'Minha organização',
     studentId: student?.id ?? null,

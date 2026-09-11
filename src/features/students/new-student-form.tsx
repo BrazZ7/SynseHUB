@@ -44,7 +44,9 @@ export function NewStudentForm({
           id="name"
           label="Nome completo"
           errors={state.fieldErrors?.name}
-          input={<Input id="name" name="name" required autoComplete="name" placeholder="Ana Ribeiro" />}
+          input={
+            <Input id="name" name="name" required autoComplete="name" placeholder="Ana Ribeiro" />
+          }
         />
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -69,10 +71,32 @@ export function NewStudentForm({
             label="Telefone"
             errors={state.fieldErrors?.phone}
             input={
-              <Input id="phone" name="phone" type="tel" autoComplete="tel" placeholder="(11) 98888-7777" />
+              <Input
+                id="phone"
+                name="phone"
+                type="tel"
+                autoComplete="tel"
+                placeholder="(11) 98888-7777"
+              />
             }
           />
         </div>
+
+        <Field
+          id="taxId"
+          label="CPF"
+          hint="Opcional agora, obrigatório para emitir cobrança pelo Synse Pay."
+          errors={state.fieldErrors?.taxId}
+          input={
+            <Input
+              id="taxId"
+              name="taxId"
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder="000.000.000-00"
+            />
+          }
+        />
 
         <Field
           id="goal"
@@ -95,7 +119,7 @@ export function NewStudentForm({
                 id="planId"
                 name="planId"
                 defaultValue=""
-                className="h-10 w-full rounded-lg border border-synse-border bg-synse-surface px-3 text-sm text-synse-text focus-visible:border-synse-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-synse-primary/25"
+                className="focus-visible:ring-synse-primary/25 h-10 w-full rounded-lg border border-synse-border bg-synse-surface px-3 text-sm text-synse-text focus-visible:border-synse-primary focus-visible:outline-none focus-visible:ring-2"
               >
                 <option value="">Sem plano por enquanto</option>
                 {plans.map((plan) => (
@@ -113,7 +137,14 @@ export function NewStudentForm({
             hint="Entre 1 e 28."
             errors={state.fieldErrors?.billingDay}
             input={
-              <Input id="billingDay" name="billingDay" type="number" min={1} max={28} defaultValue={5} />
+              <Input
+                id="billingDay"
+                name="billingDay"
+                type="number"
+                min={1}
+                max={28}
+                defaultValue={5}
+              />
             }
           />
         </div>
@@ -127,7 +158,7 @@ export function NewStudentForm({
               id="trainerId"
               name="trainerId"
               defaultValue=""
-              className="h-10 w-full rounded-lg border border-synse-border bg-synse-surface px-3 text-sm text-synse-text focus-visible:border-synse-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-synse-primary/25"
+              className="focus-visible:ring-synse-primary/25 h-10 w-full rounded-lg border border-synse-border bg-synse-surface px-3 text-sm text-synse-text focus-visible:border-synse-primary focus-visible:outline-none focus-visible:ring-2"
             >
               <option value="">Definir depois</option>
               {trainers.map((trainer) => (
@@ -212,8 +243,8 @@ function Feedback({
       role="status"
       className={
         success
-          ? 'flex items-start gap-3 rounded-lg bg-synse-success/10 p-3.5 text-sm text-synse-success'
-          : 'flex items-start gap-3 rounded-lg bg-synse-danger/10 p-3.5 text-sm text-synse-danger'
+          ? 'bg-synse-success/10 flex items-start gap-3 rounded-lg p-3.5 text-sm text-synse-success'
+          : 'bg-synse-danger/10 flex items-start gap-3 rounded-lg p-3.5 text-sm text-synse-danger'
       }
     >
       <Icon className="mt-0.5 size-4 shrink-0" aria-hidden />

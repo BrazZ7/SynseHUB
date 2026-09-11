@@ -111,6 +111,7 @@ export interface DataSource {
     name: string
     email: string
     phone: string | null
+    taxId: string | null
     goal: string | null
     planId: string | null
     trainerId: string | null

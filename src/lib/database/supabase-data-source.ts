@@ -458,6 +458,7 @@ export class SupabaseDataSource implements DataSource {
     name: string
     email: string
     phone: string | null
+    taxId: string | null
     goal: string | null
     planId: string | null
     trainerId: string | null
@@ -469,16 +470,43 @@ export class SupabaseDataSource implements DataSource {
       this.client.from('user_profiles').select('*').eq('email', input.email).maybeSingle(),
     )
 
-    const profile =
+    let profile =
       existing ??
       (await this.select<Row>(
         'createStudent:insertProfile',
         this.client
           .from('user_profiles')
-          .insert({ name: input.name, email: input.email, phone: input.phone })
+          .insert({
+            name: input.name,
+            email: input.email,
+            phone: input.phone,
+            tax_id: input.taxId,
+          })
           .select('*')
           .single(),
       ))!
+
+    /*
+     * Perfil que já existia e ainda não tinha CPF recebe o informado agora.
+     *
+     * Sem isso, matricular numa segunda academia alguém já cadastrado descartaria
+     * o documento em silêncio — e a cobrança falharia lá na frente, sem que
+     * ninguém ligasse uma coisa à outra. Um CPF já gravado nunca é sobrescrito
+     * por aqui: trocar documento de pessoa é operação de correção, não de
+     * matrícula.
+     */
+    if (existing && input.taxId && !existing.tax_id) {
+      profile =
+        (await this.select<Row>(
+          'createStudent:fillTaxId',
+          this.client
+            .from('user_profiles')
+            .update({ tax_id: input.taxId })
+            .eq('id', existing.id)
+            .select('*')
+            .single(),
+        )) ?? profile
+    }
 
     const student = (await this.select<Row>(
       'createStudent:insertStudent',

@@ -445,6 +445,8 @@ export class DemoDataSource implements DataSource {
     name: string
     email: string
     phone: string | null
+    /** Aceito e descartado: em demonstração não há cobrança real para emitir. */
+    taxId: string | null
     goal: string | null
     planId: string | null
     trainerId: string | null

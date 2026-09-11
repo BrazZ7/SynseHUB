@@ -13,6 +13,7 @@ import { appendDemoMutation, type DemoMutation } from '@/lib/database/demo-journ
 const MONTH_YEAR = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' })
 
 import type {
+  AppNotification,
   Assessment,
   Charge,
   CheckIn,
@@ -62,6 +63,8 @@ export class DemoDataSource implements DataSource {
   /** Campos de cobrança alterados, sem tocar no objeto base. */
   private readonly chargePatches = new Map<string, Partial<Charge>>()
   private readonly studentStatusPatches = new Map<string, Student['status']>()
+  /** Instante em que o visitante abriu o sino. Antes disso, tudo lido. */
+  private notificationsReadAt: string | null = null
 
   // ── Índices ────────────────────────────────────────────────────────────────
   private readonly planById = new Map(this.db.plans.map((p) => [p.id, p]))
@@ -172,6 +175,10 @@ export class DemoDataSource implements DataSource {
         break
       }
 
+      case 'notifread': {
+        this.notificationsReadAt = mutation.at
+        break
+      }
       case 'checkin': {
         this.addedCheckIns.push({
           id: mutation.id,
@@ -700,5 +707,117 @@ export class DemoDataSource implements DataSource {
   // ── CRM ────────────────────────────────────────────────────────────────────
   async listLeads(organizationId: string): Promise<Lead[]> {
     return this.scoped(this.db.leads, organizationId)
+  }
+
+  // ── Notificações ───────────────────────────────────────────────────────────
+  /*
+   * Em produção quem escreve os avisos é o banco, por gatilho. Aqui não há
+   * banco, então eles são derivados do próprio dataset: os mesmos fatos que
+   * gerariam aviso lá (matrícula pendente, cobrança, pagamento) viram aviso
+   * aqui, na leitura.
+   *
+   * A alternativa — uma lista fixa escrita à mão — mostraria avisos que não
+   * correspondem a nada na tela ao lado, e a demonstração passaria a mentir
+   * justamente sobre a função que o sino tem.
+   */
+  private buildNotifications(userProfileId: string): AppNotification[] {
+    const student = this.students().find((item) => item.userProfileId === userProfileId)
+    const at = (iso: string) => iso
+
+    const notifications: Array<Omit<AppNotification, 'readAt'>> = []
+
+    if (student) {
+      const charges = this.charges()
+        .filter((charge) => charge.studentId === student.id)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .slice(0, 4)
+
+      for (const charge of charges) {
+        notifications.push({
+          id: `notif_charge_${charge.id}`,
+          organizationId: DEMO_ORG_ID,
+          userProfileId,
+          category: 'PAYMENT',
+          title: charge.status === 'PAID' ? 'Pagamento confirmado' : `Cobrança de ${charge.description}`,
+          body: `R$ ${charge.amount.toFixed(2).replace('.', ',')} · vence em ${charge.dueDate
+            .split('-')
+            .reverse()
+            .join('/')}`,
+          actionUrl: '/app/finance',
+          createdAt: at(charge.createdAt),
+        })
+      }
+
+      const assignment = this.db.workoutAssignments.find((item) => item.studentId === student.id)
+      if (assignment) {
+        const plan = this.db.workoutPlans.find((item) => item.id === assignment.workoutPlanId)
+        notifications.push({
+          id: `notif_workout_${assignment.id}`,
+          organizationId: DEMO_ORG_ID,
+          userProfileId,
+          category: 'WORKOUT',
+          title: 'Novo treino disponível',
+          body: `${plan?.name ?? 'Um treino'} foi atribuído a você.`,
+          actionUrl: '/app/workout',
+          createdAt: at(assignment.assignedAt),
+        })
+      }
+    } else {
+      for (const pending of this.students()
+        .filter((item) => item.status === 'PENDING')
+        .slice(0, 5)) {
+        notifications.push({
+          id: `notif_pending_${pending.id}`,
+          organizationId: DEMO_ORG_ID,
+          userProfileId,
+          category: 'GYM',
+          title: `${pending.name} entrou pelo código de convite`,
+          body: 'A matrícula está aguardando a confirmação da academia.',
+          actionUrl: '/students?status=PENDING',
+          createdAt: at(`${pending.enrolledAt}T09:00:00.000Z`),
+        })
+      }
+
+      for (const paid of this.charges()
+        .filter((charge) => charge.status === 'PAID' && charge.paidAt)
+        .sort((a, b) => (b.paidAt ?? '').localeCompare(a.paidAt ?? ''))
+        .slice(0, 5)) {
+        const name = this.studentById.get(paid.studentId)?.name ?? 'aluno'
+        notifications.push({
+          id: `notif_paid_${paid.id}`,
+          organizationId: DEMO_ORG_ID,
+          userProfileId,
+          category: 'PAYMENT',
+          title: `Pagamento recebido de ${name}`,
+          body: `${paid.description} · R$ ${paid.amount.toFixed(2).replace('.', ',')}`,
+          actionUrl: '/finance',
+          createdAt: at(paid.paidAt as string),
+        })
+      }
+    }
+
+    return notifications
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map((item) => ({
+        ...item,
+        readAt:
+          this.notificationsReadAt && this.notificationsReadAt >= item.createdAt
+            ? this.notificationsReadAt
+            : null,
+      }))
+  }
+
+  async listNotifications(userProfileId: string, limit = 20): Promise<AppNotification[]> {
+    return this.buildNotifications(userProfileId).slice(0, limit)
+  }
+
+  async countUnreadNotifications(userProfileId: string): Promise<number> {
+    return this.buildNotifications(userProfileId).filter((item) => item.readAt === null).length
+  }
+
+  async markNotificationsRead(userProfileId: string): Promise<number> {
+    const unread = await this.countUnreadNotifications(userProfileId)
+    await appendDemoMutation({ t: 'notifread', at: new Date().toISOString() })
+    return unread
   }
 }

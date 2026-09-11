@@ -364,3 +364,34 @@ export type Consent = {
   acceptedAt: string | null
   revokedAt: string | null
 }
+
+// ---------------------------------------------------------------------------
+// Notificações
+// ---------------------------------------------------------------------------
+
+export type NotificationCategory =
+  | 'PAYMENT'
+  | 'WORKOUT'
+  | 'GYM'
+  | 'CONTENT'
+  | 'PROGRAM'
+  | 'SYSTEM'
+
+/**
+ * Aviso destinado a uma pessoa, não a uma organização.
+ *
+ * Quem escreve é o banco, por gatilho (migration 0012). A aplicação só lê e
+ * marca como lido — assim o aviso existe mesmo quando a mudança veio de um
+ * script, de um webhook ou do SQL de suporte.
+ */
+export type AppNotification = {
+  id: string
+  organizationId: string | null
+  userProfileId: string
+  category: NotificationCategory
+  title: string
+  body: string | null
+  actionUrl: string | null
+  readAt: string | null
+  createdAt: string
+}

@@ -1,9 +1,10 @@
-import { Bell, RotateCcw } from 'lucide-react'
+import { RotateCcw } from 'lucide-react'
 
 import { ThemeToggle } from '@/components/synse/theme-toggle'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { resetDemoAction } from '@/features/demo/actions'
+import { NotificationsBell } from '@/features/notifications/notifications-bell'
 import { isSimulatedProvider } from '@/lib/payments'
 import { isDemoMode } from '@/lib/database/env'
 
@@ -43,9 +44,7 @@ export function HubTopbar({ organizationName }: { organizationName: string }) {
           </form>
         )}
         <ThemeToggle />
-        <Button variant="ghost" size="icon" aria-label="Notificações">
-          <Bell className="size-4" />
-        </Button>
+        <NotificationsBell />
       </div>
     </div>
   )

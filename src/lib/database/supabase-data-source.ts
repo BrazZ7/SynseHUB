@@ -15,6 +15,7 @@ import type {
 } from '@/lib/database/data-source'
 import type { DemoStaff } from '@/lib/database/demo-seed'
 import type {
+  AppNotification,
   Assessment,
   Charge,
   CheckIn,
@@ -1091,5 +1092,56 @@ export class SupabaseDataSource implements DataSource {
       source: row.source,
       createdAt: row.created_at,
     })) satisfies Lead[]
+  }
+
+  // ── Notificações ───────────────────────────────────────────────────────────
+  /*
+   * Sem filtro por perfil na consulta, de propósito: a política
+   * `notifications_self` já restringe a linha a quem está autenticado. O
+   * `userProfileId` entra como conferência — se a sessão e a política
+   * discordarem, o sino fica vazio em vez de mostrar aviso de outra pessoa.
+   */
+  async listNotifications(userProfileId: string, limit = 20) {
+    const rows =
+      (await this.select<Row[]>(
+        'listNotifications',
+        this.client
+          .from('notifications')
+          .select('*')
+          .eq('user_profile_id', userProfileId)
+          .order('created_at', { ascending: false })
+          .limit(limit),
+      )) ?? []
+
+    return rows.map((row) => ({
+      id: row.id,
+      organizationId: row.organization_id,
+      userProfileId: row.user_profile_id,
+      category: row.category,
+      title: row.title,
+      body: row.body,
+      actionUrl: row.action_url,
+      readAt: row.read_at,
+      createdAt: row.created_at,
+    })) satisfies AppNotification[]
+  }
+
+  async countUnreadNotifications(userProfileId: string) {
+    const { count, error } = await this.client
+      .from('notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_profile_id', userProfileId)
+      .is('read_at', null)
+
+    if (error) this.fail('countUnreadNotifications', error)
+    return count ?? 0
+  }
+
+  async markNotificationsRead(_userProfileId: string) {
+    // A função no banco resolve o perfil pelo próprio JWT: o cliente não
+    // escolhe de quem são os avisos que vai marcar.
+    const { data, error } = await this.client.rpc('mark_notifications_read')
+    if (error) this.fail('markNotificationsRead', error)
+    return Number(data ?? 0)
   }
 }

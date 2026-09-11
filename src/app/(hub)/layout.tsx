@@ -1,6 +1,7 @@
 import { HubSidebar } from '@/components/synse/hub-sidebar'
 import { HubTopbar } from '@/components/synse/hub-topbar'
 import { HUB_NAVIGATION } from '@/config/navigation'
+import { NotificationsBell } from '@/features/notifications/notifications-bell'
 import { signOut } from '@/lib/auth/actions'
 import { requireHubSession } from '@/lib/auth/require-session'
 import { can } from '@/lib/permissions/permissions'
@@ -27,6 +28,7 @@ export default async function HubLayout({ children }: { children: React.ReactNod
         user={{ name: session.name, email: session.email, role: session.role }}
         organizationName={session.organizationName}
         signOutAction={signOut}
+        notifications={<NotificationsBell />}
       />
 
       <div className="flex min-w-0 flex-1 flex-col pt-16 lg:pt-0">

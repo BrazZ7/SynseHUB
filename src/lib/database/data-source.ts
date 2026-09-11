@@ -1,4 +1,5 @@
 import type {
+  AppNotification,
   Assessment,
   Charge,
   CheckIn,
@@ -230,4 +231,16 @@ export interface DataSource {
 
   // CRM
   listLeads(organizationId: string): Promise<Lead[]>
+
+  /*
+   * Notificações
+   *
+   * Únicos métodos sem `organizationId`: o aviso pertence à pessoa, não à
+   * academia. Quem é dono de uma e aluno de outra vê os dois no mesmo sino, e
+   * é assim que tem de ser — o sino é da conta.
+   */
+  listNotifications(userProfileId: string, limit?: number): Promise<AppNotification[]>
+  countUnreadNotifications(userProfileId: string): Promise<number>
+  /** Marca como lidos todos os avisos não lidos da pessoa. Devolve quantos. */
+  markNotificationsRead(userProfileId: string): Promise<number>
 }

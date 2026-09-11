@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { AppCheckInButton } from '@/features/checkin/app-checkin-button'
+import { NotificationsBell } from '@/features/notifications/notifications-bell'
 import { getStudentHome } from '@/features/students/app-service'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { cn, firstName, formatCurrency, formatDate, greeting } from '@/lib/utils'
@@ -36,7 +37,10 @@ export default async function StudentHomePage() {
             {firstName(home.name)} <span aria-hidden>👋</span>
           </h1>
         </div>
-        <SynseLogo variant="symbol" size="md" />
+        <div className="flex items-center gap-1">
+          <NotificationsBell allHref="/app/notifications" />
+          <SynseLogo variant="symbol" size="md" />
+        </div>
       </header>
 
       {/* Cartão principal: o treino de hoje */}

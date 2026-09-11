@@ -63,6 +63,11 @@ export type DemoMutation =
       at: string
     }
   | {
+      /** Sino aberto: tudo criado antes deste instante conta como lido. */
+      t: 'notifread'
+      at: string
+    }
+  | {
       /** Registro de presença. */
       t: 'checkin'
       id: string
@@ -90,7 +95,9 @@ function decode(raw: string): DemoMutation[] {
     (item): item is DemoMutation =>
       typeof item === 'object' &&
       item !== null &&
-      ['student', 'plan', 'paid', 'checkin'].includes((item as { t?: unknown }).t as string),
+      ['student', 'plan', 'paid', 'checkin', 'notifread'].includes(
+        (item as { t?: unknown }).t as string,
+      ),
   )
 }
 

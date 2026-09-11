@@ -24,6 +24,8 @@ type HubSidebarProps = {
   user: { name: string; email: string; role: UserRole }
   organizationName: string
   signOutAction: () => Promise<void>
+  /** Sino já renderizado no servidor — ver comentário na barra mobile. */
+  notifications?: React.ReactNode
 }
 
 export function HubSidebar({
@@ -31,6 +33,7 @@ export function HubSidebar({
   user,
   organizationName,
   signOutAction,
+  notifications,
 }: HubSidebarProps) {
   const [open, setOpen] = useState(false)
 
@@ -49,14 +52,19 @@ export function HubSidebar({
       */}
       <div className="fixed inset-x-0 top-0 z-30 flex h-16 items-center justify-between gap-3 border-b border-synse-border bg-synse-surface/90 px-4 backdrop-blur-md lg:hidden">
         <SynseLogo size="sm" />
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setOpen(true)}
-          aria-label="Abrir menu de navegação"
-        >
-          <Menu className="size-5" />
-        </Button>
+        <div className="flex items-center gap-1">
+          {/* Renderizado no servidor e passado como slot: o sino consulta banco,
+              e esta barra é cliente por causa do drawer. */}
+          {notifications}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setOpen(true)}
+            aria-label="Abrir menu de navegação"
+          >
+            <Menu className="size-5" />
+          </Button>
+        </div>
       </div>
 
       {/* Overlay do drawer */}

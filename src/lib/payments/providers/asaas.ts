@@ -58,13 +58,19 @@ const PAID_EVENTS = new Set(['PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED', 'PAYMENT_R
 
 export class AsaasPaymentProvider implements PaymentProvider {
   readonly id = 'asaas'
-  readonly supportedMethods: PaymentMethod[] = ['PIX', 'BOLETO', 'CREDIT_CARD', 'CREDIT_CARD_RECURRING']
+  readonly supportedMethods: PaymentMethod[] = [
+    'PIX',
+    'BOLETO',
+    'CREDIT_CARD',
+    'CREDIT_CARD_RECURRING',
+  ]
 
   private readonly apiUrl: string
   private readonly apiKey: string
 
   constructor(config?: { apiUrl?: string; apiKey?: string }) {
-    this.apiUrl = config?.apiUrl ?? env(process.env.ASAAS_API_URL, 'https://api-sandbox.asaas.com/v3')
+    this.apiUrl =
+      config?.apiUrl ?? env(process.env.ASAAS_API_URL, 'https://api-sandbox.asaas.com/v3')
     this.apiKey = config?.apiKey ?? env(process.env.ASAAS_API_KEY, '')
   }
 
@@ -84,14 +90,17 @@ export class AsaasPaymentProvider implements PaymentProvider {
       })
     } catch (error) {
       logger.error('asaas:network_error', { path, error: String(error) })
-      throw providerUnavailable('asaas')
+      throw providerUnavailable('asaas', `rede em ${init?.method ?? 'GET'} ${path}`)
     }
 
     const text = await response.text()
     if (!response.ok) {
       // O corpo pode conter dado do pagador — não propagar para a UI.
       logger.error('asaas:http_error', { path, status: response.status, body: text.slice(0, 500) })
-      throw providerUnavailable('asaas')
+      throw providerUnavailable(
+        'asaas',
+        `HTTP ${response.status} em ${init?.method ?? 'GET'} ${path}${descreverErro(text)}`,
+      )
     }
     return (text ? JSON.parse(text) : {}) as T
   }
@@ -269,6 +278,23 @@ export class AsaasPaymentProvider implements PaymentProvider {
       netAmount: payment.netValue != null ? Number(payment.netValue) : undefined,
       method: payment.billingType ? (String(payment.billingType) as PaymentMethod) : undefined,
     }
+  }
+}
+
+/**
+ * Resumo do erro do Asaas, sem o corpo cru.
+ *
+ * A resposta traz `errors[].code` e `errors[].description`; a descrição cita
+ * dado do pagador ("CPF do pagador inválido: 123..."), então só o código sobe.
+ * É o suficiente para saber o que corrigir e nada além disso.
+ */
+function descreverErro(corpo: string): string {
+  try {
+    const parsed = JSON.parse(corpo) as { errors?: Array<{ code?: string }> }
+    const codigos = (parsed.errors ?? []).map((e) => e.code).filter(Boolean)
+    return codigos.length ? ` (${codigos.join(', ')})` : ''
+  } catch {
+    return ''
   }
 }
 

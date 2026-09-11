@@ -36,12 +36,17 @@ export const invalidInput = (detail?: string) =>
 export const conflict = (userMessage: string, detail?: string) =>
   new AppError('conflict', userMessage, 409, detail)
 
-export const providerUnavailable = (provider: string) =>
+/**
+ * `detail` entra na `message` do erro, que só existe no servidor — a UI lê
+ * `userMessage`. Serve para dizer qual chamada falhou e com que código, sem
+ * carregar o corpo da resposta: o do Asaas traz CPF e nome do pagador.
+ */
+export const providerUnavailable = (provider: string, detail?: string) =>
   new AppError(
     'provider_unavailable',
     'O provedor de pagamentos não respondeu. Tente novamente em instantes.',
     502,
-    `provider: ${provider}`,
+    detail ? `provider: ${provider} — ${detail}` : `provider: ${provider}`,
   )
 
 /** Converte qualquer erro em uma mensagem segura de exibir. */

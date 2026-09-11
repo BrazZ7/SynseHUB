@@ -45,6 +45,15 @@ function vencimentoFuturo(dias = 7) {
   return data.toISOString().slice(0, 10)
 }
 
+/**
+ * Os testes seguintes dependem da cobrança criada. Sem essa guarda, a falha de
+ * um vira quatro, e a mensagem que importa — a primeira — some no meio das
+ * outras três reclamando de `undefined`.
+ */
+function exigirCobranca(): never {
+  throw new Error('Cobrança não foi criada: corrija a falha anterior primeiro.')
+}
+
 describe.skipIf(!rodar)('Asaas · sandbox', () => {
   const provider = new AsaasPaymentProvider({ apiUrl, apiKey })
   let customerId = ''
@@ -78,6 +87,7 @@ describe.skipIf(!rodar)('Asaas · sandbox', () => {
   })
 
   it('lê a cobrança de volta com o mesmo valor e status', async () => {
+    if (!chargeId) return exigirCobranca()
     const cobranca = await provider.getPayment(chargeId)
 
     expect(cobranca.providerChargeId).toBe(chargeId)
@@ -90,6 +100,8 @@ describe.skipIf(!rodar)('Asaas · sandbox', () => {
    * não dá erro: o dinheiro simplesmente vai inteiro para a academia.
    */
   it('aceita o formato de split que o adapter monta', async () => {
+    if (!chargeId) return exigirCobranca()
+
     const walletId = process.env.ASAAS_TEST_WALLET_ID?.trim()
     if (!walletId) {
       console.warn('  (sem ASAAS_TEST_WALLET_ID — split não verificado)')
@@ -106,6 +118,8 @@ describe.skipIf(!rodar)('Asaas · sandbox', () => {
   })
 
   it('cancela a cobrança criada, sem deixar rastro no sandbox', async () => {
+    if (!chargeId) return exigirCobranca()
+
     await expect(provider.cancelCharge(chargeId)).resolves.toBeUndefined()
 
     const cobranca = await provider.getPayment(chargeId)

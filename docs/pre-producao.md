@@ -42,6 +42,21 @@ produção**. Ele não aparece em print, em chamada compartilhada nem em mensage
 Para conferir o que está preenchido, use `npm run env:check`, que mostra estado
 sem mostrar valor.
 
+## Como se trabalha neste projeto
+
+Decidido: **sem terminal**. O ciclo é publicar, deixar a Vercel implantar e
+testar no navegador. Migração de banco vai pelo SQL Editor do Supabase.
+
+O que fica indisponível nesse modo são os scripts locais — `db:seed`,
+`db:set-password`, `env:check` e `test:asaas`. Nenhum deles é necessário no uso
+normal; se um dia forem, é uma execução pontual, não uma rotina.
+
+Consequência a não esquecer: com `PAYMENT_PROVIDER=asaas` e a URL de sandbox,
+**produção emite cobranças de mentira**. O aviso amarelo de "provedor simulado"
+some da tela, porque do ponto de vista do código o provedor é real — só a conta
+do outro lado é de teste. Trocar para a chave e a URL de produção é item da
+lista do Synse Pay, abaixo.
+
 ## Plataforma
 
 - [ ] Plano da Vercel: o Hobby **proíbe uso comercial**. Precisa virar Pro

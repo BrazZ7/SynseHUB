@@ -61,7 +61,10 @@ export class SupabaseDataSource implements DataSource {
     throw new Error(`supabase query failed: ${operation}`)
   }
 
-  private async select<T>(operation: string, query: PromiseLike<{ data: T | null; error: unknown }>) {
+  private async select<T>(
+    operation: string,
+    query: PromiseLike<{ data: T | null; error: unknown }>,
+  ) {
     const { data, error } = await query
     if (error) this.fail(operation, error)
     return data
@@ -151,7 +154,9 @@ export class SupabaseDataSource implements DataSource {
         'listStaff',
         this.client
           .from('staff')
-          .select('id, organization_id, user_profile_id, role, registration_number, status, user_profiles(name, email)')
+          .select(
+            'id, organization_id, user_profile_id, role, registration_number, status, user_profiles(name, email)',
+          )
           .eq('organization_id', organizationId)
           .eq('status', 'ACTIVE'),
       )) ?? []
@@ -304,7 +309,7 @@ export class SupabaseDataSource implements DataSource {
   // ── Alunos ─────────────────────────────────────────────────────────────────
   private readonly studentSelect = `
     id, organization_id, user_profile_id, status, goal, enrolled_at, cancelled_at, trainer_id, notes,
-    user_profiles ( synse_id, name, email, phone, avatar_url, birth_date ),
+    user_profiles ( synse_id, name, email, phone, tax_id, avatar_url, birth_date ),
     memberships ( id, plan_id, price, status, membership_plans ( name ) ),
     staff:trainer_id ( user_profiles ( name ) )
   `
@@ -323,6 +328,7 @@ export class SupabaseDataSource implements DataSource {
       name: profile.name ?? '—',
       email: profile.email ?? '',
       phone: profile.phone ?? null,
+      taxId: profile.tax_id ?? null,
       avatarUrl: profile.avatar_url ?? null,
       birthDate: profile.birth_date ?? null,
       status: row.status,
@@ -369,7 +375,8 @@ export class SupabaseDataSource implements DataSource {
     ])
 
     const nextCharge = new Map<string, Row>()
-    for (const row of charges ?? []) if (!nextCharge.has(row.student_id)) nextCharge.set(row.student_id, row)
+    for (const row of charges ?? [])
+      if (!nextCharge.has(row.student_id)) nextCharge.set(row.student_id, row)
 
     const lastCheckIn = new Map<string, string>()
     for (const row of checkIns ?? [])
@@ -378,7 +385,9 @@ export class SupabaseDataSource implements DataSource {
     return students.map((student) => ({
       ...student,
       nextChargeDueDate: nextCharge.get(student.id)?.due_date ?? null,
-      nextChargeAmount: nextCharge.get(student.id) ? Number(nextCharge.get(student.id)!.amount) : null,
+      nextChargeAmount: nextCharge.get(student.id)
+        ? Number(nextCharge.get(student.id)!.amount)
+        : null,
       lastCheckInAt: lastCheckIn.get(student.id) ?? null,
     }))
   }
@@ -507,6 +516,7 @@ export class SupabaseDataSource implements DataSource {
       name: profile.name,
       email: profile.email,
       phone: profile.phone,
+      taxId: profile.tax_id ?? null,
       avatarUrl: profile.avatar_url,
       birthDate: profile.birth_date,
       status: student.status,
@@ -617,6 +627,68 @@ export class SupabaseDataSource implements DataSource {
         .maybeSingle(),
     )
     return row ? this.mapCharge(row) : null
+  }
+
+  /*
+   * Referências do provedor.
+   *
+   * `provider_charge_id` é o que liga a cobrança do Synse à do gateway. É por
+   * ele que o webhook encontra a cobrança para dar baixa; sem gravá-lo, o
+   * pagamento chega e não acha o que confirmar.
+   */
+  async getProviderCustomerId(
+    organizationId: string,
+    studentId: string,
+    provider: string,
+  ): Promise<string | null> {
+    const row = await this.select<Row>(
+      'getProviderCustomerId',
+      this.client
+        .from('payment_customers')
+        .select('provider_customer_id')
+        .eq('organization_id', organizationId)
+        .eq('student_id', studentId)
+        .eq('provider', provider)
+        .maybeSingle(),
+    )
+    return row ? row.provider_customer_id : null
+  }
+
+  async saveProviderCustomerId(input: {
+    organizationId: string
+    studentId: string
+    provider: string
+    providerCustomerId: string
+  }): Promise<void> {
+    const { error } = await this.client.from('payment_customers').upsert(
+      {
+        organization_id: input.organizationId,
+        student_id: input.studentId,
+        provider: input.provider,
+        provider_customer_id: input.providerCustomerId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'student_id,provider' },
+    )
+    if (error) this.fail('saveProviderCustomerId', error)
+  }
+
+  async attachProviderCharge(input: {
+    organizationId: string
+    chargeId: string
+    provider: string
+    providerChargeId: string
+  }): Promise<void> {
+    const { error } = await this.client
+      .from('charges')
+      .update({
+        provider: input.provider,
+        provider_charge_id: input.providerChargeId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('organization_id', input.organizationId)
+      .eq('id', input.chargeId)
+    if (error) this.fail('attachProviderCharge', error)
   }
 
   async listCollectionRules(organizationId: string): Promise<CollectionRule[]> {

@@ -85,6 +85,12 @@ export type Student = {
   name: string
   email: string
   phone: string | null
+  /**
+   * CPF. Exigido pelo provedor de pagamento para emitir cobrança — sem ele a
+   * mensalidade não sai. Fica no perfil, não na matrícula: o documento é da
+   * pessoa e sobrevive à troca de academia, igual ao Synse ID.
+   */
+  taxId: string | null
   avatarUrl: string | null
   birthDate: string | null
   status: StudentStatus

@@ -76,7 +76,7 @@ function buildDemoDataset() {
   }
 
   const rand = mulberry32(20260910)
-  const pick = <T,>(items: readonly T[]): T => items[Math.floor(rand() * items.length)]
+  const pick = <T>(items: readonly T[]): T => items[Math.floor(rand() * items.length)]
   const between = (min: number, max: number) => min + rand() * (max - min)
   const intBetween = (min: number, max: number) => Math.floor(between(min, max + 1))
 
@@ -94,18 +94,79 @@ function buildDemoDataset() {
 
   // ── Vocabulário ──────────────────────────────────────────────────────────────
   const FIRST_NAMES = [
-    'Ana', 'Beatriz', 'Camila', 'Daniela', 'Eduarda', 'Fernanda', 'Gabriela', 'Helena',
-    'Isabela', 'Juliana', 'Larissa', 'Mariana', 'Natália', 'Patrícia', 'Rafaela', 'Sofia',
-    'Tatiane', 'Vanessa', 'André', 'Bruno', 'Carlos', 'Diego', 'Eduardo', 'Felipe',
-    'Gustavo', 'Henrique', 'Igor', 'João', 'Lucas', 'Marcelo', 'Nicolas', 'Otávio',
-    'Paulo', 'Rafael', 'Thiago', 'Vinícius', 'Emerson', 'Letícia', 'Renata', 'Murilo',
+    'Ana',
+    'Beatriz',
+    'Camila',
+    'Daniela',
+    'Eduarda',
+    'Fernanda',
+    'Gabriela',
+    'Helena',
+    'Isabela',
+    'Juliana',
+    'Larissa',
+    'Mariana',
+    'Natália',
+    'Patrícia',
+    'Rafaela',
+    'Sofia',
+    'Tatiane',
+    'Vanessa',
+    'André',
+    'Bruno',
+    'Carlos',
+    'Diego',
+    'Eduardo',
+    'Felipe',
+    'Gustavo',
+    'Henrique',
+    'Igor',
+    'João',
+    'Lucas',
+    'Marcelo',
+    'Nicolas',
+    'Otávio',
+    'Paulo',
+    'Rafael',
+    'Thiago',
+    'Vinícius',
+    'Emerson',
+    'Letícia',
+    'Renata',
+    'Murilo',
   ]
 
   const LAST_NAMES = [
-    'Silva', 'Santos', 'Oliveira', 'Souza', 'Rodrigues', 'Ferreira', 'Alves', 'Pereira',
-    'Lima', 'Gomes', 'Ribeiro', 'Carvalho', 'Almeida', 'Lopes', 'Soares', 'Fernandes',
-    'Vieira', 'Barbosa', 'Rocha', 'Dias', 'Nascimento', 'Moreira', 'Cardoso', 'Teixeira',
-    'Correia', 'Mendes', 'Araújo', 'Braz', 'Monteiro', 'Freitas',
+    'Silva',
+    'Santos',
+    'Oliveira',
+    'Souza',
+    'Rodrigues',
+    'Ferreira',
+    'Alves',
+    'Pereira',
+    'Lima',
+    'Gomes',
+    'Ribeiro',
+    'Carvalho',
+    'Almeida',
+    'Lopes',
+    'Soares',
+    'Fernandes',
+    'Vieira',
+    'Barbosa',
+    'Rocha',
+    'Dias',
+    'Nascimento',
+    'Moreira',
+    'Cardoso',
+    'Teixeira',
+    'Correia',
+    'Mendes',
+    'Araújo',
+    'Braz',
+    'Monteiro',
+    'Freitas',
   ]
 
   const GOALS = [
@@ -140,7 +201,7 @@ function buildDemoDataset() {
   }
 
   // ── Organização ──────────────────────────────────────────────────────────────
-    // DEMO_ORG_ID vive no escopo do módulo: é uma constante pura.
+  // DEMO_ORG_ID vive no escopo do módulo: é uma constante pura.
 
   const demoOrganization: Organization = {
     id: DEMO_ORG_ID,
@@ -199,12 +260,29 @@ function buildDemoDataset() {
   const STAFF_SEEDS: StaffSeed[] = [
     { id: 'staff_0001', name: 'Emerson Braz', role: 'OWNER', jobTitle: 'Proprietário' },
     { id: 'staff_0002', name: 'Marina Duarte', role: 'MANAGER', jobTitle: 'Gerente operacional' },
-    { id: 'staff_0003', name: 'Rafael Nunes', role: 'TRAINER', jobTitle: 'Professor', registration: 'CREF 012345-G/SP' },
-    { id: 'staff_0004', name: 'Carolina Prado', role: 'TRAINER', jobTitle: 'Professora', registration: 'CREF 023456-G/SP' },
-    { id: 'staff_0005', name: 'Bianca Rezende', role: 'NUTRITIONIST', jobTitle: 'Nutricionista', registration: 'CRN 34567' },
+    {
+      id: 'staff_0003',
+      name: 'Rafael Nunes',
+      role: 'TRAINER',
+      jobTitle: 'Professor',
+      registration: 'CREF 012345-G/SP',
+    },
+    {
+      id: 'staff_0004',
+      name: 'Carolina Prado',
+      role: 'TRAINER',
+      jobTitle: 'Professora',
+      registration: 'CREF 023456-G/SP',
+    },
+    {
+      id: 'staff_0005',
+      name: 'Bianca Rezende',
+      role: 'NUTRITIONIST',
+      jobTitle: 'Nutricionista',
+      registration: 'CRN 34567',
+    },
     { id: 'staff_0006', name: 'Lucas Ferraz', role: 'RECEPTIONIST', jobTitle: 'Recepção' },
   ]
-
 
   const demoUserProfiles: UserProfile[] = []
   const demoOrganizationMembers: OrganizationMember[] = []
@@ -312,7 +390,12 @@ function buildDemoDataset() {
       billingCycle: 'SEMIANNUAL',
       enrollmentFee: 0,
       weeklyAccessDays: 7,
-      benefits: ['Musculação', 'Aulas coletivas', 'Avaliação física bimestral', 'Acesso ao Synse App'],
+      benefits: [
+        'Musculação',
+        'Aulas coletivas',
+        'Avaliação física bimestral',
+        'Acesso ao Synse App',
+      ],
       autoCharge: true,
       status: 'ACTIVE',
       createdAt: demoOrganization.createdAt,
@@ -376,7 +459,6 @@ function buildDemoDataset() {
   const INACTIVE_STUDENTS = 34
   const TOTAL_STUDENTS = ACTIVE_STUDENTS + OVERDUE_STUDENTS + INACTIVE_STUDENTS
 
-
   const demoStudents: Student[] = []
   const demoMemberships: Membership[] = []
 
@@ -388,7 +470,11 @@ function buildDemoDataset() {
     const plan = weightedPlan()
 
     const status: Student['status'] =
-      i < ACTIVE_STUDENTS ? 'ACTIVE' : i < ACTIVE_STUDENTS + OVERDUE_STUDENTS ? 'OVERDUE' : 'INACTIVE'
+      i < ACTIVE_STUDENTS
+        ? 'ACTIVE'
+        : i < ACTIVE_STUDENTS + OVERDUE_STUDENTS
+          ? 'OVERDUE'
+          : 'INACTIVE'
 
     // Matrículas espalhadas nos últimos 24 meses, levemente concentradas nos
     // meses recentes — o expoente calibra ~25 novas matrículas por mês.
@@ -415,7 +501,8 @@ function buildDemoDataset() {
         ? isoDate(
             new Date(
               YEAR,
-              Math.max(MONTH - Math.min(11, monthsAgo), MONTH - 11) + intBetween(0, 11 - Math.min(11, 11)),
+              Math.max(MONTH - Math.min(11, monthsAgo), MONTH - 11) +
+                intBetween(0, 11 - Math.min(11, 11)),
               intBetween(1, 28),
             ),
           )
@@ -427,6 +514,7 @@ function buildDemoDataset() {
       userProfileId: profileId,
       synseId,
       name,
+      taxId: null,
       email: emailFor(name, i + 1),
       phone: phone(),
       avatarUrl: null,
@@ -514,7 +602,12 @@ function buildDemoDataset() {
     return charge
   }
 
-  const METHODS: Charge['paymentMethod'][] = ['PIX', 'CREDIT_CARD_RECURRING', 'BOLETO', 'CREDIT_CARD']
+  const METHODS: Charge['paymentMethod'][] = [
+    'PIX',
+    'CREDIT_CARD_RECURRING',
+    'BOLETO',
+    'CREDIT_CARD',
+  ]
 
   /** Referência de competência: `offset` 0 = mês corrente. */
   function competenceMonth(offset: number) {
@@ -547,8 +640,7 @@ function buildDemoDataset() {
         // aluno em dia carregasse cobrança vencida, a contagem por status e a
         // contagem por cobrança divergiriam — e as duas telas mostrariam
         // números diferentes para a mesma pergunta.
-        const dragsDebt =
-          student.status === 'OVERDUE' && rand() < (offset === -1 ? 0.35 : 0.15)
+        const dragsDebt = student.status === 'OVERDUE' && rand() < (offset === -1 ? 0.35 : 0.15)
         pushCharge({
           student,
           membership,
@@ -608,7 +700,8 @@ function buildDemoDataset() {
     const day = dayStart(addDays(DEMO_NOW, -dayOffset))
     const weekday = day.getDay()
     // Domingo movimenta menos; segunda e quarta são os picos.
-    const factor = weekday === 0 ? 0.35 : weekday === 6 ? 0.6 : weekday === 1 || weekday === 3 ? 1.1 : 1
+    const factor =
+      weekday === 0 ? 0.35 : weekday === 6 ? 0.6 : weekday === 1 || weekday === 3 ? 1.1 : 1
     const isToday = dayOffset === 0
 
     const count = isToday
@@ -715,11 +808,36 @@ function buildDemoDataset() {
     goal: string
     groups: Exercise['muscleGroup'][]
   }> = [
-    { split: 'A', name: 'Treino A — Peito e Tríceps', goal: 'Hipertrofia', groups: ['CHEST', 'CHEST', 'CHEST', 'ARMS', 'ARMS'] },
-    { split: 'B', name: 'Treino B — Costas e Bíceps', goal: 'Hipertrofia', groups: ['BACK', 'BACK', 'BACK', 'ARMS', 'ARMS'] },
-    { split: 'C', name: 'Treino C — Pernas e Glúteos', goal: 'Hipertrofia', groups: ['LEGS', 'LEGS', 'LEGS', 'GLUTES', 'CORE'] },
-    { split: 'D', name: 'Treino D — Ombros e Core', goal: 'Condicionamento', groups: ['SHOULDERS', 'SHOULDERS', 'CORE', 'CORE', 'CARDIO'] },
-    { split: 'FB', name: 'Full Body — Iniciante', goal: 'Condicionamento', groups: ['FULL_BODY', 'LEGS', 'CHEST', 'BACK', 'CARDIO'] },
+    {
+      split: 'A',
+      name: 'Treino A — Peito e Tríceps',
+      goal: 'Hipertrofia',
+      groups: ['CHEST', 'CHEST', 'CHEST', 'ARMS', 'ARMS'],
+    },
+    {
+      split: 'B',
+      name: 'Treino B — Costas e Bíceps',
+      goal: 'Hipertrofia',
+      groups: ['BACK', 'BACK', 'BACK', 'ARMS', 'ARMS'],
+    },
+    {
+      split: 'C',
+      name: 'Treino C — Pernas e Glúteos',
+      goal: 'Hipertrofia',
+      groups: ['LEGS', 'LEGS', 'LEGS', 'GLUTES', 'CORE'],
+    },
+    {
+      split: 'D',
+      name: 'Treino D — Ombros e Core',
+      goal: 'Condicionamento',
+      groups: ['SHOULDERS', 'SHOULDERS', 'CORE', 'CORE', 'CARDIO'],
+    },
+    {
+      split: 'FB',
+      name: 'Full Body — Iniciante',
+      goal: 'Condicionamento',
+      groups: ['FULL_BODY', 'LEGS', 'CHEST', 'BACK', 'CARDIO'],
+    },
   ]
 
   let workoutExerciseSeq = 0
@@ -748,7 +866,8 @@ function buildDemoDataset() {
         sets: intBetween(3, 4),
         reps: pick(['8-10', '10-12', '12-15', '15']),
         restSeconds: pick([45, 60, 90]),
-        suggestedLoad: group === 'CARDIO' || group === 'CORE' ? null : roundMoney(intBetween(10, 60)),
+        suggestedLoad:
+          group === 'CARDIO' || group === 'CORE' ? null : roundMoney(intBetween(10, 60)),
         notes: null,
       })
     })
@@ -826,8 +945,22 @@ function buildDemoDataset() {
   })
 
   // ── CRM ──────────────────────────────────────────────────────────────────────
-  const LEAD_SOURCES: Lead['source'][] = ['INSTAGRAM', 'GOOGLE', 'REFERRAL', 'WEBSITE', 'WHATSAPP', 'OTHER']
-  const LEAD_STAGES: Lead['stage'][] = ['NEW', 'CONTACTED', 'TRIAL_CLASS', 'PROPOSAL', 'ENROLLED', 'LOST']
+  const LEAD_SOURCES: Lead['source'][] = [
+    'INSTAGRAM',
+    'GOOGLE',
+    'REFERRAL',
+    'WEBSITE',
+    'WHATSAPP',
+    'OTHER',
+  ]
+  const LEAD_STAGES: Lead['stage'][] = [
+    'NEW',
+    'CONTACTED',
+    'TRIAL_CLASS',
+    'PROPOSAL',
+    'ENROLLED',
+    'LOST',
+  ]
 
   const demoLeads: Lead[] = Array.from({ length: 28 }, (_, index) => {
     const name = `${pick(FIRST_NAMES)} ${pick(LAST_NAMES)}`
@@ -845,12 +978,54 @@ function buildDemoDataset() {
 
   // ── Régua de cobrança ────────────────────────────────────────────────────────
   const demoCollectionRules: CollectionRule[] = [
-    { id: 'rule_1', organizationId: DEMO_ORG_ID, offsetDays: -3, channels: ['PUSH', 'EMAIL'], template: 'Sua mensalidade vence em 3 dias.', enabled: true },
-    { id: 'rule_2', organizationId: DEMO_ORG_ID, offsetDays: 0, channels: ['PUSH'], template: 'Sua mensalidade vence hoje.', enabled: true },
-    { id: 'rule_3', organizationId: DEMO_ORG_ID, offsetDays: 3, channels: ['PUSH', 'EMAIL'], template: 'Identificamos um pagamento em aberto.', enabled: true },
-    { id: 'rule_4', organizationId: DEMO_ORG_ID, offsetDays: 7, channels: ['EMAIL'], template: 'Sua mensalidade está atrasada há uma semana.', enabled: true },
-    { id: 'rule_5', organizationId: DEMO_ORG_ID, offsetDays: 15, channels: ['EMAIL'], template: 'Vamos regularizar? Fale com a recepção.', enabled: false },
-    { id: 'rule_6', organizationId: DEMO_ORG_ID, offsetDays: 30, channels: ['EMAIL'], template: 'Sua matrícula pode ser suspensa.', enabled: false },
+    {
+      id: 'rule_1',
+      organizationId: DEMO_ORG_ID,
+      offsetDays: -3,
+      channels: ['PUSH', 'EMAIL'],
+      template: 'Sua mensalidade vence em 3 dias.',
+      enabled: true,
+    },
+    {
+      id: 'rule_2',
+      organizationId: DEMO_ORG_ID,
+      offsetDays: 0,
+      channels: ['PUSH'],
+      template: 'Sua mensalidade vence hoje.',
+      enabled: true,
+    },
+    {
+      id: 'rule_3',
+      organizationId: DEMO_ORG_ID,
+      offsetDays: 3,
+      channels: ['PUSH', 'EMAIL'],
+      template: 'Identificamos um pagamento em aberto.',
+      enabled: true,
+    },
+    {
+      id: 'rule_4',
+      organizationId: DEMO_ORG_ID,
+      offsetDays: 7,
+      channels: ['EMAIL'],
+      template: 'Sua mensalidade está atrasada há uma semana.',
+      enabled: true,
+    },
+    {
+      id: 'rule_5',
+      organizationId: DEMO_ORG_ID,
+      offsetDays: 15,
+      channels: ['EMAIL'],
+      template: 'Vamos regularizar? Fale com a recepção.',
+      enabled: false,
+    },
+    {
+      id: 'rule_6',
+      organizationId: DEMO_ORG_ID,
+      offsetDays: 30,
+      channels: ['EMAIL'],
+      template: 'Sua matrícula pode ser suspensa.',
+      enabled: false,
+    },
   ]
 
   return {

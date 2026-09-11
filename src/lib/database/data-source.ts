@@ -131,12 +131,42 @@ export interface DataSource {
   ): Promise<Charge | null>
   listCollectionRules(organizationId: string): Promise<CollectionRule[]>
 
+  /*
+   * Referências criadas no provedor de pagamento.
+   *
+   * O provedor identifica pagador e cobrança por ids próprios. Sem guardá-los,
+   * a confirmação de pagamento não tem como encontrar a cobrança: o webhook
+   * procura por (provider, provider_charge_id) e devolveria "não encontrada"
+   * para sempre.
+   */
+  getProviderCustomerId(
+    organizationId: string,
+    studentId: string,
+    provider: string,
+  ): Promise<string | null>
+  saveProviderCustomerId(input: {
+    organizationId: string
+    studentId: string
+    provider: string
+    providerCustomerId: string
+  }): Promise<void>
+  attachProviderCharge(input: {
+    organizationId: string
+    chargeId: string
+    provider: string
+    providerChargeId: string
+  }): Promise<void>
+
   // Check-in
   listCheckIns(
     organizationId: string,
     options: { since?: Date; limit?: number },
   ): Promise<CheckInWithStudent[]>
-  listCheckInsForStudent(organizationId: string, studentId: string, limit?: number): Promise<CheckIn[]>
+  listCheckInsForStudent(
+    organizationId: string,
+    studentId: string,
+    limit?: number,
+  ): Promise<CheckIn[]>
   createCheckIn(input: {
     organizationId: string
     studentId: string
@@ -147,7 +177,9 @@ export interface DataSource {
   listExercises(organizationId: string): Promise<Exercise[]>
   listWorkoutPlans(organizationId: string): Promise<WorkoutPlan[]>
   getWorkoutPlan(organizationId: string, planId: string): Promise<WorkoutPlan | null>
-  listWorkoutExercises(workoutPlanId: string): Promise<Array<WorkoutExercise & { exercise: Exercise }>>
+  listWorkoutExercises(
+    workoutPlanId: string,
+  ): Promise<Array<WorkoutExercise & { exercise: Exercise }>>
   listAssignmentsForStudent(organizationId: string, studentId: string): Promise<WorkoutAssignment[]>
   countAssignments(organizationId: string): Promise<Record<string, number>>
   listWorkoutLogs(organizationId: string, studentId: string): Promise<WorkoutLog[]>

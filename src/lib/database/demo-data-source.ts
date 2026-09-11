@@ -90,6 +90,8 @@ export class DemoDataSource implements DataSource {
           synseId: mutation.synseId,
           name: mutation.name,
           email: mutation.email,
+          // Em demonstração ninguém informa CPF: não há cobrança real para emitir.
+          taxId: null,
           phone: mutation.phone,
           avatarUrl: null,
           birthDate: null,
@@ -195,9 +197,11 @@ export class DemoDataSource implements DataSource {
     }
     for (const [chargeId] of this.chargePatches) {
       const base = this.db.charges.find((c) => c.id === chargeId)
-      const studentId = base?.studentId ?? this.addedCharges.find((c) => c.id === chargeId)?.studentId
+      const studentId =
+        base?.studentId ?? this.addedCharges.find((c) => c.id === chargeId)?.studentId
       if (!studentId || settled.has(studentId)) continue
-      const student = this.studentById?.get(studentId) ?? this.db.students.find((s) => s.id === studentId)
+      const student =
+        this.studentById?.get(studentId) ?? this.db.students.find((s) => s.id === studentId)
       if (student?.status === 'OVERDUE') this.studentStatusPatches.set(studentId, 'ACTIVE')
     }
   }
@@ -420,9 +424,7 @@ export class DemoDataSource implements DataSource {
     let items = rows.map((s) => this.toListItem(s))
 
     if (filters.inactiveAttendance) {
-      items = items.filter(
-        (s) => !s.lastCheckInAt || daysBetween(s.lastCheckInAt) >= 21,
-      )
+      items = items.filter((s) => !s.lastCheckInAt || daysBetween(s.lastCheckInAt) >= 21)
     }
 
     items.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
@@ -496,7 +498,8 @@ export class DemoDataSource implements DataSource {
     filters: { status?: Charge['status'] | 'ALL'; studentId?: string; limit?: number },
   ): Promise<ChargeWithStudent[]> {
     let rows = this.scoped(this.charges(), organizationId)
-    if (filters.status && filters.status !== 'ALL') rows = rows.filter((c) => c.status === filters.status)
+    if (filters.status && filters.status !== 'ALL')
+      rows = rows.filter((c) => c.status === filters.status)
     if (filters.studentId) rows = rows.filter((c) => c.studentId === filters.studentId)
     rows = [...rows].sort((a, b) => (b.paidAt ?? b.dueDate).localeCompare(a.paidAt ?? a.dueDate))
     return rows.slice(0, filters.limit ?? 100).map((c) => this.toChargeWithStudent(c))
@@ -537,6 +540,43 @@ export class DemoDataSource implements DataSource {
     await appendDemoMutation(mutation)
 
     return this.charges().find((c) => c.id === chargeId) ?? null
+  }
+
+  /*
+   * Em demonstração não há gateway: o provedor simulado inventa os ids e eles
+   * vivem só nesta sessão. O contrato é o mesmo para que a diferença entre
+   * demo e produção continue sendo só o data source.
+   */
+  private readonly providerCustomers = new Map<string, string>()
+
+  async getProviderCustomerId(
+    organizationId: string,
+    studentId: string,
+    provider: string,
+  ): Promise<string | null> {
+    return this.providerCustomers.get(`${organizationId}:${studentId}:${provider}`) ?? null
+  }
+
+  async saveProviderCustomerId(input: {
+    organizationId: string
+    studentId: string
+    provider: string
+    providerCustomerId: string
+  }): Promise<void> {
+    this.providerCustomers.set(
+      `${input.organizationId}:${input.studentId}:${input.provider}`,
+      input.providerCustomerId,
+    )
+  }
+
+  async attachProviderCharge(input: {
+    organizationId: string
+    chargeId: string
+    provider: string
+    providerChargeId: string
+  }): Promise<void> {
+    const charge = this.charges().find((c) => c.id === input.chargeId)
+    if (charge) charge.providerChargeId = input.providerChargeId
   }
 
   async listCollectionRules(organizationId: string): Promise<CollectionRule[]> {
@@ -595,9 +635,7 @@ export class DemoDataSource implements DataSource {
   }
 
   async getWorkoutPlan(organizationId: string, planId: string): Promise<WorkoutPlan | null> {
-    return (
-      this.scoped(this.db.workoutPlans, organizationId).find((p) => p.id === planId) ?? null
-    )
+    return this.scoped(this.db.workoutPlans, organizationId).find((p) => p.id === planId) ?? null
   }
 
   async listWorkoutExercises(workoutPlanId: string) {

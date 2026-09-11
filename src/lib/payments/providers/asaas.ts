@@ -246,6 +246,8 @@ export class AsaasPaymentProvider implements PaymentProvider {
       providerAccountId: String(raw.walletId ?? raw.id),
       status: 'PENDING',
       onboardingUrl: raw.onboardingUrl ? String(raw.onboardingUrl) : undefined,
+      // Vem só nesta resposta. Descartar aqui deixa a academia sem como cobrar.
+      apiKey: raw.apiKey ? String(raw.apiKey) : undefined,
     }
   }
 

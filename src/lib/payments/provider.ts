@@ -49,6 +49,14 @@ export type ProviderPaymentAccount = {
   providerAccountId: string
   status: 'PENDING' | 'ACTIVE' | 'BLOCKED'
   onboardingUrl?: string
+  /**
+   * Credencial da subconta, devolvida uma única vez na criação.
+   *
+   * É com ela que as cobranças daquela academia são emitidas na conta dela. Se
+   * não for guardada agora, não há como recuperá-la depois — e a academia fica
+   * sem como cobrar.
+   */
+  apiKey?: string
 }
 
 export type SplitConfiguration = {

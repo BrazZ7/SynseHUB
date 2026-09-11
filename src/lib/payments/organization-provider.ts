@@ -1,7 +1,9 @@
 import 'server-only'
 
+import { APP } from '@/config/app'
 import { createSupabaseAdminClient } from '@/lib/database/supabase-admin'
 import { AppError } from '@/lib/errors'
+import { logger } from '@/lib/logger'
 import { getPaymentProvider, isSimulatedProvider } from '@/lib/payments'
 import { AsaasPaymentProvider } from '@/lib/payments/providers/asaas'
 import type { PaymentProvider, SplitConfiguration } from '@/lib/payments/provider'
@@ -69,9 +71,17 @@ export async function getProviderForOrganization(organizationId: string): Promis
  * Split a aplicar nas cobranças desta academia.
  *
  * O percentual vem do banco — nunca do código. `SYNSE_PLATFORM_WALLET_ID` é a
- * carteira que recebe a comissão; sem ela a cobrança sairia inteira para a
- * academia e a comissão simplesmente não existiria, sem erro nenhum na tela.
- * Por isso a ausência é falha, não omissão silenciosa.
+ * carteira que recebe a comissão.
+ *
+ * Sem ela, a cobrança sai inteira para a academia e a comissão simplesmente não
+ * existe — sem erro nenhum na tela, enquanto o painel segue exibindo os 2% como
+ * se tivessem sido retidos. Em produção isso é dinheiro perdido em silêncio,
+ * então a emissão para.
+ *
+ * Fora de produção ela apenas avisa e segue. Exigir a carteira no ambiente de
+ * desenvolvimento obrigaria a abrir uma segunda conta no provedor antes de
+ * conseguir testar qualquer outra parte do fluxo — e travar o teste do que
+ * funciona para proteger o que ainda não existe é proteção no lugar errado.
  */
 export async function getSplitForOrganization(
   organizationId: string,
@@ -79,7 +89,15 @@ export async function getSplitForOrganization(
   if (isSimulatedProvider()) return undefined
 
   const walletId = env(process.env.SYNSE_PLATFORM_WALLET_ID, '')
-  if (!walletId) throw platformWalletMissing()
+  if (!walletId) {
+    if (APP.env === 'production') throw platformWalletMissing()
+
+    logger.warn('payments:split_ignorado', {
+      organizationId,
+      motivo: 'SYNSE_PLATFORM_WALLET_ID ausente — cobrança sai sem comissão',
+    })
+    return undefined
+  }
 
   const admin = createSupabaseAdminClient()
   if (!admin) throw platformWalletMissing()

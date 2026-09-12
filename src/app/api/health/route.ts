@@ -126,11 +126,12 @@ async function rpcCheck(nome: string, corpo: Record<string, unknown>): Promise<S
 }
 
 async function schemaReadiness() {
-  const [tier, desafios, profissional, entradaSemVinculo] = await Promise.all([
+  const [tier, desafios, profissional, entradaSemVinculo, corridas] = await Promise.all([
     schemaCheck('user_profiles?select=tier&limit=1'),
     schemaCheck('baseline_challenges?select=code&limit=1'),
     schemaCheck('user_profiles?select=professional_plan&limit=1'),
     rpcCheck('join_synse_as_solo_student', { p_student_name: 'sonda' }),
+    schemaCheck('activities?select=id&limit=1'),
   ])
 
   const pendentes: string[] = []
@@ -139,8 +140,10 @@ async function schemaReadiness() {
     pendentes.push('0014_baseline_experience.sql')
   }
   if (profissional.present === false) pendentes.push('0015_professional_unlock.sql')
+  if (corridas.present === false) pendentes.push('0016_synse_run.sql')
 
   return {
+    synseRun: corridas,
     entradaSemVinculo,
     userProfilesTier: tier,
     baselineChallenges: desafios,

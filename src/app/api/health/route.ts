@@ -165,6 +165,22 @@ function paymentEnvironment(): string | null {
   return new URL(url).hostname
 }
 
+/**
+ * Qual commit está no ar.
+ *
+ * Publicar é assíncrono: eu envio a correção, a Vercel constrói, e no meio
+ * disso a pessoa testa a versão antiga e relata que "continua errado". Sem
+ * este campo a única forma de conferir era comparar nomes de arquivo estático
+ * entre a build local e a publicada — que mudam por motivos que nada têm a ver
+ * com o commit, e já me fizeram concluir errado. O hash curto é público:
+ * qualquer um lê o mesmo no GitHub.
+ */
+function build(): { commit: string; branch: string | null } | null {
+  const sha = env(process.env.VERCEL_GIT_COMMIT_SHA, '')
+  if (!sha) return null
+  return { commit: sha.slice(0, 7), branch: env(process.env.VERCEL_GIT_COMMIT_REF, '') || null }
+}
+
 /** Sonda de saúde. Não expõe segredo nem detalhe de infraestrutura. */
 export async function GET(request: Request) {
   const demo = isDemoMode()
@@ -176,6 +192,7 @@ export async function GET(request: Request) {
     version: APP.version,
     environment: APP.env,
     appUrl: APP.url,
+    build: build(),
     database: demo ? 'demo' : 'supabase',
     databaseRef: demo ? null : databaseRef(),
     databaseKey: demo ? null : databaseKey(),

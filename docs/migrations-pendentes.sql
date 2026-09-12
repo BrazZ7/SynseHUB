@@ -574,8 +574,9 @@ create index if not exists challenge_medals_person_idx
 
 -- ── RLS ──────────────────────────────────────────────────────────────────────
 /*
- * O catálogo é público para quem está autenticado — é conteúdo, não dado
- * pessoal. Escolha, progresso e medalha são só de quem os viveu, nem a
+ * O catálogo é público, inclusive para quem nem entrou: a política é
+ * `using (active)`, sem exigir sessão. É conteúdo, não dado pessoal, e um dia
+ * a página de vendas vai querer mostrá-lo. Escolha, progresso e medalha são só de quem os viveu, nem a
  * academia lê: "nunca publicar métricas pessoais do usuário sem consentimento"
  * vale aqui inteiro. Quando a academia precisar ver, será por opt-in explícito,
  * como já é o ranking de `challenge_participants`.

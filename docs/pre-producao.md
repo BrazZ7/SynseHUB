@@ -32,18 +32,21 @@ npm run env:check
 
 ## Migrations a aplicar no SQL Editor
 
-Com o trabalho sem terminal, migração nova só entra em produção quando alguém
-cola o arquivo no SQL Editor do Supabase. As que ainda podem não ter sido
-aplicadas, na ordem:
+**Estado em 12/09/2026: 0012 a 0015 aplicadas em produção** — conferido em
+`/api/health?deep=1`, com `pendingMigrations` vazio.
 
-- [ ] `0012_notification_events.sql` — sem ela o sino continua vazio, mas nada
+Com o trabalho sem terminal, migração nova só entra em produção quando alguém
+cola o arquivo no SQL Editor do Supabase. O histórico do que foi aplicado nesta
+rodada, na ordem:
+
+- [x] `0012_notification_events.sql` — sem ela o sino continua vazio, mas nada
       quebra: a leitura de notificações falha em silêncio e a tela mostra
       "nada por aqui ainda".
-- [ ] `0013_synse_solo.sql` — sem ela, quem escolher "treino por conta própria"
+- [x] `0013_synse_solo.sql` — sem ela, quem escolher "treino por conta própria"
       recebe erro ao concluir. O resto do cadastro segue funcionando.
-- [ ] `0014_baseline_experience.sql` — sem ela, a tela de desafios não abre.
+- [x] `0014_baseline_experience.sql` — sem ela, a tela de desafios não abre.
       Treino base e plano alimentar base não dependem de banco e continuam de pé.
-- [ ] `0015_professional_unlock.sql` — sem ela, o cartão do perfil profissional
+- [x] `0015_professional_unlock.sql` — sem ela, o cartão do perfil profissional
       aparece desligado e "abrir espaço" recusa. Nada mais é afetado.
 
 As quatro estão reunidas, na ordem, em `docs/migrations-pendentes.sql` — uma

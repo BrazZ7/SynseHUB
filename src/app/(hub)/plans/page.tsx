@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { ClipboardList, Plus, Users } from 'lucide-react'
 
 import { EmptyState } from '@/components/synse/empty-state'
@@ -49,9 +50,11 @@ export default async function PlansPage() {
         description="Os planos definem o valor da mensalidade, a periodicidade e o que está incluído."
         actions={
           canWrite && (
-            <Button disabled title="Disponível na próxima etapa">
-              <Plus className="size-4" />
-              Novo plano
+            <Button asChild>
+              <Link href="/plans/new">
+                <Plus className="size-4" />
+                Novo plano
+              </Link>
             </Button>
           )
         }
@@ -62,6 +65,16 @@ export default async function PlansPage() {
           icon={ClipboardList}
           title="Nenhum plano cadastrado."
           description="Crie o primeiro plano para poder matricular alunos e gerar mensalidades."
+          action={
+            canWrite && (
+              <Button asChild>
+                <Link href="/plans/new">
+                  <Plus className="size-4" />
+                  Criar o primeiro plano
+                </Link>
+              </Button>
+            )
+          }
         />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">

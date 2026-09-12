@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
+import { isPendingMigration } from '@/lib/database/pending-migration'
 import { logger } from '@/lib/logger'
 import { rateLimit } from '@/lib/rate-limit'
 
@@ -35,6 +36,9 @@ export async function chooseChallengeAction(
     }
     if (mensagem.includes('plano Pro')) {
       return { error: 'Este desafio faz parte do Synse+.' }
+    }
+    if (isPendingMigration(error)) {
+      return { error: 'Os desafios ainda estão sendo liberados nesta conta.' }
     }
     logger.error('challenges:choose_failed', {
       userProfileId: session.userProfileId,
@@ -76,6 +80,9 @@ export async function recordProgressAction(
     if (mensagem.includes('entre 0 e 1000')) return { error: 'Informe um valor entre 0 e 1000.' }
     if (mensagem.includes('não tem este desafio')) {
       return { error: 'Este desafio não está em andamento.' }
+    }
+    if (isPendingMigration(error)) {
+      return { error: 'Os desafios ainda estão sendo liberados nesta conta.' }
     }
     logger.error('challenges:progress_failed', {
       userProfileId: session.userProfileId,

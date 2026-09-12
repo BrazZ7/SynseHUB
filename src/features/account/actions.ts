@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 
 import { requireSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
+import { isPendingMigration } from '@/lib/database/pending-migration'
 import { logger } from '@/lib/logger'
 import { rateLimit } from '@/lib/rate-limit'
 import { slugify } from '@/lib/utils'
@@ -96,6 +97,9 @@ export async function openProfessionalSpaceAction(
     }
     if (mensagem.includes('já é proprietária')) {
       return { error: 'Esta conta já tem um espaço aberto.' }
+    }
+    if (isPendingMigration(error)) {
+      return { error: 'O perfil profissional ainda está sendo liberado nesta conta.' }
     }
     logger.error('account:open_space_failed', {
       userProfileId: session.userProfileId,

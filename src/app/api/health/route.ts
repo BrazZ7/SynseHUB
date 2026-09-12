@@ -90,20 +90,58 @@ async function schemaCheck(recurso: string): Promise<SchemaProbe> {
   }
 }
 
+/**
+ * A função existe no banco?
+ *
+ * A 0013 não cria tabela nem coluna — cria função. Sem uma sonda para ela, o
+ * relatório dizia "só falta a 0014" enquanto o cadastro sem código falhava por
+ * falta da 0013, e a diferença custou uma rodada inteira de diagnóstico.
+ *
+ * O POST não executa nada: a função é negada ao anônimo por `revoke`, então a
+ * resposta é 401 ou 403 quando ela existe, e 404 (PGRST202) quando não existe.
+ * É a diferença entre "sem permissão" e "não encontrada" que responde.
+ */
+async function rpcCheck(nome: string, corpo: Record<string, unknown>): Promise<SchemaProbe> {
+  try {
+    const resposta = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${nome}`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(corpo),
+      signal: AbortSignal.timeout(5000),
+      cache: 'no-store',
+    })
+
+    if (resposta.status === 404) return { present: false, status: 404 }
+    if (resposta.status === 401 || resposta.status === 403) {
+      return { present: true, status: resposta.status }
+    }
+    return { present: null, status: resposta.status }
+  } catch {
+    return { present: null, status: null }
+  }
+}
+
 async function schemaReadiness() {
-  const [tier, desafios, profissional] = await Promise.all([
+  const [tier, desafios, profissional, entradaSemVinculo] = await Promise.all([
     schemaCheck('user_profiles?select=tier&limit=1'),
     schemaCheck('baseline_challenges?select=code&limit=1'),
     schemaCheck('user_profiles?select=professional_plan&limit=1'),
+    rpcCheck('join_synse_as_solo_student', { p_student_name: 'sonda' }),
   ])
 
   const pendentes: string[] = []
+  if (entradaSemVinculo.present === false) pendentes.push('0013_synse_solo.sql')
   if (tier.present === false || desafios.present === false) {
     pendentes.push('0014_baseline_experience.sql')
   }
   if (profissional.present === false) pendentes.push('0015_professional_unlock.sql')
 
   return {
+    entradaSemVinculo,
     userProfilesTier: tier,
     baselineChallenges: desafios,
     professionalPlan: profissional,

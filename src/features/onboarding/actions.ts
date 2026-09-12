@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 
 import { requireOnboarding } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
+import { isPendingMigration } from '@/lib/database/pending-migration'
 import { logger } from '@/lib/logger'
 import { rateLimit } from '@/lib/rate-limit'
 import { slugify } from '@/lib/utils'
@@ -115,6 +116,24 @@ export async function startPersonalAction(
           'Código não encontrado. Confira com a recepção da academia, ou deixe o campo em branco para entrar sem vínculo.',
       }
     }
+    /*
+     * "Tente novamente" para um caminho que nunca vai funcionar é a pior
+     * resposta possível: manda a pessoa repetir o que não tem como dar certo.
+     *
+     * Entrar sem código depende da migration 0013 — publicar não a aplica, e
+     * enquanto ela não sobe essa metade do formulário não existe no banco. A
+     * outra metade, o código, é da 0011 e funciona. A mensagem diz isso, em
+     * vez de mandar insistir.
+     */
+    if (isPendingMigration(error)) {
+      logger.error('onboarding:schema_pending', { authUserId, error: mensagem.slice(0, 200) })
+      return {
+        error: parsed.data.inviteCode
+          ? 'Esta entrada ainda está sendo liberada. Tente novamente em alguns minutos.'
+          : 'Ainda não é possível entrar sem vínculo nesta conta. Informe o código da sua academia para entrar agora.',
+      }
+    }
+
     logger.error('onboarding:start_failed', { authUserId, error: mensagem })
     return { error: 'Não foi possível começar agora. Tente novamente.' }
   }

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { APP } from '@/config/app'
+import { APP, LEGAL } from '@/config/app'
 import { SUPABASE_ANON_KEY, SUPABASE_URL, isDemoMode } from '@/lib/database/env'
 import { getPaymentProvider } from '@/lib/payments'
 import { env } from '@/lib/env'
@@ -257,6 +257,29 @@ function build(): { commit: string; branch: string | null } | null {
   return { commit: sha.slice(0, 7), branch: env(process.env.VERCEL_GIT_COMMIT_REF, '') || null }
 }
 
+/**
+ * As variáveis que precisam existir, e se existem.
+ *
+ * Só o fato, nunca o valor. Existe porque esquecer uma variável de ambiente
+ * não denuncia nada na tela: sem `CRON_SECRET`, a rotina de cobrança recusa
+ * toda chamada e devolve 404 — o mesmo 404 de quem não deveria estar lá — e
+ * nenhuma mensalidade é gerada em silêncio. Descobrir isso pela reclamação da
+ * academia, no dia 5, é caro demais para uma informação que cabe num booleano.
+ *
+ * Dizer que o segredo está configurado não ajuda quem não o tem: sem o valor,
+ * a resposta continua sendo 404.
+ */
+function configuracao() {
+  return {
+    /** A rotina diária de cobrança consegue rodar? */
+    cobrancaAgendada: Boolean(env(process.env.CRON_SECRET, '')),
+    /** Termos e privacidade mostram o controlador, ou "em constituição"? */
+    identificacaoLegal: Boolean(LEGAL.entity && LEGAL.taxId),
+    /** Os azulejos do mapa vêm de fornecedor contratado ou do servidor público? */
+    mapaProprio: Boolean(env(process.env.NEXT_PUBLIC_MAP_TILE_URL, '')),
+  }
+}
+
 /** Sonda de saúde. Não expõe segredo nem detalhe de infraestrutura. */
 export async function GET(request: Request) {
   const demo = isDemoMode()
@@ -269,6 +292,7 @@ export async function GET(request: Request) {
     environment: APP.env,
     appUrl: APP.url,
     build: build(),
+    configuracao: configuracao(),
     database: demo ? 'demo' : 'supabase',
     databaseRef: demo ? null : databaseRef(),
     databaseKey: demo ? null : databaseKey(),

@@ -7,16 +7,63 @@ import { useEffect, useRef, useState } from 'react'
 import 'leaflet/dist/leaflet.css'
 
 import { cn } from '@/lib/utils'
+import {
+  BASEMAP_LIST,
+  MAP_STYLE_STORAGE_KEY,
+  resolveBasemap,
+  tileSource,
+} from '@/features/synse-run/map-style'
 
 export type MapPoint = { latitude: number; longitude: number; accuracy?: number | null }
+
+/**
+ * Estilo do mapa em uso.
+ *
+ * Sem escolha salva, acompanha o tema do aplicativo — e continua acompanhando,
+ * porque o tema pode mudar com o mapa na tela. Com escolha salva, ela vence:
+ * gosto é do dono do celular, não meu.
+ */
+function useBasemap() {
+  const [dark, setDark] = useState(false)
+  const [preferencia, setPreferencia] = useState<string | null>(null)
+
+  useEffect(() => {
+    const root = document.documentElement
+    const sync = () => setDark(root.classList.contains('dark'))
+    sync()
+
+    const observer = new MutationObserver(sync)
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] })
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
+    try {
+      setPreferencia(localStorage.getItem(MAP_STYLE_STORAGE_KEY))
+    } catch {
+      // Navegador com armazenamento bloqueado ainda merece um mapa.
+    }
+  }, [])
+
+  function escolher(id: string) {
+    setPreferencia(id)
+    try {
+      localStorage.setItem(MAP_STYLE_STORAGE_KEY, id)
+    } catch {
+      // A escolha vale para esta sessão; não é motivo para quebrar a tela.
+    }
+  }
+
+  return { basemap: resolveBasemap(preferencia, dark), escolhido: preferencia, escolher }
+}
 
 /**
  * Mapa da rota.
  *
  * Leaflet carregado sob demanda, com azulejos do OpenStreetMap: sem chave de
  * API, sem custo por visualização e sem amarrar o produto a um fornecedor de
- * mapa antes de existir o primeiro usuário. Trocar por Mapbox ou Google depois
- * é mudar este arquivo, e só ele.
+ * mapa antes de existir o primeiro usuário. Fornecedor e aparência ficam em
+ * `map-style.ts` — trocar um ou outro não passa por aqui.
  *
  * `import()` dentro do efeito porque Leaflet toca `window` ao ser importado, e
  * o Next renderiza no servidor primeiro — importar no topo quebraria a página
@@ -37,6 +84,8 @@ export function RouteMap({
   const lineRef = useRef<L.Polyline | null>(null)
   const markerRef = useRef<L.CircleMarker | null>(null)
   const precisaoRef = useRef<L.Circle | null>(null)
+
+  const { basemap, escolhido, escolher } = useBasemap()
 
   /*
    * O mapa nasce assíncrono, e a rota costuma chegar antes dele.
@@ -66,9 +115,10 @@ export function RouteMap({
         scrollWheelZoom: !live,
       })
 
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '© OpenStreetMap',
+      const azulejos = tileSource()
+      L.tileLayer(azulejos.url, {
+        maxZoom: azulejos.maxZoom,
+        attribution: azulejos.attribution,
       }).addTo(mapa)
 
       /*
@@ -96,6 +146,22 @@ export function RouteMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live])
 
+  /*
+   * O filtro vai no painel de azulejos, não no mapa inteiro: aplicado no
+   * contêiner ele apagaria junto a rota, o marcador e a atribuição.
+   */
+  useEffect(() => {
+    const mapa = mapRef.current
+    if (!pronto || !mapa) return
+
+    const painel = mapa.getPane('tilePane')
+    if (painel) painel.style.filter = basemap.filtro
+
+    lineRef.current?.setStyle({ color: basemap.rota })
+    markerRef.current?.setStyle({ color: basemap.contorno, fillColor: basemap.rota })
+    precisaoRef.current?.setStyle({ color: basemap.rota, fillColor: basemap.rota })
+  }, [basemap, pronto])
+
   useEffect(() => {
     const mapa = mapRef.current
     if (!pronto || !mapa || points.length === 0) return
@@ -109,7 +175,7 @@ export function RouteMap({
         lineRef.current.setLatLngs(coordenadas)
       } else {
         lineRef.current = L.polyline(coordenadas, {
-          color: '#12b981',
+          color: basemap.rota,
           weight: 5,
           opacity: 0.95,
           lineJoin: 'round',
@@ -122,9 +188,9 @@ export function RouteMap({
       } else {
         markerRef.current = L.circleMarker(ultimo, {
           radius: 7,
-          color: '#ffffff',
+          color: basemap.contorno,
           weight: 3,
-          fillColor: '#12b981',
+          fillColor: basemap.rota,
           fillOpacity: 1,
         }).addTo(mapa)
       }
@@ -144,10 +210,10 @@ export function RouteMap({
         } else {
           precisaoRef.current = L.circle(ultimo, {
             radius: precisao,
-            color: '#12b981',
+            color: basemap.rota,
             weight: 1,
             opacity: 0.4,
-            fillColor: '#12b981',
+            fillColor: basemap.rota,
             fillOpacity: 0.08,
           }).addTo(mapa)
         }
@@ -159,6 +225,9 @@ export function RouteMap({
         mapa.fitBounds(L.latLngBounds(coordenadas), { padding: [24, 24] })
       }
     })()
+    // A cor é reaplicada pelo efeito de estilo; incluí-la aqui redesenharia a
+    // rota inteira a cada troca de tema.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [points, live, pronto])
 
   /*
@@ -184,16 +253,47 @@ export function RouteMap({
 
   return (
     <div
-      ref={container}
-      className={cn(
-        'w-full overflow-hidden rounded-2xl border border-synse-border bg-synse-surface-2',
-        className,
-      )}
-      // Leaflet exige altura explícita: sem ela o contêiner colapsa e o mapa
-      // some sem erro nenhum.
+      className={cn('relative w-full', className)}
+      // A altura mínima vive no invólucro para que o mapa, medido em `h-full`,
+      // não estoure para fora dele quem chamar com uma altura menor.
       style={{ minHeight: 220 }}
-      role="img"
-      aria-label="Mapa do percurso"
-    />
+    >
+      <div
+        ref={container}
+        className="h-full w-full overflow-hidden rounded-2xl border border-synse-border bg-synse-surface-2"
+        // Leaflet exige altura explícita: sem ela o contêiner colapsa e o mapa
+        // some sem erro nenhum.
+        style={{ minHeight: 220 }}
+        role="img"
+        aria-label="Mapa do percurso"
+      />
+
+      {/*
+        Painéis do Leaflet vão até z-index 700; o seletor precisa passar por
+        cima deles sem cobrir a atribuição, que fica embaixo à direita.
+      */}
+      <div
+        className="absolute right-2 top-2 z-[800] flex gap-1 rounded-full border border-synse-border bg-synse-surface/90 p-1 shadow-sm backdrop-blur"
+        role="group"
+        aria-label="Estilo do mapa"
+      >
+        {BASEMAP_LIST.map((opcao) => (
+          <button
+            key={opcao.id}
+            type="button"
+            onClick={() => escolher(opcao.id)}
+            aria-pressed={escolhido ? escolhido === opcao.id : basemap.id === opcao.id}
+            className={cn(
+              'rounded-full px-2.5 py-1 text-[11px] font-medium transition',
+              basemap.id === opcao.id
+                ? 'bg-synse-primary text-white'
+                : 'text-synse-muted hover:text-synse-text',
+            )}
+          >
+            {opcao.nome}
+          </button>
+        ))}
+      </div>
+    </div>
   )
 }

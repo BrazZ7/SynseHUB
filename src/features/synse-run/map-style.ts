@@ -16,12 +16,29 @@
  * fundo recua para um cinza calmo, e a rota fica sozinha em evidência.
  */
 
-export type TileSource = { url: string; attribution: string; maxZoom: number }
+/**
+ * `estilo` é a diferença entre azulejo cru e azulejo já desenhado.
+ *
+ * O OpenStreetMap devolve o mapa colorido de navegação, e este módulo o
+ * repinta com filtro. Um fornecedor contratado entrega o estilo pronto — e
+ * aplicar o filtro em cima de um mapa que já é escuro o inverte de novo: o
+ * resultado é um mapa branco de aparência quebrada, no minuto seguinte à
+ * contratação, com a culpa caindo no fornecedor.
+ */
+export type TileStyle = 'raw' | 'dark' | 'light'
+
+export type TileSource = {
+  url: string
+  attribution: string
+  maxZoom: number
+  estilo: TileStyle
+}
 
 const OSM: TileSource = {
   url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
   attribution: '© OpenStreetMap',
   maxZoom: 19,
+  estilo: 'raw',
 }
 
 /**
@@ -33,20 +50,29 @@ const OSM: TileSource = {
  * não exibir nenhuma.
  */
 export function tileSource(
-  env: { url?: string; attribution?: string; maxZoom?: string } = {
+  env: { url?: string; attribution?: string; maxZoom?: string; style?: string } = {
     url: process.env.NEXT_PUBLIC_MAP_TILE_URL,
     attribution: process.env.NEXT_PUBLIC_MAP_TILE_ATTRIBUTION,
     maxZoom: process.env.NEXT_PUBLIC_MAP_TILE_MAX_ZOOM,
+    style: process.env.NEXT_PUBLIC_MAP_TILE_STYLE,
   },
 ): TileSource {
   const url = env.url?.trim()
   if (!url) return OSM
 
   const maxZoom = Number(env.maxZoom)
+  const declarado = env.style?.trim().toLowerCase()
+
   return {
     url,
     attribution: env.attribution?.trim() || '© OpenStreetMap',
     maxZoom: Number.isFinite(maxZoom) && maxZoom > 0 ? maxZoom : 19,
+    /*
+     * Sem declarar, trata como cru. É o padrão seguro: aplicar filtro num mapa
+     * que já vem pronto estraga a aparência, mas deixar de aplicar num mapa cru
+     * só devolve o OpenStreetMap colorido — feio, não quebrado.
+     */
+    estilo: declarado === 'dark' || declarado === 'light' ? declarado : 'raw',
   }
 }
 
@@ -130,9 +156,28 @@ export const BASEMAP_LIST: readonly Basemap[] = [
  * de relance. Quem preferir o contrário troca no próprio mapa, e a escolha
  * fica salva.
  */
-export function resolveBasemap(preferencia: string | null | undefined): Basemap {
+export function resolveBasemap(
+  preferencia: string | null | undefined,
+  estilo: TileStyle = 'raw',
+): Basemap {
+  /*
+   * Com estilo pronto do fornecedor, o filtro sai de cena e a escolha entre os
+   * três também: não faz sentido oferecer "Ardósia, Claro e Detalhado" quando
+   * o mapa tem um desenho só. O que resta é acertar a cor da rota contra o
+   * fundo que veio.
+   */
+  if (estilo !== 'raw') {
+    const base = estilo === 'dark' ? BASEMAPS.noturno : BASEMAPS.suave
+    return { ...base, filtro: 'none' }
+  }
+
   if (preferencia && preferencia in BASEMAPS) return BASEMAPS[preferencia as BasemapId]
   return BASEMAPS.noturno
+}
+
+/** Há o que escolher? Só quando os azulejos são crus e o filtro é o estilo. */
+export function estiloEscolhivel(estilo: TileStyle): boolean {
+  return estilo === 'raw'
 }
 
 export const MAP_STYLE_STORAGE_KEY = 'synse-map-style'

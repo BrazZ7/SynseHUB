@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { BASEMAP_LIST, resolveBasemap, tileSource } from '@/features/synse-run/map-style'
+import {
+  BASEMAP_LIST,
+  estiloEscolhivel,
+  resolveBasemap,
+  tileSource,
+} from '@/features/synse-run/map-style'
 
 describe('estilo do mapa', () => {
   it('sem escolha, o mapa escuro', () => {
@@ -67,5 +72,42 @@ describe('fornecedor de azulejos', () => {
     const fonte = tileSource({ url: 'https://t/{z}/{x}/{y}.png', maxZoom: 'muito', attribution: ' ' })
     expect(fonte.maxZoom).toBe(19)
     expect(fonte.attribution).toBeTruthy()
+  })
+})
+
+describe('azulejo já desenhado pelo fornecedor', () => {
+  it('sem declarar, o mapa é tratado como cru', () => {
+    /*
+     * Padrão seguro: deixar de filtrar um mapa cru devolve o OpenStreetMap
+     * colorido — feio, não quebrado. Filtrar um mapa já pronto o inverte de
+     * novo e devolve um mapa branco quebrado.
+     */
+    expect(tileSource({ url: 'https://x/{z}/{x}/{y}.png' }).estilo).toBe('raw')
+    expect(tileSource({ url: 'https://x/{z}/{x}/{y}.png', style: 'qualquer' }).estilo).toBe('raw')
+  })
+
+  it('escuro e claro são reconhecidos, com ou sem maiúscula', () => {
+    expect(tileSource({ url: 'https://x/{z}/{x}/{y}.png', style: 'DARK' }).estilo).toBe('dark')
+    expect(tileSource({ url: 'https://x/{z}/{x}/{y}.png', style: ' light ' }).estilo).toBe('light')
+  })
+
+  it('estilo pronto desliga o filtro', () => {
+    // É o defeito que apareceria no minuto seguinte à contratação: o filtro
+    // inverte um mapa que já é escuro.
+    expect(resolveBasemap(null, 'dark').filtro).toBe('none')
+    expect(resolveBasemap(null, 'light').filtro).toBe('none')
+    expect(resolveBasemap(null, 'raw').filtro).not.toBe('none')
+  })
+
+  it('estilo pronto ainda escolhe a cor da rota contra o fundo que veio', () => {
+    expect(resolveBasemap(null, 'dark').rota).toBe(resolveBasemap('noturno').rota)
+    expect(resolveBasemap(null, 'light').rota).toBe(resolveBasemap('suave').rota)
+  })
+
+  it('a escolha do usuário não vale sobre estilo de fornecedor', () => {
+    // Os três estilos são feitos de filtro; sem filtro não há o que escolher.
+    expect(resolveBasemap('detalhado', 'dark').filtro).toBe('none')
+    expect(estiloEscolhivel('dark')).toBe(false)
+    expect(estiloEscolhivel('raw')).toBe(true)
   })
 })

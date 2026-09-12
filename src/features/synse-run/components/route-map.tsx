@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 import {
   BASEMAP_LIST,
   MAP_STYLE_STORAGE_KEY,
+  estiloEscolhivel,
   resolveBasemap,
   tileSource,
 } from '@/features/synse-run/map-style'
@@ -24,6 +25,11 @@ export type MapPoint = { latitude: number; longitude: number; accuracy?: number 
  */
 function useBasemap() {
   const [preferencia, setPreferencia] = useState<string | null>(null)
+  /*
+   * Lido uma vez: variável de ambiente pública é embutida no build e não muda
+   * durante a sessão.
+   */
+  const azulejos = tileSource()
 
   useEffect(() => {
     try {
@@ -42,7 +48,12 @@ function useBasemap() {
     }
   }
 
-  return { basemap: resolveBasemap(preferencia), escolhido: preferencia, escolher }
+  return {
+    basemap: resolveBasemap(preferencia, azulejos.estilo),
+    escolhido: preferencia,
+    escolher,
+    escolhivel: estiloEscolhivel(azulejos.estilo),
+  }
 }
 
 /**
@@ -74,7 +85,7 @@ export function RouteMap({
   const markerRef = useRef<L.CircleMarker | null>(null)
   const precisaoRef = useRef<L.Circle | null>(null)
 
-  const { basemap, escolhido, escolher } = useBasemap()
+  const { basemap, escolhido, escolher, escolhivel } = useBasemap()
 
   /*
    * O mapa nasce assíncrono, e a rota costuma chegar antes dele.
@@ -282,29 +293,34 @@ export function RouteMap({
       {/*
         Painéis do Leaflet vão até z-index 700; o seletor precisa passar por
         cima deles sem cobrir a atribuição, que fica embaixo à direita.
+
+        Com estilo pronto de fornecedor o seletor some: os três estilos são
+        feitos de filtro sobre o mapa cru, e não há filtro a escolher.
       */}
-      <div
-        className="absolute right-2 top-2 z-[800] flex gap-1 rounded-full border border-synse-border bg-synse-surface/90 p-1 shadow-sm backdrop-blur"
-        role="group"
-        aria-label="Estilo do mapa"
-      >
-        {BASEMAP_LIST.map((opcao) => (
-          <button
-            key={opcao.id}
-            type="button"
-            onClick={() => escolher(opcao.id)}
-            aria-pressed={escolhido ? escolhido === opcao.id : basemap.id === opcao.id}
-            className={cn(
-              'rounded-full px-2.5 py-1 text-[11px] font-medium transition',
-              basemap.id === opcao.id
-                ? 'bg-synse-primary text-white'
-                : 'text-synse-muted hover:text-synse-text',
-            )}
-          >
-            {opcao.nome}
-          </button>
-        ))}
-      </div>
+      {escolhivel && (
+        <div
+          className="bg-synse-surface/90 absolute right-2 top-2 z-[800] flex gap-1 rounded-full border border-synse-border p-1 shadow-sm backdrop-blur"
+          role="group"
+          aria-label="Estilo do mapa"
+        >
+          {BASEMAP_LIST.map((opcao) => (
+            <button
+              key={opcao.id}
+              type="button"
+              onClick={() => escolher(opcao.id)}
+              aria-pressed={escolhido ? escolhido === opcao.id : basemap.id === opcao.id}
+              className={cn(
+                'rounded-full px-2.5 py-1 text-[11px] font-medium transition',
+                basemap.id === opcao.id
+                  ? 'bg-synse-primary text-white'
+                  : 'text-synse-muted hover:text-synse-text',
+              )}
+            >
+              {opcao.nome}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

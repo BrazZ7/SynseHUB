@@ -281,6 +281,8 @@ function configuracao() {
     identificacaoLegal: Boolean(LEGAL.entity && LEGAL.taxId),
     /** Os azulejos do mapa vêm de fornecedor contratado ou do servidor público? */
     mapaProprio: Boolean(env(process.env.NEXT_PUBLIC_MAP_TILE_URL, '')),
+    /** E o estilo declarado, que decide se o app repinta o mapa ou não. */
+    mapaEstilo: env(process.env.NEXT_PUBLIC_MAP_TILE_STYLE, '') || 'raw',
   }
 }
 

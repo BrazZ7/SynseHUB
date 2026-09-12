@@ -9,18 +9,26 @@ import type {
   CheckInWithStudent,
   DataSource,
   Paginated,
+  SaveActivityInput,
   StudentFilters,
   StudentListItem,
   FiscalData,
 } from '@/lib/database/data-source'
 import type { DemoStaff } from '@/lib/database/demo-seed'
 import type {
+  Activity,
+  ActivityPrivacy,
+  ActivityRoutePoint,
+  ActivitySplit,
+  ActivitySummary,
   AppNotification,
   Assessment,
   BaselineChallenge,
   ChallengeEntry,
   ChallengeMedal,
   Charge,
+  PersonalRecord,
+  SportType,
   CheckIn,
   CollectionRule,
   Exercise,
@@ -1265,5 +1273,270 @@ export class SupabaseDataSource implements DataSource {
     const { data, error } = await this.client.rpc('close_own_challenge_cycles')
     if (error) this.fail('closeOwnChallengeCycles', error)
     return Number(data ?? 0)
+  }
+
+  // ── SynseRun ───────────────────────────────────────────────────────────────
+  private mapActivity(row: Row): Activity {
+    return {
+      id: row.id,
+      userProfileId: row.user_profile_id,
+      organizationId: row.organization_id,
+      sport: row.sport,
+      status: row.status,
+      title: row.title,
+      startedAt: row.started_at,
+      endedAt: row.ended_at,
+      elapsedSeconds: Number(row.elapsed_seconds),
+      movingSeconds: Number(row.moving_seconds),
+      distanceMeters: Number(row.distance_meters),
+      averagePace: row.average_pace === null ? null : Number(row.average_pace),
+      bestPace: row.best_pace === null ? null : Number(row.best_pace),
+      averageSpeed: Number(row.average_speed),
+      maxSpeed: Number(row.max_speed),
+      elevationGain: Number(row.elevation_gain),
+      elevationLoss: Number(row.elevation_loss),
+      minAltitude: row.min_altitude === null ? null : Number(row.min_altitude),
+      maxAltitude: row.max_altitude === null ? null : Number(row.max_altitude),
+      calories: Number(row.calories),
+      startLatitude: row.start_latitude === null ? null : Number(row.start_latitude),
+      startLongitude: row.start_longitude === null ? null : Number(row.start_longitude),
+      privacy: row.privacy,
+      privacyZoneMeters: Number(row.privacy_zone_meters),
+      createdAt: row.created_at,
+    }
+  }
+
+  /**
+   * Grava a atividade inteira: cabeçalho, rota e parciais.
+   *
+   * Em três passos, e não num só, porque o PostgREST não abre transação entre
+   * chamadas. A ordem escolhida é a que menos machuca quando a rede cai no
+   * meio: o cabeçalho primeiro, com `client_id` — se a rota falhar, o reenvio
+   * encontra a atividade existente e completa, em vez de criar outra.
+   */
+  async saveActivity(input: SaveActivityInput): Promise<string> {
+    const { data: cabecalho, error } = await this.client
+      .from('activities')
+      .upsert(
+        {
+          user_profile_id: input.userProfileId,
+          organization_id: input.organizationId,
+          sport: input.sport,
+          status: 'COMPLETED',
+          title: input.title,
+          started_at: input.startedAt,
+          ended_at: input.endedAt,
+          elapsed_seconds: Math.round(input.elapsedSeconds),
+          moving_seconds: Math.round(input.movingSeconds),
+          distance_meters: input.distanceMeters,
+          average_pace: input.averagePace,
+          best_pace: input.bestPace,
+          average_speed: input.averageSpeed,
+          max_speed: input.maxSpeed,
+          elevation_gain: input.elevationGain,
+          elevation_loss: input.elevationLoss,
+          min_altitude: input.minAltitude,
+          max_altitude: input.maxAltitude,
+          calories: input.calories,
+          start_latitude: input.route[0]?.latitude ?? null,
+          start_longitude: input.route[0]?.longitude ?? null,
+          end_latitude: input.route[input.route.length - 1]?.latitude ?? null,
+          end_longitude: input.route[input.route.length - 1]?.longitude ?? null,
+          privacy: input.privacy,
+          client_id: input.clientId,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_profile_id,client_id' },
+      )
+      .select('id')
+      .single()
+
+    if (error) this.fail('saveActivity', error)
+    const activityId = cabecalho.id as string
+
+    if (input.route.length > 0) {
+      // Reenvio não duplica rota: o que já estava lá sai antes de entrar de novo.
+      await this.client.from('activity_points').delete().eq('activity_id', activityId)
+
+      /*
+       * Em lotes: uma corrida de uma hora tem milhares de pontos, e um único
+       * insert desse tamanho estoura o limite de corpo da requisição.
+       */
+      const LOTE = 500
+      for (let i = 0; i < input.route.length; i += LOTE) {
+        const { error: erroRota } = await this.client.from('activity_points').insert(
+          input.route.slice(i, i + LOTE).map((ponto) => ({
+            activity_id: activityId,
+            latitude: ponto.latitude,
+            longitude: ponto.longitude,
+            altitude: ponto.altitude,
+            speed: ponto.speed,
+            accuracy: ponto.accuracy,
+            heading: ponto.heading,
+            recorded_at: ponto.recordedAt,
+            distance_from_previous: ponto.distanceFromPrevious,
+            total_distance: ponto.totalDistance,
+          })),
+        )
+        if (erroRota) this.fail('saveActivity:route', erroRota)
+      }
+    }
+
+    if (input.splits.length > 0) {
+      await this.client.from('activity_splits').delete().eq('activity_id', activityId)
+      const { error: erroSplits } = await this.client.from('activity_splits').insert(
+        input.splits.map((parcial) => ({
+          activity_id: activityId,
+          kilometer: parcial.kilometer,
+          split_seconds: parcial.splitSeconds,
+          pace_seconds: parcial.paceSeconds,
+          elevation_gain: parcial.elevationGain,
+        })),
+      )
+      if (erroSplits) this.fail('saveActivity:splits', erroSplits)
+    }
+
+    // Recorde é reconhecido pelo banco, com a rota já gravada.
+    const { error: erroRecordes } = await this.client.rpc('claim_personal_records', {
+      p_activity_id: activityId,
+    })
+    if (erroRecordes) {
+      logger.warn('synse-run:records_failed', { error: String(erroRecordes.message) })
+    }
+
+    return activityId
+  }
+
+  async listActivities(
+    userProfileId: string,
+    filters: { sport?: SportType; since?: string; limit?: number } = {},
+  ) {
+    let consulta = this.client
+      .from('activities')
+      .select('*')
+      .eq('user_profile_id', userProfileId)
+      .eq('status', 'COMPLETED')
+      .order('started_at', { ascending: false })
+      .limit(filters.limit ?? 50)
+
+    if (filters.sport) consulta = consulta.eq('sport', filters.sport)
+    if (filters.since) consulta = consulta.gte('started_at', filters.since)
+
+    const rows = (await this.select<Row[]>('listActivities', consulta)) ?? []
+    return rows.map((row) => this.mapActivity(row))
+  }
+
+  async getActivity(activityId: string) {
+    const row = await this.select<Row>(
+      'getActivity',
+      this.client.from('activities').select('*').eq('id', activityId).maybeSingle(),
+    )
+    return row ? this.mapActivity(row) : null
+  }
+
+  async getActivityRoute(activityId: string) {
+    const rows =
+      (await this.select<Row[]>(
+        'getActivityRoute',
+        this.client
+          .from('activity_points')
+          .select('latitude, longitude, altitude, speed, recorded_at, total_distance')
+          .eq('activity_id', activityId)
+          .order('recorded_at', { ascending: true }),
+      )) ?? []
+
+    return rows.map((row) => ({
+      latitude: Number(row.latitude),
+      longitude: Number(row.longitude),
+      altitude: row.altitude === null ? null : Number(row.altitude),
+      speed: row.speed === null ? null : Number(row.speed),
+      recordedAt: row.recorded_at,
+      totalDistance: Number(row.total_distance),
+    })) satisfies ActivityRoutePoint[]
+  }
+
+  async getActivitySplits(activityId: string) {
+    const rows =
+      (await this.select<Row[]>(
+        'getActivitySplits',
+        this.client
+          .from('activity_splits')
+          .select('*')
+          .eq('activity_id', activityId)
+          .order('kilometer', { ascending: true }),
+      )) ?? []
+
+    return rows.map((row) => ({
+      kilometer: Number(row.kilometer),
+      splitSeconds: Number(row.split_seconds),
+      paceSeconds: Number(row.pace_seconds),
+      elevationGain: Number(row.elevation_gain),
+    })) satisfies ActivitySplit[]
+  }
+
+  async listPersonalRecords(userProfileId: string) {
+    const rows =
+      (await this.select<Row[]>(
+        'listPersonalRecords',
+        this.client
+          .from('personal_records')
+          .select('*')
+          .eq('user_profile_id', userProfileId)
+          .order('distance_meters', { ascending: true }),
+      )) ?? []
+
+    return rows.map((row) => ({
+      id: row.id,
+      sport: row.sport,
+      distanceMeters: Number(row.distance_meters),
+      seconds: Number(row.seconds),
+      paceSeconds: Number(row.pace_seconds),
+      activityId: row.activity_id,
+      achievedAt: row.achieved_at,
+    })) satisfies PersonalRecord[]
+  }
+
+  /**
+   * Resumo do período.
+   *
+   * Somado na aplicação, e não no banco, porque o PostgREST não faz agregação
+   * sem uma view — e uma view a mais para somar cinco números de algumas
+   * dezenas de linhas não se paga. Quando o volume crescer, vira função.
+   */
+  async summarizeActivities(userProfileId: string, since: string) {
+    const rows =
+      (await this.select<Row[]>(
+        'summarizeActivities',
+        this.client
+          .from('activities')
+          .select('distance_meters, moving_seconds, calories, elevation_gain')
+          .eq('user_profile_id', userProfileId)
+          .eq('status', 'COMPLETED')
+          .gte('started_at', since),
+      )) ?? []
+
+    return rows.reduce<ActivitySummary>(
+      (total, row) => ({
+        activities: total.activities + 1,
+        distanceMeters: total.distanceMeters + Number(row.distance_meters),
+        movingSeconds: total.movingSeconds + Number(row.moving_seconds),
+        calories: total.calories + Number(row.calories),
+        elevationGain: total.elevationGain + Number(row.elevation_gain),
+      }),
+      { activities: 0, distanceMeters: 0, movingSeconds: 0, calories: 0, elevationGain: 0 },
+    )
+  }
+
+  async updateActivityPrivacy(activityId: string, privacy: ActivityPrivacy) {
+    const { error } = await this.client
+      .from('activities')
+      .update({ privacy, updated_at: new Date().toISOString() })
+      .eq('id', activityId)
+    if (error) this.fail('updateActivityPrivacy', error)
+  }
+
+  async deleteActivity(activityId: string) {
+    const { error } = await this.client.from('activities').delete().eq('id', activityId)
+    if (error) this.fail('deleteActivity', error)
   }
 }

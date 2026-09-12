@@ -1,10 +1,17 @@
 import type {
+  Activity,
+  ActivityPrivacy,
+  ActivityRoutePoint,
+  ActivitySplit,
+  ActivitySummary,
   AppNotification,
   Assessment,
   BaselineChallenge,
   ChallengeEntry,
   ChallengeMedal,
   Charge,
+  PersonalRecord,
+  SportType,
   CheckIn,
   CollectionRule,
   Exercise,
@@ -273,4 +280,67 @@ export interface DataSource {
   recordChallengeProgress(code: string, delta: number): Promise<number>
   /** Fecha ciclos passados de quem está autenticado e entrega as medalhas. */
   closeOwnChallengeCycles(): Promise<number>
+
+  /*
+   * SynseRun
+   *
+   * A atividade pertence à pessoa, não à academia: `organizationId` entra só
+   * para ranking e para o treinador enxergar. Quem troca de academia leva o
+   * histórico junto.
+   */
+  saveActivity(input: SaveActivityInput): Promise<string>
+  listActivities(
+    userProfileId: string,
+    filters?: { sport?: SportType; since?: string; limit?: number },
+  ): Promise<Activity[]>
+  getActivity(activityId: string): Promise<Activity | null>
+  getActivityRoute(activityId: string): Promise<ActivityRoutePoint[]>
+  getActivitySplits(activityId: string): Promise<ActivitySplit[]>
+  listPersonalRecords(userProfileId: string): Promise<PersonalRecord[]>
+  summarizeActivities(userProfileId: string, since: string): Promise<ActivitySummary>
+  updateActivityPrivacy(activityId: string, privacy: ActivityPrivacy): Promise<void>
+  deleteActivity(activityId: string): Promise<void>
+}
+
+/**
+ * Uma atividade chega inteira, com rota e parciais.
+ *
+ * Enviar em pedaços — criar, depois anexar pontos, depois fechar — deixaria
+ * meia corrida gravada quando a rede cai no meio, e não há nada mais irritante
+ * que perder a corrida depois de tê-la corrido. O `clientId` é gerado no
+ * aparelho e torna o reenvio inofensivo.
+ */
+export type SaveActivityInput = {
+  clientId: string
+  userProfileId: string
+  organizationId: string | null
+  sport: SportType
+  title: string | null
+  startedAt: string
+  endedAt: string
+  elapsedSeconds: number
+  movingSeconds: number
+  distanceMeters: number
+  averagePace: number | null
+  bestPace: number | null
+  averageSpeed: number
+  maxSpeed: number
+  elevationGain: number
+  elevationLoss: number
+  minAltitude: number | null
+  maxAltitude: number | null
+  calories: number
+  privacy: ActivityPrivacy
+  route: Array<{
+    latitude: number
+    longitude: number
+    altitude: number | null
+    speed: number | null
+    accuracy: number | null
+    heading: number | null
+    recordedAt: string
+    distanceFromPrevious: number
+    totalDistance: number
+  }>
+  splits: ActivitySplit[]
 }

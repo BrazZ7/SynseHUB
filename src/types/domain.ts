@@ -424,3 +424,79 @@ export type ChallengeMedal = {
   targetValue: number
   awardedAt: string
 }
+
+// ---------------------------------------------------------------------------
+// SynseRun
+// ---------------------------------------------------------------------------
+
+export type SportType = 'RUN' | 'WALK' | 'RIDE'
+export type ActivityStatus = 'IN_PROGRESS' | 'COMPLETED' | 'DISCARDED'
+export type ActivityPrivacy = 'PUBLIC' | 'GYM' | 'PRIVATE'
+
+/**
+ * Uma atividade registrada. Distância em metros, tempo em segundos, pace em
+ * segundos por quilômetro, velocidade em m/s — a mesma unidade do motor, e a
+ * conversão acontece só na tela.
+ */
+export type Activity = {
+  id: string
+  userProfileId: string
+  organizationId: string | null
+  sport: SportType
+  status: ActivityStatus
+  title: string | null
+  startedAt: string
+  endedAt: string | null
+  elapsedSeconds: number
+  movingSeconds: number
+  distanceMeters: number
+  averagePace: number | null
+  bestPace: number | null
+  averageSpeed: number
+  maxSpeed: number
+  elevationGain: number
+  elevationLoss: number
+  minAltitude: number | null
+  maxAltitude: number | null
+  calories: number
+  startLatitude: number | null
+  startLongitude: number | null
+  privacy: ActivityPrivacy
+  privacyZoneMeters: number
+  createdAt: string
+}
+
+export type ActivityRoutePoint = {
+  latitude: number
+  longitude: number
+  altitude: number | null
+  speed: number | null
+  recordedAt: string
+  totalDistance: number
+}
+
+export type ActivitySplit = {
+  kilometer: number
+  splitSeconds: number
+  paceSeconds: number
+  elevationGain: number
+}
+
+export type PersonalRecord = {
+  id: string
+  sport: SportType
+  distanceMeters: number
+  seconds: number
+  paceSeconds: number
+  activityId: string
+  achievedAt: string
+}
+
+/** Resumo de um período, para a tela inicial e para as estatísticas. */
+export type ActivitySummary = {
+  activities: number
+  distanceMeters: number
+  movingSeconds: number
+  calories: number
+  elevationGain: number
+}

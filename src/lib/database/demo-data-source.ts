@@ -5,6 +5,7 @@ import type {
   CheckInWithStudent,
   DataSource,
   Paginated,
+  SaveActivityInput,
   StudentFilters,
   StudentListItem,
 } from '@/lib/database/data-source'
@@ -14,12 +15,19 @@ import { BASELINE_CHALLENGES, currentCycle } from '@/lib/baseline/challenges'
 const MONTH_YEAR = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' })
 
 import type {
+  Activity,
+  ActivityPrivacy,
+  ActivityRoutePoint,
+  ActivitySplit,
+  ActivitySummary,
   AppNotification,
   Assessment,
   BaselineChallenge,
   ChallengeEntry,
   ChallengeMedal,
   Charge,
+  PersonalRecord,
+  SportType,
   CheckIn,
   CollectionRule,
   Exercise,
@@ -903,5 +911,120 @@ export class DemoDataSource implements DataSource {
 
   async closeOwnChallengeCycles(): Promise<number> {
     return 0
+  }
+
+  // ── SynseRun ───────────────────────────────────────────────────────────────
+  /*
+   * A demonstração guarda as corridas na memória do processo.
+   *
+   * Diferente do resto, elas não viajam no diário: uma corrida com a rota
+   * inteira passa de 100 KB, e o orçamento do cookie é de 4. Some ao recarregar
+   * a página, e é o comportamento honesto para uma demonstração — melhor sumir
+   * do que fingir um histórico que ninguém correu.
+   */
+  private static readonly corridas = new Map<string, Activity>()
+  private static readonly rotas = new Map<string, ActivityRoutePoint[]>()
+  private static readonly parciais = new Map<string, ActivitySplit[]>()
+
+  async saveActivity(input: SaveActivityInput): Promise<string> {
+    const id = `act_${input.clientId}`
+
+    DemoDataSource.corridas.set(id, {
+      id,
+      userProfileId: input.userProfileId,
+      organizationId: input.organizationId,
+      sport: input.sport,
+      status: 'COMPLETED',
+      title: input.title,
+      startedAt: input.startedAt,
+      endedAt: input.endedAt,
+      elapsedSeconds: input.elapsedSeconds,
+      movingSeconds: input.movingSeconds,
+      distanceMeters: input.distanceMeters,
+      averagePace: input.averagePace,
+      bestPace: input.bestPace,
+      averageSpeed: input.averageSpeed,
+      maxSpeed: input.maxSpeed,
+      elevationGain: input.elevationGain,
+      elevationLoss: input.elevationLoss,
+      minAltitude: input.minAltitude,
+      maxAltitude: input.maxAltitude,
+      calories: input.calories,
+      startLatitude: input.route[0]?.latitude ?? null,
+      startLongitude: input.route[0]?.longitude ?? null,
+      privacy: input.privacy,
+      privacyZoneMeters: 0,
+      createdAt: new Date().toISOString(),
+    })
+
+    DemoDataSource.rotas.set(
+      id,
+      input.route.map((ponto) => ({
+        latitude: ponto.latitude,
+        longitude: ponto.longitude,
+        altitude: ponto.altitude,
+        speed: ponto.speed,
+        recordedAt: ponto.recordedAt,
+        totalDistance: ponto.totalDistance,
+      })),
+    )
+    DemoDataSource.parciais.set(id, input.splits)
+
+    return id
+  }
+
+  async listActivities(
+    userProfileId: string,
+    filters: { sport?: SportType; since?: string; limit?: number } = {},
+  ): Promise<Activity[]> {
+    return [...DemoDataSource.corridas.values()]
+      .filter((atividade) => atividade.userProfileId === userProfileId)
+      .filter((atividade) => !filters.sport || atividade.sport === filters.sport)
+      .filter((atividade) => !filters.since || atividade.startedAt >= filters.since)
+      .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+      .slice(0, filters.limit ?? 50)
+  }
+
+  async getActivity(activityId: string): Promise<Activity | null> {
+    return DemoDataSource.corridas.get(activityId) ?? null
+  }
+
+  async getActivityRoute(activityId: string): Promise<ActivityRoutePoint[]> {
+    return DemoDataSource.rotas.get(activityId) ?? []
+  }
+
+  async getActivitySplits(activityId: string): Promise<ActivitySplit[]> {
+    return DemoDataSource.parciais.get(activityId) ?? []
+  }
+
+  async listPersonalRecords(): Promise<PersonalRecord[]> {
+    // Recorde nasce da comparação com um histórico que a demonstração não tem.
+    return []
+  }
+
+  async summarizeActivities(userProfileId: string, since: string): Promise<ActivitySummary> {
+    const corridas = await this.listActivities(userProfileId, { since })
+
+    return corridas.reduce<ActivitySummary>(
+      (total, atividade) => ({
+        activities: total.activities + 1,
+        distanceMeters: total.distanceMeters + atividade.distanceMeters,
+        movingSeconds: total.movingSeconds + atividade.movingSeconds,
+        calories: total.calories + atividade.calories,
+        elevationGain: total.elevationGain + atividade.elevationGain,
+      }),
+      { activities: 0, distanceMeters: 0, movingSeconds: 0, calories: 0, elevationGain: 0 },
+    )
+  }
+
+  async updateActivityPrivacy(activityId: string, privacy: ActivityPrivacy): Promise<void> {
+    const atividade = DemoDataSource.corridas.get(activityId)
+    if (atividade) DemoDataSource.corridas.set(activityId, { ...atividade, privacy })
+  }
+
+  async deleteActivity(activityId: string): Promise<void> {
+    DemoDataSource.corridas.delete(activityId)
+    DemoDataSource.rotas.delete(activityId)
+    DemoDataSource.parciais.delete(activityId)
   }
 }

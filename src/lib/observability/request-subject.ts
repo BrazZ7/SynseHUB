@@ -14,12 +14,47 @@ import 'server-only'
 export function subjectFromCookieHeader(cookieHeader: string | null): string | null {
   if (!cookieHeader) return null
 
+  /*
+   * O cookie do Supabase vem fatiado quando o token é grande: em vez de
+   * `sb-<ref>-auth-token`, chegam `sb-<ref>-auth-token.0`, `.1`, e assim por
+   * diante, cada um com um pedaço do valor. Decodificar um pedaço isolado
+   * devolve lixo — foi o que fez o registro de erros nascer sem dono, e sem
+   * dono ninguém consegue lê-lo.
+   *
+   * As partes são juntadas na ordem numérica antes de qualquer decodificação.
+   */
+  const inteiros = new Map<string, string>()
+  const partes = new Map<string, Map<number, string>>()
+
   for (const parte of cookieHeader.split(';')) {
     const [nome, ...resto] = parte.trim().split('=')
     if (!nome?.startsWith('sb-') || !nome.includes('auth-token')) continue
 
-    const bruto = decodeURIComponent(resto.join('='))
-    const sub = subjectFromToken(bruto)
+    const valor = decodeURIComponent(resto.join('='))
+    const fatia = /^(.*auth-token)\.(\d+)$/.exec(nome)
+
+    if (fatia) {
+      const [, base, indice] = fatia
+      const grupo = partes.get(base) ?? new Map<number, string>()
+      grupo.set(Number(indice), valor)
+      partes.set(base, grupo)
+    } else {
+      inteiros.set(nome, valor)
+    }
+  }
+
+  for (const valor of inteiros.values()) {
+    const sub = subjectFromToken(valor)
+    if (sub) return sub
+  }
+
+  for (const grupo of partes.values()) {
+    const juntado = [...grupo.entries()]
+      .sort(([a], [b]) => a - b)
+      .map(([, valor]) => valor)
+      .join('')
+
+    const sub = subjectFromToken(juntado)
     if (sub) return sub
   }
 

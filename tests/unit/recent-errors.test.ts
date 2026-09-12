@@ -79,6 +79,48 @@ describe('subjectFromCookieHeader', () => {
     )
   })
 
+  /*
+   * O caso que fez o registro nascer sem dono em produção: token grande vem
+   * fatiado em `.0`, `.1`, e decodificar um pedaço isolado devolve lixo.
+   */
+  it('junta o cookie fatiado antes de decodificar', () => {
+    const jwt = jwtCom('ea4ea6c9-0000-0000-0000-000000000002')
+    const inteiro = `base64-${Buffer.from(JSON.stringify([jwt, 'refresh']), 'utf8').toString('base64')}`
+    const meio = Math.ceil(inteiro.length / 2)
+
+    const cabecalho = [
+      `sb-projeto-auth-token.0=${encodeURIComponent(inteiro.slice(0, meio))}`,
+      `sb-projeto-auth-token.1=${encodeURIComponent(inteiro.slice(meio))}`,
+    ].join('; ')
+
+    expect(subjectFromCookieHeader(cabecalho)).toBe('ea4ea6c9-0000-0000-0000-000000000002')
+  })
+
+  it('junta as fatias na ordem numérica, não na ordem do cabeçalho', () => {
+    const jwt = jwtCom('ea4ea6c9-0000-0000-0000-000000000003')
+    const inteiro = `base64-${Buffer.from(JSON.stringify([jwt]), 'utf8').toString('base64')}`
+    const corte = Math.ceil(inteiro.length / 2)
+
+    // Dez fatias fazem o navegador mandar `.10` antes de `.2` na ordem textual.
+    const cabecalho = [
+      `sb-projeto-auth-token.1=${encodeURIComponent(inteiro.slice(corte))}`,
+      `sb-projeto-auth-token.0=${encodeURIComponent(inteiro.slice(0, corte))}`,
+    ].join('; ')
+
+    expect(subjectFromCookieHeader(cabecalho)).toBe('ea4ea6c9-0000-0000-0000-000000000003')
+  })
+
+  it('uma fatia sozinha não vira sujeito — e não explode', () => {
+    const jwt = jwtCom('ea4ea6c9-0000-0000-0000-000000000004')
+    const inteiro = `base64-${Buffer.from(JSON.stringify([jwt]), 'utf8').toString('base64')}`
+
+    expect(
+      subjectFromCookieHeader(
+        `sb-projeto-auth-token.0=${encodeURIComponent(inteiro.slice(0, 20))}`,
+      ),
+    ).toBeNull()
+  })
+
   it('cookie ausente, alheio ou corrompido não vira sujeito', () => {
     expect(subjectFromCookieHeader(null)).toBeNull()
     expect(subjectFromCookieHeader('tema=escuro')).toBeNull()

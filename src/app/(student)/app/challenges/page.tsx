@@ -30,9 +30,20 @@ export default async function ChallengesPage() {
           <h1 className="text-2xl font-semibold text-synse-text">Desafios</h1>
         </header>
         <p className="rounded-xl bg-synse-surface-2 p-4 text-sm text-synse-muted">
-          Os desafios estão sendo liberados nesta conta. Volte em instantes — seu treino base e seu
-          plano alimentar já estão disponíveis.
+          Os desafios estão indisponíveis neste momento. Seu treino base e seu plano alimentar
+          continuam funcionando normalmente.
         </p>
+
+        {board.failure && (
+          <details className="rounded-xl border border-synse-border bg-synse-surface p-4">
+            <summary className="cursor-pointer text-xs font-medium text-synse-muted">
+              Detalhe técnico
+            </summary>
+            <p className="mt-2 break-words font-mono text-xs text-synse-text">
+              {board.failure.message}
+            </p>
+          </details>
+        )}
       </div>
     )
   }

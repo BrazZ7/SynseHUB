@@ -27,6 +27,11 @@ export type ChallengeBoard = {
    * de pé sem prometer o que o banco ainda não sabe fazer.
    */
   available: boolean
+  /**
+   * Preenchido quando a leitura falhou por outro motivo que não schema
+   * atrasado. A tela mostra isso em vez de estourar — ver comentário abaixo.
+   */
+  failure: { message: string } | null
   catalog: BaselineChallenge[]
   active: ActiveChallenge[]
   medals: ChallengeMedal[]
@@ -38,6 +43,7 @@ export type ChallengeBoard = {
 
 const INDISPONIVEL: ChallengeBoard = {
   available: false,
+  failure: null,
   catalog: [],
   active: [],
   medals: [],
@@ -87,7 +93,21 @@ export async function getChallengeBoard(session: SessionContext): Promise<Challe
       logger.warn('challenges:schema_pending', { detalhe: 'Migration 0014 pendente.' })
       return INDISPONIVEL
     }
-    throw error
+
+    /*
+     * Antes isto relançava, e o Next trocava a tela inteira pela página de
+     * erro — que mostra uma referência de oito dígitos e mais nada. O que a
+     * pessoa perde é a tela toda; o que quem mantém perde é a mensagem, que
+     * fica só no log da Vercel.
+     *
+     * Falhar aqui é o caso raro: não vale a tela inteira, e vale a mensagem
+     * na mão de quem pode agir sobre ela.
+     */
+    const mensagem = error instanceof Error ? error.message : String(error)
+    const causa = error instanceof Error && error.cause ? ` · ${JSON.stringify(error.cause)}` : ''
+
+    logger.error('challenges:board_failed', { error: `${mensagem}${causa}`.slice(0, 400) })
+    return { ...INDISPONIVEL, failure: { message: `${mensagem}${causa}`.slice(0, 400) } }
   }
 
   const byCode = new Map(catalog.map((item) => [item.code, item]))
@@ -107,6 +127,7 @@ export async function getChallengeBoard(session: SessionContext): Promise<Challe
 
   return {
     available: true,
+    failure: null,
     catalog,
     active,
     medals,

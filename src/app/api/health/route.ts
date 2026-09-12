@@ -66,7 +66,9 @@ async function databaseReachable(): Promise<{ ok: boolean; status: number | null
  * com lista vazia; o que interessa não é o conteúdo, é o schema aceitar a
  * pergunta. Fica atrás de `?deep=1`, junto das outras chamadas de rede.
  */
-async function schemaCheck(recurso: string): Promise<boolean | null> {
+type SchemaProbe = { present: boolean | null; status: number | null }
+
+async function schemaCheck(recurso: string): Promise<SchemaProbe> {
   try {
     const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${recurso}`, {
       headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
@@ -74,13 +76,17 @@ async function schemaCheck(recurso: string): Promise<boolean | null> {
       cache: 'no-store',
     })
 
-    if (resposta.ok) return true
     // 400 com 42703 (coluna) e 404 com PGRST205 (tabela) são "ainda não existe".
-    if (resposta.status === 400 || resposta.status === 404) return false
-    // 401, 403 e 5xx falam de credencial ou de indisponibilidade, não de schema.
-    return null
+    // 200 com lista vazia é a RLS negando linha, o que só acontece se o schema
+    // aceitou a pergunta. O resto — 401, 403, 5xx — fala de credencial ou de
+    // indisponibilidade, e o status vai junto para não virar adivinhação.
+    if (resposta.ok) return { present: true, status: resposta.status }
+    if (resposta.status === 400 || resposta.status === 404) {
+      return { present: false, status: resposta.status }
+    }
+    return { present: null, status: resposta.status }
   } catch {
-    return null
+    return { present: null, status: null }
   }
 }
 
@@ -91,7 +97,9 @@ async function schemaReadiness() {
   ])
 
   const pendentes: string[] = []
-  if (tier === false || desafios === false) pendentes.push('0014_baseline_experience.sql')
+  if (tier.present === false || desafios.present === false) {
+    pendentes.push('0014_baseline_experience.sql')
+  }
 
   return { userProfilesTier: tier, baselineChallenges: desafios, pendingMigrations: pendentes }
 }

@@ -1468,6 +1468,14 @@ export class SupabaseDataSource implements DataSource {
     if (error) this.fail('recordConsent', error)
   }
 
+  async closeOwnAccount(confirmation: string): Promise<Record<string, number>> {
+    const { data, error } = await this.client.rpc('close_own_account', {
+      p_confirmacao: confirmation,
+    })
+    if (error) this.fail('closeOwnAccount', error)
+    return (data ?? {}) as Record<string, number>
+  }
+
   async listNotifications(userProfileId: string, limit = 20) {
     const rows =
       (await this.select<Row[]>(

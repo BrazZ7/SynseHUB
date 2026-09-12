@@ -1114,6 +1114,12 @@ export class DemoDataSource implements DataSource {
     })
   }
 
+  async closeOwnAccount(): Promise<Record<string, number>> {
+    // A demonstração é compartilhada e reinicia sozinha: encerrar "a conta"
+    // aqui apagaria o passeio de quem entrar depois.
+    throw new Error('A demonstração não encerra contas.')
+  }
+
   async listNotifications(userProfileId: string, limit = 20): Promise<AppNotification[]> {
     return this.buildNotifications(userProfileId).slice(0, limit)
   }

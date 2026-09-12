@@ -6,6 +6,7 @@ import { ThemeToggle } from '@/components/synse/theme-toggle'
 import { Button } from '@/components/ui/button'
 import { LinkGymCard } from '@/features/account/link-gym-card'
 import { ProfessionalCard } from '@/features/account/professional-card'
+import { CloseAccountCard } from '@/features/account/close-account-card'
 import { ConsentList } from '@/features/consents/consent-list'
 import { signOut } from '@/lib/auth/actions'
 import { requireStudentSession } from '@/lib/auth/require-session'
@@ -75,6 +76,8 @@ export default async function StudentProfilePage() {
       <ProfessionalCard ativo={session.professionalPlan} defaultName={session.name} />
 
       <ConsentList consents={consents} />
+
+      <CloseAccountCard />
 
       <form action={signOut}>
         <Button type="submit" variant="outline" className="w-full">

@@ -127,9 +127,23 @@ export default function PrivacidadePage() {
       <Section title="Seus direitos">
         <p>
           A LGPD (art. 18) garante confirmação e acesso, correção, anonimização ou eliminação,
-          portabilidade, informação sobre compartilhamento, e revogação do consentimento. No app,
-          parte disso está a um toque na tela de privacidade. O resto — inclusive a exclusão da
-          conta — você pede por{' '}
+          portabilidade, informação sobre compartilhamento, e revogação do consentimento.
+        </p>
+        <p>
+          Dois deles não dependem de pedir nada a ninguém: os consentimentos você concede e retira
+          na tela de privacidade do aplicativo, e a <strong>exclusão da sua conta</strong> você faz
+          ali mesmo, no fim da mesma tela — ou, se você usa o painel da academia, em Configurações →
+          Privacidade.
+        </p>
+        <p>
+          O que acontece ao encerrar: seu nome, e-mail, telefone, foto, corridas, recordes, desafios
+          e avisos são apagados, e o acesso é desligado na hora. Continuam guardados o registro dos
+          seus consentimentos — é a prova que esta política precisa manter —, as cobranças, por
+          serem registro fiscal da academia, e a ficha que a academia mantém de você, que é registro
+          dela; a matrícula é encerrada.
+        </p>
+        <p>
+          Os demais direitos, incluindo a exportação dos seus dados, você pede por{' '}
           <a className="text-synse-primary hover:underline" href={`mailto:${LEGAL.contactEmail}`}>
             {LEGAL.contactEmail}
           </a>

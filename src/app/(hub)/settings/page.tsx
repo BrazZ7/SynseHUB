@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Bell, Building2, CreditCard, ShieldCheck, Users, Wallet } from 'lucide-react'
 
+import { CloseAccountCard } from '@/features/account/close-account-card'
 import { PageHeader } from '@/components/synse/page-header'
 import { FiscalDataForm } from '@/features/organizations/fiscal-data-form'
 import { InviteCodeCard } from '@/features/organizations/invite-code-card'
@@ -250,10 +251,34 @@ export default async function SettingsPage() {
                   estorno.
                 </li>
                 <li>Minimização: nenhum dado de cartão trafega ou é armazenado pelo Synse.</li>
-                <li>Exportação e exclusão de dados pessoais mediante solicitação do titular.</li>
+                <li>
+                  Exclusão da conta pessoal pela própria tela, abaixo. Exportação de dados mediante
+                  solicitação do titular.
+                </li>
               </ul>
+
+              <p className="pt-1 text-xs">
+                Os documentos que valem para quem usa o Synse:{' '}
+                <Link href="/termos" className="text-synse-primary hover:underline">
+                  Termos de Uso
+                </Link>{' '}
+                e{' '}
+                <Link href="/privacidade" className="text-synse-primary hover:underline">
+                  Política de Privacidade
+                </Link>
+                .
+              </p>
             </CardContent>
           </Card>
+
+          {/*
+            Encerrar a conta é da pessoa, não da academia: apaga o perfil de
+            quem está logado e não fecha a academia. Quem é o único responsável
+            por uma academia com alunos é impedido, com o motivo na tela.
+          */}
+          <div className="mt-4">
+            <CloseAccountCard />
+          </div>
         </TabsContent>
 
         <TabsContent value="subscription">

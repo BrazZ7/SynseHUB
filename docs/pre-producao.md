@@ -47,6 +47,8 @@ ordem:
 - **0021 (`0021_biblioteca_de_exercicios.sql`)** — os 132 exercícios da
   plataforma, com músculo alvo, região, padrão de movimento e apelidos. Sem
   ela, a tela de montar treino não tem o que oferecer.
+- **0022 (`0022_encerrar_conta.sql`)** — exclusão da conta pela própria tela.
+  Sem ela, o botão existe e a operação falha.
 
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona
@@ -237,5 +239,7 @@ não venha.
 - [ ] Fazer o e-mail de privacidade existir de verdade. A política promete
       resposta em 15 dias; promessa de canal que ninguém lê é pior que canal
       nenhum.
-- [ ] Encerramento de conta pela própria tela. Hoje é por e-mail, e a Apple
-      exige exclusão dentro do aplicativo para quem permite criar conta nele.
+- [x] Encerramento de conta pela própria tela, em Perfil → Privacidade e em
+      Configurações → Privacidade. Apaga o que é só da pessoa, anonimiza o
+      perfil e mantém consentimento e registro fiscal. Dono único de academia
+      com alunos é impedido, com o motivo na tela.

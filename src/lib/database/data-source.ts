@@ -362,6 +362,18 @@ export interface DataSource {
    */
   recordConsent(input: { consentType: ConsentType; accepted: boolean }): Promise<void>
 
+  /**
+   * Encerra a conta de quem está autenticado.
+   *
+   * Apaga o que é só da pessoa, anonimiza o perfil e mantém o que a lei manda
+   * guardar — consentimento e registro fiscal. Devolve o que foi apagado, para
+   * a tela poder dizer à pessoa o que aconteceu.
+   *
+   * Não remove o usuário de autenticação: isso exige a chave de serviço e
+   * acontece logo depois, na aplicação.
+   */
+  closeOwnAccount(confirmation: string): Promise<Record<string, number>>
+
   /*
    * Desafios base
    *

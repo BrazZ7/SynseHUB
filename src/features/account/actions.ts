@@ -10,7 +10,10 @@ import { logger } from '@/lib/logger'
 import { rateLimit } from '@/lib/rate-limit'
 import { slugify } from '@/lib/utils'
 import { joinGymSchema } from '@/lib/validations/organization'
-import type { AccountActionState } from '@/features/account/state'
+import { createSupabaseAdminClient } from '@/lib/database/supabase-admin'
+import { getAuthenticatedUserId } from '@/lib/auth/session'
+import { signOut } from '@/lib/auth/actions'
+import type { AccountActionState, CloseAccountState } from '@/features/account/state'
 
 /**
  * Vincular a conta a uma academia, depois de já estar usando o app.
@@ -106,4 +109,72 @@ export async function openProfessionalSpaceAction(
   }
 
   redirect('/dashboard')
+}
+
+/**
+ * Encerrar a conta.
+ *
+ * Dois passos, e a ordem importa. Primeiro o banco apaga o que é só da pessoa,
+ * anonimiza o perfil e desliga o vínculo com o login. Só depois o usuário de
+ * autenticação é removido, o que exige chave de serviço.
+ *
+ * Se o segundo passo falhar, a conta já está encerrada: o perfil não aponta
+ * mais para nenhum login, então a sessão antiga não alcança nada. O que sobra é
+ * um usuário órfão no provedor de autenticação — registrado no log para ser
+ * removido depois, e sem acesso a coisa alguma enquanto isso.
+ */
+export async function closeAccountAction(
+  _state: CloseAccountState,
+  formData: FormData,
+): Promise<CloseAccountState> {
+  const session = await requireSession()
+  const authUserId = await getAuthenticatedUserId()
+
+  const confirmacao = String(formData.get('confirmacao') ?? '')
+
+  try {
+    const dataSource = await getDataSource()
+    const apagados = await dataSource.closeOwnAccount(confirmacao)
+
+    logger.info('account:closed', { userProfileId: session.userProfileId, apagados })
+  } catch (error) {
+    const mensagem = String(error)
+    if (mensagem.includes('Confirmação inválida')) {
+      return { error: 'Digite APAGAR para confirmar.' }
+    }
+    if (mensagem.includes('único responsável')) {
+      /*
+       * A mensagem do banco nomeia a academia, e é ela que a pessoa precisa
+       * ler: sem o nome, "passe a propriedade" não diz de qual.
+       */
+      const limpa = mensagem.split('único responsável por ')[1]?.split('\n')[0]
+      return {
+        error: limpa
+          ? `Você é o único responsável por ${limpa}`
+          : 'Passe a propriedade da academia para outra pessoa antes de encerrar sua conta.',
+      }
+    }
+    if (mensagem.includes('não encerra contas')) {
+      return { error: 'A demonstração não encerra contas.' }
+    }
+    if (isPendingMigration(error)) {
+      return { error: 'O encerramento de conta ainda está sendo liberado nesta conta.' }
+    }
+    logger.error('account:close_failed', {
+      userProfileId: session.userProfileId,
+      error: mensagem.slice(0, 200),
+    })
+    return { error: 'Não foi possível encerrar agora. Tente novamente.' }
+  }
+
+  const admin = createSupabaseAdminClient()
+  if (admin && authUserId) {
+    const { error } = await admin.auth.admin.deleteUser(authUserId)
+    if (error) {
+      logger.error('account:auth_user_orphan', { authUserId, error: error.message })
+    }
+  }
+
+  await signOut()
+  return {}
 }

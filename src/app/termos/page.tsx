@@ -118,12 +118,18 @@ export default function TermosPage() {
 
       <Section title="Suspensão e encerramento">
         <p>
-          Você pode encerrar sua conta quando quiser, escrevendo para{' '}
+          Você pode encerrar sua conta quando quiser, pelo próprio aplicativo: Perfil → Privacidade,
+          no fim da tela. No painel da academia, em Configurações → Privacidade. Quem é o único
+          responsável por uma academia com alunos matriculados precisa antes passar a propriedade
+          para outra pessoa da equipe — encerrar deixaria a academia sem ninguém para administrá-la.
+        </p>
+        <p>
+          O Synse pode suspender ou encerrar contas que descumpram estes termos, com aviso prévio
+          sempre que for possível dar. Dúvidas sobre isso:{' '}
           <a className="text-synse-primary hover:underline" href={`mailto:${LEGAL.contactEmail}`}>
             {LEGAL.contactEmail}
           </a>
-          . O Synse pode suspender ou encerrar contas que descumpram estes termos, com aviso prévio
-          sempre que for possível dar.
+          .
         </p>
         <p>
           Encerrada a conta, os dados seguem o que está na{' '}

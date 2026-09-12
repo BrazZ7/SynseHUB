@@ -2,3 +2,8 @@
 export type AccountActionState = { error?: string; message?: string }
 
 export const initialAccountState: AccountActionState = {}
+
+/** Estado da tela de encerrar conta. */
+export type CloseAccountState = { error?: string }
+
+export const CLOSE_ACCOUNT_INITIAL: CloseAccountState = {}

@@ -30,49 +30,32 @@ Para conferir o estado sem abrir o arquivo e expor tudo de novo:
 npm run env:check
 ```
 
-## Migrations a aplicar no SQL Editor
+## Migrations — todas aplicadas
 
-**Estado em 12/09/2026: 0012 a 0015 aplicadas em produção** — conferido em
-`/api/health?deep=1`, com `pendingMigrations` vazio.
+**Estado em 12/09/2026: 0001 a 0016 aplicadas em produção**, conferido em
+`/api/health?deep=1` com `pendingMigrations` vazio.
 
-Com o trabalho sem terminal, migração nova só entra em produção quando alguém
-cola o arquivo no SQL Editor do Supabase. O histórico do que foi aplicado nesta
-rodada, na ordem:
+Com o trabalho sem terminal, migração nova só entra quando alguém cola o
+arquivo no SQL Editor do Supabase. Duas coisas que essa rotina ensinou, e que
+valem para a próxima:
 
-- [x] `0012_notification_events.sql` — sem ela o sino continua vazio, mas nada
-      quebra: a leitura de notificações falha em silêncio e a tela mostra
-      "nada por aqui ainda".
-- [x] `0013_synse_solo.sql` — sem ela, quem escolher "treino por conta própria"
-      recebe erro ao concluir. O resto do cadastro segue funcionando.
-- [x] `0014_baseline_experience.sql` — sem ela, a tela de desafios não abre.
-      Treino base e plano alimentar base não dependem de banco e continuam de pé.
-- [x] `0015_professional_unlock.sql` — sem ela, o cartão do perfil profissional
-      aparece desligado e "abrir espaço" recusa. Nada mais é afetado.
+- **O SQL Editor executa SQL, não abre endereço.** Colar o link do arquivo
+  devolve `syntax error at or near "https"`. O caminho é abrir o link no
+  navegador, copiar o texto que aparece, e colar o texto.
+- **Publicar não aplica migration.** Entre o deploy e a colagem existe uma
+  janela em que o código novo fala com o banco velho, e ela derrubou o login
+  uma vez. Desde então toda leitura tolera coluna ausente, e a sonda de schema
+  em `/api/health?deep=1` diz o que falta.
 
-**Pendente agora: `0016_synse_run.sql`** — sem ela o SynseRun mede e grava a
-corrida no aparelho, mas não guarda histórico nem recorde; as telas avisam isso
-em vez de quebrar.
-
-As quatro anteriores estão reunidas, na ordem, em `docs/migrations-pendentes.sql` — uma
-colagem só no SQL Editor, em vez de quatro chances de pular uma ou trocar a
-ordem. O arquivo é gerado a partir de `src/db/migrations`, que continua sendo a
-fonte da verdade.
-
-Aplicar duas vezes é inofensivo: são `create or replace`, `if not exists`,
-`on conflict do nothing` e `drop ... if exists`. Nenhum comando exige rodar
-fora de transação, então o editor pode executar tudo de uma vez — ou entra
-tudo, ou não entra nada.
-
-Para liberar o Synse+ numa conta de teste, com a chave de serviço:
+Para liberar planos numa conta de teste, com a chave de serviço:
 
 ```sql
 select set_user_tier('<id do user_profiles>', 'PRO');            -- Synse+
 select set_professional_plan('<id do user_profiles>', true);     -- perfil profissional
 ```
 
-A função é a única porta para mudar o plano — pela tela, nem o dono da conta
-consegue, e é de propósito: senão bastaria um PATCH em `user_profiles` para
-virar assinante sem pagar.
+Essas funções são a única porta: pela tela, nem o dono da conta muda o próprio
+plano — senão bastaria um PATCH em `user_profiles` para virar assinante.
 
 ## Quando aparecer "não foi possível concluir esta operação"
 

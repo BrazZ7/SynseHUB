@@ -88,6 +88,10 @@ export class DemoDataSource implements DataSource {
   /** Campos de cobrança alterados, sem tocar no objeto base. */
   private readonly chargePatches = new Map<string, Partial<Charge>>()
   private readonly studentStatusPatches = new Map<string, Student['status']>()
+  private readonly studentEdits = new Map<
+    string,
+    { name: string; phone: string | null; goal: string | null; trainerId: string | null }
+  >()
   /** Instante em que o visitante abriu o sino. Antes disso, tudo lido. */
   private notificationsReadAt: string | null = null
   private consentAnswers = new Map<string, { accepted: boolean; at: string }>()
@@ -226,6 +230,14 @@ export class DemoDataSource implements DataSource {
         this.notificationsReadAt = mutation.at
         break
       }
+      case 'sstatus': {
+        this.studentStatusPatches.set(mutation.id, mutation.status)
+        break
+      }
+      case 'sedit': {
+        this.studentEdits.set(mutation.id, mutation)
+        break
+      }
       case 'wplan': {
         this.addedWorkoutPlans.push({
           id: mutation.id,
@@ -314,13 +326,24 @@ export class DemoDataSource implements DataSource {
 
   // ── Coleções com a sobreposição aplicada ───────────────────────────────────
   private students(): Student[] {
-    const base =
-      this.studentStatusPatches.size === 0
-        ? this.db.students
-        : this.db.students.map((s) => {
-            const status = this.studentStatusPatches.get(s.id)
-            return status ? { ...s, status } : s
-          })
+    /*
+     * As alterações são aplicadas em cópias, nunca no objeto do dataset.
+     *
+     * O dataset é um singleton compartilhado por todos os visitantes: escrever
+     * `aluno.status = ...` nele fazia a mudança de um aparecer na demonstração
+     * do outro, e ficar lá até o processo reiniciar.
+     */
+    const alterado = this.studentStatusPatches.size > 0 || this.studentEdits.size > 0
+
+    const base = !alterado
+      ? this.db.students
+      : this.db.students.map((s) => {
+          const status = this.studentStatusPatches.get(s.id)
+          const edicao = this.studentEdits.get(s.id)
+          if (!status && !edicao) return s
+          return { ...s, ...(status ? { status } : {}), ...(edicao ?? {}) }
+        })
+
     return this.addedStudents.length ? [...base, ...this.addedStudents] : base
   }
 
@@ -454,8 +477,32 @@ export class DemoDataSource implements DataSource {
     studentId: string
     status: StudentStatus
   }): Promise<void> {
-    const aluno = this.students().find((s) => s.id === input.studentId)
-    if (aluno) aluno.status = input.status
+    await appendDemoMutation({ t: 'sstatus', id: input.studentId, status: input.status })
+  }
+
+  async updateStudent(input: {
+    organizationId: string
+    studentId: string
+    name: string
+    phone: string | null
+    taxId: string | null
+    goal: string | null
+    trainerId: string | null
+    planId: string | null
+    billingDay: number
+  }): Promise<void> {
+    // O CPF não viaja no diário: a demonstração não guarda documento de
+    // ninguém, e o orçamento do cookie é curto demais para o que não se usa.
+    await appendDemoMutation({
+      t: 'sedit',
+      id: input.studentId,
+      name: input.name,
+      phone: input.phone,
+      goal: input.goal,
+      trainerId: input.trainerId,
+      planId: input.planId,
+      day: input.billingDay,
+    })
   }
 
   async listPlans(organizationId: string): Promise<MembershipPlan[]> {

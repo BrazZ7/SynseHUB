@@ -32,11 +32,29 @@ npm run env:check
 
 ## Migrations
 
-**Estado em 12/09/2026: 0001 a 0016 aplicadas em produção**, conferido em
-`/api/health?deep=1` com `pendingMigrations` vazio. A **0017
-(`0017_consentimento.sql`) está escrita e ainda não foi colada** — enquanto
-não for, a tela de privacidade do app aparece sem a lista de consentimentos, e
-o cadastro não registra o aceite dos termos.
+**Estado em 12/09/2026: 0001 a 0016 aplicadas em produção.** Faltam duas, nesta
+ordem:
+
+- **0017 (`0017_consentimento.sql`)** — sem ela a tela de privacidade do app
+  aparece sem a lista de consentimentos, e o cadastro não registra o aceite dos
+  termos.
+- **0018 (`0018_reativacao_avisa.sql`)** — avisa o aluno quando a matrícula é
+  reativada, e cria `schema_migrations`.
+
+A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
+do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona
+enquanto toda migration cria algo visível pela API. A 0018 não cria: ela troca
+o corpo de um gatilho. Com o registro, `/api/health?deep=1` lê a lista do banco.
+
+**Toda migration nova precisa terminar inserindo a própria versão:**
+
+```sql
+insert into schema_migrations (version) values ('00NN_nome.sql')
+on conflict (version) do nothing;
+```
+
+`tests/db/schema-migrations.test.ts` cobra isso: arquivo novo sem essa linha
+falha o teste, em vez de deixar a sonda cega e o sintoma aparecer em produção.
 
 Com o trabalho sem terminal, migração nova só entra quando alguém cola o
 arquivo no SQL Editor do Supabase. Duas coisas que essa rotina ensinou, e que

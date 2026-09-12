@@ -279,6 +279,79 @@ export class SupabaseDataSource implements DataSource {
     return String(data)
   }
 
+  async updateStudent(input: {
+    organizationId: string
+    studentId: string
+    name: string
+    phone: string | null
+    taxId: string | null
+    goal: string | null
+    trainerId: string | null
+    planId: string | null
+    billingDay: number
+  }): Promise<void> {
+    const aluno = await this.getStudent(input.organizationId, input.studentId)
+    if (!aluno) this.fail('updateStudent', { message: 'Aluno não encontrado.' })
+
+    /*
+     * Nome e telefone vivem no perfil, que é da pessoa e atravessa academias.
+     * O CPF só é preenchido quando está vazio: trocar documento de alguém é
+     * operação de correção de cadastro, não de edição de aluno — e um erro de
+     * digitação aqui apontaria a cobrança para outra pessoa.
+     */
+    const perfil: Record<string, unknown> = { name: input.name, phone: input.phone }
+    if (input.taxId && !aluno!.taxId) perfil.tax_id = input.taxId
+
+    const { error: erroPerfil } = await this.client
+      .from('user_profiles')
+      .update(perfil)
+      .eq('id', aluno!.userProfileId)
+    if (erroPerfil) this.fail('updateStudent:profile', erroPerfil)
+
+    const { error: erroAluno } = await this.client
+      .from('students')
+      .update({ goal: input.goal, trainer_id: input.trainerId, updated_at: new Date().toISOString() })
+      .eq('organization_id', input.organizationId)
+      .eq('id', input.studentId)
+    if (erroAluno) this.fail('updateStudent:student', erroAluno)
+
+    if (!input.planId) return
+
+    const plano = await this.getPlan(input.organizationId, input.planId)
+    if (!plano) return
+
+    const atual = await this.getActiveMembership(input.organizationId, input.studentId)
+
+    if (atual) {
+      /*
+       * O preço é copiado do plano no momento da troca, e não lido do plano na
+       * hora de cobrar: quem já estava matriculado não deve ser surpreendido
+       * por um reajuste feito na tela de planos. A matrícula guarda o valor
+       * combinado.
+       */
+      const { error } = await this.client
+        .from('memberships')
+        .update({
+          plan_id: plano.id,
+          price: plano.price,
+          billing_day: input.billingDay,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', atual.id)
+      if (error) this.fail('updateStudent:membership', error)
+      return
+    }
+
+    const { error } = await this.client.from('memberships').insert({
+      organization_id: input.organizationId,
+      student_id: input.studentId,
+      plan_id: plano.id,
+      price: plano.price,
+      billing_day: input.billingDay,
+    })
+    if (error) this.fail('updateStudent:newMembership', error)
+  }
+
   async updateStudentStatus(input: {
     organizationId: string
     studentId: string

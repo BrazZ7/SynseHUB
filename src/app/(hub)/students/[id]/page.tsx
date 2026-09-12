@@ -9,6 +9,7 @@ import {
   Dumbbell,
   FileText,
   History,
+  Pencil,
   Target,
   Wallet,
 } from 'lucide-react'
@@ -18,6 +19,7 @@ import { ChartCard } from '@/components/synse/chart-card'
 import { EmptyState } from '@/components/synse/empty-state'
 import { MetricCard } from '@/components/synse/metric-card'
 import { PaymentStatus, StudentStatusBadge } from '@/components/synse/status-badge'
+import { StudentStatusCard } from '@/features/students/student-status-card'
 import { StudentAvatar } from '@/components/synse/student-avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -63,6 +65,7 @@ export default async function StudentProfilePage({ params }: { params: Params })
     dataSource.listWorkoutPlans(session.organizationId),
   ])
 
+  const canWrite = can(session.role, 'students:write')
   const canSeeFinance = can(session.role, 'finance:read')
   const canSeeHealth = can(session.role, 'assessments:read')
   const canSeeNutrition = can(session.role, 'nutrition:read')
@@ -139,13 +142,33 @@ export default async function StudentProfilePage({ params }: { params: Params })
             </div>
           </div>
 
-          {student.goal && (
-            <Badge variant="primary" className="gap-1.5">
-              <Target className="size-3" aria-hidden />
-              {student.goal}
-            </Badge>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {student.goal && (
+              <Badge variant="primary" className="gap-1.5">
+                <Target className="size-3" aria-hidden />
+                {student.goal}
+              </Badge>
+            )}
+            {canWrite && (
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/students/${student.id}/edit`}>
+                  <Pencil className="size-4" aria-hidden />
+                  Editar
+                </Link>
+              </Button>
+            )}
+          </div>
         </div>
+
+        {canWrite && (
+          <div className="mt-5 border-t border-synse-border pt-4">
+            <StudentStatusCard
+              studentId={student.id}
+              studentName={student.name}
+              status={student.status}
+            />
+          </div>
+        )}
       </header>
 
       <Tabs defaultValue="overview">

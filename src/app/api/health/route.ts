@@ -125,6 +125,42 @@ async function rpcCheck(nome: string, corpo: Record<string, unknown>): Promise<S
   }
 }
 
+/**
+ * As migrations que o banco diz ter aplicado.
+ *
+ * A partir da 0018 existe `schema_migrations`, e a resposta deixa de ser
+ * dedução. As sondas de formato continuam logo abaixo por dois motivos: bancos
+ * que ainda não receberam a 0018 não têm a tabela, e uma coluna que sumiu por
+ * qualquer outro caminho não apareceria num registro que só guarda o que rodou.
+ */
+async function migracoesRegistradas(): Promise<string[] | null> {
+  try {
+    const resposta = await fetch(
+      `${SUPABASE_URL}/rest/v1/schema_migrations?select=version&order=version`,
+      {
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+        signal: AbortSignal.timeout(5000),
+        cache: 'no-store',
+      },
+    )
+    if (!resposta.ok) return null
+    const linhas = (await resposta.json()) as Array<{ version: string }>
+    return linhas.map((linha) => linha.version)
+  } catch {
+    return null
+  }
+}
+
+/** O que este código espera encontrar no banco. */
+const MIGRATIONS_ESPERADAS = [
+  '0013_synse_solo.sql',
+  '0014_baseline_experience.sql',
+  '0015_professional_unlock.sql',
+  '0016_synse_run.sql',
+  '0017_consentimento.sql',
+  '0018_reativacao_avisa.sql',
+]
+
 async function schemaReadiness() {
   const [tier, desafios, profissional, entradaSemVinculo, corridas, consentimento] =
     await Promise.all([
@@ -142,6 +178,27 @@ async function schemaReadiness() {
       schemaCheck('consent_documents?select=consent_type&limit=1'),
     ])
 
+  const registradas = await migracoesRegistradas()
+
+  /*
+   * Com o registro no ar, ele manda: é a única fonte que enxerga migration sem
+   * forma própria, como a 0018. Sem ele, valem as sondas de formato — que é
+   * como funcionava até a 0018 existir.
+   */
+  if (registradas) {
+    const faltando = MIGRATIONS_ESPERADAS.filter((versao) => !registradas.includes(versao))
+    return {
+      synseRun: corridas,
+      entradaSemVinculo,
+      userProfilesTier: tier,
+      baselineChallenges: desafios,
+      professionalPlan: profissional,
+      consentimento,
+      appliedMigrations: registradas.length,
+      pendingMigrations: faltando,
+    }
+  }
+
   const pendentes: string[] = []
   if (entradaSemVinculo.present === false) pendentes.push('0013_synse_solo.sql')
   if (tier.present === false || desafios.present === false) {
@@ -150,6 +207,8 @@ async function schemaReadiness() {
   if (profissional.present === false) pendentes.push('0015_professional_unlock.sql')
   if (corridas.present === false) pendentes.push('0016_synse_run.sql')
   if (consentimento.present === false) pendentes.push('0017_consentimento.sql')
+  // Sem `schema_migrations`, a 0018 não subiu — ela é quem cria a tabela.
+  pendentes.push('0018_reativacao_avisa.sql')
 
   return {
     synseRun: corridas,

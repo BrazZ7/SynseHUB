@@ -94,9 +94,23 @@ describe.skipIf(!temBanco)('gatilhos de notificação', () => {
     expect(doAluno[0].body).toContain('Academia Sino')
   })
 
-  it('mudança de status que não é confirmação nem cancelamento não avisa', async () => {
+  it('suspender não avisa: o vínculo não acabou, e o aluno saberá pela recepção', async () => {
     await client.query(`update students set status = 'INACTIVE' where id = $1`, [studentId])
     expect(await avisos(alunoProfile)).toHaveLength(1)
+  })
+
+  it('baixa de pagamento não gera um segundo aviso de matrícula', async () => {
+    /*
+     * OVERDUE → ACTIVE é o pagamento entrando, e o gatilho de cobrança já
+     * avisa. Dois avisos para o mesmo fato ensinam a pessoa a ignorar os dois.
+     */
+    await client.query(`update students set status = 'OVERDUE' where id = $1`, [studentId])
+    const antes = (await avisos(alunoProfile)).length
+
+    await client.query(`update students set status = 'ACTIVE' where id = $1`, [studentId])
+    expect(await avisos(alunoProfile)).toHaveLength(antes)
+
+    await client.query(`update students set status = 'INACTIVE' where id = $1`, [studentId])
   })
 
   it('cobrança criada avisa o aluno com valor em reais', async () => {
@@ -123,6 +137,25 @@ describe.skipIf(!temBanco)('gatilhos de notificação', () => {
     const daDona = await avisos(donaProfile)
     expect(daDona.at(-1)?.title).toBe('Pagamento recebido de Aluno Novo')
     expect(daDona.at(-1)?.body).toContain('R$ 149,90')
+  })
+
+  it('encerrar a matrícula avisa o aluno, e reativar avisa de novo', async () => {
+    /*
+     * Encerrar é a operação que a recepção mais evita por medo de apagar o
+     * histórico. O aviso é o que dá ao aluno a chance de perguntar — e a
+     * reativação precisa avisar também, senão quem voltou não sabe que voltou.
+     */
+    const antes = (await avisos(alunoProfile)).length
+
+    await client.query(`update students set status = 'CANCELLED' where id = $1`, [studentId])
+    const encerrado = await avisos(alunoProfile)
+    expect(encerrado).toHaveLength(antes + 1)
+    expect(encerrado.at(-1)?.category).toBe('GYM')
+
+    await client.query(`update students set status = 'ACTIVE' where id = $1`, [studentId])
+    const reativado = await avisos(alunoProfile)
+    expect(reativado).toHaveLength(antes + 2)
+    expect(reativado.at(-1)?.title).toBe('Matrícula reativada')
   })
 
   it('atribuir um treino avisa o aluno', async () => {

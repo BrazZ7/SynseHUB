@@ -7,27 +7,56 @@ import { useFormStatus } from 'react-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Field, Feedback, SELECT_CLASS } from '@/components/synse/form-field'
-import { createStudentAction } from '@/features/students/actions'
+import { createStudentAction, updateStudentAction } from '@/features/students/actions'
 import { initialActionState } from '@/features/students/state'
 import { formatCurrency } from '@/lib/utils'
 import type { MembershipPlan } from '@/types/domain'
 
 type Option = { id: string; name: string }
 
-export function NewStudentForm({
+/** Os valores que a edição precisa reapresentar. */
+export type StudentFormValues = {
+  id: string
+  name: string
+  email: string
+  phone: string
+  taxId: string
+  goal: string
+  planId: string
+  trainerId: string
+  billingDay: number
+}
+
+/**
+ * O mesmo formulário matricula e corrige.
+ *
+ * Dois formulários separados divergiriam no primeiro campo novo — e o campo
+ * que faltasse num deles só apareceria como "não consigo mudar isso aqui".
+ * A diferença real entre os dois modos cabe em três pontos: o e-mail é somente
+ * leitura na edição, o CPF já gravado não é reescrito, e o botão muda de nome.
+ */
+export function StudentForm({
   plans,
   trainers,
+  student,
 }: {
   plans: MembershipPlan[]
   trainers: Option[]
+  student?: StudentFormValues
 }) {
-  const [state, formAction] = useActionState(createStudentAction, initialActionState)
+  const editando = Boolean(student)
+  const [state, formAction] = useActionState(
+    editando ? updateStudentAction : createStudentAction,
+    initialActionState,
+  )
 
   return (
     <form action={formAction} className="space-y-6" noValidate>
+      {student && <input type="hidden" name="studentId" value={student.id} />}
+
       {state.status === 'success' && (
         <Feedback tone="success" message={state.message ?? ''}>
-          {state.createdId && (
+          {state.createdId && !editando && (
             <Button variant="link" size="sm" asChild className="h-auto p-0">
               <Link href={`/students/${state.createdId}`}>Abrir perfil</Link>
             </Button>
@@ -44,7 +73,14 @@ export function NewStudentForm({
           label="Nome completo"
           errors={state.fieldErrors?.name}
           input={
-            <Input id="name" name="name" required autoComplete="name" placeholder="Ana Ribeiro" />
+            <Input
+              id="name"
+              name="name"
+              required
+              autoComplete="name"
+              defaultValue={student?.name}
+              placeholder="Ana Ribeiro"
+            />
           }
         />
 
@@ -52,16 +88,23 @@ export function NewStudentForm({
           <Field
             id="email"
             label="E-mail"
-            hint="Usado para o acesso do aluno ao Synse App."
+            hint={
+              editando
+                ? 'O e-mail é a identidade da conta do aluno e vale em qualquer academia — só ele pode trocar.'
+                : 'Usado para o acesso do aluno ao Synse App.'
+            }
             errors={state.fieldErrors?.email}
             input={
               <Input
                 id="email"
-                name="email"
+                name={editando ? undefined : 'email'}
                 type="email"
-                required
+                required={!editando}
+                readOnly={editando}
                 autoComplete="email"
+                defaultValue={student?.email}
                 placeholder="ana@exemplo.com.br"
+                className={editando ? 'cursor-not-allowed opacity-70' : undefined}
               />
             }
           />
@@ -75,6 +118,7 @@ export function NewStudentForm({
                 name="phone"
                 type="tel"
                 autoComplete="tel"
+                defaultValue={student?.phone}
                 placeholder="(11) 98888-7777"
               />
             }
@@ -84,7 +128,11 @@ export function NewStudentForm({
         <Field
           id="taxId"
           label="CPF"
-          hint="Opcional agora, obrigatório para emitir cobrança pelo Synse Pay."
+          hint={
+            student?.taxId
+              ? 'Já registrado. Corrigir documento de alguém é operação de cadastro, não de edição de aluno.'
+              : 'Opcional agora, obrigatório para emitir cobrança pelo Synse Pay.'
+          }
           errors={state.fieldErrors?.taxId}
           input={
             <Input
@@ -92,6 +140,9 @@ export function NewStudentForm({
               name="taxId"
               inputMode="numeric"
               autoComplete="off"
+              defaultValue={student?.taxId}
+              readOnly={Boolean(student?.taxId)}
+              className={student?.taxId ? 'cursor-not-allowed opacity-70' : undefined}
               placeholder="000.000.000-00"
             />
           }
@@ -101,7 +152,14 @@ export function NewStudentForm({
           id="goal"
           label="Objetivo"
           errors={state.fieldErrors?.goal}
-          input={<Input id="goal" name="goal" placeholder="Emagrecimento, hipertrofia…" />}
+          input={
+            <Input
+              id="goal"
+              name="goal"
+              defaultValue={student?.goal}
+              placeholder="Emagrecimento, hipertrofia…"
+            />
+          }
         />
       </fieldset>
 
@@ -117,7 +175,7 @@ export function NewStudentForm({
               <select
                 id="planId"
                 name="planId"
-                defaultValue=""
+                defaultValue={student?.planId ?? ''}
                 className={SELECT_CLASS}
               >
                 <option value="">Sem plano por enquanto</option>
@@ -142,7 +200,7 @@ export function NewStudentForm({
                 type="number"
                 min={1}
                 max={28}
-                defaultValue={5}
+                defaultValue={student?.billingDay ?? 5}
               />
             }
           />
@@ -156,7 +214,7 @@ export function NewStudentForm({
             <select
               id="trainerId"
               name="trainerId"
-              defaultValue=""
+              defaultValue={student?.trainerId ?? ''}
               className={SELECT_CLASS}
             >
               <option value="">Definir depois</option>
@@ -171,20 +229,28 @@ export function NewStudentForm({
       </fieldset>
 
       <div className="flex flex-wrap items-center gap-3 border-t border-synse-border pt-6">
-        <SubmitButton />
+        <SubmitButton editando={editando} />
         <Button variant="ghost" asChild>
-          <Link href="/students">Cancelar</Link>
+          <Link href={student ? `/students/${student.id}` : '/students'}>Cancelar</Link>
         </Button>
       </div>
     </form>
   )
 }
 
-function SubmitButton() {
+function SubmitButton({ editando }: { editando: boolean }) {
   const { pending } = useFormStatus()
+  const rotulo = editando
+    ? pending
+      ? 'Salvando…'
+      : 'Salvar alterações'
+    : pending
+      ? 'Matriculando…'
+      : 'Matricular aluno'
+
   return (
     <Button type="submit" disabled={pending}>
-      {pending ? 'Matriculando…' : 'Matricular aluno'}
+      {rotulo}
     </Button>
   )
 }

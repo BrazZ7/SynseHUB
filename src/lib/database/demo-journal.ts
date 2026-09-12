@@ -82,6 +82,23 @@ export type DemoMutation =
       at: string
     }
   | {
+      /** Situação da matrícula alterada na demonstração. */
+      t: 'sstatus'
+      id: string
+      status: StudentStatus
+    }
+  | {
+      /** Edição de aluno. Só o que a tela deixa mudar. */
+      t: 'sedit'
+      id: string
+      name: string
+      phone: string | null
+      goal: string | null
+      trainerId: string | null
+      planId: string | null
+      day: number
+    }
+  | {
       /**
        * Treino montado na demonstração.
        *

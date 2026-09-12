@@ -5,7 +5,7 @@ import { ChevronLeft } from 'lucide-react'
 import { PageHeader } from '@/components/synse/page-header'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { NewStudentForm } from '@/features/students/new-student-form'
+import { StudentForm } from '@/features/students/student-form'
 import { requireHubSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 
@@ -40,7 +40,7 @@ export default async function NewStudentPage() {
 
       <Card>
         <CardContent className="pt-5">
-          <NewStudentForm plans={plans.filter((plan) => plan.status === 'ACTIVE')} trainers={trainers} />
+          <StudentForm plans={plans.filter((plan) => plan.status === 'ACTIVE')} trainers={trainers} />
         </CardContent>
       </Card>
     </div>

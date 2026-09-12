@@ -154,6 +154,25 @@ export interface DataSource {
    */
   openProfessionalSpace(input: { name: string; slug: string; ownerName: string }): Promise<string>
 
+  /**
+   * Corrige os dados de um aluno já matriculado.
+   *
+   * O e-mail fica de fora de propósito: ele é a identidade da conta, que é da
+   * pessoa e vale em todas as academias. Trocá-lo daqui renomearia o login de
+   * alguém a partir do painel de terceiros.
+   */
+  updateStudent(input: {
+    organizationId: string
+    studentId: string
+    name: string
+    phone: string | null
+    taxId: string | null
+    goal: string | null
+    trainerId: string | null
+    planId: string | null
+    billingDay: number
+  }): Promise<void>
+
   /** Muda a situação da matrícula. Usada para confirmar quem entrou por código. */
   updateStudentStatus(input: {
     organizationId: string

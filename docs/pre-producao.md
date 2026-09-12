@@ -40,6 +40,8 @@ ordem:
   termos.
 - **0018 (`0018_reativacao_avisa.sql`)** — avisa o aluno quando a matrícula é
   reativada, e cria `schema_migrations`.
+- **0019 (`0019_mensalidade_automatica.sql`)** — geração automática de
+  mensalidade e marcação de cobrança vencida.
 
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona
@@ -122,6 +124,32 @@ Consequência a não esquecer: com `PAYMENT_PROVIDER=asaas` e a URL de sandbox,
 some da tela, porque do ponto de vista do código o provedor é real — só a conta
 do outro lado é de teste. Trocar para a chave e a URL de produção é item da
 lista do Synse Pay, abaixo.
+
+## Rotina diária de cobrança
+
+A partir da 0019 a mensalidade se gera sozinha. O agendamento está em
+`vercel.json`, às 9h UTC — 6h de Brasília, antes de a academia abrir.
+
+- [ ] **`CRON_SECRET` na Vercel**, como *Sensitive*. Sem ele, o endereço
+      `/api/cron/billing` recusa tudo e devolve 404: nenhuma cobrança é gerada,
+      e nada na tela denuncia. Gere um valor longo e aleatório.
+- [ ] Conferir a primeira execução no dia seguinte: `/api/health?deep=1` mostra
+      as migrations aplicadas, e a lista de cobranças do painel mostra o
+      resultado.
+
+O que a rotina faz, nesta ordem: cria as mensalidades que vencem nos próximos
+cinco dias, e depois marca como vencida toda cobrança PENDING com data passada,
+avisando o aluno uma única vez. A ordem importa — cobrança criada hoje com
+vencimento de ontem, o que acontece quando o job ficou um dia fora do ar, já sai
+marcada em vez de esperar mais 24 horas.
+
+Chamar duas vezes é seguro: a unicidade de `billing_reference` no banco é quem
+garante uma mensalidade por ciclo.
+
+**Decisão em aberto: cobrança proporcional.** Hoje, quem se matricula depois do
+dia de vencimento só é cobrado no mês seguinte — treina de graça nesses dias. O
+contrário (cobrar o mês inteiro de quem entrou no dia 28) é pior, então essa é a
+escolha provisória. Proporcional é decisão de negócio.
 
 ## Plataforma
 

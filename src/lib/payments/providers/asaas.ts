@@ -17,6 +17,7 @@ import type {
 } from '@/lib/payments/provider'
 import type { PaymentMethod } from '@/types/domain'
 import { env } from '@/lib/env'
+import { timingSafeEqual } from '@/lib/secrets'
 
 /**
  * Adapter Asaas.
@@ -387,12 +388,4 @@ function motivoLegivel(corpo: string): string | null {
   } catch {
     return null
   }
-}
-
-/** Comparação de tempo constante — evita oráculo de timing no token do webhook. */
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false
-  let diff = 0
-  for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
-  return diff === 0
 }

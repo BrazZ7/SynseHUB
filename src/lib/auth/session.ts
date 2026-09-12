@@ -173,21 +173,35 @@ type ProfileRow = {
  * resultado, e um problema de schema chegava disfarçado de "conta sem ficha" —
  * o mesmo silêncio, num lugar em que ele custa caro.
  */
+type ProfileRead =
+  | { row: ProfileRow | null; error: null }
+  | { row: null; error: { step: string; code: string | null; message: string } }
+
 async function readProfile(
   supabase: NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>,
   authUserId: string,
-): Promise<ProfileRow | null> {
+): Promise<ProfileRead> {
   const completa = await supabase
     .from('user_profiles')
     .select(`${PROFILE_COLUMNS}, tier`)
     .eq('auth_user_id', authUserId)
     .maybeSingle()
 
-  if (!completa.error) return completa.data as ProfileRow | null
+  if (!completa.error) return { row: completa.data as ProfileRow | null, error: null }
 
   if (!isPendingMigration(completa.error)) {
-    logger.error('session:profile_read_failed', { error: String(completa.error.message) })
-    return null
+    logger.error('session:profile_read_failed', {
+      code: completa.error.code,
+      error: completa.error.message,
+    })
+    return {
+      row: null,
+      error: {
+        step: 'profile',
+        code: completa.error.code ?? null,
+        message: completa.error.message,
+      },
+    }
   }
 
   logger.warn('session:tier_column_missing', {
@@ -201,39 +215,80 @@ async function readProfile(
     .maybeSingle()
 
   if (legado.error) {
-    logger.error('session:profile_read_failed', { error: String(legado.error.message) })
-    return null
+    logger.error('session:profile_read_failed', {
+      code: legado.error.code,
+      error: legado.error.message,
+    })
+    return {
+      row: null,
+      error: { step: 'profile', code: legado.error.code ?? null, message: legado.error.message },
+    }
   }
 
-  return legado.data as ProfileRow | null
+  return { row: legado.data as ProfileRow | null, error: null }
 }
 
 // ── Resolução da sessão ─────────────────────────────────────────────────────
-export async function getSession(): Promise<SessionContext | null> {
+/**
+ * Por que não há sessão?
+ *
+ * `null` respondia três perguntas diferentes com a mesma palavra: visitante
+ * anônimo, conta sem academia, e falha ao ler a conta. As duas primeiras têm
+ * destino certo — login e cadastro. A terceira não tinha destino nenhum, e
+ * caía no cadastro junto com a segunda: quem já tem academia há meses era
+ * recebido com "você é academia, profissional ou aluno?".
+ *
+ * Perguntar isso a quem já respondeu é pior que mostrar um erro. O erro a
+ * pessoa reporta; a pergunta ela responde — e aí passa a existir uma segunda
+ * academia, vazia, no lugar da que ela já tinha.
+ */
+export type SessionResolution =
+  | { status: 'ok'; session: SessionContext }
+  | { status: 'anonymous' }
+  | { status: 'no-account' }
+  | { status: 'unavailable'; step: string; code: string | null }
+
+export async function resolveSession(): Promise<SessionResolution> {
   if (isDemoMode()) {
     const cookieStore = await cookies()
     const persona = findDemoPersona(cookieStore.get(DEMO_SESSION_COOKIE)?.value)
-    return persona ? demoSessionFor(persona) : null
+    return persona ? { status: 'ok', session: demoSessionFor(persona) } : { status: 'anonymous' }
   }
 
   const supabase = await createSupabaseServerClient()
-  if (!supabase) return null
+  if (!supabase) return { status: 'unavailable', step: 'client', code: null }
 
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  if (!user) return null
+  if (!user) return { status: 'anonymous' }
 
-  const profile = await readProfile(supabase, user.id)
-  if (!profile) return null
+  const perfil = await readProfile(supabase, user.id)
+  if (perfil.error) {
+    return { status: 'unavailable', step: perfil.error.step, code: perfil.error.code }
+  }
 
-  const { data: membership } = await supabase
+  const profile = perfil.row
+  // Autenticado sem ficha é conta recém-criada: o cadastro é o destino certo.
+  if (!profile) return { status: 'no-account' }
+
+  const vinculo = await supabase
     .from('organization_members')
     .select('organization_id, role, organizations ( name )')
     .eq('user_profile_id', profile.id)
     .eq('status', 'ACTIVE')
     .limit(1)
     .maybeSingle()
+
+  if (vinculo.error) {
+    logger.error('session:membership_read_failed', {
+      code: vinculo.error.code,
+      error: vinculo.error.message,
+    })
+    return { status: 'unavailable', step: 'membership', code: vinculo.error.code ?? null }
+  }
+
+  const membership = vinculo.data
 
   /*
    * Sem vínculo de equipe, ainda pode haver matrícula.
@@ -249,12 +304,20 @@ export async function getSession(): Promise<SessionContext | null> {
    * pessoa pertence à organização?" e responde olhando só para a equipe.
    */
   if (!membership) {
-    const { data: enrolments } = await supabase
+    const matriculas = await supabase
       .from('students')
       .select('id,organization_id,status,organizations(name)')
       .eq('user_profile_id', profile.id)
       .order('enrolled_at', { ascending: false })
       .limit(5)
+
+    if (matriculas.error) {
+      logger.error('session:enrolment_read_failed', {
+        code: matriculas.error.code,
+        error: matriculas.error.message,
+      })
+      return { status: 'unavailable', step: 'enrolment', code: matriculas.error.code ?? null }
+    }
 
     /*
      * Academia de verdade ganha da organização reservada.
@@ -264,27 +327,31 @@ export async function getSession(): Promise<SessionContext | null> {
      * decidiria no empate, e no dia seguinte poderia decidir diferente. Aqui a
      * regra é explícita: existindo academia, é nela que a pessoa está.
      */
+    const enrolments = matriculas.data ?? []
     const enrolment =
-      enrolments?.find((row) => !isSoloOrganization(row.organization_id)) ?? enrolments?.[0]
+      enrolments.find((row) => !isSoloOrganization(row.organization_id)) ?? enrolments[0]
 
-    if (!enrolment) return null
+    if (!enrolment) return { status: 'no-account' }
 
     const gym = enrolment.organizations as { name?: string } | null
     const solo = isSoloOrganization(enrolment.organization_id)
 
     return {
-      userProfileId: profile.id,
-      synseId: profile.synse_id,
-      name: profile.name,
-      email: profile.email,
-      avatarUrl: profile.avatar_url,
-      role: 'STUDENT' as UserRole,
-      organizationId: enrolment.organization_id,
-      organizationName: solo ? SOLO_ORGANIZATION_LABEL : (gym?.name ?? 'Minha academia'),
-      studentId: enrolment.id,
-      isSoloStudent: solo,
-      tier: (profile.tier ?? 'FREE') as UserTier,
-      isDemo: false,
+      status: 'ok',
+      session: {
+        userProfileId: profile.id,
+        synseId: profile.synse_id,
+        name: profile.name,
+        email: profile.email,
+        avatarUrl: profile.avatar_url,
+        role: 'STUDENT' as UserRole,
+        organizationId: enrolment.organization_id,
+        organizationName: solo ? SOLO_ORGANIZATION_LABEL : (gym?.name ?? 'Minha academia'),
+        studentId: enrolment.id,
+        isSoloStudent: solo,
+        tier: (profile.tier ?? 'FREE') as UserTier,
+        isDemo: false,
+      },
     }
   }
 
@@ -298,19 +365,28 @@ export async function getSession(): Promise<SessionContext | null> {
   const organizations = membership.organizations as { name?: string } | null
 
   return {
-    userProfileId: profile.id,
-    synseId: profile.synse_id,
-    name: profile.name,
-    email: profile.email,
-    avatarUrl: profile.avatar_url,
-    role: membership.role as UserRole,
-    organizationId: membership.organization_id,
-    organizationName: organizations?.name ?? 'Minha organização',
-    studentId: student?.id ?? null,
-    isSoloStudent: false,
-    tier: (profile.tier ?? 'FREE') as UserTier,
-    isDemo: false,
+    status: 'ok',
+    session: {
+      userProfileId: profile.id,
+      synseId: profile.synse_id,
+      name: profile.name,
+      email: profile.email,
+      avatarUrl: profile.avatar_url,
+      role: membership.role as UserRole,
+      organizationId: membership.organization_id,
+      organizationName: organizations?.name ?? 'Minha organização',
+      studentId: student?.id ?? null,
+      isSoloStudent: false,
+      tier: (profile.tier ?? 'FREE') as UserTier,
+      isDemo: false,
+    },
   }
+}
+
+/** A sessão, ou nada. Para quem só precisa saber se há alguém logado. */
+export async function getSession(): Promise<SessionContext | null> {
+  const resolucao = await resolveSession()
+  return resolucao.status === 'ok' ? resolucao.session : null
 }
 
 /** Organização ativa com os dados completos. */

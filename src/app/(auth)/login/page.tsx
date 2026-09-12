@@ -9,20 +9,38 @@ import { isDemoMode } from '@/lib/database/env'
 
 export const metadata: Metadata = { title: 'Entrar' }
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ erro?: string }>
+}) {
   const session = await getSession()
   if (session) redirect(session.role === 'STUDENT' ? '/app' : '/dashboard')
 
+  /*
+   * Quem chega com `?erro=indisponivel` está autenticado: a senha passou, e o
+   * que falhou foi ler a conta. Antes essa pessoa era mandada para o cadastro
+   * e recebia "você é academia, profissional ou aluno?" — pergunta que ela já
+   * tinha respondido, e que respondida de novo criaria uma academia vazia.
+   */
+  const indisponivel = (await searchParams).erro === 'indisponivel'
   const demo = isDemoMode()
 
   return (
-    <div className="space-y-8 animate-fade-in-up">
+    <div className="animate-fade-in-up space-y-8">
       <header className="space-y-1.5">
         <h1 className="text-page-title font-semibold text-synse-text">Entrar no SynseHub</h1>
         <p className="text-sm text-synse-muted">
           Acesse o painel da sua academia para acompanhar alunos, pagamentos e treinos.
         </p>
       </header>
+
+      {indisponivel && (
+        <p role="alert" className="bg-synse-warning/10 rounded-lg p-3 text-sm text-synse-text">
+          Sua conta existe e a senha está certa, mas não conseguimos carregar seus dados agora.
+          Tente entrar de novo em instantes. Se continuar, avise o suporte — não crie outra conta.
+        </p>
+      )}
 
       {demo ? (
         <DemoPersonaPicker personas={getDemoPersonas()} />

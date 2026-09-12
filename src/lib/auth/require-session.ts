@@ -2,7 +2,7 @@ import 'server-only'
 
 import { redirect } from 'next/navigation'
 
-import { getAuthenticatedUserId, getSession, type SessionContext } from '@/lib/auth/session'
+import { getAuthenticatedUserId, resolveSession, type SessionContext } from '@/lib/auth/session'
 import { can, isHubRole, type Permission } from '@/lib/permissions/permissions'
 
 /**
@@ -13,14 +13,33 @@ import { can, isHubRole, type Permission } from '@/lib/permissions/permissions'
  */
 
 export async function requireSession(): Promise<SessionContext> {
-  const session = await getSession()
-  if (session) return session
+  const resolucao = await resolveSession()
 
-  // Autenticado sem academia é estado legítimo: a conta existe, falta o
-  // cadastro. Mandar essa pessoa para o login a devolveria a uma tela onde
-  // ela já está logada, sem saída.
-  if (await getAuthenticatedUserId()) redirect('/onboarding')
-  redirect('/login')
+  switch (resolucao.status) {
+    case 'ok':
+      return resolucao.session
+
+    /*
+     * Autenticado sem academia é estado legítimo: a conta existe, falta o
+     * cadastro. Mandar essa pessoa para o login a devolveria a uma tela onde
+     * ela já está logada, sem saída.
+     */
+    case 'no-account':
+      redirect('/onboarding')
+
+    /*
+     * Falha ao ler a conta não é conta inexistente.
+     *
+     * Tratar as duas igual mandava para o cadastro quem já tem academia há
+     * meses — e "você é academia, profissional ou aluno?" é uma pergunta que a
+     * pessoa responde, criando uma segunda academia vazia no lugar da dela.
+     */
+    case 'unavailable':
+      redirect('/login?erro=indisponivel')
+
+    default:
+      redirect('/login')
+  }
 }
 
 /**
@@ -30,9 +49,18 @@ export async function requireSession(): Promise<SessionContext> {
  * pré-condição, não erro. Devolve para o painel quem já tem academia.
  */
 export async function requireOnboarding(): Promise<string> {
+  const resolucao = await resolveSession()
+
+  // Mesma distinção do `requireSession`, e aqui ela é o ponto: esta é a tela
+  // que não pode aparecer para quem já escolheu.
+  if (resolucao.status === 'unavailable') redirect('/login?erro=indisponivel')
+  if (resolucao.status === 'anonymous') redirect('/login')
+  if (resolucao.status === 'ok') {
+    redirect(resolucao.session.role === 'STUDENT' ? '/app' : '/dashboard')
+  }
+
   const authUserId = await getAuthenticatedUserId()
   if (!authUserId) redirect('/login')
-  if (await getSession()) redirect('/dashboard')
   return authUserId
 }
 

@@ -16,15 +16,19 @@ const tabelas: Record<string, unknown> = {}
 
 /** Simula o banco anterior à migration 0014, sem a coluna `tier`. */
 let semColunaTier = false
+/** Simula falha real de leitura — RLS negando, banco fora do ar. */
+let erroDuro: { code: string; message: string } | null = null
 
 function construirClient() {
   const encadeado = (tabela: string) => {
     let colunas = ''
 
-    const erroDeColuna = () =>
-      semColunaTier && tabela === 'user_profiles' && colunas.includes('tier')
+    const erroDeColuna = () => {
+      if (erroDuro && tabela === 'user_profiles') return erroDuro
+      return semColunaTier && tabela === 'user_profiles' && colunas.includes('tier')
         ? { code: '42703', message: 'column user_profiles.tier does not exist' }
         : null
+    }
 
     const resultado = () => {
       const erro = erroDeColuna()
@@ -60,7 +64,7 @@ vi.mock('@/lib/database/supabase-server', () => ({
 }))
 vi.mock('next/headers', () => ({ cookies: async () => ({ get: () => undefined }) }))
 
-const { getSession } = await import('@/lib/auth/session')
+const { getSession, resolveSession } = await import('@/lib/auth/session')
 
 const SOLO = '00000000-0000-0000-0000-000000000001'
 
@@ -75,6 +79,7 @@ const PERFIL = {
 beforeEach(() => {
   for (const chave of Object.keys(tabelas)) delete tabelas[chave]
   semColunaTier = false
+  erroDuro = null
 })
 
 describe('getSession', () => {
@@ -130,7 +135,12 @@ describe('getSession', () => {
     tabelas.user_profiles = PERFIL
     tabelas.organization_members = null
     tabelas.students = [
-      { id: 'aluno-solo', organization_id: SOLO, status: 'ACTIVE', organizations: { name: 'Synse' } },
+      {
+        id: 'aluno-solo',
+        organization_id: SOLO,
+        status: 'ACTIVE',
+        organizations: { name: 'Synse' },
+      },
       {
         id: 'aluno-1',
         organization_id: 'org-1',
@@ -191,6 +201,32 @@ describe('getSession', () => {
       organizationId: 'org-1',
       tier: 'FREE',
     })
+  })
+
+  /*
+   * A distinção que faltava.
+   *
+   * Falha de leitura e conta inexistente respondiam a mesma coisa — `null` — e
+   * quem tem academia há meses era mandado para o cadastro, com "você é
+   * academia, profissional ou aluno?". Pergunta que, respondida de novo, cria
+   * uma segunda academia vazia no lugar da que a pessoa já tem.
+   */
+  it('falha de leitura não é conta inexistente', async () => {
+    erroDuro = { code: '42501', message: 'permission denied for table user_profiles' }
+    tabelas.user_profiles = PERFIL
+
+    const resolucao = await resolveSession()
+
+    expect(resolucao.status).toBe('unavailable')
+    expect(resolucao).toMatchObject({ step: 'profile', code: '42501' })
+  })
+
+  it('conta autenticada sem academia nem matrícula é conta a cadastrar', async () => {
+    tabelas.user_profiles = PERFIL
+    tabelas.organization_members = null
+    tabelas.students = []
+
+    expect((await resolveSession()).status).toBe('no-account')
   })
 
   it('sem ficha não há sessão, mesmo autenticado', async () => {

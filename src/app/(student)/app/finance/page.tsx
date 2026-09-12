@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Receipt, Wallet } from 'lucide-react'
 
+import { AppBackLink } from '@/components/synse/app-back-link'
 import { EmptyState } from '@/components/synse/empty-state'
 import { PaymentStatus } from '@/components/synse/status-badge'
 import { StudentPixPanel } from '@/features/payments/student-pix-panel'
@@ -30,10 +31,13 @@ export default async function StudentFinancePage() {
   const pixSupported = provider.supportedMethods.includes('PIX')
 
   return (
-    <div className="space-y-5 animate-fade-in-up">
+    <div className="animate-fade-in-up space-y-5">
       <header>
+        <AppBackLink href="/app" label="Hoje" />
         <h1 className="text-2xl font-semibold text-synse-text">Financeiro</h1>
-        <p className="text-sm text-synse-muted">Seu plano, vencimentos e histórico de pagamentos.</p>
+        <p className="text-sm text-synse-muted">
+          Seu plano, vencimentos e histórico de pagamentos.
+        </p>
       </header>
 
       <section className="rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
@@ -44,9 +48,7 @@ export default async function StudentFinancePage() {
           {student?.planName ?? 'Sem plano ativo'}
         </p>
         {student?.planPrice != null && (
-          <p className="text-sm text-synse-muted">
-            {formatCurrency(student.planPrice)} por mês
-          </p>
+          <p className="text-sm text-synse-muted">{formatCurrency(student.planPrice)} por mês</p>
         )}
       </section>
 
@@ -83,9 +85,7 @@ export default async function StudentFinancePage() {
                   <p className="truncate text-sm font-medium capitalize text-synse-text">
                     {charge.description}
                   </p>
-                  <p className="text-xs text-synse-muted">
-                    Pago em {formatDate(charge.paidAt)}
-                  </p>
+                  <p className="text-xs text-synse-muted">Pago em {formatDate(charge.paidAt)}</p>
                 </div>
                 <span className="text-sm font-semibold tabular-nums text-synse-text">
                   {formatCurrency(charge.amount)}

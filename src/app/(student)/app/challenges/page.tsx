@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Sparkles, Trophy } from 'lucide-react'
 
+import { AppBackLink } from '@/components/synse/app-back-link'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { ChallengePicker } from '@/features/challenges/challenge-picker'
@@ -27,6 +28,7 @@ export default async function ChallengesPage() {
     return (
       <div className="animate-fade-in-up space-y-5">
         <header>
+          <AppBackLink href="/app" label="Hoje" />
           <h1 className="text-2xl font-semibold text-synse-text">Desafios</h1>
         </header>
         <p className="rounded-xl bg-synse-surface-2 p-4 text-sm text-synse-muted">
@@ -51,6 +53,7 @@ export default async function ChallengesPage() {
   return (
     <div className="animate-fade-in-up space-y-6">
       <header>
+        <AppBackLink href="/app" label="Hoje" />
         <h1 className="text-2xl font-semibold text-synse-text">Desafios</h1>
         <p className="text-sm text-synse-muted">
           Um objetivo por mês. No fim de {cicloAtual} você recebe a análise e a medalha.

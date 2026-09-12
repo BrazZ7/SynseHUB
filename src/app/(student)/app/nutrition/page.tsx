@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Info, Salad } from 'lucide-react'
 
+import { AppBackLink } from '@/components/synse/app-back-link'
 import { Badge } from '@/components/ui/badge'
 import { BASELINE_MEAL_PLAN } from '@/lib/baseline/meal-plan'
 import { requireStudentSession } from '@/lib/auth/require-session'
@@ -21,6 +22,7 @@ export default async function StudentNutritionPage() {
   return (
     <div className="animate-fade-in-up space-y-5">
       <header className="space-y-1">
+        <AppBackLink href="/app" label="Hoje" />
         <div className="flex items-center gap-2">
           <h1 className="text-2xl font-semibold text-synse-text">{plano.name}</h1>
           <Badge variant="outline">Grátis</Badge>

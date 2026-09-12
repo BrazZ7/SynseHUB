@@ -36,7 +36,7 @@ export default async function StudentProgressPage() {
   const latest = assessments[assessments.length - 1]
 
   return (
-    <div className="space-y-5 animate-fade-in-up">
+    <div className="animate-fade-in-up space-y-5">
       <header>
         <h1 className="text-2xl font-semibold text-synse-text">Seu progresso</h1>
         <p className="text-sm text-synse-muted">

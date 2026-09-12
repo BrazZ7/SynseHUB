@@ -24,7 +24,7 @@ export default async function StudentProfilePage() {
   ])
 
   return (
-    <div className="space-y-5 animate-fade-in-up">
+    <div className="animate-fade-in-up space-y-5">
       <header className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-synse-text">Perfil</h1>
         <ThemeToggle />
@@ -48,14 +48,11 @@ export default async function StudentProfilePage() {
           />
           <Row label="Plano" value={student?.planName ?? 'Sem plano'} />
           <Row label="Professor" value={student?.trainerName ?? 'A definir'} />
-          <Row
-            label="Matrícula"
-            value={student ? formatDate(student.enrolledAt) : '—'}
-          />
+          <Row label="Matrícula" value={student ? formatDate(student.enrolledAt) : '—'} />
           <Row label="Telefone" value={formatPhone(student?.phone)} />
         </div>
 
-        <p className="mt-4 flex items-start gap-2 rounded-lg bg-synse-mint/40 p-3 text-xs text-synse-dark">
+        <p className="bg-synse-mint/40 mt-4 flex items-start gap-2 rounded-lg p-3 text-xs text-synse-dark">
           <BadgeCheck className="mt-0.5 size-3.5 shrink-0" aria-hidden />
           Seu Synse ID é vitalício. Se você trocar de academia ou sair, sua conta pessoal continua
           existindo — com seu histórico de treinos e progresso.

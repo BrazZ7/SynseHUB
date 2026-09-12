@@ -6,7 +6,8 @@ import { useFormStatus } from 'react-dom'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { chooseChallengeAction, initialChallengeState } from '@/features/challenges/actions'
+import { chooseChallengeAction } from '@/features/challenges/actions'
+import { initialChallengeState } from '@/features/challenges/state'
 import type { UserTier } from '@/lib/plans/tiers'
 import type { BaselineChallenge } from '@/types/domain'
 

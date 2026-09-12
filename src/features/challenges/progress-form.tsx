@@ -5,7 +5,8 @@ import { useFormStatus } from 'react-dom'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { initialChallengeState, recordProgressAction } from '@/features/challenges/actions'
+import { recordProgressAction } from '@/features/challenges/actions'
+import { initialChallengeState } from '@/features/challenges/state'
 
 /**
  * Lançamento manual de progresso.

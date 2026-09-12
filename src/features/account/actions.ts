@@ -10,10 +10,7 @@ import { logger } from '@/lib/logger'
 import { rateLimit } from '@/lib/rate-limit'
 import { slugify } from '@/lib/utils'
 import { joinGymSchema } from '@/lib/validations/organization'
-
-export type AccountActionState = { error?: string; message?: string }
-
-export const initialAccountState: AccountActionState = {}
+import type { AccountActionState } from '@/features/account/state'
 
 /**
  * Vincular a conta a uma academia, depois de já estar usando o app.

@@ -8,7 +8,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { initialAccountState, openProfessionalSpaceAction } from '@/features/account/actions'
+import { openProfessionalSpaceAction } from '@/features/account/actions'
+import { initialAccountState } from '@/features/account/state'
 
 const ACESSOS = [
   'Treinador: montar treinos e acompanhar a evolução dos seus alunos',

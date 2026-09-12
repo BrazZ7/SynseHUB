@@ -7,10 +7,7 @@ import { getDataSource } from '@/lib/database'
 import { isPendingMigration } from '@/lib/database/pending-migration'
 import { logger } from '@/lib/logger'
 import { rateLimit } from '@/lib/rate-limit'
-
-export type ChallengeActionState = { error?: string; message?: string }
-
-export const initialChallengeState: ChallengeActionState = {}
+import type { ChallengeActionState } from '@/features/challenges/state'
 
 /*
  * As duas ações abaixo não conferem plano nem limite: quem confere é o banco,

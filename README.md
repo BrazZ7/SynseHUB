@@ -253,6 +253,7 @@ Arquivos versionados em `src/db/migrations`, aplicados em ordem:
 | `0013_synse_solo.sql` | Organização reservada: treinar sem academia vinculada |
 | `0014_baseline_experience.sql` | Plano da conta, desafios base, progresso e medalhas |
 | `0015_professional_unlock.sql` | Perfil profissional como assinatura, não como tipo de cadastro |
+| `0016_synse_run.sql` | SynseRun: atividades, rota, parciais e recordes |
 
 ```bash
 npm run db:migrate                      # lista as migrations e como aplicá-las
@@ -543,11 +544,17 @@ Honestidade sobre o estado atual, revisada em 12/09/2026.
   tem tela nem ação.
 - **Editar aluno.** Dá para cadastrar e confirmar; não dá para corrigir dado,
   trocar de plano nem encerrar matrícula pela interface.
+- **Feed social, desafios de corrida e ranking** do SynseRun: o schema aguenta
+  (a atividade já tem organização e privacidade por atividade), as telas não
+  existem.
 - **Módulos marcados "em breve"** na navegação — agenda, avaliações, nutrição do
   painel, conteúdos, desafios do painel, CRM e relatórios — têm modelo de dados
   e permissões, e nenhuma tela.
-- **Instalar na tela inicial.** Não há manifesto PWA nem ícones: o Synse App
-  roda no navegador, sem virar aplicativo no celular.
+- **Rastrear com a tela apagada.** Limite de plataforma, não de esforço: num
+  navegador, o iOS suspende o JavaScript da aba em segundo plano, e nenhuma API
+  de site contorna isso. O SynseRun mantém a tela acesa (Wake Lock), grava cada
+  ponto no aparelho e reconstrói ao voltar — rastreamento com tela apagada exige
+  aplicativo nativo.
 
 ### Sobre a base
 

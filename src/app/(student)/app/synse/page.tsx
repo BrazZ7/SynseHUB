@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Check, Minus } from 'lucide-react'
 
+import { AppBackLink } from '@/components/synse/app-back-link'
 import { SynseLogo } from '@/components/synse/synse-logo'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -29,6 +30,7 @@ export default async function SynsePlusPage() {
           className="bg-synse-cyan/25 pointer-events-none absolute -right-20 -top-20 size-56 rounded-full blur-3xl"
         />
         <div className="relative space-y-3">
+          <AppBackLink href="/app" label="Hoje" />
           <SynseLogo tone="light" size="md" />
           <Badge className="bg-white/15 text-white">{assinante ? 'Você é Synse+' : 'Synse+'}</Badge>
           <h1 className="text-2xl font-semibold leading-tight">

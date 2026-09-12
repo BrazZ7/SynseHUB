@@ -49,7 +49,11 @@ rodada, na ordem:
 - [x] `0015_professional_unlock.sql` — sem ela, o cartão do perfil profissional
       aparece desligado e "abrir espaço" recusa. Nada mais é afetado.
 
-As quatro estão reunidas, na ordem, em `docs/migrations-pendentes.sql` — uma
+**Pendente agora: `0016_synse_run.sql`** — sem ela o SynseRun mede e grava a
+corrida no aparelho, mas não guarda histórico nem recorde; as telas avisam isso
+em vez de quebrar.
+
+As quatro anteriores estão reunidas, na ordem, em `docs/migrations-pendentes.sql` — uma
 colagem só no SQL Editor, em vez de quatro chances de pular uma ou trocar a
 ordem. O arquivo é gerado a partir de `src/db/migrations`, que continua sendo a
 fonte da verdade.

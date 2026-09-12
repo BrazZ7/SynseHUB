@@ -2,15 +2,22 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Dumbbell, Home, Sparkles, TrendingUp, UserRound } from 'lucide-react'
+import { Dumbbell, Footprints, Home, TrendingUp, UserRound } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 
+/*
+ * Cinco destinos, e o do meio é a ação.
+ *
+ * O SynseRun entra no lugar do Synse+, que era a única aba de venda numa barra
+ * de uso diário — quem abre o app para treinar não vem comprar. O Synse+
+ * continua a um toque, no cartão da tela inicial.
+ */
 const ITEMS = [
   { href: '/app', label: 'Hoje', icon: Home },
   { href: '/app/workout', label: 'Treino', icon: Dumbbell },
+  { href: '/app/run', label: 'Correr', icon: Footprints, destaque: true },
   { href: '/app/progress', label: 'Progresso', icon: TrendingUp },
-  { href: '/app/synse', label: 'Synse', icon: Sparkles },
   { href: '/app/profile', label: 'Perfil', icon: UserRound },
 ] as const
 
@@ -21,7 +28,7 @@ export function AppBottomNavigation() {
   return (
     <nav
       aria-label="Navegação do Synse App"
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-synse-border bg-synse-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-lg"
+      className="bg-synse-surface/95 fixed inset-x-0 bottom-0 z-40 border-t border-synse-border pb-[env(safe-area-inset-bottom)] backdrop-blur-lg"
     >
       <ul className="mx-auto flex max-w-lg items-stretch">
         {ITEMS.map((item) => {
@@ -42,6 +49,9 @@ export function AppBottomNavigation() {
                   className={cn(
                     'size-5 transition-transform duration-200',
                     active && 'scale-110',
+                    'destaque' in item &&
+                      item.destaque &&
+                      'text-synse-primary drop-shadow-[0_0_10px_var(--synse-primary)]',
                   )}
                   aria-hidden
                 />

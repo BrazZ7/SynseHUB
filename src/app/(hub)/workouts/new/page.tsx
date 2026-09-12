@@ -1,9 +1,7 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
-import { ChevronLeft } from 'lucide-react'
 
+import { BackLink } from '@/components/synse/back-link'
 import { PageHeader } from '@/components/synse/page-header'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { NewWorkoutForm } from '@/features/workouts/new-workout-form'
 import { requireHubSession } from '@/lib/auth/require-session'
@@ -18,12 +16,7 @@ export default async function NewWorkoutPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 animate-fade-in-up">
-      <Button variant="ghost" size="sm" asChild className="-ml-2">
-        <Link href="/workouts">
-          <ChevronLeft className="size-4" />
-          Treinos
-        </Link>
-      </Button>
+      <BackLink href="/workouts" label="Treinos" />
 
       <PageHeader
         title="Novo treino"

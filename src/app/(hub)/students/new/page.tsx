@@ -1,9 +1,7 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
-import { ChevronLeft } from 'lucide-react'
 
+import { BackLink } from '@/components/synse/back-link'
 import { PageHeader } from '@/components/synse/page-header'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { StudentForm } from '@/features/students/student-form'
 import { requireHubSession } from '@/lib/auth/require-session'
@@ -26,12 +24,7 @@ export default async function NewStudentPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 animate-fade-in-up">
-      <Button variant="ghost" size="sm" asChild className="-ml-2">
-        <Link href="/students">
-          <ChevronLeft className="size-4" />
-          Alunos
-        </Link>
-      </Button>
+      <BackLink href="/students" label="Alunos" />
 
       <PageHeader
         title="Novo aluno"

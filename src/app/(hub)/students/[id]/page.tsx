@@ -5,7 +5,6 @@ import {
   Activity,
   Apple,
   CalendarCheck,
-  ChevronLeft,
   Dumbbell,
   FileText,
   History,
@@ -18,6 +17,7 @@ import { ProgressLineChart } from '@/components/synse/charts/progress-line-chart
 import { ChartCard } from '@/components/synse/chart-card'
 import { EmptyState } from '@/components/synse/empty-state'
 import { MetricCard } from '@/components/synse/metric-card'
+import { BackLink } from '@/components/synse/back-link'
 import { PaymentStatus, StudentStatusBadge } from '@/components/synse/status-badge'
 import { StudentStatusCard } from '@/features/students/student-status-card'
 import { StudentAvatar } from '@/components/synse/student-avatar'
@@ -99,12 +99,7 @@ export default async function StudentProfilePage({ params }: { params: Params })
 
   return (
     <div className="space-y-5 animate-fade-in-up">
-      <Button variant="ghost" size="sm" asChild className="-ml-2">
-        <Link href="/students">
-          <ChevronLeft className="size-4" />
-          Alunos
-        </Link>
-      </Button>
+      <BackLink href="/students" label="Alunos" />
 
       {/* Cabeçalho do perfil */}
       <header className="rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm sm:p-6">

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { Receipt, Wallet } from 'lucide-react'
 
-import { AppBackLink } from '@/components/synse/app-back-link'
+import { BackLink } from '@/components/synse/back-link'
 import { EmptyState } from '@/components/synse/empty-state'
 import { PaymentStatus } from '@/components/synse/status-badge'
 import { StudentPixPanel } from '@/features/payments/student-pix-panel'
@@ -33,7 +33,7 @@ export default async function StudentFinancePage() {
   return (
     <div className="animate-fade-in-up space-y-5">
       <header>
-        <AppBackLink href="/app" label="Hoje" />
+        <BackLink href="/app" label="Hoje" />
         <h1 className="text-2xl font-semibold text-synse-text">Financeiro</h1>
         <p className="text-sm text-synse-muted">
           Seu plano, vencimentos e histórico de pagamentos.

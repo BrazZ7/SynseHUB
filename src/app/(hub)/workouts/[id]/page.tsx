@@ -1,12 +1,11 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ChevronLeft, Timer } from 'lucide-react'
+import { Timer } from 'lucide-react'
 
 import { EmptyState } from '@/components/synse/empty-state'
+import { BackLink } from '@/components/synse/back-link'
 import { PageHeader } from '@/components/synse/page-header'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { AssignWorkoutCard } from '@/features/workouts/assign-workout-card'
 import { MUSCLE_GROUP_LABELS } from '@/features/workouts/labels'
@@ -53,12 +52,7 @@ export default async function WorkoutDetailPage({ params }: { params: Params }) 
 
   return (
     <div className="mx-auto max-w-4xl space-y-5 animate-fade-in-up">
-      <Button variant="ghost" size="sm" asChild className="-ml-2">
-        <Link href="/workouts">
-          <ChevronLeft className="size-4" />
-          Treinos
-        </Link>
-      </Button>
+      <BackLink href="/workouts" label="Treinos" />
 
       <PageHeader
         eyebrow={`Divisão ${plan.splitLabel}`}

@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Bike, ChevronRight, Footprints, Timer, Trophy } from 'lucide-react'
 
-import { AppBackLink } from '@/components/synse/app-back-link'
+import { BackLink } from '@/components/synse/back-link'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Metric } from '@/features/synse-run/components/metric'
@@ -29,7 +29,7 @@ export default async function SynseRunPage() {
   return (
     <div className="animate-fade-in-up space-y-5">
       <header>
-        <AppBackLink href="/app" label="Hoje" />
+        <BackLink href="/app" label="Hoje" />
         <p className="mt-1 text-sm text-synse-muted">
           {greeting()}, {firstName(session.name)}
         </p>

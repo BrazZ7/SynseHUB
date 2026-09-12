@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ChevronRight, Timer } from 'lucide-react'
 
-import { AppBackLink } from '@/components/synse/app-back-link'
+import { BackLink } from '@/components/synse/back-link'
 import { EmptyState } from '@/components/synse/empty-state'
 import { Badge } from '@/components/ui/badge'
 import { Metric } from '@/features/synse-run/components/metric'
@@ -73,7 +73,7 @@ export default async function RunHistoryPage({
   return (
     <div className="animate-fade-in-up space-y-5">
       <header>
-        <AppBackLink href="/app/run" label="SynseRun" />
+        <BackLink href="/app/run" label="SynseRun" />
         <h1 className="text-2xl font-semibold text-synse-text">Minhas atividades</h1>
       </header>
 

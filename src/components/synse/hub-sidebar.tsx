@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { CircleHelp, LogOut, Menu, X } from 'lucide-react'
 import { useState } from 'react'
 
+import { HubBottomNavigation } from '@/components/synse/hub-bottom-navigation'
 import { SynseLogo } from '@/components/synse/synse-logo'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -163,6 +164,13 @@ export function HubSidebar({
           </p>
         </div>
       </aside>
+
+      {/*
+        A barra inferior mora aqui, e não no layout, porque quem guarda o
+        estado da gaveta é este componente. Separar os dois obrigaria a subir
+        esse estado para um provider só para o botão "Menu" alcançá-lo.
+      */}
+      <HubBottomNavigation allowedHrefs={allowedHrefs} onOpenMenu={() => setOpen(true)} />
     </>
   )
 }

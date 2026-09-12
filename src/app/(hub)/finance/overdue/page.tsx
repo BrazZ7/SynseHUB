@@ -1,15 +1,14 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { ChevronLeft } from 'lucide-react'
 
 import { DataTable, type Column } from '@/components/synse/data-table'
 import { EmptyState } from '@/components/synse/empty-state'
 import { FilterBar } from '@/components/synse/filter-bar'
 import { MetricCard } from '@/components/synse/metric-card'
+import { BackLink } from '@/components/synse/back-link'
 import { PageHeader } from '@/components/synse/page-header'
 import { StudentAvatar } from '@/components/synse/student-avatar'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { OverdueActionsCell } from '@/features/payments/overdue-actions-cell'
 import { OVERDUE_BUCKETS, bucketOf, filterByBucket } from '@/features/payments/service'
 import { requireHubSession } from '@/lib/auth/require-session'
@@ -134,12 +133,7 @@ export default async function OverduePage({ searchParams }: { searchParams: Sear
 
   return (
     <div className="space-y-5 animate-fade-in-up">
-      <Button variant="ghost" size="sm" asChild className="-ml-2">
-        <Link href="/finance">
-          <ChevronLeft className="size-4" />
-          Financeiro
-        </Link>
-      </Button>
+      <BackLink href="/finance" label="Financeiro" />
 
       <PageHeader
         eyebrow="Synse Pay"

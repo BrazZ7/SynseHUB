@@ -33,7 +33,9 @@ export default async function HubLayout({ children }: { children: React.ReactNod
 
       <div className="flex min-w-0 flex-1 flex-col pt-16 lg:pt-0">
         <HubTopbar organizationName={session.organizationName} />
-        <main className="mx-auto w-full min-w-0 max-w-[1400px] flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        {/* `pb-28` no celular: a barra inferior é fixa e cobriria o fim da
+            página — o último aluno da lista, o último botão do formulário. */}
+        <main className="mx-auto w-full min-w-0 max-w-[1400px] flex-1 px-4 pb-28 pt-6 sm:px-6 lg:px-8 lg:pb-8 lg:pt-8">
           {children}
         </main>
       </div>

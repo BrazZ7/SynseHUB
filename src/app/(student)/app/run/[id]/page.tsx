@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { Info, Mountain, Timer, Zap } from 'lucide-react'
 
-import { AppBackLink } from '@/components/synse/app-back-link'
+import { BackLink } from '@/components/synse/back-link'
 import { Badge } from '@/components/ui/badge'
 import { Metric } from '@/features/synse-run/components/metric'
 import { PaceChart } from '@/features/synse-run/components/pace-chart'
@@ -41,7 +41,7 @@ export default async function ActivityDetailPage({ params }: { params: Promise<{
   return (
     <div className="animate-fade-in-up space-y-5">
       <header>
-        <AppBackLink href="/app/run" label="SynseRun" />
+        <BackLink href="/app/run" label="SynseRun" />
         <div className="mt-1 flex items-center gap-2">
           <h1 className="text-2xl font-semibold text-synse-text">
             {atividade.title ?? tituloPorHorario(quando, atividade.sport)}

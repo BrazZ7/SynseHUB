@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { BookOpen, LifeBuoy, Mail, ShieldCheck } from 'lucide-react'
 
+import { BackLink } from '@/components/synse/back-link'
 import { PageHeader } from '@/components/synse/page-header'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -18,6 +19,8 @@ export default async function HelpPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 animate-fade-in-up">
+      <BackLink href="/dashboard" label="Painel" />
+
       <PageHeader
         title="Ajuda"
         description="Como o SynseHub está configurado neste ambiente e onde encontrar apoio."

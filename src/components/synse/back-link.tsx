@@ -2,7 +2,11 @@ import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 
 /**
- * Voltar dentro do app, sem depender do navegador.
+ * Voltar dentro do produto, sem depender do navegador.
+ *
+ * Serve o aplicativo do aluno e o painel da academia. Eram dois: o app tinha
+ * este componente, e o painel repetia um botão parecido em cada tela — o que
+ * deixou duas delas sem nenhum, e o painel inteiro sem teste que cobrasse.
  *
  * Aponta para a tela de origem, não para o histórico. `router.back()` parece
  * mais natural e falha no caso que mais acontece: quem chega por link de
@@ -13,7 +17,7 @@ import { ChevronLeft } from 'lucide-react'
  * O rótulo é o nome de onde a pessoa vai chegar, não a palavra "voltar": saber
  * o destino antes de tocar vale mais do que saber a direção.
  */
-export function AppBackLink({ href, label }: { href: string; label: string }) {
+export function BackLink({ href, label }: { href: string; label: string }) {
   return (
     <Link
       href={href}

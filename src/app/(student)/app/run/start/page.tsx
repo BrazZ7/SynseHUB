@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 
-import { AppBackLink } from '@/components/synse/app-back-link'
+import { BackLink } from '@/components/synse/back-link'
 import { RunTracker } from '@/features/synse-run/components/run-tracker'
 import { SPORT_LABELS } from '@/features/synse-run/format'
 import type { SportType } from '@/features/synse-run/engine/types'
@@ -26,7 +26,7 @@ export default async function StartActivityPage({
   return (
     <div className="animate-fade-in-up space-y-5">
       <header>
-        <AppBackLink href="/app/run" label="SynseRun" />
+        <BackLink href="/app/run" label="SynseRun" />
         <h1 className="text-2xl font-semibold text-synse-text">{SPORT_LABELS[esporte]}</h1>
       </header>
 

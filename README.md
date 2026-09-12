@@ -252,6 +252,7 @@ Arquivos versionados em `src/db/migrations`, aplicados em ordem:
 | `0012_notification_events.sql` | Gatilhos que enchem o sino |
 | `0013_synse_solo.sql` | Organização reservada: treinar sem academia vinculada |
 | `0014_baseline_experience.sql` | Plano da conta, desafios base, progresso e medalhas |
+| `0015_professional_unlock.sql` | Perfil profissional como assinatura, não como tipo de cadastro |
 
 ```bash
 npm run db:migrate                      # lista as migrations e como aplicá-las

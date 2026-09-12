@@ -95,6 +95,76 @@ describe.skipIf(!temBanco)('plano da conta', () => {
       asUser(client, LIVRE, `select set_user_tier($1,'PRO')`, [perfilLivre]),
     ).rejects.toThrow(/permission denied/i)
   })
+
+  /*
+   * Mesma trava, segunda coluna paga. O perfil profissional deixou de ser tipo
+   * de cadastro e virou assinatura — se a pessoa pudesse marcá-la sozinha,
+   * seria acesso profissional de graça com um PATCH.
+   */
+  it('a pessoa não se marca como assinante do plano profissional', async () => {
+    await expect(
+      asUser(
+        client,
+        LIVRE,
+        `update user_profiles set professional_plan = true where auth_user_id = $1`,
+        [LIVRE],
+      ),
+    ).rejects.toThrow(/não é editável pelo cliente/i)
+
+    await expect(
+      asUser(client, LIVRE, `select set_professional_plan($1, true)`, [perfilLivre]),
+    ).rejects.toThrow(/permission denied/i)
+  })
+})
+
+describe.skipIf(!temBanco)('perfil profissional', () => {
+  it('sem assinatura não abre espaço', async () => {
+    await expect(
+      asUser(
+        client,
+        LIVRE,
+        `select open_professional_space('Studio Livre','studio-livre','Livre')`,
+      ),
+    ).rejects.toThrow(/exige o plano ativo/i)
+
+    const { rows } = await client.query(
+      `select count(*)::int as total from organizations where slug = 'studio-livre'`,
+    )
+    expect(rows[0].total).toBe(0)
+  })
+
+  it('com assinatura abre o espaço como STUDIO, e a pessoa vira dona', async () => {
+    await client.query(`select set_professional_plan($1, true)`, [perfilLivre])
+
+    const [{ open_professional_space: orgId }] = await asUser<{ open_professional_space: string }>(
+      client,
+      LIVRE,
+      `select open_professional_space('Studio Livre','studio-livre','Livre Silva') as open_professional_space`,
+    )
+
+    const { rows } = await client.query(`select type, status from organizations where id = $1`, [
+      orgId,
+    ])
+    expect(rows[0]).toMatchObject({ type: 'STUDIO', status: 'TRIALING' })
+
+    const { rows: papel } = await client.query(
+      `select role, status from organization_members where organization_id = $1 and user_profile_id = $2`,
+      [orgId, perfilLivre],
+    )
+    expect(papel[0]).toMatchObject({ role: 'OWNER', status: 'ACTIVE' })
+  })
+
+  it('não abre um segundo espaço para a mesma conta', async () => {
+    await expect(
+      asUser(client, LIVRE, `select open_professional_space('Outro','outro-espaco','Livre Silva')`),
+    ).rejects.toThrow(/já é proprietária/i)
+  })
+
+  it('anônimo não abre espaço', async () => {
+    await expect(
+      asUser(client, null, `select open_professional_space('X','x','Y')`),
+    ).rejects.toThrow(/permission denied/i)
+  })
 })
 
 describe.skipIf(!temBanco)('escolha do desafio', () => {

@@ -130,22 +130,39 @@ export type FiscalDataInput = z.infer<typeof fiscalDataSchema>
  * digita no celular manda minúscula com espaço sobrando o tempo todo. Corrigir
  * aqui evita recusar um código que estava certo.
  */
+const INVITE_CODE = /^[2-9A-HJKMNPQRSTVWXYZ]{6}$/
+
+/**
+ * Entrada da pessoa física: o nome é obrigatório, o código não.
+ *
+ * Campo vazio vira `null` em vez de erro — é o que separa "não tenho código"
+ * de "digitei errado". Só o que foi digitado é conferido, e aí sim com rigor:
+ * o alfabeto do convite não tem I, L, O, U, zero nem um.
+ */
+export const personalStartSchema = z.object({
+  studentName: z.string().trim().min(3, 'Informe seu nome completo.').max(120),
+  inviteCode: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .transform((value) => (value.length === 0 ? null : value))
+    .refine((value) => value === null || INVITE_CODE.test(value), {
+      message: 'O código tem 6 caracteres. Confira com a recepção, ou deixe em branco.',
+    }),
+})
+
+export type PersonalStartInput = z.infer<typeof personalStartSchema>
+
+/** Vínculo pedido depois, pelo perfil. Aqui o código é obrigatório. */
 export const joinGymSchema = z.object({
   inviteCode: z
     .string()
     .trim()
     .toUpperCase()
-    .refine((value) => /^[2-9A-HJKMNPQRSTVWXYZ]{6}$/.test(value), {
+    .refine((value) => INVITE_CODE.test(value), {
       message: 'O código tem 6 caracteres. Confira com a recepção.',
     }),
   studentName: z.string().trim().min(3, 'Informe seu nome completo.').max(120),
 })
 
 export type JoinGymInput = z.infer<typeof joinGymSchema>
-
-/** Entrada sem academia: só o nome, e o nome já veio do cadastro da conta. */
-export const soloStartSchema = z.object({
-  studentName: z.string().trim().min(3, 'Informe seu nome completo.').max(120),
-})
-
-export type SoloStartInput = z.infer<typeof soloStartSchema>

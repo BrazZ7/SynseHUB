@@ -4,9 +4,8 @@ import Link from 'next/link'
 import { SynseLogo } from '@/components/synse/synse-logo'
 import { AccountTypePicker } from '@/features/auth/account-type-picker'
 import { parseAccountType } from '@/features/auth/account-type'
-import { JoinGymForm } from '@/features/onboarding/join-gym-form'
 import { OnboardingForm } from '@/features/onboarding/onboarding-form'
-import { SoloStartForm } from '@/features/onboarding/solo-start-form'
+import { PersonalStartForm } from '@/features/onboarding/personal-start-form'
 import { requireOnboarding } from '@/lib/auth/require-session'
 import { createSupabaseServerClient } from '@/lib/database/supabase-server'
 
@@ -24,17 +23,9 @@ const COPY = {
     titulo: 'Falta pouco',
     descricao: 'Conta criada. Agora informe os dados da academia para abrir o painel.',
   },
-  profissional: {
-    titulo: 'Falta pouco',
-    descricao: 'Conta criada. Agora dê um nome ao seu espaço para abrir o painel.',
-  },
-  aluno: {
-    titulo: 'Entre na sua academia',
-    descricao: 'Conta criada. Informe o código que a academia te passou.',
-  },
   pessoal: {
-    titulo: 'Comece por conta própria',
-    descricao: 'Sem academia vinculada. Você já sai daqui com treino e desafio do mês.',
+    titulo: 'Falta pouco',
+    descricao: 'Conta criada. Só falta seu nome — o código da academia é opcional.',
   },
 } as const
 
@@ -91,10 +82,10 @@ export default async function OnboardingPage({
         <p className="text-sm text-synse-muted">{copy.descricao}</p>
       </header>
 
-      {tipo === 'aluno' && <JoinGymForm defaultName={suggestedName} />}
-      {tipo === 'pessoal' && <SoloStartForm defaultName={suggestedName} />}
-      {(tipo === 'academia' || tipo === 'profissional') && (
-        <OnboardingForm defaultOwnerName={suggestedName} accountType={tipo} />
+      {tipo === 'pessoal' ? (
+        <PersonalStartForm defaultName={suggestedName} />
+      ) : (
+        <OnboardingForm defaultOwnerName={suggestedName} />
       )}
 
       {/*

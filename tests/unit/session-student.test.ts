@@ -25,14 +25,23 @@ function construirClient() {
 
     const erroDeColuna = () => {
       if (erroDuro && tabela === 'user_profiles') return erroDuro
+      // Depois de `select('*')` a coluna ausente não é erro: ela simplesmente
+      // não vem na linha. Pedi-la pelo nome é que derrubava a consulta.
       return semColunaTier && tabela === 'user_profiles' && colunas.includes('tier')
         ? { code: '42703', message: 'column user_profiles.tier does not exist' }
         : null
     }
 
+    const linha = () => {
+      const dado = tabelas[tabela] ?? null
+      if (!semColunaTier || tabela !== 'user_profiles' || dado === null) return dado
+      const { tier: _tier, professional_plan: _plano, ...resto } = dado as Record<string, unknown>
+      return resto
+    }
+
     const resultado = () => {
       const erro = erroDeColuna()
-      return erro ? { data: null, error: erro } : { data: tabelas[tabela] ?? null, error: null }
+      return erro ? { data: null, error: erro } : { data: linha(), error: null }
     }
 
     // A consulta de matrículas é aguardada direto (devolve lista); a de equipe
@@ -74,6 +83,8 @@ const PERFIL = {
   name: 'Joana Ribeiro',
   email: 'joana@exemplo.com',
   avatar_url: null,
+  tier: 'PRO',
+  professional_plan: true,
 }
 
 beforeEach(() => {
@@ -186,7 +197,7 @@ describe('getSession', () => {
    * acabava de entrar era mandado para o cadastro, e da tela parecia que o
    * botão de login não respondia.
    */
-  it('funciona no banco anterior à migration que criou o plano da conta', async () => {
+  it('funciona no banco anterior às migrations que criaram as colunas de plano', async () => {
     semColunaTier = true
     tabelas.user_profiles = PERFIL
     tabelas.organization_members = {
@@ -196,11 +207,26 @@ describe('getSession', () => {
     }
     tabelas.students = []
 
+    // Sem as colunas, a sessão existe e cai no plano gratuito — em vez de
+    // sumir e mandar a pessoa para a escolha de perfil.
     expect(await getSession()).toMatchObject({
       role: 'OWNER',
       organizationId: 'org-1',
       tier: 'FREE',
+      professionalPlan: false,
     })
+  })
+
+  it('lê o plano da conta quando as colunas existem', async () => {
+    tabelas.user_profiles = PERFIL
+    tabelas.organization_members = {
+      organization_id: 'org-1',
+      role: 'OWNER',
+      organizations: { name: 'Academia Alpha' },
+    }
+    tabelas.students = []
+
+    expect(await getSession()).toMatchObject({ tier: 'PRO', professionalPlan: true })
   })
 
   /*

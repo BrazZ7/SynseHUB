@@ -20,8 +20,8 @@ export default async function SignUpPage() {
       <header className="space-y-1.5">
         <h1 className="text-page-title font-semibold text-synse-text">Criar conta</h1>
         <p className="text-sm text-synse-muted">
-          Comece pela conta. Depois de confirmar o e-mail você diz o que faz — academia,
-          profissional ou aluno.
+          Comece pela conta. Depois de confirmar o e-mail você diz apenas se tem uma academia ou
+          se vai treinar.
         </p>
       </header>
 

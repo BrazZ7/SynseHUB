@@ -7,11 +7,7 @@ import { getDataSource } from '@/lib/database'
 import { logger } from '@/lib/logger'
 import { rateLimit } from '@/lib/rate-limit'
 import { slugify } from '@/lib/utils'
-import {
-  createOrganizationSchema,
-  joinGymSchema,
-  soloStartSchema,
-} from '@/lib/validations/organization'
+import { createOrganizationSchema, personalStartSchema } from '@/lib/validations/organization'
 import type { OnboardingState } from '@/features/onboarding/state'
 
 /** Cadastro da academia, logo após a criação da conta. */
@@ -44,13 +40,6 @@ export async function createOrganizationAction(
 
   try {
     const dataSource = await getDataSource()
-    /*
-     * O profissional independente abre um STUDIO. Mesma estrutura da academia
-     * e mesmo papel de dono — o tipo muda o vocabulário da interface e abre
-     * espaço para relatórios e planos diferentes mais adiante.
-     */
-    const tipo = formData.get('accountType')?.toString() === 'profissional' ? 'STUDIO' : 'GYM'
-
     await dataSource.createOrganization({
       name: parsed.data.name,
       slug,
@@ -59,7 +48,7 @@ export async function createOrganizationAction(
       taxId: parsed.data.taxId || null,
       city: parsed.data.city || null,
       state: parsed.data.state || null,
-      type: tipo,
+      type: 'GYM',
     })
   } catch (error) {
     logger.error('onboarding:failed', { authUserId, error: String(error) })
@@ -70,21 +59,23 @@ export async function createOrganizationAction(
 }
 
 /**
- * Entrada do aluno numa academia existente, pelo código de convite.
+ * Entrada da pessoa física, com ou sem academia.
  *
- * A matrícula nasce pendente de confirmação: a academia vê quem entrou e
- * aprova. Nascer ativa colocaria o aluno na contagem de mensalidades de uma
- * academia que nunca o cadastrou.
+ * Os dois caminhos que existiam viraram um. Com código, a matrícula nasce
+ * pendente de confirmação: a academia vê quem entrou e aprova — nascer ativa
+ * colocaria o aluno na contagem de mensalidades de uma academia que nunca o
+ * cadastrou. Sem código, a matrícula vai para a organização reservada do Synse
+ * e nasce ativa, porque não há quem confirme.
  */
-export async function joinGymAction(
+export async function startPersonalAction(
   _state: OnboardingState,
   formData: FormData,
 ): Promise<OnboardingState> {
   const authUserId = await requireOnboarding()
 
-  const parsed = joinGymSchema.safeParse({
-    inviteCode: formData.get('inviteCode'),
+  const parsed = personalStartSchema.safeParse({
     studentName: formData.get('studentName'),
+    inviteCode: formData.get('inviteCode') ?? '',
   })
 
   if (!parsed.success) {
@@ -95,55 +86,36 @@ export async function joinGymAction(
    * Limite apertado de propósito: sem ele, o código de seis caracteres vira
    * alvo de tentativa e erro até alguém entrar numa academia qualquer.
    */
-  const limit = rateLimit(`join:${authUserId}`, 8, 600_000)
+  const limit = rateLimit(`start:${authUserId}`, 8, 600_000)
   if (!limit.allowed) {
     return { error: 'Muitas tentativas. Aguarde alguns minutos e confira o código.' }
   }
 
   try {
     const dataSource = await getDataSource()
-    await dataSource.joinOrganizationAsStudent({
-      inviteCode: parsed.data.inviteCode,
-      studentName: parsed.data.studentName,
-    })
+
+    if (parsed.data.inviteCode) {
+      await dataSource.joinOrganizationAsStudent({
+        inviteCode: parsed.data.inviteCode,
+        studentName: parsed.data.studentName,
+      })
+    } else {
+      await dataSource.joinSynseAsSoloStudent({ studentName: parsed.data.studentName })
+    }
   } catch (error) {
     const mensagem = String(error)
     if (mensagem.includes('Código de convite inválido')) {
-      return { error: 'Código não encontrado. Confira com a recepção da academia.' }
+      /*
+       * Código errado não pode ser beco sem saída: agora existe a alternativa
+       * de entrar sem nenhum, e a mensagem precisa dizer isso — senão a pessoa
+       * fica presa tentando adivinhar seis caracteres.
+       */
+      return {
+        error:
+          'Código não encontrado. Confira com a recepção da academia, ou deixe o campo em branco para entrar sem vínculo.',
+      }
     }
-    logger.error('onboarding:join_failed', { authUserId, error: mensagem })
-    return { error: 'Não foi possível entrar agora. Tente novamente.' }
-  }
-
-  redirect('/app')
-}
-
-/**
- * Entrada de quem não tem academia vinculada.
- *
- * A matrícula vai para a organização reservada do Synse (migration 0013) e
- * nasce ativa — não há academia para confirmar, e deixar pendente seria uma
- * espera que nunca termina.
- */
-export async function startSoloAction(
-  _state: OnboardingState,
-  formData: FormData,
-): Promise<OnboardingState> {
-  const authUserId = await requireOnboarding()
-
-  const parsed = soloStartSchema.safeParse({ studentName: formData.get('studentName') })
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? 'Confira os dados informados.' }
-  }
-
-  const limit = rateLimit(`solo:${authUserId}`, 5, 600_000)
-  if (!limit.allowed) return { error: 'Muitas tentativas. Aguarde alguns minutos.' }
-
-  try {
-    const dataSource = await getDataSource()
-    await dataSource.joinSynseAsSoloStudent({ studentName: parsed.data.studentName })
-  } catch (error) {
-    logger.error('onboarding:solo_failed', { authUserId, error: String(error) })
+    logger.error('onboarding:start_failed', { authUserId, error: mensagem })
     return { error: 'Não foi possível começar agora. Tente novamente.' }
   }
 

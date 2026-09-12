@@ -1,45 +1,30 @@
 import Link from 'next/link'
-import { Building2, Dumbbell, Sparkles, UserRound } from 'lucide-react'
+import { Building2, UserRound } from 'lucide-react'
 
 /**
  * Escolha do perfil, depois de a conta existir e o e-mail estar confirmado.
  *
- * Perguntar antes parecia natural, mas obrigava a escolha a atravessar a
- * criação de senha, o e-mail de confirmação e a volta para o site — e ela se
- * perdia em cada um desses trechos. Quem escolhia "sou aluno" e voltava por um
- * link de e-mail caía num formulário pedindo CNPJ.
+ * Perguntar antes obrigava a escolha a atravessar a criação de senha, o e-mail
+ * de confirmação e a volta para o site — e ela se perdia em cada trecho. Quem
+ * escolhia "sou aluno" e voltava por link de e-mail caía num formulário
+ * pedindo CNPJ.
  *
- * Aqui a pessoa já está autenticada: a resposta vai direto para onde precisa,
- * sem viajar por lugar nenhum.
+ * São duas opções porque o corte é binário: administrar uma academia é um
+ * trabalho, treinar é outro. O resto — vínculo com academia, perfil de
+ * treinador — é ajuste dentro da conta, não uma quarta porta na entrada.
  */
 const OPCOES = [
+  {
+    tipo: 'pessoal',
+    icone: UserRound,
+    titulo: 'Sou pessoa física',
+    descricao: 'Treinar, acompanhar resultados e participar dos desafios. Com ou sem academia.',
+  },
   {
     tipo: 'academia',
     icone: Building2,
     titulo: 'Tenho uma academia',
     descricao: 'Gestão de alunos, mensalidades, treinos e check-in.',
-  },
-  {
-    tipo: 'profissional',
-    icone: Dumbbell,
-    titulo: 'Sou profissional',
-    descricao: 'Personal, nutricionista ou estúdio. Seus alunos, do seu jeito.',
-  },
-  {
-    tipo: 'aluno',
-    icone: UserRound,
-    titulo: 'Sou aluno',
-    descricao: 'Entre com o código da sua academia e acompanhe seus treinos.',
-  },
-  /*
-   * Sem esta opção, quem treina numa academia que não usa o Synse não tinha
-   * código para digitar — e era expulso do produto na primeira tela.
-   */
-  {
-    tipo: 'pessoal',
-    icone: Sparkles,
-    titulo: 'Treino por conta própria',
-    descricao: 'Sem academia, ou numa que ainda não usa o Synse. Comece agora mesmo.',
   },
 ] as const
 
@@ -61,6 +46,11 @@ export function AccountTypePicker() {
           </span>
         </Link>
       ))}
+
+      <p className="pt-1 text-center text-xs text-synse-muted">
+        É treinador, fisioterapeuta ou nutricionista? Entre como pessoa física — o perfil
+        profissional é liberado depois, no seu perfil.
+      </p>
     </div>
   )
 }

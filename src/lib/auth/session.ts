@@ -6,7 +6,6 @@ import { getDataSource } from '@/lib/database'
 import { isDemoMode } from '@/lib/database/env'
 import { createSupabaseServerClient } from '@/lib/database/supabase-server'
 import { DEMO_ORG_ID, getDemoDataset } from '@/lib/database/demo-seed'
-import { isPendingMigration } from '@/lib/database/pending-migration'
 import { logger } from '@/lib/logger'
 import { isSoloOrganization, SOLO_ORGANIZATION_LABEL } from '@/lib/organizations/solo'
 import type { UserTier } from '@/lib/plans/tiers'
@@ -29,6 +28,8 @@ export type SessionContext = {
   isSoloStudent: boolean
   /** Plano da conta da pessoa (Synse ou Synse+), não o plano da academia. */
   tier: UserTier
+  /** Assinatura que libera abrir o próprio espaço como profissional. */
+  professionalPlan: boolean
   isDemo: boolean
 }
 
@@ -124,6 +125,7 @@ function demoSessionFor(persona: DemoPersona): SessionContext {
     studentId: student?.id ?? null,
     isSoloStudent: false,
     tier: 'FREE',
+    professionalPlan: false,
     isDemo: true,
   }
 }
@@ -149,8 +151,6 @@ export async function getAuthenticatedUserId(): Promise<string | null> {
   return user?.id ?? null
 }
 
-const PROFILE_COLUMNS = 'id, synse_id, name, email, avatar_url'
-
 type ProfileRow = {
   id: string
   synse_id: string
@@ -158,6 +158,7 @@ type ProfileRow = {
   email: string
   avatar_url: string | null
   tier?: string | null
+  professional_plan?: boolean | null
 }
 
 /**
@@ -177,55 +178,39 @@ type ProfileRead =
   | { row: ProfileRow | null; error: null }
   | { row: null; error: { step: string; code: string | null; message: string } }
 
+/**
+ * A ficha de quem está autenticado, com `*`.
+ *
+ * Listar as colunas parecia mais cuidadoso e era o contrário: pedir uma coluna
+ * que o banco ainda não tem derruba a consulta inteira, não só o campo novo.
+ * Foi assim que `tier` — criada na 0014, aplicada à mão depois do deploy —
+ * apagou a sessão de todo mundo entre publicar e migrar, e mandou quem tinha
+ * academia para a tela de "você é academia ou pessoa física?".
+ *
+ * Com `*`, coluna nova nunca mais quebra sessão: vem quando existe, falta
+ * quando não existe, e o código trata a ausência. O custo é trazer alguns
+ * campos a mais de uma linha só, uma vez por requisição — barato perto de um
+ * login que para de funcionar a cada migration.
+ *
+ * O erro continua sendo lido e registrado. Descartá-lo era o que fazia
+ * problema de schema chegar disfarçado de "conta sem ficha".
+ */
 async function readProfile(
   supabase: NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>,
   authUserId: string,
 ): Promise<ProfileRead> {
-  const completa = await supabase
+  const { data, error } = await supabase
     .from('user_profiles')
-    .select(`${PROFILE_COLUMNS}, tier`)
+    .select('*')
     .eq('auth_user_id', authUserId)
     .maybeSingle()
 
-  if (!completa.error) return { row: completa.data as ProfileRow | null, error: null }
-
-  if (!isPendingMigration(completa.error)) {
-    logger.error('session:profile_read_failed', {
-      code: completa.error.code,
-      error: completa.error.message,
-    })
-    return {
-      row: null,
-      error: {
-        step: 'profile',
-        code: completa.error.code ?? null,
-        message: completa.error.message,
-      },
-    }
+  if (error) {
+    logger.error('session:profile_read_failed', { code: error.code, error: error.message })
+    return { row: null, error: { step: 'profile', code: error.code ?? null, message: error.message } }
   }
 
-  logger.warn('session:tier_column_missing', {
-    detalhe: 'Migration 0014 pendente. Sessão segue no plano gratuito.',
-  })
-
-  const legado = await supabase
-    .from('user_profiles')
-    .select(PROFILE_COLUMNS)
-    .eq('auth_user_id', authUserId)
-    .maybeSingle()
-
-  if (legado.error) {
-    logger.error('session:profile_read_failed', {
-      code: legado.error.code,
-      error: legado.error.message,
-    })
-    return {
-      row: null,
-      error: { step: 'profile', code: legado.error.code ?? null, message: legado.error.message },
-    }
-  }
-
-  return { row: legado.data as ProfileRow | null, error: null }
+  return { row: data as ProfileRow | null, error: null }
 }
 
 // ── Resolução da sessão ─────────────────────────────────────────────────────
@@ -350,6 +335,7 @@ export async function resolveSession(): Promise<SessionResolution> {
         studentId: enrolment.id,
         isSoloStudent: solo,
         tier: (profile.tier ?? 'FREE') as UserTier,
+        professionalPlan: profile.professional_plan === true,
         isDemo: false,
       },
     }
@@ -378,6 +364,7 @@ export async function resolveSession(): Promise<SessionResolution> {
       studentId: student?.id ?? null,
       isSoloStudent: false,
       tier: (profile.tier ?? 'FREE') as UserTier,
+      professionalPlan: profile.professional_plan === true,
       isDemo: false,
     },
   }

@@ -5,6 +5,8 @@ import { StudentAvatar } from '@/components/synse/student-avatar'
 import { ThemeToggle } from '@/components/synse/theme-toggle'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { LinkGymCard } from '@/features/account/link-gym-card'
+import { ProfessionalCard } from '@/features/account/professional-card'
 import { signOut } from '@/lib/auth/actions'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
@@ -40,7 +42,10 @@ export default async function StudentProfilePage() {
       <section className="rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
         <h2 className="mb-3 text-sm font-semibold text-synse-text">Sua conta Synse</h2>
         <div className="space-y-2.5 text-sm">
-          <Row label="Academia" value={organization?.name ?? '—'} />
+          <Row
+            label="Academia"
+            value={session.isSoloStudent ? 'Sem vínculo' : (organization?.name ?? '—')}
+          />
           <Row label="Plano" value={student?.planName ?? 'Sem plano'} />
           <Row label="Professor" value={student?.trainerName ?? 'A definir'} />
           <Row
@@ -56,6 +61,15 @@ export default async function StudentProfilePage() {
           existindo — com seu histórico de treinos e progresso.
         </p>
       </section>
+
+      {/*
+        O código de convite só aparece para quem ainda não tem academia. Para
+        quem já tem, um segundo campo de código na mesma tela convidaria a
+        trocar de academia por engano.
+      */}
+      {session.isSoloStudent && <LinkGymCard />}
+
+      <ProfessionalCard ativo={session.professionalPlan} defaultName={session.name} />
 
       <section className="rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
         <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-synse-text">

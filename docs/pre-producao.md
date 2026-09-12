@@ -43,6 +43,8 @@ aplicadas, na ordem:
       recebe erro ao concluir. O resto do cadastro segue funcionando.
 - [ ] `0014_baseline_experience.sql` — sem ela, a tela de desafios não abre.
       Treino base e plano alimentar base não dependem de banco e continuam de pé.
+- [ ] `0015_professional_unlock.sql` — sem ela, o cartão do perfil profissional
+      aparece desligado e "abrir espaço" recusa. Nada mais é afetado.
 
 Cada arquivo é independente e pode ser colado inteiro. Aplicar duas vezes é
 inofensivo: são `create or replace`, `if not exists` e `on conflict do nothing`.
@@ -50,7 +52,8 @@ inofensivo: são `create or replace`, `if not exists` e `on conflict do nothing`
 Para liberar o Synse+ numa conta de teste, com a chave de serviço:
 
 ```sql
-select set_user_tier('<id do user_profiles>', 'PRO');
+select set_user_tier('<id do user_profiles>', 'PRO');            -- Synse+
+select set_professional_plan('<id do user_profiles>', true);     -- perfil profissional
 ```
 
 A função é a única porta para mudar o plano — pela tela, nem o dono da conta

@@ -382,6 +382,10 @@ export class DemoDataSource implements DataSource {
     throw new Error('Entrada sem academia não existe em modo de demonstração.')
   }
 
+  async openProfessionalSpace(): Promise<string> {
+    throw new Error('Abrir espaço profissional não existe em modo de demonstração.')
+  }
+
   async updateStudentStatus(input: {
     organizationId: string
     studentId: string

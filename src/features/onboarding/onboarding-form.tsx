@@ -13,32 +13,24 @@ import type { OnboardingState } from '@/features/onboarding/state'
 const initialState: OnboardingState = {}
 
 /**
- * Academia e profissional preenchem os mesmos campos — o que muda é o nome das
- * coisas. Um estúdio de personal não se reconhece em "nome da academia", e essa
- * estranheza no primeiro minuto de uso custa mais do que parece.
+ * Cadastro da academia.
+ *
+ * Já serviu também ao profissional independente, com outro vocabulário. Agora
+ * o profissional entra como pessoa física e abre o espaço pelo perfil, depois
+ * de assinar — então aqui sobrou um caminho só, e o texto pode ser direto.
  */
 const ROTULOS = {
-  academia: { nome: 'Nome da academia', exemplo: 'Academia Alpha', botao: 'Abrir minha academia' },
-  profissional: {
-    nome: 'Nome do seu espaço',
-    exemplo: 'Studio Ana Ribeiro',
-    botao: 'Abrir meu espaço',
-  },
+  nome: 'Nome da academia',
+  exemplo: 'Academia Alpha',
+  botao: 'Abrir minha academia',
 } as const
 
-export function OnboardingForm({
-  defaultOwnerName,
-  accountType,
-}: {
-  defaultOwnerName: string
-  accountType: 'academia' | 'profissional'
-}) {
-  const rotulos = ROTULOS[accountType]
+export function OnboardingForm({ defaultOwnerName }: { defaultOwnerName: string }) {
+  const rotulos = ROTULOS
   const [state, formAction] = useActionState(createOrganizationAction, initialState)
 
   return (
     <form action={formAction} className="space-y-4">
-      <input type="hidden" name="accountType" value={accountType} />
       {state.error && (
         <p
           role="alert"

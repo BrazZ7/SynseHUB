@@ -139,6 +139,12 @@ export interface DataSource {
    */
   joinSynseAsSoloStudent(input: { studentName: string }): Promise<string>
 
+  /**
+   * Abre o espaço de quem assinou o plano profissional. O banco recusa sem
+   * assinatura ativa — a tela não é a guardiã disso.
+   */
+  openProfessionalSpace(input: { name: string; slug: string; ownerName: string }): Promise<string>
+
   /** Muda a situação da matrícula. Usada para confirmar quem entrou por código. */
   updateStudentStatus(input: {
     organizationId: string

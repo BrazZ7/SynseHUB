@@ -259,6 +259,16 @@ export class SupabaseDataSource implements DataSource {
     return String(data)
   }
 
+  async openProfessionalSpace(input: { name: string; slug: string; ownerName: string }) {
+    const { data, error } = await this.client.rpc('open_professional_space', {
+      p_name: input.name,
+      p_slug: input.slug,
+      p_owner_name: input.ownerName,
+    })
+    if (error) this.fail('openProfessionalSpace', error)
+    return String(data)
+  }
+
   async updateStudentStatus(input: {
     organizationId: string
     studentId: string

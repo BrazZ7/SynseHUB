@@ -6,6 +6,8 @@ import { getDataSource } from '@/lib/database'
 import { isDemoMode } from '@/lib/database/env'
 import { createSupabaseServerClient } from '@/lib/database/supabase-server'
 import { DEMO_ORG_ID, getDemoDataset } from '@/lib/database/demo-seed'
+import { isPendingMigration } from '@/lib/database/pending-migration'
+import { logger } from '@/lib/logger'
 import { isSoloOrganization, SOLO_ORGANIZATION_LABEL } from '@/lib/organizations/solo'
 import type { UserTier } from '@/lib/plans/tiers'
 import type { UserRole } from '@/types/domain'
@@ -147,6 +149,65 @@ export async function getAuthenticatedUserId(): Promise<string | null> {
   return user?.id ?? null
 }
 
+const PROFILE_COLUMNS = 'id, synse_id, name, email, avatar_url'
+
+type ProfileRow = {
+  id: string
+  synse_id: string
+  name: string
+  email: string
+  avatar_url: string | null
+  tier?: string | null
+}
+
+/**
+ * A ficha de quem está autenticado.
+ *
+ * Duas tentativas de propósito. `tier` só existe depois da migration 0014, e
+ * publicar não aplica migration: entre um e outro, pedir a coluna derruba a
+ * consulta inteira — não só o campo novo. A sessão vira nula, quem acabou de
+ * entrar é mandado para o cadastro, e da tela parece que o login não responde.
+ * Foi exatamente o que aconteceu.
+ *
+ * O erro também passa a ser registrado. Antes ele era descartado junto com o
+ * resultado, e um problema de schema chegava disfarçado de "conta sem ficha" —
+ * o mesmo silêncio, num lugar em que ele custa caro.
+ */
+async function readProfile(
+  supabase: NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>,
+  authUserId: string,
+): Promise<ProfileRow | null> {
+  const completa = await supabase
+    .from('user_profiles')
+    .select(`${PROFILE_COLUMNS}, tier`)
+    .eq('auth_user_id', authUserId)
+    .maybeSingle()
+
+  if (!completa.error) return completa.data as ProfileRow | null
+
+  if (!isPendingMigration(completa.error)) {
+    logger.error('session:profile_read_failed', { error: String(completa.error.message) })
+    return null
+  }
+
+  logger.warn('session:tier_column_missing', {
+    detalhe: 'Migration 0014 pendente. Sessão segue no plano gratuito.',
+  })
+
+  const legado = await supabase
+    .from('user_profiles')
+    .select(PROFILE_COLUMNS)
+    .eq('auth_user_id', authUserId)
+    .maybeSingle()
+
+  if (legado.error) {
+    logger.error('session:profile_read_failed', { error: String(legado.error.message) })
+    return null
+  }
+
+  return legado.data as ProfileRow | null
+}
+
 // ── Resolução da sessão ─────────────────────────────────────────────────────
 export async function getSession(): Promise<SessionContext | null> {
   if (isDemoMode()) {
@@ -163,12 +224,7 @@ export async function getSession(): Promise<SessionContext | null> {
   } = await supabase.auth.getUser()
   if (!user) return null
 
-  const { data: profile } = await supabase
-    .from('user_profiles')
-    .select('id, synse_id, name, email, avatar_url, tier')
-    .eq('auth_user_id', user.id)
-    .maybeSingle()
-
+  const profile = await readProfile(supabase, user.id)
   if (!profile) return null
 
   const { data: membership } = await supabase

@@ -14,18 +14,36 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const tabelas: Record<string, unknown> = {}
 
+/** Simula o banco anterior à migration 0014, sem a coluna `tier`. */
+let semColunaTier = false
+
 function construirClient() {
   const encadeado = (tabela: string) => {
+    let colunas = ''
+
+    const erroDeColuna = () =>
+      semColunaTier && tabela === 'user_profiles' && colunas.includes('tier')
+        ? { code: '42703', message: 'column user_profiles.tier does not exist' }
+        : null
+
+    const resultado = () => {
+      const erro = erroDeColuna()
+      return erro ? { data: null, error: erro } : { data: tabelas[tabela] ?? null, error: null }
+    }
+
     // A consulta de matrículas é aguardada direto (devolve lista); a de equipe
     // termina em `maybeSingle`. O `then` cobre a primeira forma.
     const alvo = {
-      select: () => alvo,
+      select: (cols = '') => {
+        colunas = cols
+        return alvo
+      },
       eq: () => alvo,
       order: () => alvo,
       limit: () => alvo,
-      maybeSingle: async () => ({ data: tabelas[tabela] ?? null }),
-      then: (resolver: (valor: { data: unknown }) => unknown) =>
-        Promise.resolve(resolver({ data: tabelas[tabela] ?? null })),
+      maybeSingle: async () => resultado(),
+      then: (resolver: (valor: { data: unknown; error: unknown }) => unknown) =>
+        Promise.resolve(resolver(resultado())),
     }
     return alvo
   }
@@ -56,6 +74,7 @@ const PERFIL = {
 
 beforeEach(() => {
   for (const chave of Object.keys(tabelas)) delete tabelas[chave]
+  semColunaTier = false
 })
 
 describe('getSession', () => {
@@ -147,6 +166,31 @@ describe('getSession', () => {
     const sessao = await getSession()
 
     expect(sessao).toMatchObject({ role: 'OWNER', organizationId: 'org-1' })
+  })
+
+  /*
+   * O caso que derrubou o login em produção.
+   *
+   * `tier` só existe depois da migration 0014, e publicar não aplica migration.
+   * Pedir a coluna derrubava a consulta inteira: a sessão virava nula, quem
+   * acabava de entrar era mandado para o cadastro, e da tela parecia que o
+   * botão de login não respondia.
+   */
+  it('funciona no banco anterior à migration que criou o plano da conta', async () => {
+    semColunaTier = true
+    tabelas.user_profiles = PERFIL
+    tabelas.organization_members = {
+      organization_id: 'org-1',
+      role: 'OWNER',
+      organizations: { name: 'Academia Alpha' },
+    }
+    tabelas.students = []
+
+    expect(await getSession()).toMatchObject({
+      role: 'OWNER',
+      organizationId: 'org-1',
+      tier: 'FREE',
+    })
   })
 
   it('sem ficha não há sessão, mesmo autenticado', async () => {

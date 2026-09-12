@@ -19,6 +19,24 @@ export default async function ChallengesPage() {
 
   const cicloAtual = cycleLabel(new Date().toISOString())
 
+  /*
+   * Migration 0014 pendente: a tela avisa em vez de estourar. Publicar não
+   * aplica migration, e entre um e outro esta página não tem banco para ler.
+   */
+  if (!board.available) {
+    return (
+      <div className="animate-fade-in-up space-y-5">
+        <header>
+          <h1 className="text-2xl font-semibold text-synse-text">Desafios</h1>
+        </header>
+        <p className="rounded-xl bg-synse-surface-2 p-4 text-sm text-synse-muted">
+          Os desafios estão sendo liberados nesta conta. Volte em instantes — seu treino base e seu
+          plano alimentar já estão disponíveis.
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className="animate-fade-in-up space-y-6">
       <header>

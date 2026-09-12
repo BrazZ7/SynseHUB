@@ -64,7 +64,14 @@ export class SupabaseDataSource implements DataSource {
 
   private fail(operation: string, error: unknown): never {
     logger.error('supabase:query_failed', { operation, error: String(error) })
-    throw new Error(`supabase query failed: ${operation}`)
+    /*
+     * O erro original viaja em `cause`.
+     *
+     * Sem ele, quem pega esta exceção lá em cima só recebe "supabase query
+     * failed: X" e não tem como distinguir uma tabela que ainda não existe
+     * (migration pendente, contornável) de uma consulta errada (defeito).
+     */
+    throw new Error(`supabase query failed: ${operation}`, { cause: error })
   }
 
   private async select<T>(

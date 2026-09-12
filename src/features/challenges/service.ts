@@ -2,6 +2,7 @@ import 'server-only'
 
 import { currentCycle } from '@/lib/baseline/challenges'
 import { getDataSource } from '@/lib/database'
+import { isPendingMigration } from '@/lib/database/pending-migration'
 import { logger } from '@/lib/logger'
 import { CHALLENGES_PER_CYCLE } from '@/lib/plans/tiers'
 import type { SessionContext } from '@/lib/auth/session'
@@ -20,6 +21,12 @@ export type CycleReport = {
 }
 
 export type ChallengeBoard = {
+  /**
+   * Falso enquanto a migration 0014 não estiver aplicada. A tela some em vez
+   * de quebrar: publicar não aplica migration, e nessa janela o app continua
+   * de pé sem prometer o que o banco ainda não sabe fazer.
+   */
+  available: boolean
   catalog: BaselineChallenge[]
   active: ActiveChallenge[]
   medals: ChallengeMedal[]
@@ -27,6 +34,16 @@ export type ChallengeBoard = {
   lastReport: CycleReport | null
   slotsLeft: number
   slotsTotal: number
+}
+
+const INDISPONIVEL: ChallengeBoard = {
+  available: false,
+  catalog: [],
+  active: [],
+  medals: [],
+  lastReport: null,
+  slotsLeft: 0,
+  slotsTotal: 0,
 }
 
 function percent(progress: number, target: number): number {
@@ -55,11 +72,23 @@ export async function getChallengeBoard(session: SessionContext): Promise<Challe
     logger.warn('challenges:close_failed', { error: String(error).slice(0, 200) })
   }
 
-  const [catalog, entries, medals] = await Promise.all([
-    dataSource.listBaselineChallenges(),
-    dataSource.listChallengeEntries(session.userProfileId),
-    dataSource.listChallengeMedals(session.userProfileId),
-  ])
+  let catalog: BaselineChallenge[]
+  let entries: ChallengeEntry[]
+  let medals: ChallengeMedal[]
+
+  try {
+    ;[catalog, entries, medals] = await Promise.all([
+      dataSource.listBaselineChallenges(),
+      dataSource.listChallengeEntries(session.userProfileId),
+      dataSource.listChallengeMedals(session.userProfileId),
+    ])
+  } catch (error) {
+    if (isPendingMigration(error)) {
+      logger.warn('challenges:schema_pending', { detalhe: 'Migration 0014 pendente.' })
+      return INDISPONIVEL
+    }
+    throw error
+  }
 
   const byCode = new Map(catalog.map((item) => [item.code, item]))
   const cycle = currentCycle()
@@ -77,6 +106,7 @@ export async function getChallengeBoard(session: SessionContext): Promise<Challe
   const [ultima] = medals
 
   return {
+    available: true,
     catalog,
     active,
     medals,

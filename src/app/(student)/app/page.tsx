@@ -139,43 +139,45 @@ export default async function StudentHomePage() {
         </div>
       </section>
 
-      {/* Desafio do mês */}
-      <section className="rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
-        <div className="flex items-center justify-between gap-3">
-          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-synse-primary">
-            <Trophy className="size-3.5" aria-hidden />
-            Desafio do mês
-          </p>
-          {desafio && (
-            <Badge variant="primary" className="tabular-nums">
-              {desafio.percentage}%
-            </Badge>
+      {/* Desafio do mês — some enquanto a migration 0014 não estiver aplicada */}
+      {challenges.available && (
+        <section className="rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
+          <div className="flex items-center justify-between gap-3">
+            <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-synse-primary">
+              <Trophy className="size-3.5" aria-hidden />
+              Desafio do mês
+            </p>
+            {desafio && (
+              <Badge variant="primary" className="tabular-nums">
+                {desafio.percentage}%
+              </Badge>
+            )}
+          </div>
+
+          {desafio ? (
+            <>
+              <p className="mt-1.5 text-lg font-semibold text-synse-text">
+                {desafio.challenge.title}
+              </p>
+              <p className="text-sm text-synse-muted">
+                {desafio.progressValue.toLocaleString('pt-BR')} de{' '}
+                {desafio.targetValue.toLocaleString('pt-BR')} {desafio.challenge.unit}
+              </p>
+              <Progress value={desafio.percentage} className="mt-3" />
+            </>
+          ) : (
+            <p className="mt-1.5 text-sm text-synse-muted">
+              Escolha um objetivo para este mês. No fim, você recebe a análise e a medalha.
+            </p>
           )}
-        </div>
 
-        {desafio ? (
-          <>
-            <p className="mt-1.5 text-lg font-semibold text-synse-text">
-              {desafio.challenge.title}
-            </p>
-            <p className="text-sm text-synse-muted">
-              {desafio.progressValue.toLocaleString('pt-BR')} de{' '}
-              {desafio.targetValue.toLocaleString('pt-BR')} {desafio.challenge.unit}
-            </p>
-            <Progress value={desafio.percentage} className="mt-3" />
-          </>
-        ) : (
-          <p className="mt-1.5 text-sm text-synse-muted">
-            Escolha um objetivo para este mês. No fim, você recebe a análise e a medalha.
-          </p>
-        )}
-
-        <Button variant="outline" asChild className="mt-4 w-full">
-          <Link href="/app/challenges">
-            {desafio ? 'Registrar progresso' : 'Escolher meu desafio'}
-          </Link>
-        </Button>
-      </section>
+          <Button variant="outline" asChild className="mt-4 w-full">
+            <Link href="/app/challenges">
+              {desafio ? 'Registrar progresso' : 'Escolher meu desafio'}
+            </Link>
+          </Button>
+        </section>
+      )}
 
       {/* Alimentação base */}
       <Link

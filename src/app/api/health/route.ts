@@ -54,6 +54,49 @@ async function databaseReachable(): Promise<{ ok: boolean; status: number | null
 }
 
 /**
+ * O banco já tem o que esta build pede?
+ *
+ * Publicar e migrar são dois atos separados: a Vercel publica no push, o SQL
+ * é colado à mão no painel do Supabase. Entre um e outro, o código novo fala
+ * com o banco velho. Quando isso aconteceu, o sintoma que chegou foi "o login
+ * não responde" — e descobrir a causa exigiu ler código, porque nada no ar
+ * dizia qual dos dois lados estava atrasado.
+ *
+ * Agora diz. Cada sonda é uma consulta com a chave pública, que a RLS responde
+ * com lista vazia; o que interessa não é o conteúdo, é o schema aceitar a
+ * pergunta. Fica atrás de `?deep=1`, junto das outras chamadas de rede.
+ */
+async function schemaCheck(recurso: string): Promise<boolean | null> {
+  try {
+    const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${recurso}`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+      signal: AbortSignal.timeout(5000),
+      cache: 'no-store',
+    })
+
+    if (resposta.ok) return true
+    // 400 com 42703 (coluna) e 404 com PGRST205 (tabela) são "ainda não existe".
+    if (resposta.status === 400 || resposta.status === 404) return false
+    // 401, 403 e 5xx falam de credencial ou de indisponibilidade, não de schema.
+    return null
+  } catch {
+    return null
+  }
+}
+
+async function schemaReadiness() {
+  const [tier, desafios] = await Promise.all([
+    schemaCheck('user_profiles?select=tier&limit=1'),
+    schemaCheck('baseline_challenges?select=code&limit=1'),
+  ])
+
+  const pendentes: string[] = []
+  if (tier === false || desafios === false) pendentes.push('0014_baseline_experience.sql')
+
+  return { userProfilesTier: tier, baselineChallenges: desafios, pendingMigrations: pendentes }
+}
+
+/**
  * Contra qual ambiente do provedor de pagamento o app fala.
  *
  * "Está batendo no sandbox ou em produção?" é a primeira pergunta de qualquer
@@ -80,7 +123,9 @@ export async function GET(request: Request) {
     database: demo ? 'demo' : 'supabase',
     databaseRef: demo ? null : databaseRef(),
     databaseKey: demo ? null : databaseKey(),
-    ...(deep && !demo ? { databaseAuth: await databaseReachable() } : {}),
+    ...(deep && !demo
+      ? { databaseAuth: await databaseReachable(), schema: await schemaReadiness() }
+      : {}),
     paymentProvider: getPaymentProvider().id,
     paymentProviderHost: paymentEnvironment(),
     timestamp: new Date().toISOString(),

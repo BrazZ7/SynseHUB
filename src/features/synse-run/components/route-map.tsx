@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 // O CSS entra no topo: é folha de estilo, não toca `window`, e o bundler
 // resolve na compilação. Só o JavaScript do Leaflet precisa esperar o cliente.
@@ -8,7 +8,7 @@ import 'leaflet/dist/leaflet.css'
 
 import { cn } from '@/lib/utils'
 
-export type MapPoint = { latitude: number; longitude: number }
+export type MapPoint = { latitude: number; longitude: number; accuracy?: number | null }
 
 /**
  * Mapa da rota.
@@ -36,6 +36,19 @@ export function RouteMap({
   const mapRef = useRef<L.Map | null>(null)
   const lineRef = useRef<L.Polyline | null>(null)
   const markerRef = useRef<L.CircleMarker | null>(null)
+  const precisaoRef = useRef<L.Circle | null>(null)
+
+  /*
+   * O mapa nasce assíncrono, e a rota costuma chegar antes dele.
+   *
+   * Sem este estado, o efeito que desenha rodava com `mapRef` ainda nulo,
+   * desistia, e nunca mais rodava — as dependências não mudam depois. O
+   * resultado aparecia como "localização errada": a página de detalhe mostrava
+   * o centro padrão do mapa, sem rota nenhuma desenhada em cima.
+   */
+  const [pronto, setPronto] = useState(false)
+
+  const primeiro = points[0]
 
   useEffect(() => {
     let cancelado = false
@@ -58,24 +71,39 @@ export function RouteMap({
         attribution: '© OpenStreetMap',
       }).addTo(mapa)
 
-      mapa.setView([-23.5613, -46.6565], 15)
+      /*
+       * Enquadra o primeiro ponto real. Antes havia um centro fixo em São
+       * Paulo, e ele aparecia como se fosse o percurso de quem correu em outra
+       * cidade — um mapa mentindo é pior que mapa nenhum.
+       */
+      mapa.setView([primeiro.latitude, primeiro.longitude], 16)
+
       mapRef.current = mapa
+      setPronto(true)
     })()
 
     return () => {
       cancelado = true
       mapRef.current?.remove()
       mapRef.current = null
+      lineRef.current = null
+      markerRef.current = null
+      precisaoRef.current = null
+      setPronto(false)
     }
+    // `primeiro` só posiciona a câmera inicial; mudanças depois são tratadas
+    // no efeito de desenho, sem recriar o mapa.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live])
 
   useEffect(() => {
     const mapa = mapRef.current
-    if (!mapa || points.length === 0) return
+    if (!pronto || !mapa || points.length === 0) return
 
     void (async () => {
       const L = (await import('leaflet')).default
       const coordenadas = points.map((p) => [p.latitude, p.longitude] as [number, number])
+      const ultimo = coordenadas[coordenadas.length - 1]
 
       if (lineRef.current) {
         lineRef.current.setLatLngs(coordenadas)
@@ -89,8 +117,6 @@ export function RouteMap({
         }).addTo(mapa)
       }
 
-      const ultimo = coordenadas[coordenadas.length - 1]
-
       if (markerRef.current) {
         markerRef.current.setLatLng(ultimo)
       } else {
@@ -103,13 +129,58 @@ export function RouteMap({
         }).addTo(mapa)
       }
 
+      /*
+       * O círculo de incerteza é a informação que faltava.
+       *
+       * Dentro de casa o aparelho se localiza por Wi-Fi e erra fácil algumas
+       * centenas de metros — o ponto aparece confiante no lugar errado, e quem
+       * olha conclui que o app está quebrado. Desenhar o raio que o próprio
+       * aparelho declara mostra o tamanho da dúvida.
+       */
+      const precisao = points[points.length - 1]?.accuracy
+      if (live && typeof precisao === 'number' && precisao > 0) {
+        if (precisaoRef.current) {
+          precisaoRef.current.setLatLng(ultimo).setRadius(precisao)
+        } else {
+          precisaoRef.current = L.circle(ultimo, {
+            radius: precisao,
+            color: '#12b981',
+            weight: 1,
+            opacity: 0.4,
+            fillColor: '#12b981',
+            fillOpacity: 0.08,
+          }).addTo(mapa)
+        }
+      }
+
       if (live) {
         mapa.setView(ultimo, Math.max(mapa.getZoom(), 16), { animate: true })
       } else if (coordenadas.length > 1) {
         mapa.fitBounds(L.latLngBounds(coordenadas), { padding: [24, 24] })
       }
     })()
-  }, [points, live])
+  }, [points, live, pronto])
+
+  /*
+   * Sem ponto nenhum não há mapa. Mostrar azulejos de um lugar qualquer
+   * enquanto o GPS não responde é convidar a pessoa a achar que o app a
+   * localizou — e localizou errado.
+   */
+  if (!primeiro) {
+    return (
+      <div
+        className={cn(
+          'grid w-full place-items-center rounded-2xl border border-dashed border-synse-border bg-synse-surface-2 p-6 text-center',
+          className,
+        )}
+        style={{ minHeight: 220 }}
+      >
+        <p className="text-sm text-synse-muted">
+          O mapa aparece quando o GPS confirmar sua posição.
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div

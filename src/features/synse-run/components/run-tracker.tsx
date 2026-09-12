@@ -105,9 +105,22 @@ export function RunTracker({ sport }: { sport: SportType }) {
             {SPORT_LABELS[sport]} ao ar livre
           </p>
 
-          <div className="mt-4 flex justify-center">
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
             <GpsBadge quality={snapshot.gpsQuality} />
+            {tracker.lastFix && (
+              <span className="text-xs text-synse-muted">
+                margem de {Math.round(tracker.lastFix.accuracy)} m
+              </span>
+            )}
           </div>
+
+          {/*
+            O mapa antes de começar mostra onde o aparelho acha que você está,
+            com o círculo da margem. Dentro de casa ele se localiza por Wi-Fi e
+            erra fácil algumas centenas de metros — ver o círculo enorme explica
+            de imediato por que o botão não libera.
+          */}
+          {tracker.lastFix && <RouteMap points={[tracker.lastFix]} live className="mt-4 h-40" />}
 
           <p className="mt-4 text-sm text-synse-muted">
             {tracker.permission === 'denied'
@@ -252,7 +265,13 @@ export function RunTracker({ sport }: { sport: SportType }) {
         ))}
       </section>
 
-      <RouteMap points={tracker.points} live className="h-56" />
+      <RouteMap
+        points={
+          tracker.points.length > 0 ? tracker.points : tracker.lastFix ? [tracker.lastFix] : []
+        }
+        live
+        className="h-56"
+      />
 
       {/* Parciais */}
       {snapshot.splits.length > 0 && (

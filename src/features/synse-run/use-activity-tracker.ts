@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { ActivityTrackingEngine } from '@/features/synse-run/engine/tracking-engine'
+import { DEFAULT_CONFIG } from '@/features/synse-run/engine/types'
 import type { ActivitySnapshot, RawPoint, SportType } from '@/features/synse-run/engine/types'
 import {
   discardLocalActivity,
@@ -70,6 +71,18 @@ export function useActivityTracker(sport: SportType, weightKg?: number) {
   const [error, setError] = useState<string | null>(null)
   const [recovered, setRecovered] = useState<StoredActivity | null>(null)
   const [screenLocked, setScreenLocked] = useState(false)
+  /*
+   * A última leitura do aparelho, aceita ou não.
+   *
+   * Serve para a tela mostrar onde ele *acha* que você está e com que margem,
+   * mesmo quando o filtro recusa tudo. Sem isso, quem está parado dentro de
+   * casa vê uma tela vazia e não descobre que o problema é o sinal.
+   */
+  const [lastFix, setLastFix] = useState<{
+    latitude: number
+    longitude: number
+    accuracy: number
+  } | null>(null)
   const [kmMarker, setKmMarker] = useState<{ kilometer: number; seconds: number } | null>(null)
 
   /*
@@ -159,6 +172,12 @@ export function useActivityTracker(sport: SportType, weightKg?: number) {
         timestamp: posicao.timestamp,
       }
 
+      setLastFix({
+        latitude: ponto.latitude,
+        longitude: ponto.longitude,
+        accuracy: ponto.accuracy,
+      })
+
       const resultado = engine().addPoint(ponto)
       setSnapshot(engine().snapshot())
 
@@ -185,8 +204,17 @@ export function useActivityTracker(sport: SportType, weightKg?: number) {
         setPermission('granted')
         setError(null)
 
-        // O primeiro sinal aceitável libera o botão de começar.
-        if (engine().state === 'GPS_SEARCHING' && posicao.coords.accuracy <= 30) {
+        /*
+         * O botão só libera com sinal que o filtro aceitaria.
+         *
+         * Estava em 30 metros enquanto o filtro descarta acima de 25: dava
+         * para começar uma corrida cujos pontos seriam todos recusados — o
+         * cronômetro andando e a distância parada em zero, sem explicação.
+         */
+        if (
+          engine().state === 'GPS_SEARCHING' &&
+          posicao.coords.accuracy <= DEFAULT_CONFIG[sport].maxAccuracy
+        ) {
           engine().transition('sinalPronto')
         }
 
@@ -215,7 +243,7 @@ export function useActivityTracker(sport: SportType, weightKg?: number) {
         maximumAge: 0,
       },
     )
-  }, [engine, onPosition])
+  }, [engine, onPosition, sport])
 
   const stopWatching = useCallback(() => {
     if (watchRef.current !== null) {
@@ -323,6 +351,7 @@ export function useActivityTracker(sport: SportType, weightKg?: number) {
     recovered,
     screenLocked,
     kmMarker,
+    lastFix,
     points: engineRef.current?.trackPoints ?? [],
     clientId: clientIdRef.current,
     startWatching,

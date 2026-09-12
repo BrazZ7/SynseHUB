@@ -74,6 +74,8 @@ export class ActivityTrackingEngine {
   private pausaComecouEm: number | null = null
   /** Instante em que a velocidade caiu abaixo do limiar de parada. */
   private paradoDesde: number | null = null
+  /** Onde a pessoa estava quando a pausa automática entrou. */
+  private ancoraDaPausa: TrackPoint | null = null
 
   private maxSpeed = 0
   private bestPace: number | null = null
@@ -98,6 +100,7 @@ export class ActivityTrackingEngine {
     this.estado = transicao.para
 
     if (transicao.para === 'RUNNING') {
+      this.ancoraDaPausa = null
       if (this.inicioMs === null) this.inicioMs = agora
       if (this.pausaComecouEm !== null) {
         this.pausadoMs += agora - this.pausaComecouEm
@@ -215,6 +218,31 @@ export class ActivityTrackingEngine {
       return { accepted: false, reason: 'RUIDO_PARADO' }
     }
 
+    /*
+     * Retomar da pausa automática exige afastamento, não um ponto aceito.
+     *
+     * Antes bastava um ponto passar o filtro para a corrida voltar e somar.
+     * Parado em casa com sinal ruim, o app alternava pausa e retomada a cada
+     * salto do GPS, acumulando metros que ninguém andou — foi o que apareceu
+     * no primeiro uso real.
+     *
+     * Ruído vai e volta: medido sempre contra a mesma âncora, nunca se afasta.
+     * Movimento de verdade se afasta e fica — e aí a distância desde a âncora
+     * entra inteira, sem perder o trecho da retomada.
+     */
+    if (this.estado === 'AUTO_PAUSED') {
+      const ancora = this.ancoraDaPausa ?? anterior
+      const afastamento = haversineDistance(ancora, suavizado)
+
+      if (afastamento < Math.max(15, ponto.accuracy * 1.5)) {
+        this.eventos.push({ type: 'PONTO_RECUSADO', reason: 'RUIDO_PARADO' })
+        return { accepted: false, reason: 'RUIDO_PARADO' }
+      }
+
+      this.transition('retomar', ponto.timestamp)
+      this.eventos.push({ type: 'AUTO_RETOMADO' })
+    }
+
     const resultado = {
       accepted: true as const,
       point: {
@@ -267,12 +295,15 @@ export class ActivityTrackingEngine {
     })
 
     if (decisao === 'PAUSAR' && this.transition('pausarSozinho', agora)) {
+      this.ancoraDaPausa = this.pontos[this.pontos.length - 1] ?? null
       this.eventos.push({ type: 'AUTO_PAUSADO' })
     }
 
-    if (decisao === 'RETOMAR' && this.transition('retomar', agora)) {
-      this.eventos.push({ type: 'AUTO_RETOMADO' })
-    }
+    /*
+     * A retomada por velocidade sai daqui de propósito. Ela olhava a janela de
+     * velocidade, que fica velha justamente quando os pontos são recusados —
+     * quem decide retomar é o afastamento da âncora, em `addPoint`.
+     */
   }
 
   private detectarMarcoDeKm(): void {

@@ -289,3 +289,62 @@ describe('recuperação', () => {
     expect(recuperado.drainEvents().filter((e) => e.type === 'MARCO_KM')).toHaveLength(0)
   })
 })
+
+describe('parado em casa, sinal ruim', () => {
+  /*
+   * O caso que chegou de campo: pessoa parada dentro de casa, precisão em
+   * torno de 20 metros, e o app contabilizando distância.
+   *
+   * A oscilação de 12 metros passava o limiar de ruído (40% da precisão = 8 m)
+   * e, pior, cada ponto aceito durante a pausa automática RETOMAVA a corrida e
+   * somava a distância. Parado, o app alternava pausa e retomada somando ruído.
+   */
+  it('oscilação com precisão ruim não vira distância', () => {
+    const gps = new GpsSimulator().comPrecisao(20)
+    const engine = motorRodando('RUN', gps.agora)
+
+    for (const ponto of gps.parar(180, 12)) engine.addPoint(ponto)
+
+    expect(engine.snapshot(gps.agora).distance).toBe(0)
+  })
+
+  it('depois de pausar sozinho, ruído não retoma nem soma', () => {
+    const gps = new GpsSimulator().comPrecisao(20)
+    const engine = motorRodando('RUN', gps.agora)
+
+    for (const ponto of gps.correr(3, 60)) engine.addPoint(ponto)
+
+    /*
+     * Os primeiros segundos parado ainda somam, e devem somar: com precisão de
+     * 20 metros a distância entra em degraus de 20, e o último degrau da
+     * corrida só fecha quando a pessoa para. Isso é distância que ela correu,
+     * chegando junta — o teste mede o que vem *depois* disso.
+     */
+    for (const ponto of gps.parar(20, 12)) engine.addPoint(ponto)
+    expect(engine.state).toBe('AUTO_PAUSED')
+
+    const aoPausar = engine.snapshot(gps.agora).distance
+
+    // Dois minutos parado em casa, com o GPS oscilando doze metros.
+    for (const ponto of gps.parar(120, 12)) engine.addPoint(ponto)
+
+    expect(engine.state).toBe('AUTO_PAUSED')
+    expect(engine.snapshot(gps.agora).distance).toBe(aoPausar)
+  })
+
+  it('movimento de verdade depois da pausa retoma e conta', () => {
+    const gps = new GpsSimulator().comPrecisao(20)
+    const engine = motorRodando('RUN', gps.agora)
+
+    for (const ponto of gps.correr(3, 60)) engine.addPoint(ponto)
+    for (const ponto of gps.parar(60, 12)) engine.addPoint(ponto)
+    expect(engine.state).toBe('AUTO_PAUSED')
+
+    const antes = engine.snapshot(gps.agora).distance
+    for (const ponto of gps.correr(3, 120)) engine.addPoint(ponto)
+
+    expect(engine.state).toBe('RUNNING')
+    // 120 s a 3 m/s são 360 m. A folga cobre o atraso da retomada.
+    expect(engine.snapshot(gps.agora).distance - antes).toBeGreaterThan(300)
+  })
+})

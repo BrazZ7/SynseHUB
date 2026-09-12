@@ -56,12 +56,20 @@ export function validatePoint(
 /**
  * Deslocamento pequeno o bastante para ser o próprio erro do aparelho.
  *
- * Aplicado sobre a posição **já suavizada**: depois da média, o que sobra de
- * ruído é a amplitude dividida pela raiz do tamanho da janela, e três metros
- * cobrem folgado o caso comum. Em sinal ruim o limiar acompanha a precisão.
+ * O limiar é a própria precisão informada, e não uma fração dela.
+ *
+ * Eu tinha posto 40%, argumentando que a média já matava o ruído. Com sinal
+ * bom funciona; dentro de casa, com precisão de 20 metros, a média de cinco
+ * pontos ainda deixa uns 10 de resíduo — passava o limiar de 8, e o app
+ * contabilizava distância com a pessoa parada na sala.
+ *
+ * Abaixo da precisão declarada não existe informação: o aparelho está dizendo
+ * que não sabe onde está com essa margem. Isso não perde movimento lento,
+ * porque a referência não avança em ponto recusado — caminhando, o quarto ou
+ * quinto ponto ultrapassa o limiar e entra inteiro.
  */
 export function isNoise(distancia: number, accuracy: number, config: TrackingConfig): boolean {
-  return distancia < Math.max(config.minDisplacement, accuracy * 0.4)
+  return distancia < Math.max(config.minDisplacement, accuracy)
 }
 
 /**

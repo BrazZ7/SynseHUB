@@ -60,6 +60,24 @@ A função é a única porta para mudar o plano — pela tela, nem o dono da con
 consegue, e é de propósito: senão bastaria um PATCH em `user_profiles` para
 virar assinante sem pagar.
 
+## Quando aparecer "não foi possível concluir esta operação"
+
+A tela mostra uma referência de oito dígitos e nada mais — é o certo para quem
+usa o produto. O outro lado dessa referência fica no log da Vercel, que não faz
+parte deste fluxo de trabalho.
+
+Logo depois de ver o erro, abra:
+
+    https://synse.com.br/api/health/errors
+
+Responde com os erros das **suas** requisições nesta instância: rota, mensagem
+e as primeiras linhas de pilha. Erro de outra conta aparece só como contagem,
+porque mensagem de erro carrega o que a requisição estava fazendo.
+
+A lista vive na memória da instância: some no reinício e não atravessa as
+instâncias serverless. Se vier vazia, provoque o erro de novo e recarregue em
+seguida — assim as duas requisições caem na mesma instância.
+
 ## Ambiente separado — decidido: não
 
 Avaliado e descartado. Um projeto Supabase só para desenvolvimento resolveria a

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { readErrorsFor } from '@/lib/observability/recent-errors'
+import { readErrorsFor, readPersistedErrors } from '@/lib/observability/recent-errors'
 import { createSupabaseServerClient } from '@/lib/database/supabase-server'
 
 export const dynamic = 'force-dynamic'
@@ -35,14 +35,26 @@ export async function GET() {
   }
 
   const { meus, deOutros } = readErrorsFor(user.id)
+  const gravados = await readPersistedErrors(user.id)
+
+  // A memória primeiro (é a desta instância, e mais recente); o banco em
+  // seguida, sem repetir o que já veio.
+  const vistos = new Set(meus.map((item) => `${item.at}|${item.message}`))
+  const erros = [
+    ...meus,
+    ...gravados.meus.filter((item) => !vistos.has(`${item.at}|${item.message}`)),
+  ]
 
   return NextResponse.json({
     authenticated: true,
-    erros: meus,
-    deOutrasContas: deOutros,
+    erros,
+    naMemoriaDestaInstancia: meus.length,
+    gravadosNoBanco: gravados.meus.length,
+    semDonoNoBanco: gravados.semDono,
+    deOutrasContasNestaInstancia: deOutros,
     aviso:
-      meus.length === 0
-        ? 'Nenhum erro registrado nesta instância para a sua conta. Provoque o erro de novo e recarregue esta página em seguida.'
+      erros.length === 0
+        ? 'Nenhum erro registrado. Provoque o erro de novo e recarregue esta página.'
         : undefined,
     timestamp: new Date().toISOString(),
   })

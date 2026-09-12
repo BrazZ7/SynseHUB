@@ -161,6 +161,7 @@ const MIGRATIONS_ESPERADAS = [
   '0018_reativacao_avisa.sql',
   '0019_mensalidade_automatica.sql',
   '0020_convite_de_equipe.sql',
+  '0021_biblioteca_de_exercicios.sql',
 ]
 
 async function schemaReadiness() {
@@ -215,6 +216,7 @@ async function schemaReadiness() {
     '0018_reativacao_avisa.sql',
     '0019_mensalidade_automatica.sql',
     '0020_convite_de_equipe.sql',
+    '0021_biblioteca_de_exercicios.sql',
   )
 
   return {

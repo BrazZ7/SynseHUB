@@ -1008,6 +1008,17 @@ export class SupabaseDataSource implements DataSource {
       description: row.description,
       videoUrl: row.video_url,
       imageUrl: row.image_url,
+      slug: row.slug ?? null,
+      primaryMuscle: row.primary_muscle ?? null,
+      secondaryMuscles: row.secondary_muscles ?? [],
+      region: row.region ?? null,
+      pattern: row.pattern ?? null,
+      mechanics: row.mechanics ?? null,
+      utility: row.utility ?? null,
+      equipmentType: row.equipment_type ?? null,
+      unilateral: Boolean(row.unilateral),
+      level: row.level ?? null,
+      aliases: row.aliases ?? [],
     }
   }
 

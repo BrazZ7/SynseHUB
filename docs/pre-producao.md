@@ -44,6 +44,9 @@ ordem:
   mensalidade e marcação de cobrança vencida.
 - **0020 (`0020_convite_de_equipe.sql`)** — convite de acesso ao painel para a
   equipe.
+- **0021 (`0021_biblioteca_de_exercicios.sql`)** — os 132 exercícios da
+  plataforma, com músculo alvo, região, padrão de movimento e apelidos. Sem
+  ela, a tela de montar treino não tem o que oferecer.
 
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona

@@ -2,13 +2,16 @@
 
 import Link from 'next/link'
 import { Plus, Trash2 } from 'lucide-react'
-import { useActionState, useState } from 'react'
+import { useActionState, useMemo, useState } from 'react'
 import { useFormStatus } from 'react-dom'
 
 import { Field, Feedback, SELECT_CLASS } from '@/components/synse/form-field'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { MUSCLE_GROUP_LABELS } from '@/features/workouts/labels'
+import {
+  exerciseOptionLabel,
+  groupExercisesForSelect,
+} from '@/features/workouts/group-exercises'
 import { createWorkoutAction } from '@/features/workouts/actions'
 import { initialWorkoutState } from '@/features/workouts/state'
 import type { Exercise } from '@/types/domain'
@@ -24,6 +27,12 @@ import type { Exercise } from '@/types/domain'
  */
 export function NewWorkoutForm({ exercises }: { exercises: Exercise[] }) {
   const [state, formAction] = useActionState(createWorkoutAction, initialWorkoutState)
+
+  /*
+   * O agrupamento é estável enquanto a biblioteca não muda, e a lista tem
+   * 132 itens: refazer isso a cada linha adicionada custaria sem motivo.
+   */
+  const grupos = useMemo(() => groupExercisesForSelect(exercises), [exercises])
 
   // Só as chaves das linhas moram no estado; os valores ficam no DOM, onde o
   // navegador os preserva.
@@ -106,10 +115,14 @@ export function NewWorkoutForm({ exercises }: { exercises: Exercise[] }) {
                   className={`${SELECT_CLASS} col-span-2 sm:col-span-1`}
                 >
                   <option value="">Escolher exercício…</option>
-                  {exercises.map((exercicio) => (
-                    <option key={exercicio.id} value={exercicio.id}>
-                      {exercicio.name} · {MUSCLE_GROUP_LABELS[exercicio.muscleGroup]}
-                    </option>
+                  {grupos.map((grupo) => (
+                    <optgroup key={grupo.label} label={grupo.label}>
+                      {grupo.exercises.map((exercicio) => (
+                        <option key={exercicio.id} value={exercicio.id}>
+                          {exerciseOptionLabel(exercicio)}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
 

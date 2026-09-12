@@ -227,15 +227,102 @@ export type CheckIn = {
 export type MuscleGroup =
   'CHEST' | 'BACK' | 'LEGS' | 'SHOULDERS' | 'ARMS' | 'CORE' | 'GLUTES' | 'CARDIO' | 'FULL_BODY'
 
+/**
+ * Músculo alvo, no detalhe que a prescrição usa.
+ *
+ * `MuscleGroup` continua existindo e serve para colorir e agrupar em telas
+ * antigas, mas junta bíceps com tríceps em ARMS e quadríceps com panturrilha
+ * em LEGS. Para montar treino isso não basta.
+ */
+export type MuscleTarget =
+  | 'PECTORAL'
+  | 'SERRATUS'
+  | 'LATS'
+  | 'TRAPS'
+  | 'RHOMBOIDS'
+  | 'LOWER_BACK'
+  | 'DELT_ANTERIOR'
+  | 'DELT_LATERAL'
+  | 'DELT_POSTERIOR'
+  | 'ROTATOR_CUFF'
+  | 'BICEPS'
+  | 'TRICEPS'
+  | 'FOREARMS'
+  | 'ABS'
+  | 'OBLIQUES'
+  | 'HIP_FLEXORS'
+  | 'QUADS'
+  | 'HAMSTRINGS'
+  | 'GLUTES'
+  | 'ADDUCTORS'
+  | 'ABDUCTORS'
+  | 'CALVES'
+
+/** O recorte com que se fecha um treino A/B/C. */
+export type BodyRegion = 'UPPER_BODY' | 'LOWER_BODY' | 'CORE' | 'FULL_BODY'
+
+/** Como o treinador equilibra um programa: empurrar, puxar, agachar, dobradiça. */
+export type MovementPattern =
+  | 'PUSH_HORIZONTAL'
+  | 'PUSH_VERTICAL'
+  | 'PULL_HORIZONTAL'
+  | 'PULL_VERTICAL'
+  | 'SQUAT'
+  | 'HINGE'
+  | 'LUNGE'
+  | 'CARRY'
+  | 'ROTATION'
+  | 'GAIT'
+  | 'CONDITIONING'
+  | 'ISOLATION'
+
+export type ExerciseMechanics = 'COMPOUND' | 'ISOLATION'
+/** Básico sustenta o treino; auxiliar complementa. */
+export type ExerciseUtility = 'BASIC' | 'AUXILIARY'
+export type ExerciseLevel = 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED'
+
+export type EquipmentType =
+  | 'BARBELL'
+  | 'DUMBBELL'
+  | 'MACHINE'
+  | 'CABLE'
+  | 'SMITH'
+  | 'BODYWEIGHT'
+  | 'KETTLEBELL'
+  | 'BAND'
+  | 'PLATE'
+  | 'MEDICINE_BALL'
+  | 'CARDIO'
+  | 'OTHER'
+
 export type Exercise = {
   id: string
   organizationId: string | null
   name: string
   muscleGroup: MuscleGroup
+  /** O aparelho pelo nome da academia: "cadeira extensora", "graviton". */
   equipment: string | null
   description: string | null
   videoUrl: string | null
   imageUrl: string | null
+  /*
+   * Tudo abaixo é anulável porque a tabela é anterior à classificação: um
+   * exercício que a academia criou antes da 0021 não tem nada disso, e a tela
+   * precisa continuar mostrando o nome dele.
+   */
+  /** Identificador estável do catálogo da plataforma. Nulo no exercício da academia. */
+  slug: string | null
+  primaryMuscle: MuscleTarget | null
+  secondaryMuscles: MuscleTarget[]
+  region: BodyRegion | null
+  pattern: MovementPattern | null
+  mechanics: ExerciseMechanics | null
+  utility: ExerciseUtility | null
+  equipmentType: EquipmentType | null
+  unilateral: boolean
+  level: ExerciseLevel | null
+  /** Outros nomes do mesmo exercício: "pulley frente", "cavalinho", "serrote". */
+  aliases: string[]
 }
 
 export type WorkoutPlan = {

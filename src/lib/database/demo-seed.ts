@@ -809,6 +809,22 @@ function buildDemoDataset() {
     description: null,
     videoUrl: null,
     imageUrl: null,
+    /*
+     * A demonstração fica sem a classificação de propósito: ela existe para
+     * mostrar o produto funcionando, e o catálogo de verdade — com músculo
+     * alvo, padrão de movimento e apelidos — vive no banco, a partir da 0021.
+     */
+    slug: null,
+    primaryMuscle: null,
+    secondaryMuscles: [],
+    region: null,
+    pattern: null,
+    mechanics: null,
+    utility: null,
+    equipmentType: null,
+    unilateral: false,
+    level: null,
+    aliases: [],
   }))
 
   const byGroup = (group: Exercise['muscleGroup']) =>

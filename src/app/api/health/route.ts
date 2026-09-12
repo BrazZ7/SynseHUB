@@ -91,17 +91,24 @@ async function schemaCheck(recurso: string): Promise<SchemaProbe> {
 }
 
 async function schemaReadiness() {
-  const [tier, desafios] = await Promise.all([
+  const [tier, desafios, profissional] = await Promise.all([
     schemaCheck('user_profiles?select=tier&limit=1'),
     schemaCheck('baseline_challenges?select=code&limit=1'),
+    schemaCheck('user_profiles?select=professional_plan&limit=1'),
   ])
 
   const pendentes: string[] = []
   if (tier.present === false || desafios.present === false) {
     pendentes.push('0014_baseline_experience.sql')
   }
+  if (profissional.present === false) pendentes.push('0015_professional_unlock.sql')
 
-  return { userProfilesTier: tier, baselineChallenges: desafios, pendingMigrations: pendentes }
+  return {
+    userProfilesTier: tier,
+    baselineChallenges: desafios,
+    professionalPlan: profissional,
+    pendingMigrations: pendentes,
+  }
 }
 
 /**

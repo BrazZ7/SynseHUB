@@ -125,6 +125,48 @@ describe.skipIf(!temBanco)('gatilhos de notificação', () => {
     expect(daDona.at(-1)?.body).toContain('R$ 149,90')
   })
 
+  it('atribuir um treino avisa o aluno', async () => {
+    /*
+     * Este gatilho existe desde a 0012 e ficou meses sem nada capaz de
+     * acioná-lo: o botão "Novo treino" estava desabilitado, então nenhuma linha
+     * entrava em `workout_assignments`. O teste fecha a ponta que faltava.
+     */
+    const plano = await client.query(
+      `insert into workout_plans (organization_id, name, split_label)
+       values ($1,'Superiores — força','A') returning id`,
+      [ORG],
+    )
+
+    const antes = (await avisos(alunoProfile)).length
+
+    await client.query(
+      `insert into workout_assignments (organization_id, workout_plan_id, student_id)
+       values ($1,$2,$3)`,
+      [ORG, plano.rows[0].id, studentId],
+    )
+
+    const doAluno = await avisos(alunoProfile)
+    expect(doAluno).toHaveLength(antes + 1)
+    expect(doAluno.at(-1)?.category).toBe('WORKOUT')
+    expect(doAluno.at(-1)?.body).toContain('Superiores — força')
+  })
+
+  it('renovar a validade do mesmo treino não avisa de novo', async () => {
+    /*
+     * A atribuição é um par único (treino, aluno), e reatribuir vira `update`.
+     * O gatilho é `after insert` de propósito: estender o prazo não é treino
+     * novo, e avisar de novo ensinaria a pessoa a ignorar o sino.
+     */
+    const antes = (await avisos(alunoProfile)).length
+
+    await client.query(
+      `update workout_assignments set valid_until = current_date + 30 where student_id = $1`,
+      [studentId],
+    )
+
+    expect(await avisos(alunoProfile)).toHaveLength(antes)
+  })
+
   it('cada pessoa só enxerga os próprios avisos', async () => {
     const vistoPeloAluno = await asUser<{ user_profile_id: string }>(
       client,

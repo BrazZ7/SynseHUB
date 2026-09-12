@@ -33,9 +33,11 @@ export default async function WorkoutsPage() {
         description={`Planos de treino da academia e biblioteca com ${formatNumber(exercises.length)} exercícios.`}
         actions={
           canWrite && (
-            <Button disabled title="Disponível na próxima etapa">
-              <Plus className="size-4" />
-              Novo treino
+            <Button asChild>
+              <Link href="/workouts/new">
+                <Plus className="size-4" />
+                Novo treino
+              </Link>
             </Button>
           )
         }
@@ -46,6 +48,16 @@ export default async function WorkoutsPage() {
           icon={Dumbbell}
           title="Nenhum treino criado ainda."
           description="Monte o primeiro plano de treino para atribuir aos alunos."
+          action={
+            canWrite && (
+              <Button asChild>
+                <Link href="/workouts/new">
+                  <Plus className="size-4" />
+                  Montar o primeiro treino
+                </Link>
+              </Button>
+            )
+          }
         />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">

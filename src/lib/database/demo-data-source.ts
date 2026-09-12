@@ -42,6 +42,7 @@ import type {
   PaymentAccount,
   Student,
   WorkoutAssignment,
+  WorkoutExercise,
   WorkoutLog,
   WorkoutPlan,
   StudentStatus,
@@ -75,6 +76,15 @@ export class DemoDataSource implements DataSource {
   private readonly addedMemberships: Membership[] = []
   private readonly addedCharges: Charge[] = []
   private readonly addedCheckIns: CheckIn[] = []
+  /*
+   * O dataset base é um singleton compartilhado entre todos os visitantes: o
+   * que um monta não pode aparecer na demonstração do outro. Por isso o que é
+   * criado aqui vive na instância, reconstruída a cada requisição a partir do
+   * diário no cookie de quem está navegando.
+   */
+  private readonly addedWorkoutPlans: WorkoutPlan[] = []
+  private readonly addedWorkoutExercises: WorkoutExercise[] = []
+  private readonly addedAssignments: WorkoutAssignment[] = []
   /** Campos de cobrança alterados, sem tocar no objeto base. */
   private readonly chargePatches = new Map<string, Partial<Charge>>()
   private readonly studentStatusPatches = new Map<string, Student['status']>()
@@ -214,6 +224,43 @@ export class DemoDataSource implements DataSource {
       }
       case 'notifread': {
         this.notificationsReadAt = mutation.at
+        break
+      }
+      case 'wplan': {
+        this.addedWorkoutPlans.push({
+          id: mutation.id,
+          organizationId: DEMO_ORG_ID,
+          name: mutation.name,
+          goal: mutation.goal,
+          splitLabel: mutation.split,
+          createdByStaffId: null,
+          status: 'PUBLISHED',
+          createdAt: mutation.at,
+        })
+        mutation.ex.forEach(([exerciseId, sets, reps, rest], indice) => {
+          this.addedWorkoutExercises.push({
+            id: `${mutation.id}_ex${indice}`,
+            workoutPlanId: mutation.id,
+            exerciseId,
+            order: indice + 1,
+            sets,
+            reps,
+            restSeconds: rest,
+            suggestedLoad: null,
+            notes: null,
+          })
+        })
+        break
+      }
+      case 'wassign': {
+        this.addedAssignments.push({
+          id: mutation.id,
+          organizationId: DEMO_ORG_ID,
+          workoutPlanId: mutation.planId,
+          studentId: mutation.studentId,
+          assignedAt: mutation.at,
+          validUntil: mutation.until,
+        })
         break
       }
       case 'consent': {
@@ -706,17 +753,21 @@ export class DemoDataSource implements DataSource {
     )
   }
 
+  private workoutPlans(): WorkoutPlan[] {
+    return [...this.db.workoutPlans, ...this.addedWorkoutPlans]
+  }
+
   async listWorkoutPlans(organizationId: string): Promise<WorkoutPlan[]> {
-    return this.scoped(this.db.workoutPlans, organizationId)
+    return this.scoped(this.workoutPlans(), organizationId)
   }
 
   async getWorkoutPlan(organizationId: string, planId: string): Promise<WorkoutPlan | null> {
-    return this.scoped(this.db.workoutPlans, organizationId).find((p) => p.id === planId) ?? null
+    return this.scoped(this.workoutPlans(), organizationId).find((p) => p.id === planId) ?? null
   }
 
   async listWorkoutExercises(workoutPlanId: string) {
     const exerciseById = new Map(this.db.exercises.map((e) => [e.id, e]))
-    return this.db.workoutExercises
+    return [...this.db.workoutExercises, ...this.addedWorkoutExercises]
       .filter((we) => we.workoutPlanId === workoutPlanId)
       .sort((a, b) => a.order - b.order)
       .map((we) => ({ ...we, exercise: exerciseById.get(we.exerciseId)! }))
@@ -727,9 +778,88 @@ export class DemoDataSource implements DataSource {
     organizationId: string,
     studentId: string,
   ): Promise<WorkoutAssignment[]> {
-    return this.scoped(this.db.workoutAssignments, organizationId).filter(
-      (a) => a.studentId === studentId,
-    )
+    return this.scoped(
+      [...this.db.workoutAssignments, ...this.addedAssignments],
+      organizationId,
+    ).filter((a) => a.studentId === studentId)
+  }
+
+  async listAssignmentsForPlan(
+    organizationId: string,
+    workoutPlanId: string,
+  ): Promise<WorkoutAssignment[]> {
+    return this.scoped(
+      [...this.db.workoutAssignments, ...this.addedAssignments],
+      organizationId,
+    ).filter((a) => a.workoutPlanId === workoutPlanId)
+  }
+
+  async createWorkoutPlan(input: {
+    organizationId: string
+    name: string
+    goal: string | null
+    splitLabel: string
+    createdByStaffId: string | null
+    exercises: Array<{
+      exerciseId: string
+      sets: number
+      reps: string
+      restSeconds: number
+      suggestedLoad: number | null
+      notes: string | null
+    }>
+  }): Promise<WorkoutPlan> {
+    const id = `wplan_${generateSynseId().slice(4).toLowerCase()}`
+    const at = new Date().toISOString()
+
+    await appendDemoMutation({
+      t: 'wplan',
+      id,
+      name: input.name,
+      goal: input.goal,
+      split: input.splitLabel,
+      ex: input.exercises.map((e) => [e.exerciseId, e.sets, e.reps, e.restSeconds]),
+      at,
+    })
+
+    return {
+      id,
+      organizationId: DEMO_ORG_ID,
+      name: input.name,
+      goal: input.goal,
+      splitLabel: input.splitLabel,
+      createdByStaffId: null,
+      status: 'PUBLISHED',
+      createdAt: at,
+    }
+  }
+
+  async assignWorkoutPlan(input: {
+    organizationId: string
+    workoutPlanId: string
+    studentId: string
+    validUntil: string | null
+  }): Promise<WorkoutAssignment> {
+    const id = `wassign_${generateSynseId().slice(4).toLowerCase()}`
+    const at = new Date().toISOString()
+
+    await appendDemoMutation({
+      t: 'wassign',
+      id,
+      planId: input.workoutPlanId,
+      studentId: input.studentId,
+      until: input.validUntil,
+      at,
+    })
+
+    return {
+      id,
+      organizationId: DEMO_ORG_ID,
+      workoutPlanId: input.workoutPlanId,
+      studentId: input.studentId,
+      assignedAt: at,
+      validUntil: input.validUntil,
+    }
   }
 
   async countAssignments(organizationId: string): Promise<Record<string, number>> {

@@ -1013,6 +1013,105 @@ export class SupabaseDataSource implements DataSource {
     })) satisfies Array<WorkoutExercise & { exercise: Exercise }>
   }
 
+  async createWorkoutPlan(input: {
+    organizationId: string
+    name: string
+    goal: string | null
+    splitLabel: string
+    createdByStaffId: string | null
+    exercises: Array<{
+      exerciseId: string
+      sets: number
+      reps: string
+      restSeconds: number
+      suggestedLoad: number | null
+      notes: string | null
+    }>
+  }): Promise<WorkoutPlan> {
+    const row = await this.select<Row>(
+      'createWorkoutPlan',
+      this.client
+        .from('workout_plans')
+        .insert({
+          organization_id: input.organizationId,
+          name: input.name,
+          goal: input.goal,
+          split_label: input.splitLabel,
+          created_by_staff_id: input.createdByStaffId,
+          status: 'PUBLISHED',
+        })
+        .select('*')
+        .single(),
+    )
+    const plan = this.mapWorkoutPlan(row!)
+
+    /*
+     * Duas escritas sem transação, porque o PostgREST não oferece uma. O que
+     * fica no lugar dela é a limpeza abaixo: se os exercícios falharem, o plano
+     * vazio é removido em vez de ficar na lista como um treino que abre em
+     * branco. Um plano órfão é pior que um erro — o erro a pessoa refaz.
+     */
+    try {
+      const { error } = await this.client.from('workout_exercises').insert(
+        input.exercises.map((exercicio, indice) => ({
+          workout_plan_id: plan.id,
+          exercise_id: exercicio.exerciseId,
+          position: indice + 1,
+          sets: exercicio.sets,
+          reps: exercicio.reps,
+          rest_seconds: exercicio.restSeconds,
+          suggested_load: exercicio.suggestedLoad,
+          notes: exercicio.notes,
+        })),
+      )
+      if (error) this.fail('createWorkoutPlan:exercises', error)
+    } catch (erro) {
+      await this.client.from('workout_plans').delete().eq('id', plan.id)
+      throw erro
+    }
+
+    return plan
+  }
+
+  async assignWorkoutPlan(input: {
+    organizationId: string
+    workoutPlanId: string
+    studentId: string
+    validUntil: string | null
+  }): Promise<WorkoutAssignment> {
+    /*
+     * `onConflict` porque a tabela tem uma única atribuição por par
+     * (treino, aluno): reatribuir o mesmo treino é renovar a validade, não um
+     * erro para mostrar na tela de quem só quis estender o prazo.
+     */
+    const row = await this.select<Row>(
+      'assignWorkoutPlan',
+      this.client
+        .from('workout_assignments')
+        .upsert(
+          {
+            organization_id: input.organizationId,
+            workout_plan_id: input.workoutPlanId,
+            student_id: input.studentId,
+            valid_until: input.validUntil,
+            assigned_at: new Date().toISOString(),
+          },
+          { onConflict: 'workout_plan_id,student_id' },
+        )
+        .select('*')
+        .single(),
+    )
+
+    return {
+      id: row!.id,
+      organizationId: row!.organization_id,
+      workoutPlanId: row!.workout_plan_id,
+      studentId: row!.student_id,
+      assignedAt: row!.assigned_at,
+      validUntil: row!.valid_until,
+    }
+  }
+
   async listAssignmentsForStudent(organizationId: string, studentId: string) {
     const rows =
       (await this.select<Row[]>(
@@ -1022,6 +1121,26 @@ export class SupabaseDataSource implements DataSource {
           .select('*')
           .eq('organization_id', organizationId)
           .eq('student_id', studentId),
+      )) ?? []
+    return rows.map((row) => ({
+      id: row.id,
+      organizationId: row.organization_id,
+      workoutPlanId: row.workout_plan_id,
+      studentId: row.student_id,
+      assignedAt: row.assigned_at,
+      validUntil: row.valid_until,
+    })) satisfies WorkoutAssignment[]
+  }
+
+  async listAssignmentsForPlan(organizationId: string, workoutPlanId: string) {
+    const rows =
+      (await this.select<Row[]>(
+        'listAssignmentsForPlan',
+        this.client
+          .from('workout_assignments')
+          .select('*')
+          .eq('organization_id', organizationId)
+          .eq('workout_plan_id', workoutPlanId),
       )) ?? []
     return rows.map((row) => ({
       id: row.id,

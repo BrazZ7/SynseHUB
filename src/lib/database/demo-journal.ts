@@ -82,6 +82,32 @@ export type DemoMutation =
       at: string
     }
   | {
+      /**
+       * Treino montado na demonstração.
+       *
+       * Os exercícios viajam em forma curta — id, séries, repetições, descanso
+       * — porque o orçamento do cookie é de 4 KB e um treino com nome de
+       * exercício por extenso comeria metade dele sozinho. O nome vem do
+       * catálogo na leitura.
+       */
+      t: 'wplan'
+      id: string
+      name: string
+      goal: string | null
+      split: string
+      ex: Array<[exerciseId: string, sets: number, reps: string, rest: number]>
+      at: string
+    }
+  | {
+      /** Treino atribuído a um aluno. */
+      t: 'wassign'
+      id: string
+      planId: string
+      studentId: string
+      until: string | null
+      at: string
+    }
+  | {
       /** Consentimento aceito ou revogado na demonstração. */
       t: 'consent'
       /** Tipo do consentimento; a versão é sempre a vigente. */

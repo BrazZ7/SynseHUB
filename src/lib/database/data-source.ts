@@ -246,7 +246,44 @@ export interface DataSource {
   listWorkoutExercises(
     workoutPlanId: string,
   ): Promise<Array<WorkoutExercise & { exercise: Exercise }>>
+  /**
+   * Cria o plano e os exercícios dele numa operação só.
+   *
+   * Plano sem exercício é um título sem treino: aparece na lista da academia,
+   * pode ser atribuído a um aluno, e o aluno abre para encontrar nada. Por isso
+   * os dois nascem juntos, e um plano que ficou sem exercícios é desfeito.
+   */
+  createWorkoutPlan(input: {
+    organizationId: string
+    name: string
+    goal: string | null
+    splitLabel: string
+    createdByStaffId: string | null
+    exercises: Array<{
+      exerciseId: string
+      sets: number
+      reps: string
+      restSeconds: number
+      suggestedLoad: number | null
+      notes: string | null
+    }>
+  }): Promise<WorkoutPlan>
+
+  /**
+   * Atribui um treino a um aluno. É esta escrita que dispara o aviso de "novo
+   * treino disponível" no sino — o gatilho está na 0012, e até agora nada no
+   * produto chegava a acioná-lo.
+   */
+  assignWorkoutPlan(input: {
+    organizationId: string
+    workoutPlanId: string
+    studentId: string
+    validUntil: string | null
+  }): Promise<WorkoutAssignment>
+
   listAssignmentsForStudent(organizationId: string, studentId: string): Promise<WorkoutAssignment[]>
+  /** Quem já recebeu um treino. Uma consulta, em vez de uma por aluno. */
+  listAssignmentsForPlan(organizationId: string, workoutPlanId: string): Promise<WorkoutAssignment[]>
   countAssignments(organizationId: string): Promise<Record<string, number>>
   listWorkoutLogs(organizationId: string, studentId: string): Promise<WorkoutLog[]>
 

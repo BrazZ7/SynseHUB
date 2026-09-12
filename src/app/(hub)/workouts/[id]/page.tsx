@@ -8,9 +8,11 @@ import { PageHeader } from '@/components/synse/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { AssignWorkoutCard } from '@/features/workouts/assign-workout-card'
 import { MUSCLE_GROUP_LABELS } from '@/features/workouts/labels'
 import { requireHubSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
+import { can } from '@/lib/permissions/permissions'
 
 type Params = Promise<{ id: string }>
 
@@ -30,7 +32,24 @@ export default async function WorkoutDetailPage({ params }: { params: Params }) 
   const plan = await dataSource.getWorkoutPlan(session.organizationId, id)
   if (!plan) notFound()
 
-  const exercises = await dataSource.listWorkoutExercises(plan.id)
+  const [exercises, alunos] = await Promise.all([
+    dataSource.listWorkoutExercises(plan.id),
+    dataSource.listStudents(session.organizationId, { status: 'ACTIVE', pageSize: 200 }),
+  ])
+
+  const podeAtribuir = can(session.role, 'workouts:write')
+
+  /*
+   * Quem já tem este treino é marcado na lista, não removido dela: reatribuir
+   * renova a validade, e esconder o aluno faria parecer que ele sumiu.
+   */
+  const jaAtribuido = new Set(
+    podeAtribuir
+      ? (await dataSource.listAssignmentsForPlan(session.organizationId, plan.id)).map(
+          (atribuicao) => atribuicao.studentId,
+        )
+      : [],
+  )
 
   return (
     <div className="mx-auto max-w-4xl space-y-5 animate-fade-in-up">
@@ -92,6 +111,27 @@ export default async function WorkoutDetailPage({ params }: { params: Params }) 
                 </li>
               ))}
             </ol>
+          </CardContent>
+        </Card>
+      )}
+
+      {podeAtribuir && (
+        <Card>
+          <CardContent className="space-y-4 pt-5">
+            <div>
+              <h2 className="text-sm font-semibold text-synse-text">Atribuir a um aluno</h2>
+              <p className="text-xs text-synse-muted">
+                O aluno recebe o aviso no sino e o treino aparece no app dele.
+              </p>
+            </div>
+            <AssignWorkoutCard
+              workoutPlanId={plan.id}
+              students={alunos.rows.map((aluno) => ({
+                id: aluno.id,
+                name: aluno.name,
+                assigned: jaAtribuido.has(aluno.id),
+              }))}
+            />
           </CardContent>
         </Card>
       )}

@@ -50,7 +50,7 @@ export function tileSource(
   }
 }
 
-export type BasemapId = 'suave' | 'noturno' | 'detalhado'
+export type BasemapId = 'noturno' | 'suave' | 'detalhado'
 
 export type Basemap = {
   id: BasemapId
@@ -59,30 +59,50 @@ export type Basemap = {
   filtro: string
   /** Linha do percurso, escolhida para contrastar com este fundo. */
   rota: string
+  espessura: number
+  /**
+   * Traço mais largo por baixo da linha.
+   *
+   * É o que separa um mapa com uma linha em cima de um mapa de corrida: o
+   * percurso cruza rua, rio e mata, e sem um contorno próprio ele se confunde
+   * com a via embaixo. No escuro o contorno é mais claro e vira brilho; no
+   * claro é branco e vira recorte.
+   */
+  halo: { cor: string; espessura: number; opacidade: number }
   /** Contorno do marcador atual: precisa se separar da linha e do fundo. */
   contorno: string
 }
 
 const BASEMAPS: Record<BasemapId, Basemap> = {
-  /* Cinza claro, quase sem cor. O percurso é a única coisa saturada na tela. */
-  suave: {
-    id: 'suave',
-    nome: 'Suave',
-    filtro: 'grayscale(0.65) saturate(0.8) brightness(1.06) contrast(0.92)',
-    rota: '#00a98f',
-    contorno: '#ffffff',
-  },
   /*
-   * Inverter e girar o matiz em 180° escurece o mapa mantendo as cores
-   * reconhecíveis — água continua azulada, vegetação continua esverdeada. É o
-   * modo que se usa correndo à noite, quando a tela clara cega.
+   * Ardósia escura, no espírito dos aplicativos de corrida.
+   *
+   * Os valores não foram escolhidos no olho: renderizei o mesmo trecho com
+   * dezenas de combinações e comparei as capturas. `invert` + `grayscale`
+   * derruba a cor original do OSM (asfalto amarelo, parque verde, prédio
+   * rosa), `sepia` devolve uma cor só, e o giro de matiz leva essa cor do
+   * marrom para o azul-ardósia. O resto é achar o ponto em que a rua ainda se
+   * lê e o fundo já não compete com o percurso.
    */
   noturno: {
     id: 'noturno',
-    nome: 'Noturno',
-    filtro: 'invert(1) hue-rotate(180deg) grayscale(0.35) brightness(0.78) contrast(1.15)',
-    rota: '#4fe3c3',
+    nome: 'Ardósia',
+    filtro:
+      'invert(1) grayscale(1) sepia(0.85) hue-rotate(165deg) saturate(1.35) brightness(0.78) contrast(1.02)',
+    rota: '#8ff7e0',
+    espessura: 4,
+    halo: { cor: '#17c4a5', espessura: 10, opacidade: 0.35 },
     contorno: '#04211d',
+  },
+  /* Cinza claro, quase sem cor. Para quem corre de dia e quer a tela clara. */
+  suave: {
+    id: 'suave',
+    nome: 'Claro',
+    filtro: 'grayscale(0.65) saturate(0.8) brightness(1.06) contrast(0.92)',
+    rota: '#00a98f',
+    espessura: 5,
+    halo: { cor: '#ffffff', espessura: 9, opacidade: 0.85 },
+    contorno: '#ffffff',
   },
   /* O OSM como ele é: nomes de rua legíveis, comércio, pontos de referência. */
   detalhado: {
@@ -90,23 +110,29 @@ const BASEMAPS: Record<BasemapId, Basemap> = {
     nome: 'Detalhado',
     filtro: 'none',
     rota: '#0f766e',
+    espessura: 5,
+    halo: { cor: '#ffffff', espessura: 9, opacidade: 0.9 },
     contorno: '#ffffff',
   },
 }
 
 export const BASEMAP_LIST: readonly Basemap[] = [
-  BASEMAPS.suave,
   BASEMAPS.noturno,
+  BASEMAPS.suave,
   BASEMAPS.detalhado,
 ]
 
 /**
- * Sem escolha explícita, o mapa acompanha o tema do aplicativo: quem já pediu
- * a interface escura não quer um retângulo branco no meio dela.
+ * O padrão é o mapa escuro, nos dois temas do aplicativo.
+ *
+ * Não é descuido com o tema claro: o mapa é uma superfície de leitura rápida
+ * em movimento, e o fundo escuro com a rota acesa é o que se enxerga no sol e
+ * de relance. Quem preferir o contrário troca no próprio mapa, e a escolha
+ * fica salva.
  */
-export function resolveBasemap(preferencia: string | null | undefined, dark: boolean): Basemap {
+export function resolveBasemap(preferencia: string | null | undefined): Basemap {
   if (preferencia && preferencia in BASEMAPS) return BASEMAPS[preferencia as BasemapId]
-  return dark ? BASEMAPS.noturno : BASEMAPS.suave
+  return BASEMAPS.noturno
 }
 
 export const MAP_STYLE_STORAGE_KEY = 'synse-map-style'

@@ -3,22 +3,21 @@ import { describe, expect, it } from 'vitest'
 import { BASEMAP_LIST, resolveBasemap, tileSource } from '@/features/synse-run/map-style'
 
 describe('estilo do mapa', () => {
-  it('sem escolha, acompanha o tema do aplicativo', () => {
-    expect(resolveBasemap(null, false).id).toBe('suave')
-    expect(resolveBasemap(null, true).id).toBe('noturno')
-    expect(resolveBasemap(undefined, true).id).toBe('noturno')
+  it('sem escolha, o mapa escuro', () => {
+    expect(resolveBasemap(null).id).toBe('noturno')
+    expect(resolveBasemap(undefined).id).toBe('noturno')
   })
 
-  it('a escolha da pessoa vence o tema', () => {
-    expect(resolveBasemap('detalhado', true).id).toBe('detalhado')
-    expect(resolveBasemap('noturno', false).id).toBe('noturno')
+  it('a escolha da pessoa vence o padrão', () => {
+    expect(resolveBasemap('detalhado').id).toBe('detalhado')
+    expect(resolveBasemap('suave').id).toBe('suave')
   })
 
   it('valor salvo que não existe mais volta ao padrão em vez de quebrar', () => {
     // O identificador vive no `localStorage` do celular: uma versão futura que
     // renomeie um estilo encontra o nome antigo salvo lá por meses.
-    expect(resolveBasemap('cinza-2024', false).id).toBe('suave')
-    expect(resolveBasemap('', true).id).toBe('noturno')
+    expect(resolveBasemap('cinza-2024').id).toBe('noturno')
+    expect(resolveBasemap('').id).toBe('noturno')
   })
 
   it('só o estilo detalhado mostra o mapa sem filtro', () => {
@@ -28,10 +27,16 @@ describe('estilo do mapa', () => {
     }
   })
 
-  it('cada estilo declara cor de rota e de contorno', () => {
+  it('cada estilo declara cor de rota, halo e contorno', () => {
     for (const opcao of BASEMAP_LIST) {
       expect(opcao.rota).toMatch(/^#[0-9a-f]{6}$/)
       expect(opcao.contorno).toMatch(/^#[0-9a-f]{6}$/)
+      expect(opcao.halo.cor).toMatch(/^#[0-9a-f]{6}$/)
+      // O halo existe para contornar a linha: mais estreito, ele apareceria
+      // como uma segunda rota desalinhada em vez de um contorno.
+      expect(opcao.halo.espessura).toBeGreaterThan(opcao.espessura)
+      expect(opcao.halo.opacidade).toBeGreaterThan(0)
+      expect(opcao.halo.opacidade).toBeLessThanOrEqual(1)
     }
   })
 })

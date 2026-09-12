@@ -19,23 +19,11 @@ export type MapPoint = { latitude: number; longitude: number; accuracy?: number 
 /**
  * Estilo do mapa em uso.
  *
- * Sem escolha salva, acompanha o tema do aplicativo — e continua acompanhando,
- * porque o tema pode mudar com o mapa na tela. Com escolha salva, ela vence:
- * gosto é do dono do celular, não meu.
+ * Sem escolha salva, o padrão de `resolveBasemap` — o mapa escuro. Com escolha
+ * salva, ela vence: gosto é do dono do celular, não meu.
  */
 function useBasemap() {
-  const [dark, setDark] = useState(false)
   const [preferencia, setPreferencia] = useState<string | null>(null)
-
-  useEffect(() => {
-    const root = document.documentElement
-    const sync = () => setDark(root.classList.contains('dark'))
-    sync()
-
-    const observer = new MutationObserver(sync)
-    observer.observe(root, { attributes: true, attributeFilter: ['class'] })
-    return () => observer.disconnect()
-  }, [])
 
   useEffect(() => {
     try {
@@ -54,7 +42,7 @@ function useBasemap() {
     }
   }
 
-  return { basemap: resolveBasemap(preferencia, dark), escolhido: preferencia, escolher }
+  return { basemap: resolveBasemap(preferencia), escolhido: preferencia, escolher }
 }
 
 /**
@@ -81,6 +69,7 @@ export function RouteMap({
 }) {
   const container = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
+  const haloRef = useRef<L.Polyline | null>(null)
   const lineRef = useRef<L.Polyline | null>(null)
   const markerRef = useRef<L.CircleMarker | null>(null)
   const precisaoRef = useRef<L.Circle | null>(null)
@@ -136,6 +125,7 @@ export function RouteMap({
       cancelado = true
       mapRef.current?.remove()
       mapRef.current = null
+      haloRef.current = null
       lineRef.current = null
       markerRef.current = null
       precisaoRef.current = null
@@ -157,7 +147,12 @@ export function RouteMap({
     const painel = mapa.getPane('tilePane')
     if (painel) painel.style.filter = basemap.filtro
 
-    lineRef.current?.setStyle({ color: basemap.rota })
+    haloRef.current?.setStyle({
+      color: basemap.halo.cor,
+      weight: basemap.halo.espessura,
+      opacity: basemap.halo.opacidade,
+    })
+    lineRef.current?.setStyle({ color: basemap.rota, weight: basemap.espessura })
     markerRef.current?.setStyle({ color: basemap.contorno, fillColor: basemap.rota })
     precisaoRef.current?.setStyle({ color: basemap.rota, fillColor: basemap.rota })
   }, [basemap, pronto])
@@ -171,13 +166,29 @@ export function RouteMap({
       const coordenadas = points.map((p) => [p.latitude, p.longitude] as [number, number])
       const ultimo = coordenadas[coordenadas.length - 1]
 
+      /*
+       * O halo entra primeiro para ficar por baixo: no Leaflet a ordem de
+       * inserção é a ordem de pintura dentro do painel.
+       */
+      if (haloRef.current) {
+        haloRef.current.setLatLngs(coordenadas)
+      } else {
+        haloRef.current = L.polyline(coordenadas, {
+          color: basemap.halo.cor,
+          weight: basemap.halo.espessura,
+          opacity: basemap.halo.opacidade,
+          lineJoin: 'round',
+          lineCap: 'round',
+        }).addTo(mapa)
+      }
+
       if (lineRef.current) {
         lineRef.current.setLatLngs(coordenadas)
       } else {
         lineRef.current = L.polyline(coordenadas, {
           color: basemap.rota,
-          weight: 5,
-          opacity: 0.95,
+          weight: basemap.espessura,
+          opacity: 0.98,
           lineJoin: 'round',
           lineCap: 'round',
         }).addTo(mapa)

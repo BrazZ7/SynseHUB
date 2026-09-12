@@ -12,6 +12,7 @@ import type {
 import { DEMO_ORG_ID, getDemoDataset } from '@/lib/database/demo-seed'
 import { appendDemoMutation, type DemoMutation } from '@/lib/database/demo-journal'
 import { BASELINE_CHALLENGES, currentCycle } from '@/lib/baseline/challenges'
+import { CONSENT_DOCUMENTS } from '@/lib/consents/catalog'
 const MONTH_YEAR = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' })
 
 import type {
@@ -23,6 +24,8 @@ import type {
   AppNotification,
   Assessment,
   BaselineChallenge,
+  ConsentState,
+  ConsentType,
   ChallengeEntry,
   ChallengeMedal,
   Charge,
@@ -77,6 +80,7 @@ export class DemoDataSource implements DataSource {
   private readonly studentStatusPatches = new Map<string, Student['status']>()
   /** Instante em que o visitante abriu o sino. Antes disso, tudo lido. */
   private notificationsReadAt: string | null = null
+  private consentAnswers = new Map<string, { accepted: boolean; at: string }>()
   private readonly challengeEntries: ChallengeEntry[] = []
 
   // ── Índices ────────────────────────────────────────────────────────────────
@@ -210,6 +214,10 @@ export class DemoDataSource implements DataSource {
       }
       case 'notifread': {
         this.notificationsReadAt = mutation.at
+        break
+      }
+      case 'consent': {
+        this.consentAnswers.set(mutation.code, { accepted: mutation.ok, at: mutation.at })
         break
       }
       case 'checkin': {
@@ -847,6 +855,41 @@ export class DemoDataSource implements DataSource {
             ? this.notificationsReadAt
             : null,
       }))
+  }
+
+  // ── Consentimento ──────────────────────────────────────────────────────────
+  /*
+   * Na demonstração ninguém aceitou nada ainda: o catálogo aparece inteiro, com
+   * tudo por responder, e o que o visitante marcar viaja no diário. Fingir
+   * consentimentos já dados seria repetir na demonstração exatamente a mentira
+   * que a 0017 veio corrigir no produto.
+   */
+  async listConsents(): Promise<ConsentState[]> {
+    return CONSENT_DOCUMENTS.map((documento) => {
+      const resposta = this.consentAnswers.get(documento.consentType)
+      return {
+        ...documento,
+        accepted: resposta?.accepted ?? false,
+        respondedAt: resposta?.at ?? null,
+        revokedAt: resposta && !resposta.accepted ? resposta.at : null,
+        outdated: false,
+      }
+    })
+  }
+
+  async recordConsent(input: { consentType: ConsentType; accepted: boolean }): Promise<void> {
+    const documento = CONSENT_DOCUMENTS.find((item) => item.consentType === input.consentType)
+    if (!documento) throw new Error(`Consentimento desconhecido: ${input.consentType}`)
+    if (documento.required && !input.accepted) {
+      throw new Error('Este consentimento não pode ser revogado sem encerrar a conta.')
+    }
+
+    await appendDemoMutation({
+      t: 'consent',
+      code: input.consentType,
+      ok: input.accepted,
+      at: new Date().toISOString(),
+    })
   }
 
   async listNotifications(userProfileId: string, limit = 20): Promise<AppNotification[]> {

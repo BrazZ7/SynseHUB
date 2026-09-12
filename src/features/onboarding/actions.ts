@@ -9,6 +9,7 @@ import { logger } from '@/lib/logger'
 import { rateLimit } from '@/lib/rate-limit'
 import { slugify } from '@/lib/utils'
 import { createOrganizationSchema, personalStartSchema } from '@/lib/validations/organization'
+import { recordSignupConsents } from '@/features/consents/actions'
 import type { OnboardingState } from '@/features/onboarding/state'
 
 /** Cadastro da academia, logo após a criação da conta. */
@@ -51,6 +52,7 @@ export async function createOrganizationAction(
       state: parsed.data.state || null,
       type: 'GYM',
     })
+    await recordSignupConsents()
   } catch (error) {
     logger.error('onboarding:failed', { authUserId, error: String(error) })
     return { error: 'Não foi possível concluir o cadastro. Tente novamente.' }
@@ -103,6 +105,7 @@ export async function startPersonalAction(
     } else {
       await dataSource.joinSynseAsSoloStudent({ studentName: parsed.data.studentName })
     }
+    await recordSignupConsents()
   } catch (error) {
     const mensagem = String(error)
     if (mensagem.includes('Código de convite inválido')) {

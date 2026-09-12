@@ -126,13 +126,21 @@ async function rpcCheck(nome: string, corpo: Record<string, unknown>): Promise<S
 }
 
 async function schemaReadiness() {
-  const [tier, desafios, profissional, entradaSemVinculo, corridas] = await Promise.all([
-    schemaCheck('user_profiles?select=tier&limit=1'),
-    schemaCheck('baseline_challenges?select=code&limit=1'),
-    schemaCheck('user_profiles?select=professional_plan&limit=1'),
-    rpcCheck('join_synse_as_solo_student', { p_student_name: 'sonda' }),
-    schemaCheck('activities?select=id&limit=1'),
-  ])
+  const [tier, desafios, profissional, entradaSemVinculo, corridas, consentimento] =
+    await Promise.all([
+      schemaCheck('user_profiles?select=tier&limit=1'),
+      schemaCheck('baseline_challenges?select=code&limit=1'),
+      schemaCheck('user_profiles?select=professional_plan&limit=1'),
+      rpcCheck('join_synse_as_solo_student', { p_student_name: 'sonda' }),
+      schemaCheck('activities?select=id&limit=1'),
+      /*
+       * `consent_documents` é legível pelo anônimo de propósito — a tela de
+       * privacidade precisa do catálogo antes do login. Aqui isso ajuda: a
+       * sonda distingue "tabela não existe" de "sem permissão" sem depender de
+       * sessão.
+       */
+      schemaCheck('consent_documents?select=consent_type&limit=1'),
+    ])
 
   const pendentes: string[] = []
   if (entradaSemVinculo.present === false) pendentes.push('0013_synse_solo.sql')
@@ -141,6 +149,7 @@ async function schemaReadiness() {
   }
   if (profissional.present === false) pendentes.push('0015_professional_unlock.sql')
   if (corridas.present === false) pendentes.push('0016_synse_run.sql')
+  if (consentimento.present === false) pendentes.push('0017_consentimento.sql')
 
   return {
     synseRun: corridas,
@@ -148,6 +157,7 @@ async function schemaReadiness() {
     userProfilesTier: tier,
     baselineChallenges: desafios,
     professionalPlan: profissional,
+    consentimento,
     pendingMigrations: pendentes,
   }
 }

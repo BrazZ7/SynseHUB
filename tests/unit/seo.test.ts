@@ -58,6 +58,8 @@ describe('sitemap', () => {
       'https://synse.com.br',
       'https://synse.com.br/signup',
       'https://synse.com.br/login',
+      'https://synse.com.br/termos',
+      'https://synse.com.br/privacidade',
     ])
   })
 

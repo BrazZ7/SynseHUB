@@ -82,6 +82,14 @@ export type DemoMutation =
       at: string
     }
   | {
+      /** Consentimento aceito ou revogado na demonstração. */
+      t: 'consent'
+      /** Tipo do consentimento; a versão é sempre a vigente. */
+      code: string
+      ok: boolean
+      at: string
+    }
+  | {
       /** Registro de presença. */
       t: 'checkin'
       id: string

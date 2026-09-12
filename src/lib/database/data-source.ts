@@ -10,10 +10,10 @@ import type {
   ChallengeEntry,
   ChallengeMedal,
   Charge,
-  PersonalRecord,
-  SportType,
   CheckIn,
   CollectionRule,
+  ConsentState,
+  ConsentType,
   Exercise,
   Lead,
   Membership,
@@ -21,6 +21,8 @@ import type {
   Organization,
   OrganizationBillingSettings,
   PaymentAccount,
+  PersonalRecord,
+  SportType,
   Student,
   StudentStatus,
   WorkoutAssignment,
@@ -265,6 +267,20 @@ export interface DataSource {
   countUnreadNotifications(userProfileId: string): Promise<number>
   /** Marca como lidos todos os avisos não lidos da pessoa. Devolve quantos. */
   markNotificationsRead(userProfileId: string): Promise<number>
+
+  /*
+   * Consentimento
+   *
+   * Também da pessoa, não da academia: quem troca de academia leva as próprias
+   * autorizações junto, e quem não tem nenhuma continua sendo titular dos
+   * próprios dados.
+   */
+  listConsents(userProfileId: string): Promise<ConsentState[]>
+  /**
+   * Registra aceite ou revogação. A versão do documento é resolvida no banco —
+   * se viesse daqui, a prova seria a palavra de quem está sendo provado.
+   */
+  recordConsent(input: { consentType: ConsentType; accepted: boolean }): Promise<void>
 
   /*
    * Desafios base

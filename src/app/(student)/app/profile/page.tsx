@@ -1,12 +1,12 @@
 import type { Metadata } from 'next'
-import { BadgeCheck, LogOut, ShieldCheck } from 'lucide-react'
+import { BadgeCheck, LogOut } from 'lucide-react'
 
 import { StudentAvatar } from '@/components/synse/student-avatar'
 import { ThemeToggle } from '@/components/synse/theme-toggle'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { LinkGymCard } from '@/features/account/link-gym-card'
 import { ProfessionalCard } from '@/features/account/professional-card'
+import { ConsentList } from '@/features/consents/consent-list'
 import { signOut } from '@/lib/auth/actions'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
@@ -18,9 +18,15 @@ export default async function StudentProfilePage() {
   const session = await requireStudentSession()
   const dataSource = await getDataSource()
 
-  const [student, organization] = await Promise.all([
+  const [student, organization, consents] = await Promise.all([
     dataSource.getStudent(session.organizationId, session.studentId),
     dataSource.getOrganization(session.organizationId),
+    /*
+     * A lista de consentimentos depende da 0017. Enquanto ela não estiver
+     * aplicada, a tela mostra o resto do perfil em vez de quebrar inteira —
+     * publicar e migrar são dois atos separados neste projeto.
+     */
+    dataSource.listConsents(session.userProfileId).catch(() => []),
   ])
 
   return (
@@ -68,33 +74,7 @@ export default async function StudentProfilePage() {
 
       <ProfessionalCard ativo={session.professionalPlan} defaultName={session.name} />
 
-      <section className="rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-synse-text">
-          <ShieldCheck className="size-4 text-synse-muted" aria-hidden />
-          Privacidade
-        </h2>
-        <ul className="space-y-2 text-sm text-synse-muted">
-          <li className="flex items-center justify-between gap-3">
-            Uso do app e dados cadastrais
-            <Badge variant="success">Aceito</Badge>
-          </li>
-          <li className="flex items-center justify-between gap-3">
-            Tratamento de dados de saúde
-            <Badge variant="success">Aceito</Badge>
-          </li>
-          <li className="flex items-center justify-between gap-3">
-            Fotos de progresso
-            <Badge variant="outline">Não autorizado</Badge>
-          </li>
-          <li className="flex items-center justify-between gap-3">
-            Aparecer em rankings
-            <Badge variant="outline">Não autorizado</Badge>
-          </li>
-        </ul>
-        <p className="mt-3 text-xs text-synse-muted">
-          Cada consentimento é registrado com versão e data, e pode ser revogado a qualquer momento.
-        </p>
-      </section>
+      <ConsentList consents={consents} />
 
       <form action={signOut}>
         <Button type="submit" variant="outline" className="w-full">

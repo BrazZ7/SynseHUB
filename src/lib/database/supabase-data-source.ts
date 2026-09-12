@@ -27,6 +27,8 @@ import type {
   ChallengeEntry,
   ChallengeMedal,
   Charge,
+  ConsentState,
+  ConsentType,
   PersonalRecord,
   SportType,
   CheckIn,
@@ -1137,6 +1139,70 @@ export class SupabaseDataSource implements DataSource {
    * `userProfileId` entra como conferência — se a sessão e a política
    * discordarem, o sino fica vazio em vez de mostrar aviso de outra pessoa.
    */
+  /**
+   * O que esta pessoa autorizou, sobre os documentos que estão no ar.
+   *
+   * A junção é feita aqui e não no banco porque o lado que manda é o dos
+   * documentos: consentimento que ainda não existe na tela precisa aparecer
+   * como "nunca respondido", e resposta antiga a um documento que ganhou
+   * versão nova precisa aparecer como desatualizada, não como aceita.
+   */
+  async listConsents(userProfileId: string): Promise<ConsentState[]> {
+    const [documentos, respostas] = await Promise.all([
+      this.select<Row[]>(
+        'listConsentDocuments',
+        this.client
+          .from('consent_documents')
+          .select('*')
+          .lte('effective_at', new Date().toISOString())
+          .order('effective_at', { ascending: false }),
+      ),
+      this.select<Row[]>(
+        'listConsents',
+        this.client.from('consents').select('*').eq('user_profile_id', userProfileId),
+      ),
+    ])
+
+    // Mais de uma versão por tipo pode estar publicada; a primeira de cada tipo
+    // é a vigente, porque a consulta veio ordenada da mais recente.
+    const vigentes = new Map<string, Row>()
+    for (const linha of documentos ?? []) {
+      if (!vigentes.has(linha.consent_type)) vigentes.set(linha.consent_type, linha)
+    }
+
+    return [...vigentes.values()].map((documento) => {
+      const doTipo = (respostas ?? []).filter((r) => r.consent_type === documento.consent_type)
+      const naVersao = doTipo.find((r) => r.version === documento.version)
+      const anterior = doTipo.find((r) => r.accepted)
+
+      return {
+        consentType: documento.consent_type,
+        version: documento.version,
+        title: documento.title,
+        description: documento.description,
+        url: documento.url,
+        required: documento.required,
+        accepted: naVersao ? Boolean(naVersao.accepted) : false,
+        respondedAt: naVersao ? (naVersao.accepted_at ?? naVersao.revoked_at) : null,
+        revokedAt: naVersao?.revoked_at ?? null,
+        outdated: !naVersao && Boolean(anterior),
+      }
+    }) satisfies ConsentState[]
+  }
+
+  async recordConsent(input: { consentType: ConsentType; accepted: boolean }): Promise<void> {
+    /*
+     * `security definer` no banco, e por dois motivos: a tabela não aceita mais
+     * escrita direta (o registro que prova o consentimento não pode ser apagado
+     * por quem ele documenta), e a versão do documento é resolvida lá dentro.
+     */
+    const { error } = await this.client.rpc('record_consent', {
+      p_type: input.consentType,
+      p_accepted: input.accepted,
+    })
+    if (error) this.fail('recordConsent', error)
+  }
+
   async listNotifications(userProfileId: string, limit = 20) {
     const rows =
       (await this.select<Row[]>(

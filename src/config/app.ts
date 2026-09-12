@@ -41,6 +41,25 @@ export const BRAND = {
   symbol: env(process.env.NEXT_PUBLIC_BRAND_SYMBOL, '/brand/synse-symbol.svg'),
 } as const
 
+/**
+ * Identificação de quem responde pelos documentos legais.
+ *
+ * Fica em variável de ambiente, e não escrita no código, por uma razão simples:
+ * enquanto a empresa não estiver constituída não existe CNPJ, e inventar um
+ * número numa política de privacidade é pior do que não ter a página. Sem
+ * valor preenchido, o documento diz que a identificação está em andamento e
+ * oferece o contato — que é o que a LGPD pede que exista de fato.
+ */
+export const LEGAL = {
+  entity: env(process.env.NEXT_PUBLIC_LEGAL_ENTITY, ''),
+  taxId: env(process.env.NEXT_PUBLIC_LEGAL_TAX_ID, ''),
+  address: env(process.env.NEXT_PUBLIC_LEGAL_ADDRESS, ''),
+  contactEmail: env(process.env.NEXT_PUBLIC_LEGAL_CONTACT, 'privacidade@synse.com.br'),
+  /** Precisa bater com a versão em `consent_documents` (migration 0017). */
+  version: 'v1',
+  updatedAt: '2026-09-12',
+} as const
+
 export const LOCALE = 'pt-BR'
 export const CURRENCY = 'BRL'
 export const TIMEZONE = 'America/Sao_Paulo'

@@ -1,5 +1,7 @@
 'use client'
 
+import Link from 'next/link'
+
 import { MailCheck, TriangleAlert } from 'lucide-react'
 import { useActionState, useState } from 'react'
 import { useFormStatus } from 'react-dom'
@@ -146,7 +148,15 @@ function ErrorMessage({ error }: { error?: string }) {
 function Terms() {
   return (
     <p className="text-center text-xs text-synse-muted">
-      Ao entrar você concorda com os Termos de Uso e a Política de Privacidade do Synse.
+      Ao entrar você concorda com os{' '}
+      <Link href="/termos" className="text-synse-primary hover:underline">
+        Termos de Uso
+      </Link>{' '}
+      e a{' '}
+      <Link href="/privacidade" className="text-synse-primary hover:underline">
+        Política de Privacidade
+      </Link>{' '}
+      do Synse.
     </p>
   )
 }

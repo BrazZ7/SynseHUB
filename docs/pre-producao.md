@@ -30,10 +30,13 @@ Para conferir o estado sem abrir o arquivo e expor tudo de novo:
 npm run env:check
 ```
 
-## Migrations — todas aplicadas
+## Migrations
 
 **Estado em 12/09/2026: 0001 a 0016 aplicadas em produção**, conferido em
-`/api/health?deep=1` com `pendingMigrations` vazio.
+`/api/health?deep=1` com `pendingMigrations` vazio. A **0017
+(`0017_consentimento.sql`) está escrita e ainda não foi colada** — enquanto
+não for, a tela de privacidade do app aparece sem a lista de consentimentos, e
+o cadastro não registra o aceite dos termos.
 
 Com o trabalho sem terminal, migração nova só entra quando alguém cola o
 arquivo no SQL Editor do Supabase. Duas coisas que essa rotina ensinou, e que
@@ -151,4 +154,19 @@ não venha.
       escolha foi marketplace — o dinheiro do aluno cai na conta da academia e
       só a comissão vem para o Synse —, justamente para o Synse não operar como
       repasse. Vale confirmar com quem responde por isso.
-- [ ] Termos de Uso e Política de Privacidade publicados e linkados no cadastro.
+- [x] Termos de Uso e Política de Privacidade publicados em `/termos` e
+      `/privacidade`, linkados no cadastro e no login, com versão e data.
+- [ ] **Revisão dos dois documentos por advogado.** O texto que está no ar foi
+      escrito a partir do que o sistema realmente faz — não é modelo genérico
+      copiado — mas descrever a prática certa não é o mesmo que redigir contrato
+      que se sustenta. Revisar antes do primeiro cliente pagante.
+- [ ] Preencher a identificação do controlador: `NEXT_PUBLIC_LEGAL_ENTITY`,
+      `NEXT_PUBLIC_LEGAL_TAX_ID`, `NEXT_PUBLIC_LEGAL_ADDRESS` e
+      `NEXT_PUBLIC_LEGAL_CONTACT`. Sem elas, as páginas dizem que a empresa está
+      em constituição — o que é verdade hoje, e deixa de ser no dia em que houver
+      CNPJ.
+- [ ] Fazer o e-mail de privacidade existir de verdade. A política promete
+      resposta em 15 dias; promessa de canal que ninguém lê é pior que canal
+      nenhum.
+- [ ] Encerramento de conta pela própria tela. Hoje é por e-mail, e a Apple
+      exige exclusão dentro do aplicativo para quem permite criar conta nele.

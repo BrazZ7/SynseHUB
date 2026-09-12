@@ -349,6 +349,33 @@ export type ConsentType =
   | 'PROGRESS_PHOTOS'
   | 'RANKING_VISIBILITY'
 
+/**
+ * Um documento de consentimento publicado, na versão em vigor.
+ *
+ * Vem do banco, e não de uma constante no código, porque a versão é a parte
+ * que dá valor ao registro: o que a pessoa aceitou é o texto que estava no ar
+ * naquele dia.
+ */
+export type ConsentDocument = {
+  consentType: ConsentType
+  version: string
+  title: string
+  description: string
+  url: string | null
+  /** Termos e privacidade: sem eles não há conta, então não viram caixinha. */
+  required: boolean
+}
+
+/** O documento vigente somado ao que esta pessoa respondeu sobre ele. */
+export type ConsentState = ConsentDocument & {
+  accepted: boolean
+  /** Nulo quando a pessoa nunca respondeu — diferente de ter recusado. */
+  respondedAt: string | null
+  revokedAt: string | null
+  /** A resposta registrada é de uma versão anterior à que está no ar. */
+  outdated: boolean
+}
+
 export type Consent = {
   id: string
   userProfileId: string

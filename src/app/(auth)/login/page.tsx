@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: 'Entrar' }
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ erro?: string }>
+  searchParams: Promise<{ erro?: string; proximo?: string }>
 }) {
   const session = await getSession()
   if (session) redirect(session.role === 'STUDENT' ? '/app' : '/dashboard')
@@ -23,7 +23,14 @@ export default async function LoginPage({
    * e recebia "você é academia, profissional ou aluno?" — pergunta que ela já
    * tinha respondido, e que respondida de novo criaria uma academia vazia.
    */
-  const indisponivel = (await searchParams).erro === 'indisponivel'
+  const parametros = await searchParams
+  const indisponivel = parametros.erro === 'indisponivel'
+  // Só caminho interno: `//host` sairia do site levando junto a confiança de
+  // quem clicou num link do Synse.
+  const proximo =
+    parametros.proximo?.startsWith('/') && !parametros.proximo.startsWith('//')
+      ? parametros.proximo
+      : undefined
   const demo = isDemoMode()
 
   return (
@@ -46,7 +53,7 @@ export default async function LoginPage({
         <DemoPersonaPicker personas={getDemoPersonas()} />
       ) : (
         <>
-          <LoginForm />
+          <LoginForm proximo={proximo} />
           <p className="text-center text-sm text-synse-muted">
             Ainda não tem conta?{' '}
             <Link href="/signup" className="text-synse-primary underline-offset-2 hover:underline">

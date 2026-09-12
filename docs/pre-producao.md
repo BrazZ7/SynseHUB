@@ -42,6 +42,8 @@ ordem:
   reativada, e cria `schema_migrations`.
 - **0019 (`0019_mensalidade_automatica.sql`)** — geração automática de
   mensalidade e marcação de cobrança vencida.
+- **0020 (`0020_convite_de_equipe.sql`)** — convite de acesso ao painel para a
+  equipe.
 
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona
@@ -150,6 +152,24 @@ garante uma mensalidade por ciclo.
 dia de vencimento só é cobrado no mês seguinte — treina de graça nesses dias. O
 contrário (cobrar o mês inteiro de quem entrou no dia 28) é pior, então essa é a
 escolha provisória. Proporcional é decisão de negócio.
+
+## Convite de equipe
+
+O convite sai por e-mail pelo SMTP do Supabase e **também aparece como link na
+tela**, para mandar por WhatsApp. Isso não é plano B improvisado: caixa de spam
+e endereço digitado errado são a regra, e o que não pode é o convite existir e
+ninguém conseguir alcançá-lo.
+
+- [ ] **Lista de endereços permitidos no Supabase** (Authentication → URL
+      Configuration → Redirect URLs) precisa conter
+      `https://synse.com.br/auth/callback*`, **com o curinga**. O e-mail aponta
+      para essa rota com `?next=/convite/<token>`, e sem o curinga o Supabase
+      recusa o retorno por causa da query — o clique no link não faz nada e o
+      token nem é consumido. Já aconteceu neste projeto, com o link de
+      confirmação de cadastro.
+
+Enquanto isso não estiver configurado, o convite continua funcionando pelo link
+copiado da tela.
 
 ## Plataforma
 

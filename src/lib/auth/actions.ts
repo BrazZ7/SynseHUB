@@ -34,6 +34,19 @@ export async function signInWithDemoPersona(personaKey: string) {
   redirect(persona.role === 'STUDENT' ? '/app' : '/dashboard')
 }
 
+/**
+ * Para onde mandar depois de entrar.
+ *
+ * Só caminho interno: `//host` e `https://host` levariam a pessoa para fora do
+ * site levando junto a confiança de ter clicado num link do Synse. É a mesma
+ * regra da rota de callback, e ela existe porque redirecionamento aberto é o
+ * jeito mais barato de transformar um login legítimo em phishing.
+ */
+function destinoInterno(valor: unknown): string | null {
+  const caminho = String(valor ?? '')
+  return caminho.startsWith('/') && !caminho.startsWith('//') ? caminho : null
+}
+
 export async function signInWithPassword(
   _state: AuthActionState,
   formData: FormData,
@@ -57,6 +70,8 @@ export async function signInWithPassword(
   if (!supabase) {
     return { error: 'Autenticação indisponível neste ambiente. Use uma conta de demonstração.' }
   }
+
+  const proximo = destinoInterno(formData.get('proximo'))
 
   const { error } = await supabase.auth.signInWithPassword(parsed.data)
   if (error) {
@@ -107,7 +122,7 @@ export async function signInWithPassword(
     return { error: 'E-mail ou senha incorretos.' }
   }
 
-  redirect('/dashboard')
+  redirect(proximo ?? '/dashboard')
 }
 
 /**

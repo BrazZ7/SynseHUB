@@ -341,6 +341,20 @@ export type AuditLog = {
   createdAt: string
 }
 
+/** Convite de acesso ao painel, sem o token — ele não circula. */
+export type StaffInvite = {
+  id: string
+  organizationId: string
+  email: string
+  role: UserRole
+  jobTitle: string | null
+  registrationNumber: string | null
+  status: 'PENDING' | 'ACCEPTED' | 'REVOKED' | 'EXPIRED'
+  expiresAt: string
+  acceptedAt: string | null
+  createdAt: string
+}
+
 export type ConsentType =
   | 'TERMS_OF_USE'
   | 'PRIVACY_POLICY'

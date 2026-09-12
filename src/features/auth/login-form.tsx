@@ -15,21 +15,28 @@ const initialState: AuthActionState = {}
 
 type Mode = 'password' | 'link'
 
-export function LoginForm() {
+export function LoginForm({ proximo }: { proximo?: string }) {
   const [mode, setMode] = useState<Mode>('password')
 
   return mode === 'link' ? (
     <EmailLinkForm onBack={() => setMode('password')} />
   ) : (
-    <PasswordForm onUseLink={() => setMode('link')} />
+    <PasswordForm onUseLink={() => setMode('link')} proximo={proximo} />
   )
 }
 
-function PasswordForm({ onUseLink }: { onUseLink: () => void }) {
+function PasswordForm({ onUseLink, proximo }: { onUseLink: () => void; proximo?: string }) {
   const [state, formAction] = useActionState(signInWithPassword, initialState)
 
   return (
     <form action={formAction} className="space-y-4">
+      {/*
+        Quem chegou aqui por um link protegido — um convite de equipe, por
+        exemplo — volta para lá depois de entrar, em vez de cair no painel e ter
+        de achar o caminho de novo. O servidor só aceita caminho interno.
+      */}
+      {proximo && <input type="hidden" name="proximo" value={proximo} />}
+
       <ErrorMessage error={state.error} />
 
       <div className="space-y-1.5">

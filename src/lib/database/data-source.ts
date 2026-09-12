@@ -13,6 +13,8 @@ import type {
   CheckIn,
   CollectionRule,
   ConsentState,
+  StaffInvite,
+  UserRole,
   ConsentType,
   Exercise,
   Lead,
@@ -323,6 +325,28 @@ export interface DataSource {
   countUnreadNotifications(userProfileId: string): Promise<number>
   /** Marca como lidos todos os avisos não lidos da pessoa. Devolve quantos. */
   markNotificationsRead(userProfileId: string): Promise<number>
+
+  /*
+   * Convite de equipe
+   *
+   * O token do link só volta uma vez, na criação, para quem acabou de criá-lo.
+   * A listagem vem de uma view sem essa coluna: token legível por qualquer
+   * pessoa da equipe é token que circula.
+   */
+  createStaffInvite(input: {
+    organizationId: string
+    email: string
+    role: UserRole
+    jobTitle: string | null
+    registrationNumber: string | null
+  }): Promise<string>
+  listStaffInvites(organizationId: string): Promise<StaffInvite[]>
+  /**
+   * Aceita o convite e devolve a academia. O banco recusa se a sessão não for
+   * do e-mail convidado — o link sozinho não dá acesso a nada.
+   */
+  acceptStaffInvite(token: string): Promise<string>
+  revokeStaffInvite(inviteId: string): Promise<void>
 
   /*
    * Consentimento

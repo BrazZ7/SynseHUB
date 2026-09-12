@@ -29,6 +29,8 @@ import type {
   Charge,
   ConsentState,
   ConsentType,
+  StaffInvite,
+  UserRole,
   PersonalRecord,
   SportType,
   CheckIn,
@@ -1339,6 +1341,66 @@ export class SupabaseDataSource implements DataSource {
    * como "nunca respondido", e resposta antiga a um documento que ganhou
    * versão nova precisa aparecer como desatualizada, não como aceita.
    */
+  async createStaffInvite(input: {
+    organizationId: string
+    email: string
+    role: UserRole
+    jobTitle: string | null
+    registrationNumber: string | null
+  }): Promise<string> {
+    /*
+     * `security definer` no banco, e as regras que importam ficam lá: quem
+     * convida precisa ser da direção, e ninguém convida acima do próprio
+     * acesso. Se essa checagem morasse aqui, um caminho novo até a tabela a
+     * contornaria.
+     */
+    const { data, error } = await this.client.rpc('create_staff_invite', {
+      p_organization_id: input.organizationId,
+      p_email: input.email,
+      p_role: input.role,
+      p_job_title: input.jobTitle,
+      p_registration_number: input.registrationNumber,
+    })
+    if (error) this.fail('createStaffInvite', error)
+    return String(data)
+  }
+
+  async listStaffInvites(organizationId: string): Promise<StaffInvite[]> {
+    const rows =
+      (await this.select<Row[]>(
+        'listStaffInvites',
+        this.client
+          .from('staff_invites_public')
+          .select('*')
+          .eq('organization_id', organizationId)
+          .order('created_at', { ascending: false }),
+      )) ?? []
+
+    return rows.map((row) => ({
+      id: row.id,
+      organizationId: row.organization_id,
+      email: row.email,
+      role: row.role,
+      jobTitle: row.job_title,
+      registrationNumber: row.registration_number,
+      status: row.status,
+      expiresAt: row.expires_at,
+      acceptedAt: row.accepted_at,
+      createdAt: row.created_at,
+    })) satisfies StaffInvite[]
+  }
+
+  async acceptStaffInvite(token: string): Promise<string> {
+    const { data, error } = await this.client.rpc('accept_staff_invite', { p_token: token })
+    if (error) this.fail('acceptStaffInvite', error)
+    return String(data)
+  }
+
+  async revokeStaffInvite(inviteId: string): Promise<void> {
+    const { error } = await this.client.rpc('revoke_staff_invite', { p_invite_id: inviteId })
+    if (error) this.fail('revokeStaffInvite', error)
+  }
+
   async listConsents(userProfileId: string): Promise<ConsentState[]> {
     const [documentos, respostas] = await Promise.all([
       this.select<Row[]>(

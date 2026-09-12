@@ -26,6 +26,8 @@ import type {
   BaselineChallenge,
   ConsentState,
   ConsentType,
+  StaffInvite,
+  UserRole,
   ChallengeEntry,
   ChallengeMedal,
   Charge,
@@ -95,6 +97,7 @@ export class DemoDataSource implements DataSource {
   /** Instante em que o visitante abriu o sino. Antes disso, tudo lido. */
   private notificationsReadAt: string | null = null
   private consentAnswers = new Map<string, { accepted: boolean; at: string }>()
+  private readonly demoInvites: StaffInvite[] = []
   private readonly challengeEntries: ChallengeEntry[] = []
 
   // ── Índices ────────────────────────────────────────────────────────────────
@@ -1041,6 +1044,48 @@ export class DemoDataSource implements DataSource {
    * consentimentos já dados seria repetir na demonstração exatamente a mentira
    * que a 0017 veio corrigir no produto.
    */
+  // ── Convite de equipe ──────────────────────────────────────────────────────
+  /*
+   * A demonstração não convida ninguém de verdade: mandar e-mail a partir de um
+   * ambiente de demonstração alcançaria uma pessoa real, com o nome de uma
+   * academia fictícia. O convite vira um cartão na lista, com um token de
+   * mentira que não abre nada.
+   */
+  async createStaffInvite(input: {
+    organizationId: string
+    email: string
+    role: UserRole
+    jobTitle: string | null
+    registrationNumber: string | null
+  }): Promise<string> {
+    this.demoInvites.push({
+      id: `invite_${generateSynseId().slice(4).toLowerCase()}`,
+      organizationId: DEMO_ORG_ID,
+      email: input.email.toLowerCase().trim(),
+      role: input.role,
+      jobTitle: input.jobTitle,
+      registrationNumber: input.registrationNumber,
+      status: 'PENDING',
+      expiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+      acceptedAt: null,
+      createdAt: new Date().toISOString(),
+    })
+    return 'demonstracao-sem-token'
+  }
+
+  async listStaffInvites(): Promise<StaffInvite[]> {
+    return this.demoInvites
+  }
+
+  async acceptStaffInvite(): Promise<string> {
+    throw new Error('A demonstração não aceita convites de equipe.')
+  }
+
+  async revokeStaffInvite(inviteId: string): Promise<void> {
+    const convite = this.demoInvites.find((item) => item.id === inviteId)
+    if (convite) convite.status = 'REVOKED'
+  }
+
   async listConsents(): Promise<ConsentState[]> {
     return CONSENT_DOCUMENTS.map((documento) => {
       const resposta = this.consentAnswers.get(documento.consentType)

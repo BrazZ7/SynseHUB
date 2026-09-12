@@ -160,6 +160,7 @@ const MIGRATIONS_ESPERADAS = [
   '0017_consentimento.sql',
   '0018_reativacao_avisa.sql',
   '0019_mensalidade_automatica.sql',
+  '0020_convite_de_equipe.sql',
 ]
 
 async function schemaReadiness() {
@@ -210,7 +211,11 @@ async function schemaReadiness() {
   if (consentimento.present === false) pendentes.push('0017_consentimento.sql')
   // Sem `schema_migrations`, a 0018 não subiu — ela é quem cria a tabela — e a
   // 0019, que vem depois, também não.
-  pendentes.push('0018_reativacao_avisa.sql', '0019_mensalidade_automatica.sql')
+  pendentes.push(
+    '0018_reativacao_avisa.sql',
+    '0019_mensalidade_automatica.sql',
+    '0020_convite_de_equipe.sql',
+  )
 
   return {
     synseRun: corridas,

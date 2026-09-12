@@ -46,8 +46,15 @@ aplicadas, na ordem:
 - [ ] `0015_professional_unlock.sql` — sem ela, o cartão do perfil profissional
       aparece desligado e "abrir espaço" recusa. Nada mais é afetado.
 
-Cada arquivo é independente e pode ser colado inteiro. Aplicar duas vezes é
-inofensivo: são `create or replace`, `if not exists` e `on conflict do nothing`.
+As quatro estão reunidas, na ordem, em `docs/migrations-pendentes.sql` — uma
+colagem só no SQL Editor, em vez de quatro chances de pular uma ou trocar a
+ordem. O arquivo é gerado a partir de `src/db/migrations`, que continua sendo a
+fonte da verdade.
+
+Aplicar duas vezes é inofensivo: são `create or replace`, `if not exists`,
+`on conflict do nothing` e `drop ... if exists`. Nenhum comando exige rodar
+fora de transação, então o editor pode executar tudo de uma vez — ou entra
+tudo, ou não entra nada.
 
 Para liberar o Synse+ numa conta de teste, com a chave de serviço:
 

@@ -506,29 +506,60 @@ adiar esses itens — a lista existe para que adiar não vire esquecer.
 
 ## O que ainda não está pronto
 
-Honestidade sobre o estado atual:
+Honestidade sobre o estado atual, revisada em 12/09/2026.
 
-- **Escritas em produção não foram exercitadas.** O data source Supabase foi escrito
-  contra o schema das migrations, mas nenhuma instância real foi provisionada. O que
-  roda hoje é o data source de demonstração.
-- **O schema e a RLS já foram validados** contra um PostgreSQL 16 real: as cinco
-  migrations aplicam limpo (40 tabelas, 70 políticas, 91 índices, 69 chaves
-  estrangeiras) e o isolamento entre organizações foi exercitado com duas academias
-  concorrentes. Anônimo e usuário sem vínculo não leem nada; cada dono lê apenas a
-  própria academia. Falta exercitar as consultas do data source em si.
-- **As migrations não concedem privilégios de tabela.** Elas dependem do padrão que
-  o Supabase aplica ao schema `public` (`anon`, `authenticated`, `service_role`).
-  Em um PostgreSQL fora do Supabase é preciso conceder na mão.
-- **O adapter do Asaas não foi testado contra a API.** Sem credenciais, o provedor
-  padrão é `mock`, e a interface sinaliza isso em tela.
-- **Não há suíte de testes automatizados.** A validação até aqui é typecheck, lint,
-  build e verificação manual das rotas.
-- **Módulos marcados "em breve"** na navegação (agenda, nutrição, conteúdos,
-  desafios, CRM, relatórios, notificações) têm modelo de dados e permissões, mas
-  ainda não têm tela.
-- **O QR Code do totem** é um padrão visual determinístico, não um QR Code
-  escaneável. A assinatura do payload com o segredo da organização entra junto com
-  o app nativo.
+### Telas que dizem algo que não é verdade
+
+- **Os consentimentos no perfil do aluno são fixos.** A tela lista quatro itens
+  com "Aceito"/"Não autorizado" escritos no código, e a legenda promete que
+  "cada consentimento é registrado com versão e data". A tabela `consents`
+  existe desde a 0003 e não é lida nem escrita por lugar nenhum. É a única tela
+  do produto que afirma algo falso sobre dado do usuário, e por ser matéria de
+  LGPD deveria sair ou virar verdade antes de qualquer cliente.
+- **O QR Code do totem** é um padrão visual determinístico, não um código
+  escaneável.
+
+### Funciona, com limite conhecido
+
+- **Cobrança é avulsa.** PIX por aluno, na mão. A régua de cobrança e as regras
+  de recorrência estão no schema e são lidas, mas não existe geração mensal
+  automática de mensalidade.
+- **Synse Pay opera em sandbox.** O adapter foi exercitado contra a API real do
+  Asaas (5/5), e a abertura de subconta responde 403 até a conta ser habilitada
+  para marketplace. Webhook ainda não configurado.
+- **O fechamento do desafio acontece quando a pessoa abre o app.** Sem
+  agendador: se ninguém abrir, a medalha do mês não sai — e é idempotente, então
+  sai inteira na primeira visita seguinte.
+- **A assinatura do consumidor não existe.** Synse+ e perfil profissional têm a
+  tela, a coluna e a função de liberação; o botão fica travado até haver
+  checkout. Hoje só se libera pelo SQL, com a chave de serviço.
+
+### Não existe ainda
+
+- **Montar treino pelo painel.** O professor não cria plano nem atribui a aluno:
+  `/workouts` é somente leitura. É a lacuna mais cara do produto — o gatilho de
+  "novo treino disponível" nunca dispara porque nada atribui treino.
+- **Cadastrar plano de mensalidade.** `createPlan` existe no data source e não
+  tem tela nem ação.
+- **Editar aluno.** Dá para cadastrar e confirmar; não dá para corrigir dado,
+  trocar de plano nem encerrar matrícula pela interface.
+- **Módulos marcados "em breve"** na navegação — agenda, avaliações, nutrição do
+  painel, conteúdos, desafios do painel, CRM e relatórios — têm modelo de dados
+  e permissões, e nenhuma tela.
+- **Instalar na tela inicial.** Não há manifesto PWA nem ícones: o Synse App
+  roda no navegador, sem virar aplicativo no celular.
+
+### Sobre a base
+
+- **Schema, RLS e escritas foram exercitados contra PostgreSQL real**, e as
+  migrations 0001 a 0015 estão aplicadas em produção. O isolamento entre
+  organizações é testado com duas academias concorrentes: anônimo e usuário sem
+  vínculo não leem nada.
+- **As migrations não concedem privilégios de tabela.** Dependem do padrão que o
+  Supabase aplica ao schema `public`. Num PostgreSQL fora do Supabase é preciso
+  conceder na mão.
+- **A suíte tem 205 testes** — unidade, banco contra PostgreSQL real e uma
+  integração opcional contra o sandbox do Asaas, que pula sem credencial.
 
 ---
 

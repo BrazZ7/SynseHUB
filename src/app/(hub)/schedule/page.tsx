@@ -1,13 +1,16 @@
 import type { Metadata } from 'next'
-import { CalendarDays, Clock, Hourglass, Users } from 'lucide-react'
+import Link from 'next/link'
+import { CalendarDays, Clock, Hourglass, Plus, Users } from 'lucide-react'
 
 import { EmptyState } from '@/components/synse/empty-state'
 import { MetricCard } from '@/components/synse/metric-card'
 import { PageHeader } from '@/components/synse/page-header'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { requireHubSession } from '@/lib/auth/require-session'
 import { createSupabaseServerClient } from '@/lib/database/supabase-server'
+import { can } from '@/lib/permissions/permissions'
 import { cn, formatDate, formatNumber, formatTime } from '@/lib/utils'
 
 export const metadata: Metadata = { title: 'Agenda' }
@@ -30,6 +33,8 @@ type ScheduleResult = {
   unavailable: boolean
 }
 
+type StaffRelation = { user_profiles?: { name?: string | null } | null }
+
 type SessionRow = {
   id: string
   name: string
@@ -39,7 +44,7 @@ type SessionRow = {
   booked_count: number | null
   room: string | null
   status: 'SCHEDULED' | 'CANCELLED'
-  staff?: { user_profiles?: { name?: string | null } | null } | null
+  staff?: StaffRelation | StaffRelation[] | null
 }
 
 type BookingRow = {
@@ -53,6 +58,7 @@ const DIA_LOCAL = new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Sao_Paul
 export default async function SchedulePage() {
   const session = await requireHubSession('schedule:read')
   const { sessions, unavailable } = await listSchedule(session.organizationId)
+  const canWrite = can(session.role, 'schedule:write')
 
   const hoje = new Date()
   const hojeKey = dateKey(hoje)
@@ -70,6 +76,16 @@ export default async function SchedulePage() {
       <PageHeader
         title="Agenda"
         description="Aulas dos proximos 14 dias, com lotacao, lista de espera e cancelamentos."
+        actions={
+          canWrite && (
+            <Button asChild>
+              <Link href="/schedule/new">
+                <Plus className="size-4" />
+                Nova aula
+              </Link>
+            </Button>
+          )
+        }
       />
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -100,7 +116,7 @@ export default async function SchedulePage() {
       </section>
 
       {unavailable && (
-        <Card className="border-synse-warning/30 bg-synse-warning/8">
+        <Card className="border-synse-warning/30 bg-synse-warning/10">
           <CardContent className="py-4 text-sm text-synse-text">
             A agenda ja esta publicada no codigo, mas o banco desta instalacao ainda nao
             respondeu com as tabelas da migration 0024. Depois que o SQL estiver aplicado,
@@ -114,6 +130,16 @@ export default async function SchedulePage() {
           icon={CalendarDays}
           title="Nenhuma aula na agenda"
           description="Quando houver aulas materializadas para os proximos dias, elas aparecem aqui."
+          action={
+            canWrite && (
+              <Button asChild>
+                <Link href="/schedule/new">
+                  <Plus className="size-4" />
+                  Criar primeira aula
+                </Link>
+              </Button>
+            )
+          }
         />
       ) : (
         <div className="space-y-4">
@@ -244,7 +270,7 @@ async function listSchedule(organizationId: string): Promise<ScheduleResult> {
       bookedCount: Number(row.booked_count ?? 0),
       waitlistCount: waitlistBySession.get(row.id) ?? 0,
       room: row.room,
-      staffName: row.staff?.user_profiles?.name ?? null,
+      staffName: staffName(row.staff),
       status: row.status,
     })),
   }
@@ -262,6 +288,11 @@ function groupByDay(sessions: ScheduleSession[]) {
 function dateKey(value: string | Date) {
   const date = typeof value === 'string' ? new Date(value) : value
   return DIA_LOCAL.format(date)
+}
+
+function staffName(staff: SessionRow['staff']) {
+  const relation = Array.isArray(staff) ? staff[0] : staff
+  return relation?.user_profiles?.name ?? null
 }
 
 function demoSchedule(): ScheduleSession[] {

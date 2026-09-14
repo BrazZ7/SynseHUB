@@ -44,7 +44,7 @@ export const HUB_NAVIGATION: NavGroup[] = [
       { label: 'Dashboard', href: '/dashboard', icon: Gauge, permission: 'dashboard:view' },
       { label: 'Alunos', href: '/students', icon: Users, permission: 'students:read' },
       { label: 'Check-in', href: '/checkin', icon: QrCode, permission: 'checkin:read' },
-      { label: 'Agenda', href: '/schedule', icon: CalendarDays, permission: 'schedule:read', soon: true },
+      { label: 'Agenda', href: '/schedule', icon: CalendarDays, permission: 'schedule:read' },
     ],
   },
   {

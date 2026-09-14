@@ -163,6 +163,7 @@ const MIGRATIONS_ESPERADAS = [
   '0020_convite_de_equipe.sql',
   '0021_biblioteca_de_exercicios.sql',
   '0022_encerrar_conta.sql',
+  '0023_avaliacao_fisica.sql',
 ]
 
 async function schemaReadiness() {
@@ -219,6 +220,7 @@ async function schemaReadiness() {
     '0020_convite_de_equipe.sql',
     '0021_biblioteca_de_exercicios.sql',
     '0022_encerrar_conta.sql',
+  '0023_avaliacao_fisica.sql',
   )
 
   return {

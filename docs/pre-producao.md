@@ -49,6 +49,11 @@ ordem:
   ela, a tela de montar treino não tem o que oferecer.
 - **0022 (`0022_encerrar_conta.sql`)** — exclusão da conta pela própria tela.
   Sem ela, o botão existe e a operação falha.
+- **0023 (`0023_avaliacao_fisica.sql`)** — avaliação física com dobras
+  cutâneas. Traz as equações de Jackson & Pollock e o gatilho que recalcula
+  IMC, densidade corporal e percentual de gordura a cada escrita. Sem ela, a
+  tela de avaliação grava as colunas que não existem e falha; com ela, nenhum
+  desses três números pode chegar pronto do formulário.
 
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona

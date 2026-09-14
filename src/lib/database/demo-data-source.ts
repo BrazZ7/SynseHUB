@@ -6,6 +6,7 @@ import type {
   DataSource,
   Paginated,
   SaveActivityInput,
+  SaveAssessmentInput,
   StudentFilters,
   StudentListItem,
 } from '@/lib/database/data-source'
@@ -13,6 +14,12 @@ import { DEMO_ORG_ID, getDemoDataset } from '@/lib/database/demo-seed'
 import { appendDemoMutation, type DemoMutation } from '@/lib/database/demo-journal'
 import { BASELINE_CHALLENGES, currentCycle } from '@/lib/baseline/challenges'
 import { CONSENT_DOCUMENTS } from '@/lib/consents/catalog'
+import {
+  densidadeCorporal,
+  imc,
+  percentualDeGordura,
+  somaDasDobras,
+} from '@/features/assessments/composition'
 const MONTH_YEAR = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' })
 
 import type {
@@ -98,6 +105,7 @@ export class DemoDataSource implements DataSource {
   private notificationsReadAt: string | null = null
   private consentAnswers = new Map<string, { accepted: boolean; at: string }>()
   private readonly demoInvites: StaffInvite[] = []
+  private readonly addedAssessments: Assessment[] = []
   private readonly challengeEntries: ChallengeEntry[] = []
 
   // ── Índices ────────────────────────────────────────────────────────────────
@@ -927,10 +935,86 @@ export class DemoDataSource implements DataSource {
   }
 
   // ── Avaliações ─────────────────────────────────────────────────────────────
+  private avaliacoes(): Assessment[] {
+    return [...this.db.assessments, ...this.addedAssessments]
+  }
+
   async listAssessments(organizationId: string, studentId: string): Promise<Assessment[]> {
-    return this.scoped(this.db.assessments, organizationId)
+    return this.scoped(this.avaliacoes(), organizationId)
       .filter((a) => a.studentId === studentId)
       .sort((a, b) => a.assessedAt.localeCompare(b.assessedAt))
+  }
+
+  async getAssessment(organizationId: string, assessmentId: string): Promise<Assessment | null> {
+    return this.scoped(this.avaliacoes(), organizationId).find((a) => a.id === assessmentId) ?? null
+  }
+
+  async listLatestAssessments(organizationId: string): Promise<Assessment[]> {
+    const ultima = new Map<string, Assessment>()
+    for (const a of this.scoped(this.avaliacoes(), organizationId)) {
+      const atual = ultima.get(a.studentId)
+      if (!atual || a.assessedAt > atual.assessedAt) ultima.set(a.studentId, a)
+    }
+    return [...ultima.values()]
+  }
+
+  /*
+   * A demonstração calcula a composição aqui, com as mesmas funções que a tela
+   * usa para prever o resultado. No produto quem calcula é o gatilho no banco —
+   * aqui não há banco, e deixar o número em branco faria a avaliação recém
+   * gravada parecer incompleta.
+   */
+  async saveAssessment(input: SaveAssessmentInput): Promise<Assessment> {
+    const soma = somaDasDobras(input.protocol, input.protocolSex, {
+      chest: input.skinfoldChest,
+      axilla: input.skinfoldAxilla,
+      triceps: input.skinfoldTriceps,
+      subscapular: input.skinfoldSubscapular,
+      abdominal: input.skinfoldAbdominal,
+      suprailiac: input.skinfoldSuprailiac,
+      thigh: input.skinfoldThigh,
+    })
+    const densidade = densidadeCorporal(input.protocol, input.protocolSex, input.ageYears, soma)
+
+    const avaliacao: Assessment = {
+      id: input.id ?? `asm_${generateSynseId().slice(4).toLowerCase()}`,
+      organizationId: DEMO_ORG_ID,
+      studentId: input.studentId,
+      assessedByStaffId: input.assessedByStaffId,
+      assessedAt: input.assessedAt,
+      weight: input.weight,
+      height: input.height,
+      bmi: imc(input.weight, input.height),
+      bodyFatPercentage:
+        input.protocol === 'MANUAL'
+          ? input.bodyFatPercentage
+          : percentualDeGordura(densidade),
+      chest: input.chest,
+      arm: input.arm,
+      waist: input.waist,
+      abdomen: input.abdomen,
+      hip: input.hip,
+      thigh: input.thigh,
+      calf: input.calf,
+      notes: input.notes,
+      protocol: input.protocol,
+      protocolSex: input.protocolSex,
+      ageYears: input.ageYears,
+      bodyDensity: densidade,
+      skinfoldChest: input.skinfoldChest,
+      skinfoldAxilla: input.skinfoldAxilla,
+      skinfoldTriceps: input.skinfoldTriceps,
+      skinfoldSubscapular: input.skinfoldSubscapular,
+      skinfoldAbdominal: input.skinfoldAbdominal,
+      skinfoldSuprailiac: input.skinfoldSuprailiac,
+      skinfoldThigh: input.skinfoldThigh,
+    }
+
+    const existente = this.addedAssessments.findIndex((a) => a.id === avaliacao.id)
+    if (existente >= 0) this.addedAssessments[existente] = avaliacao
+    else this.addedAssessments.push(avaliacao)
+
+    return avaliacao
   }
 
   // ── CRM ────────────────────────────────────────────────────────────────────

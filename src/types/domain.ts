@@ -376,6 +376,16 @@ export type WorkoutLog = {
 // Avaliações
 // ---------------------------------------------------------------------------
 
+export type AssessmentProtocol = 'MANUAL' | 'POLLOCK_3' | 'POLLOCK_7'
+
+/**
+ * As equações de composição corporal são específicas por sexo, e não existe
+ * versão validada fora disso. Fica na avaliação, e não é lido do perfil na hora
+ * da conta: quem avalia escolhe qual equação aplicar, e o registro guarda a
+ * escolha para o número continuar reproduzível.
+ */
+export type AssessmentSex = 'MALE' | 'FEMALE'
+
 export type Assessment = {
   id: string
   organizationId: string
@@ -394,6 +404,19 @@ export type Assessment = {
   thigh: number | null
   calf: number | null
   notes: string | null
+  protocol: AssessmentProtocol
+  protocolSex: AssessmentSex | null
+  /** Idade no dia da avaliação. A equação usa idade, e a data de nascimento pode ser corrigida depois. */
+  ageYears: number | null
+  bodyDensity: number | null
+  /* Dobras cutâneas, em milímetros. */
+  skinfoldChest: number | null
+  skinfoldAxilla: number | null
+  skinfoldTriceps: number | null
+  skinfoldSubscapular: number | null
+  skinfoldAbdominal: number | null
+  skinfoldSuprailiac: number | null
+  skinfoldThigh: number | null
 }
 
 // ---------------------------------------------------------------------------

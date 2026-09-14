@@ -9,6 +9,7 @@ import {
   FileText,
   History,
   Pencil,
+  Plus,
   Target,
   Wallet,
 } from 'lucide-react'
@@ -68,6 +69,7 @@ export default async function StudentProfilePage({ params }: { params: Params })
   const canWrite = can(session.role, 'students:write')
   const canSeeFinance = can(session.role, 'finance:read')
   const canSeeHealth = can(session.role, 'assessments:read')
+  const canWriteAssessments = can(session.role, 'assessments:write')
   const canSeeNutrition = can(session.role, 'nutrition:read')
 
   const planById = new Map(workoutPlans.map((plan) => [plan.id, plan]))
@@ -347,9 +349,30 @@ export default async function StudentProfilePage({ params }: { params: Params })
                 icon={Activity}
                 title="Nenhuma avaliação registrada"
                 description="As avaliações físicas aparecem aqui em ordem cronológica."
+                action={
+                  canWriteAssessments && (
+                    <Button asChild>
+                      <Link href={`/students/${student.id}/assessments/new`}>
+                        <Plus className="size-4" aria-hidden />
+                        Fazer a primeira avaliação
+                      </Link>
+                    </Button>
+                  )
+                }
               />
             ) : (
               <>
+                {canWriteAssessments && (
+                  <div className="flex justify-end">
+                    <Button asChild>
+                      <Link href={`/students/${student.id}/assessments/new`}>
+                        <Plus className="size-4" aria-hidden />
+                        Nova avaliação
+                      </Link>
+                    </Button>
+                  </div>
+                )}
+
                 {weightSeries.length > 1 && (
                   <ChartCard title="Evolução do peso" description="Comparativo entre avaliações.">
                     <ProgressLineChart data={weightSeries} unit=" kg" />
@@ -371,7 +394,10 @@ export default async function StudentProfilePage({ params }: { params: Params })
                             <th scope="col" className="py-2 pr-4 font-semibold">IMC</th>
                             <th scope="col" className="py-2 pr-4 font-semibold">Cintura</th>
                             <th scope="col" className="py-2 pr-4 font-semibold">Braço</th>
-                            <th scope="col" className="py-2 font-semibold">Coxa</th>
+                            <th scope="col" className="py-2 pr-4 font-semibold">Coxa</th>
+                            <th scope="col" className="py-2 font-semibold">
+                              <span className="sr-only">Ações</span>
+                            </th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-synse-border">
@@ -384,7 +410,18 @@ export default async function StudentProfilePage({ params }: { params: Params })
                               <td className="py-2.5 pr-4 tabular-nums">{assessment.bmi ?? '—'}</td>
                               <td className="py-2.5 pr-4 tabular-nums">{assessment.waist ?? '—'} cm</td>
                               <td className="py-2.5 pr-4 tabular-nums">{assessment.arm ?? '—'} cm</td>
-                              <td className="py-2.5 tabular-nums">{assessment.thigh ?? '—'} cm</td>
+                              <td className="py-2.5 pr-4 tabular-nums">{assessment.thigh ?? '—'} cm</td>
+                              <td className="py-2.5 text-right">
+                                {canWriteAssessments && (
+                                  <Button variant="ghost" size="sm" asChild>
+                                    <Link
+                                      href={`/students/${student.id}/assessments/${assessment.id}`}
+                                    >
+                                      Abrir
+                                    </Link>
+                                  </Button>
+                                )}
+                              </td>
                             </tr>
                           ))}
                         </tbody>

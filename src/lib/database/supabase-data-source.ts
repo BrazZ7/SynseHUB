@@ -10,6 +10,7 @@ import type {
   DataSource,
   Paginated,
   SaveActivityInput,
+  SaveAssessmentInput,
   StudentFilters,
   StudentListItem,
   FiscalData,
@@ -1280,20 +1281,9 @@ export class SupabaseDataSource implements DataSource {
   }
 
   // ── Avaliações ─────────────────────────────────────────────────────────────
-  async listAssessments(organizationId: string, studentId: string) {
-    const rows =
-      (await this.select<Row[]>(
-        'listAssessments',
-        this.client
-          .from('assessments')
-          .select('*')
-          .eq('organization_id', organizationId)
-          .eq('student_id', studentId)
-          .order('assessed_at', { ascending: true }),
-      )) ?? []
-
+  private mapAssessment(row: Row): Assessment {
     const num = (v: unknown) => (v != null ? Number(v) : null)
-    return rows.map((row) => ({
+    return {
       id: row.id,
       organizationId: row.organization_id,
       studentId: row.student_id,
@@ -1311,10 +1301,131 @@ export class SupabaseDataSource implements DataSource {
       thigh: num(row.thigh),
       calf: num(row.calf),
       notes: row.notes,
-    })) satisfies Assessment[]
+      protocol: row.protocol ?? 'MANUAL',
+      protocolSex: row.protocol_sex ?? null,
+      ageYears: num(row.age_years),
+      bodyDensity: num(row.body_density),
+      skinfoldChest: num(row.sf_chest),
+      skinfoldAxilla: num(row.sf_axilla),
+      skinfoldTriceps: num(row.sf_triceps),
+      skinfoldSubscapular: num(row.sf_subscapular),
+      skinfoldAbdominal: num(row.sf_abdominal),
+      skinfoldSuprailiac: num(row.sf_suprailiac),
+      skinfoldThigh: num(row.sf_thigh),
+    }
   }
 
-  // ── CRM ────────────────────────────────────────────────────────────────────
+  async listAssessments(organizationId: string, studentId: string) {
+    const rows =
+      (await this.select<Row[]>(
+        'listAssessments',
+        this.client
+          .from('assessments')
+          .select('*')
+          .eq('organization_id', organizationId)
+          .eq('student_id', studentId)
+          .order('assessed_at', { ascending: true }),
+      )) ?? []
+
+    return rows.map((row) => this.mapAssessment(row))
+  }
+
+  async getAssessment(organizationId: string, assessmentId: string): Promise<Assessment | null> {
+    const row = await this.select<Row>(
+      'getAssessment',
+      this.client
+        .from('assessments')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .eq('id', assessmentId)
+        .maybeSingle(),
+    )
+    return row ? this.mapAssessment(row) : null
+  }
+
+  async listLatestAssessments(organizationId: string): Promise<Assessment[]> {
+    /*
+     * A última avaliação de cada aluno. Vem tudo e o corte é aqui porque o
+     * PostgREST não faz `distinct on`; a ordem descendente garante que a
+     * primeira que aparece de cada aluno é a mais recente.
+     */
+    const rows =
+      (await this.select<Row[]>(
+        'listLatestAssessments',
+        this.client
+          .from('assessments')
+          .select('*')
+          .eq('organization_id', organizationId)
+          .order('assessed_at', { ascending: false })
+          .limit(500),
+      )) ?? []
+
+    const vistos = new Set<string>()
+    const ultimas: Assessment[] = []
+    for (const row of rows) {
+      if (vistos.has(row.student_id)) continue
+      vistos.add(row.student_id)
+      ultimas.push(this.mapAssessment(row))
+    }
+    return ultimas
+  }
+
+  /**
+   * Grava a avaliação.
+   *
+   * Nada de IMC, densidade ou percentual calculado sai daqui: o gatilho da 0023
+   * recalcula na escrita. Mandar o número junto seria oferecer ao cliente a
+   * chance de contar outra história sobre o mesmo corpo.
+   */
+  async saveAssessment(input: SaveAssessmentInput): Promise<Assessment> {
+    const linha = {
+      organization_id: input.organizationId,
+      student_id: input.studentId,
+      assessed_by_staff_id: input.assessedByStaffId,
+      assessed_at: input.assessedAt,
+      weight: input.weight,
+      height: input.height,
+      chest: input.chest,
+      arm: input.arm,
+      waist: input.waist,
+      abdomen: input.abdomen,
+      hip: input.hip,
+      thigh: input.thigh,
+      calf: input.calf,
+      notes: input.notes,
+      protocol: input.protocol,
+      protocol_sex: input.protocolSex,
+      age_years: input.ageYears,
+      sf_chest: input.skinfoldChest,
+      sf_axilla: input.skinfoldAxilla,
+      sf_triceps: input.skinfoldTriceps,
+      sf_subscapular: input.skinfoldSubscapular,
+      sf_abdominal: input.skinfoldAbdominal,
+      sf_suprailiac: input.skinfoldSuprailiac,
+      sf_thigh: input.skinfoldThigh,
+      /* Só vale quando o protocolo é manual; o gatilho ignora nos demais. */
+      body_fat_percentage: input.protocol === 'MANUAL' ? input.bodyFatPercentage : null,
+    }
+
+    const row = input.id
+      ? await this.select<Row>(
+          'saveAssessment:update',
+          this.client
+            .from('assessments')
+            .update(linha)
+            .eq('organization_id', input.organizationId)
+            .eq('id', input.id)
+            .select('*')
+            .single(),
+        )
+      : await this.select<Row>(
+          'saveAssessment:insert',
+          this.client.from('assessments').insert(linha).select('*').single(),
+        )
+
+    return this.mapAssessment(row!)
+  }
+
   async listLeads(organizationId: string) {
     const rows =
       (await this.select<Row[]>(

@@ -952,7 +952,12 @@ function buildDemoDataset() {
 
     // Avaliações trimestrais.
     let weight = between(58, 96)
-    const height = roundMoney(between(1.58, 1.92))
+    /*
+     * Altura em centímetros, como no banco de verdade. A demonstração usava
+     * metros e calculava o IMC com outra fórmula: dois lugares dizendo alturas
+     * diferentes para a mesma pessoa, dependendo de onde se olhasse.
+     */
+    const height = roundMoney(between(158, 192))
     for (let quarter = 3; quarter >= 0; quarter -= 1) {
       weight = roundMoney(weight - between(-0.4, 1.4))
       assessmentSeq += 1
@@ -964,7 +969,7 @@ function buildDemoDataset() {
         assessedAt: isoDate(new Date(YEAR, MONTH - quarter * 3, 12)),
         weight,
         height,
-        bmi: roundMoney(weight / (height * height)),
+        bmi: roundMoney(weight / (height / 100) ** 2),
         bodyFatPercentage: roundMoney(between(12, 32)),
         chest: roundMoney(between(86, 112)),
         arm: roundMoney(between(28, 42)),
@@ -974,6 +979,22 @@ function buildDemoDataset() {
         thigh: roundMoney(between(48, 66)),
         calf: roundMoney(between(32, 42)),
         notes: null,
+        /*
+         * A demonstração não simula dobras cutâneas: o percentual vem
+         * sorteado, e inventar sete medidas que "explicassem" esse número
+         * daria a impressão de uma avaliação que nunca foi feita.
+         */
+        protocol: 'MANUAL',
+        protocolSex: null,
+        ageYears: null,
+        bodyDensity: null,
+        skinfoldChest: null,
+        skinfoldAxilla: null,
+        skinfoldTriceps: null,
+        skinfoldSubscapular: null,
+        skinfoldAbdominal: null,
+        skinfoldSuprailiac: null,
+        skinfoldThigh: null,
       })
     }
   })

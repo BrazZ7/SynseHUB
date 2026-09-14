@@ -6,6 +6,8 @@ import type {
   ActivitySummary,
   AppNotification,
   Assessment,
+  AssessmentProtocol,
+  AssessmentSex,
   BaselineChallenge,
   ChallengeEntry,
   ChallengeMedal,
@@ -57,6 +59,45 @@ export type StudentFilters = {
   newcomers?: boolean
   page?: number
   pageSize?: number
+}
+
+/**
+ * O que a tela manda ao gravar uma avaliação.
+ *
+ * Repare no que não está aqui: IMC, densidade corporal e o percentual dos
+ * protocolos. Esses saem de conta, e a conta é do banco — o gatilho da 0023
+ * recalcula na escrita. Aceitar o número pronto daria ao cliente a chance de
+ * contar outra história sobre o mesmo corpo.
+ */
+export type SaveAssessmentInput = {
+  /** Ausente cria; presente corrige a avaliação existente. */
+  id?: string
+  organizationId: string
+  studentId: string
+  assessedByStaffId: string | null
+  assessedAt: string
+  weight: number | null
+  height: number | null
+  chest: number | null
+  arm: number | null
+  waist: number | null
+  abdomen: number | null
+  hip: number | null
+  thigh: number | null
+  calf: number | null
+  notes: string | null
+  protocol: AssessmentProtocol
+  protocolSex: AssessmentSex | null
+  ageYears: number | null
+  /** Só é gravado quando o protocolo é MANUAL — bioimpedância, por exemplo. */
+  bodyFatPercentage: number | null
+  skinfoldChest: number | null
+  skinfoldAxilla: number | null
+  skinfoldTriceps: number | null
+  skinfoldSubscapular: number | null
+  skinfoldAbdominal: number | null
+  skinfoldSuprailiac: number | null
+  skinfoldThigh: number | null
 }
 
 export type Paginated<T> = {
@@ -310,6 +351,10 @@ export interface DataSource {
 
   // Avaliações
   listAssessments(organizationId: string, studentId: string): Promise<Assessment[]>
+  getAssessment(organizationId: string, assessmentId: string): Promise<Assessment | null>
+  /** A última avaliação de cada aluno, para a tela de acompanhamento. */
+  listLatestAssessments(organizationId: string): Promise<Assessment[]>
+  saveAssessment(input: SaveAssessmentInput): Promise<Assessment>
 
   // CRM
   listLeads(organizationId: string): Promise<Lead[]>

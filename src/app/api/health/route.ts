@@ -167,21 +167,35 @@ const MIGRATIONS_ESPERADAS = [
 ]
 
 async function schemaReadiness() {
-  const [tier, desafios, profissional, entradaSemVinculo, corridas, consentimento] =
-    await Promise.all([
-      schemaCheck('user_profiles?select=tier&limit=1'),
-      schemaCheck('baseline_challenges?select=code&limit=1'),
-      schemaCheck('user_profiles?select=professional_plan&limit=1'),
-      rpcCheck('join_synse_as_solo_student', { p_student_name: 'sonda' }),
-      schemaCheck('activities?select=id&limit=1'),
-      /*
-       * `consent_documents` é legível pelo anônimo de propósito — a tela de
-       * privacidade precisa do catálogo antes do login. Aqui isso ajuda: a
-       * sonda distingue "tabela não existe" de "sem permissão" sem depender de
-       * sessão.
-       */
-      schemaCheck('consent_documents?select=consent_type&limit=1'),
-    ])
+  const [
+    tier,
+    desafios,
+    profissional,
+    entradaSemVinculo,
+    corridas,
+    consentimento,
+    avaliacaoFisica,
+  ] = await Promise.all([
+    schemaCheck('user_profiles?select=tier&limit=1'),
+    schemaCheck('baseline_challenges?select=code&limit=1'),
+    schemaCheck('user_profiles?select=professional_plan&limit=1'),
+    rpcCheck('join_synse_as_solo_student', { p_student_name: 'sonda' }),
+    schemaCheck('activities?select=id&limit=1'),
+    /*
+     * `consent_documents` é legível pelo anônimo de propósito — a tela de
+     * privacidade precisa do catálogo antes do login. Aqui isso ajuda: a
+     * sonda distingue "tabela não existe" de "sem permissão" sem depender de
+     * sessão.
+     */
+    schemaCheck('consent_documents?select=consent_type&limit=1'),
+    /*
+     * `body_density` só existe depois da 0023. A RLS nega a linha e devolve
+     * lista vazia; o que a sonda lê é o schema ter aceitado a pergunta. O
+     * registro de migrations já diria que a 0023 rodou — esta sonda responde
+     * outra pergunta: a coluna continua lá.
+     */
+    schemaCheck('assessments?select=body_density&limit=1'),
+  ])
 
   const registradas = await migracoesRegistradas()
 
@@ -192,6 +206,14 @@ async function schemaReadiness() {
    */
   if (registradas) {
     const faltando = MIGRATIONS_ESPERADAS.filter((versao) => !registradas.includes(versao))
+    /*
+     * O registro guarda o que rodou, não o que continua no banco. Coluna que
+     * sumiu por outro caminho — restauração de backup, edição à mão — deixa o
+     * registro intacto e a tela quebrada; quem percebe é a sonda de formato.
+     */
+    if (avaliacaoFisica.present === false && !faltando.includes('0023_avaliacao_fisica.sql')) {
+      faltando.push('0023_avaliacao_fisica.sql')
+    }
     return {
       synseRun: corridas,
       entradaSemVinculo,
@@ -199,6 +221,7 @@ async function schemaReadiness() {
       baselineChallenges: desafios,
       professionalPlan: profissional,
       consentimento,
+      avaliacaoFisica,
       appliedMigrations: registradas.length,
       pendingMigrations: faltando,
     }
@@ -220,7 +243,7 @@ async function schemaReadiness() {
     '0020_convite_de_equipe.sql',
     '0021_biblioteca_de_exercicios.sql',
     '0022_encerrar_conta.sql',
-  '0023_avaliacao_fisica.sql',
+    '0023_avaliacao_fisica.sql',
   )
 
   return {
@@ -230,6 +253,7 @@ async function schemaReadiness() {
     baselineChallenges: desafios,
     professionalPlan: profissional,
     consentimento,
+    avaliacaoFisica,
     pendingMigrations: pendentes,
   }
 }

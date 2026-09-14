@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { CalendarDays, Clock, Hourglass, Users, UserCheck } from 'lucide-react'
+import { CalendarDays, Clock, Hourglass, Users } from 'lucide-react'
 
 import { EmptyState } from '@/components/synse/empty-state'
 import { MetricCard } from '@/components/synse/metric-card'
@@ -48,6 +48,7 @@ type BookingRow = {
 }
 
 const JANELA_DIAS = 14
+const DIA_LOCAL = new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Sao_Paulo' })
 
 export default async function SchedulePage() {
   const session = await requireHubSession('schedule:read')
@@ -68,7 +69,7 @@ export default async function SchedulePage() {
     <div className="space-y-5 animate-fade-in-up">
       <PageHeader
         title="Agenda"
-        description="Aulas dos próximos 14 dias, com lotação, lista de espera e cancelamentos."
+        description="Aulas dos proximos 14 dias, com lotacao, lista de espera e cancelamentos."
       />
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -112,7 +113,7 @@ export default async function SchedulePage() {
         <EmptyState
           icon={CalendarDays}
           title="Nenhuma aula na agenda"
-          description="Quando houver aulas materializadas para os próximos dias, elas aparecem aqui."
+          description="Quando houver aulas materializadas para os proximos dias, elas aparecem aqui."
         />
       ) : (
         <div className="space-y-4">
@@ -120,7 +121,7 @@ export default async function SchedulePage() {
             <Card key={dia}>
               <CardHeader className="pb-3">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <CardTitle>{formatDate(dia, 'long')}</CardTitle>
+                  <CardTitle>{formatDate(`${dia}T12:00:00`, 'long')}</CardTitle>
                   <Badge variant="outline">{formatNumber(aulas.length)} aulas</Badge>
                 </div>
               </CardHeader>
@@ -227,7 +228,7 @@ async function listSchedule(organizationId: string): Promise<ScheduleResult> {
       .in('session_id', ids)
       .eq('status', 'WAITLIST')
 
-    for (const booking of ((bookings ?? []) as BookingRow[])) {
+    for (const booking of (bookings ?? []) as BookingRow[]) {
       waitlistBySession.set(booking.session_id, (waitlistBySession.get(booking.session_id) ?? 0) + 1)
     }
   }
@@ -260,7 +261,7 @@ function groupByDay(sessions: ScheduleSession[]) {
 
 function dateKey(value: string | Date) {
   const date = typeof value === 'string' ? new Date(value) : value
-  return date.toISOString().slice(0, 10)
+  return DIA_LOCAL.format(date)
 }
 
 function demoSchedule(): ScheduleSession[] {

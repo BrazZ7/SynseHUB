@@ -32,8 +32,13 @@ npm run env:check
 
 ## Migrations
 
-**Estado em 12/09/2026: 0001 a 0016 aplicadas em produção.** Faltam duas, nesta
-ordem:
+**Estado em 16/09/2026: 0001 a 0026 aplicadas em produção**, confirmado por
+`/api/health?deep=1` (`appliedMigrations: 20`, `pendingMigrations: []`).
+
+Esta linha envelhece a cada migration e por isso não é a fonte da verdade: a
+sonda é. Quem quiser saber o que falta abre o endereço, não este arquivo. O que
+segue abaixo é o registro do que cada uma resolve — útil para entender por que
+existem, não para conferir se subiram.
 
 - **0017 (`0017_consentimento.sql`)** — sem ela a tela de privacidade do app
   aparece sem a lista de consentimentos, e o cadastro não registra o aceite dos

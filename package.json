@@ -19,9 +19,18 @@
     "test:db": "vitest run tests/db",
     "db:set-password": "node scripts/set-password.mjs",
     "test:asaas": "vitest run tests/integration/asaas.test.ts",
-    "env:check": "node scripts/env-check.mjs"
+    "env:check": "node scripts/env-check.mjs",
+    "mobile:sync": "cap sync",
+    "mobile:android": "cap open android",
+    "mobile:ios": "cap open ios"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/ios": "^8.5.2",
+    "@capacitor/status-bar": "^8.0.3",
     "@hookform/resolvers": "^3.9.1",
     "@radix-ui/react-avatar": "^1.1.2",
     "@radix-ui/react-dialog": "^1.1.4",
@@ -51,9 +60,12 @@
     "recharts": "^3.10.1",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
-    "zod": "^3.24.1"
+    "zod": "^3.24.1",
+    "@synse/workout-activity": "file:native/synse-workout-activity"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.2",
     "@eslint/eslintrc": "^3.3.7",
     "@types/node": "^22.10.5",
     "@types/pg": "^8.23.1",

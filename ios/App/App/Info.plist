@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CAPACITOR_DEBUG</key>
+	<string>$(CAPACITOR_DEBUG)</string>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>pt-BR</string>
+	<key>CFBundleDisplayName</key>
+        <string>Synse</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<!--
+	  Live Activities do Treino Ativo. Sem esta chave o ActivityKit recusa a
+	  atividade em silêncio, e o cartão da tela bloqueada simplesmente não
+	  aparece — sem erro nenhum para investigar.
+	-->
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<!--
+	  Atualização da Live Activity por push, quando o descanso terminar com o
+	  app descarregado da memória.
+	-->
+	<key>NSSupportsLiveActivitiesFrequentUpdates</key>
+	<true/>
+
+	<!--
+	  Os textos abaixo são o que a pessoa lê no momento de permitir. A Apple
+	  recusa app cujo texto é genérico — e, mais importante, quem lê "o app
+	  precisa da sua localização" nega. Dizer para quê é o que faz permitir.
+	-->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>O Synse usa o GPS para medir distância, ritmo e percurso das suas corridas e caminhadas. Sem isso, a atividade é registrada apenas pelo tempo.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>O Synse usa os sensores de movimento para contar passos e melhorar a precisão da distância quando o sinal de GPS está fraco.</string>
+
+	<!--
+	  Modos de segundo plano do SynseRun. `location` é o que mantém a corrida
+	  sendo medida com o celular no bolso; sem ele, o percurso vira uma linha
+	  reta entre o momento em que a tela apagou e o momento em que voltou.
+	-->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+		<string>remote-notification</string>
+	</array>
+
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+    <false/>
+    <key>UISceneConfigurations</key>
+    <dict>
+      <key>UIWindowSceneSessionRoleApplication</key>
+      <array>
+        <dict>
+            <key>UISceneConfigurationName</key>
+            <string>Default Configuration</string>
+            <key>UISceneDelegateClassName</key>
+            <string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+            <key>UISceneStoryboardFile</key>
+            <string>Main</string>
+        </dict>
+      </array>
+    </dict>
+	</dict>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>armv7</string>
+	</array>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<true/>
+</dict>
+</plist>

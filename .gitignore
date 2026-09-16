@@ -38,3 +38,19 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+
+# ── Invólucro nativo ─────────────────────────────────────────────────────────
+# Artefatos de build. O projeto nativo em si é versionado: é nele que ficam
+# permissões, Info.plist e ícones, e perdê-los significaria reconfigurar tudo.
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+ios/App/Pods/
+ios/App/build/
+ios/App/output/
+ios/DerivedData/
+*.xcuserstate
+# Fontes dos ícones: geradas do SVG da marca por script.
+/assets/

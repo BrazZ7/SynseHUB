@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Synse</title>
+    <style>
+      :root { color-scheme: dark; }
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        display: grid;
+        place-items: center;
+        background: #041d1b;
+        color: #e8f5f2;
+        font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+        padding: 24px;
+        text-align: center;
+      }
+      strong { display: block; font-size: 20px; margin-bottom: 8px; color: #17c4a5; }
+      p { margin: 0; color: #9db8b3; max-width: 30ch; }
+    </style>
+  </head>
+  <body>
+    <!--
+      Só aparece quando o aparelho não alcança synse.com.br. O app carrega a
+      aplicação publicada; sem rede, esta é a tela — e ela precisa dizer o que
+      houve em vez de deixar um branco que parece defeito.
+    -->
+    <div>
+      <strong>Sem conexão</strong>
+      <p>O Synse precisa de internet para abrir. Verifique a rede e tente de novo.</p>
+    </div>
+  </body>
+</html>

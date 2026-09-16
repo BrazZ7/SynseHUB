@@ -714,6 +714,44 @@ export type NutritionPlanWithMeals = NutritionPlan & {
 }
 
 // ---------------------------------------------------------------------------
+// Conteúdos
+// ---------------------------------------------------------------------------
+
+export type ContentType =
+  | 'ARTICLE'
+  | 'EBOOK'
+  | 'VIDEO'
+  | 'RECIPE'
+  | 'GUIDE'
+  | 'PROGRAM'
+  | 'CHALLENGE'
+
+/**
+ * `FREE` é conteúdo da plataforma, sem academia dona — e a 0031 recusa a
+ * combinação com `organizationId`. Para quem opera a academia, "grátis" lê como
+ * "sem custo para os meus alunos", e o efeito real era publicar na internet.
+ */
+export type ContentVisibility = 'FREE' | 'ORGANIZATION' | 'SYNSE_PLUS'
+
+export type ContentItem = {
+  id: string
+  organizationId: string | null
+  type: ContentType
+  title: string
+  summary: string | null
+  body: string | null
+  coverUrl: string | null
+  mediaUrl: string | null
+  visibility: ContentVisibility
+  /** Nulo é rascunho; no futuro é publicação agendada. */
+  publishedAt: string | null
+  pinned: boolean
+  authorStaffId: string | null
+  authorName: string | null
+  createdAt: string
+}
+
+// ---------------------------------------------------------------------------
 // CRM
 // ---------------------------------------------------------------------------
 

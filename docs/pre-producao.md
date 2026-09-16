@@ -104,6 +104,13 @@ existem, não para conferir se subiram.
   `tests/db/nutricao.test.ts`. Junto, `nutrition:read/write` saiu do papel
   MANAGER no app: a RLS já restringia a NUTRITIONIST e OWNER, e o menu mostrava
   uma tela que o banco devolvia vazia.
+- **0031 (`0031_conteudos.sql`)** — conteúdos, e o conserto de dois furos que a
+  RLS da 0004 tinha e que os testes confirmaram antes de a migration ser
+  escrita. Rascunho aparecia para o aluno, porque a política não olhava
+  `published_at`. E o pior: conteúdo de academia marcado `FREE` era entregue a
+  outras academias **e ao visitante anônimo** — o rótulo é a armadilha, porque
+  "grátis" lê como "sem custo para os meus alunos". FREE passa a exigir
+  `organization_id is null`, e uma restrição impede a escolha na origem.
 
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona

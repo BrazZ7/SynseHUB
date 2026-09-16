@@ -171,6 +171,7 @@ const MIGRATIONS_ESPERADAS = [
   '0028_crm.sql',
   '0029_desafios_da_academia.sql',
   '0030_nutricao.sql',
+  '0031_conteudos.sql',
 ]
 
 async function schemaReadiness() {
@@ -279,6 +280,7 @@ async function schemaReadiness() {
     '0028_crm.sql',
     '0029_desafios_da_academia.sql',
     '0030_nutricao.sql',
+    '0031_conteudos.sql',
   )
 
   return {

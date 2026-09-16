@@ -9,6 +9,7 @@ import type {
   SaveAssessmentInput,
   LogWorkoutSetInput,
   SaveClassScheduleInput,
+  SaveContentInput,
   SaveGymChallengeInput,
   SaveLeadInput,
   SaveNutritionPlanInput,
@@ -40,6 +41,7 @@ import type {
   Assessment,
   BaselineChallenge,
   ConsentState,
+  ContentItem,
   ConsentType,
   StaffInvite,
   UserRole,
@@ -155,6 +157,8 @@ export class DemoDataSource implements DataSource {
   private desafiosProntos = false
   private readonly demoNutritionPlans: NutritionPlanWithMeals[] = []
   private nutricaoPronta = false
+  private readonly demoContent: ContentItem[] = []
+  private conteudosProntos = false
 
   // ── Índices ────────────────────────────────────────────────────────────────
   private readonly planById = new Map(this.db.plans.map((p) => [p.id, p]))
@@ -1621,6 +1625,134 @@ export class DemoDataSource implements DataSource {
   }
 
   // ── CRM ────────────────────────────────────────────────────────────────────
+  // ── Conteúdos ──────────────────────────────────────────────────────────────
+  /** Três publicações de exemplo, relativas a hoje, mais um rascunho. */
+  private montarConteudos() {
+    if (this.conteudosProntos) return
+    this.conteudosProntos = true
+
+    const staff = this.db.staff[0]
+    const dias = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString()
+
+    this.demoContent.push(
+      {
+        id: 'cont_1',
+        organizationId: DEMO_ORG_ID,
+        type: 'ARTICLE',
+        title: 'Novo horário da musculação aos sábados',
+        summary: 'A partir deste mês abrimos às 8h e fechamos às 14h.',
+        body: 'A sala de musculação passa a abrir às 8h aos sábados...',
+        coverUrl: null,
+        mediaUrl: null,
+        visibility: 'ORGANIZATION',
+        publishedAt: dias(20),
+        pinned: true,
+        authorStaffId: staff?.id ?? null,
+        authorName: staff?.name ?? null,
+        createdAt: dias(20),
+      },
+      {
+        id: 'cont_2',
+        organizationId: DEMO_ORG_ID,
+        type: 'VIDEO',
+        title: 'Como executar o agachamento com segurança',
+        summary: 'Três minutos com os erros mais comuns.',
+        body: null,
+        coverUrl: null,
+        mediaUrl: 'https://exemplo.test/agachamento',
+        visibility: 'ORGANIZATION',
+        publishedAt: dias(4),
+        pinned: false,
+        authorStaffId: staff?.id ?? null,
+        authorName: staff?.name ?? null,
+        createdAt: dias(4),
+      },
+      {
+        id: 'cont_3',
+        organizationId: DEMO_ORG_ID,
+        type: 'GUIDE',
+        title: 'Guia: o que comer antes do treino',
+        summary: 'Sugestões para treinar de manhã, à tarde e à noite.',
+        body: 'Treinar em jejum funciona para algumas pessoas...',
+        coverUrl: null,
+        mediaUrl: null,
+        visibility: 'ORGANIZATION',
+        publishedAt: null,
+        pinned: false,
+        authorStaffId: staff?.id ?? null,
+        authorName: staff?.name ?? null,
+        createdAt: dias(1),
+      },
+    )
+  }
+
+  async listContent(organizationId: string): Promise<ContentItem[]> {
+    this.montarConteudos()
+    return this.demoContent
+      .filter((c) => c.organizationId === organizationId)
+      .sort((a, b) => {
+        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
+        return b.createdAt.localeCompare(a.createdAt)
+      })
+  }
+
+  async getContent(organizationId: string, contentId: string) {
+    this.montarConteudos()
+    return (
+      this.demoContent.find((c) => c.organizationId === organizationId && c.id === contentId) ??
+      null
+    )
+  }
+
+  async saveContent(input: SaveContentInput): Promise<ContentItem> {
+    this.montarConteudos()
+    const existente = input.id ? this.demoContent.find((c) => c.id === input.id) : undefined
+
+    const item: ContentItem = {
+      id: input.id ?? `cont_${this.demoContent.length + 1}`,
+      organizationId: input.organizationId,
+      type: input.type,
+      title: input.title,
+      summary: input.summary,
+      body: input.body,
+      coverUrl: input.coverUrl,
+      mediaUrl: input.mediaUrl,
+      // Sempre ORGANIZATION, como na produção: FREE é da plataforma.
+      visibility: 'ORGANIZATION',
+      publishedAt: input.publishedAt,
+      pinned: input.pinned,
+      authorStaffId: input.authorStaffId,
+      authorName: this.staffById.get(input.authorStaffId ?? '')?.name ?? null,
+      createdAt: existente?.createdAt ?? new Date().toISOString(),
+    }
+
+    const indice = this.demoContent.findIndex((c) => c.id === item.id)
+    if (indice >= 0) this.demoContent[indice] = item
+    else this.demoContent.push(item)
+    return item
+  }
+
+  async deleteContent(organizationId: string, contentId: string): Promise<void> {
+    this.montarConteudos()
+    const indice = this.demoContent.findIndex(
+      (c) => c.organizationId === organizationId && c.id === contentId,
+    )
+    if (indice >= 0) this.demoContent.splice(indice, 1)
+  }
+
+  async listPublishedContent(organizationId: string, limite: number): Promise<ContentItem[]> {
+    const agora = new Date().toISOString()
+    const todos = await this.listContent(organizationId)
+    // Mesma regra da produção: rascunho e agendado ficam de fora.
+    return todos
+      .filter((c) => c.publishedAt !== null && c.publishedAt <= agora)
+      .sort((a, b) => {
+        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
+        return (b.publishedAt ?? '').localeCompare(a.publishedAt ?? '')
+      })
+      .slice(0, limite)
+  }
+
   // ── Nutrição ───────────────────────────────────────────────────────────────
   /**
    * Em demonstração o plano nasce do plano base, para a tela ter o que mostrar

@@ -13,6 +13,7 @@ import type {
   SaveAssessmentInput,
   LogWorkoutSetInput,
   SaveClassScheduleInput,
+  SaveContentInput,
   SaveGymChallengeInput,
   SaveLeadInput,
   SaveNutritionPlanInput,
@@ -36,6 +37,7 @@ import type {
   ChallengeMedal,
   Charge,
   ConsentState,
+  ContentItem,
   ConsentType,
   StaffInvite,
   UserRole,
@@ -1980,6 +1982,138 @@ export class SupabaseDataSource implements DataSource {
       attended: Number(row.presencas ?? 0),
       noShows: Number(row.faltas ?? 0),
     })) satisfies ClassOccupancyRow[]
+  }
+
+  // ── Conteúdos ──────────────────────────────────────────────────────────────
+  private mapContent(row: Row): ContentItem {
+    return {
+      id: row.id,
+      organizationId: row.organization_id ?? null,
+      type: row.type,
+      title: row.title,
+      summary: row.summary ?? null,
+      body: row.body ?? null,
+      coverUrl: row.cover_url ?? null,
+      mediaUrl: row.media_url ?? null,
+      visibility: row.visibility,
+      publishedAt: row.published_at ?? null,
+      pinned: Boolean(row.pinned),
+      authorStaffId: row.author_staff_id ?? null,
+      authorName: row.staff?.user_profiles?.name ?? null,
+      createdAt: row.created_at,
+    }
+  }
+
+  private static readonly CONTEUDO_SELECT =
+    '*, staff:author_staff_id(user_profiles:user_profile_id(name))'
+
+  async listContent(organizationId: string): Promise<ContentItem[]> {
+    const rows =
+      (await this.select<Row[]>(
+        'listContent',
+        this.client
+          .from('content_library')
+          .select(SupabaseDataSource.CONTEUDO_SELECT)
+          .eq('organization_id', organizationId)
+          .order('pinned', { ascending: false })
+          .order('created_at', { ascending: false }),
+      )) ?? []
+    return rows.map((row) => this.mapContent(row))
+  }
+
+  async getContent(organizationId: string, contentId: string) {
+    const row = await this.select<Row>(
+      'getContent',
+      this.client
+        .from('content_library')
+        .select(SupabaseDataSource.CONTEUDO_SELECT)
+        .eq('organization_id', organizationId)
+        .eq('id', contentId)
+        .maybeSingle(),
+    )
+    return row ? this.mapContent(row) : null
+  }
+
+  async saveContent(input: SaveContentInput): Promise<ContentItem> {
+    const linha = {
+      organization_id: input.organizationId,
+      type: input.type,
+      title: input.title,
+      summary: input.summary,
+      body: input.body,
+      cover_url: input.coverUrl,
+      media_url: input.mediaUrl,
+      /*
+       * Sempre ORGANIZATION. FREE é da plataforma, e a 0031 recusa a combinação
+       * com academia dona — a tela nem oferece a escolha, para ninguém publicar
+       * para a internet achando que publicou para os alunos.
+       */
+      visibility: 'ORGANIZATION',
+      pinned: input.pinned,
+      published_at: input.publishedAt,
+      author_staff_id: input.authorStaffId,
+      updated_at: new Date().toISOString(),
+    }
+
+    const row = input.id
+      ? await this.select<Row>(
+          'saveContent:update',
+          this.client
+            .from('content_library')
+            .update(linha)
+            .eq('organization_id', input.organizationId)
+            .eq('id', input.id)
+            .select(SupabaseDataSource.CONTEUDO_SELECT)
+            .single(),
+        )
+      : await this.select<Row>(
+          'saveContent:insert',
+          this.client
+            .from('content_library')
+            .insert(linha)
+            .select(SupabaseDataSource.CONTEUDO_SELECT)
+            .single(),
+        )
+
+    return this.mapContent(row!)
+  }
+
+  async deleteContent(organizationId: string, contentId: string): Promise<void> {
+    const { error } = await this.client
+      .from('content_library')
+      .delete()
+      .eq('organization_id', organizationId)
+      .eq('id', contentId)
+    if (error) this.fail('deleteContent', error)
+  }
+
+  async listPublishedContent(organizationId: string, limite: number): Promise<ContentItem[]> {
+    const { data, error } = await this.client.rpc('published_content', {
+      p_organization_id: organizationId,
+      p_limite: limite,
+    })
+    if (error) {
+      // Leitura: falhar aqui não derruba a tela do aluno.
+      logger.warn('listPublishedContent', { erro: String((error as Error).message) })
+      return []
+    }
+
+    return ((data as Row[]) ?? []).map((row) => ({
+      id: row.id,
+      organizationId,
+      type: row.tipo,
+      title: row.titulo,
+      summary: row.resumo ?? null,
+      body: null,
+      coverUrl: row.capa_url ?? null,
+      mediaUrl: row.midia_url ?? null,
+      visibility: 'ORGANIZATION' as const,
+      publishedAt: row.publicado_em ?? null,
+      pinned: Boolean(row.fixado),
+      authorStaffId: null,
+      authorName: row.autor ?? null,
+      createdAt: row.publicado_em ?? new Date().toISOString(),
+    }))
   }
 
   // ── Nutrição ───────────────────────────────────────────────────────────────

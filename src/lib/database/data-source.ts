@@ -34,6 +34,8 @@ import type {
   WorkoutTotals,
   CollectionRule,
   ConsentState,
+  ContentItem,
+  ContentType,
   StaffInvite,
   UserRole,
   ConsentType,
@@ -229,6 +231,21 @@ export type SaveNutritionPlanInput = {
       fatG: number | null
     }>
   }>
+}
+
+export type SaveContentInput = {
+  id?: string
+  organizationId: string
+  type: ContentType
+  title: string
+  summary: string | null
+  body: string | null
+  coverUrl: string | null
+  mediaUrl: string | null
+  pinned: boolean
+  /** Nulo mantém como rascunho. Data no futuro agenda. */
+  publishedAt: string | null
+  authorStaffId: string | null
 }
 
 export type Paginated<T> = {
@@ -619,6 +636,15 @@ export interface DataSource {
   /** Publica e arquiva o anterior, numa transação só no banco. */
   publishNutritionPlan(planId: string): Promise<void>
   newNutritionPlanVersion(planId: string): Promise<string>
+
+  // Conteúdos
+  /** Tudo que a academia escreveu, rascunho incluído. Só a equipe enxerga. */
+  listContent(organizationId: string): Promise<ContentItem[]>
+  getContent(organizationId: string, contentId: string): Promise<ContentItem | null>
+  saveContent(input: SaveContentInput): Promise<ContentItem>
+  deleteContent(organizationId: string, contentId: string): Promise<void>
+  /** O que está publicado, para o aluno. Fixado primeiro, depois o recente. */
+  listPublishedContent(organizationId: string, limite: number): Promise<ContentItem[]>
 
   // CRM
   listLeads(organizationId: string): Promise<Lead[]>

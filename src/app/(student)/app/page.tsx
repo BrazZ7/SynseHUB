@@ -32,7 +32,7 @@ export const metadata: Metadata = { title: 'Hoje' }
 export default async function StudentHomePage() {
   const session = await requireStudentSession()
   const agora = new Date()
-  const [home, challenges, aulas] = await Promise.all([
+  const [home, challenges, aulas, conteudos] = await Promise.all([
     getStudentHome(session.organizationId, session.studentId),
     getChallengeBoard(session),
     getDataSource().then((dataSource) =>
@@ -40,6 +40,10 @@ export default async function StudentHomePage() {
         from: agora.toISOString(),
         to: new Date(agora.getTime() + 7 * 86_400_000).toISOString(),
       }),
+    ),
+    // Os três últimos avisos da academia. Some quando não há nada publicado.
+    getDataSource().then((dataSource) =>
+      dataSource.listPublishedContent(session.organizationId, 3),
     ),
   ])
 
@@ -196,6 +200,34 @@ export default async function StudentHomePage() {
               <ArrowRight className="size-4" aria-hidden />
             </Link>
           </Button>
+        </section>
+      )}
+
+      {/* Da academia — some quando não há nada publicado */}
+      {conteudos.length > 0 && (
+        <section className="rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-synse-text">Da sua academia</h2>
+            <Button variant="ghost" size="sm" asChild className="text-synse-muted">
+              <Link href="/app/content">
+                Ver tudo
+                <ArrowRight className="size-4" aria-hidden />
+              </Link>
+            </Button>
+          </div>
+
+          <ul className="mt-2 divide-y divide-synse-border">
+            {conteudos.slice(0, 3).map((item) => (
+              <li key={item.id} className="py-2.5">
+                <Link href="/app/content" className="block">
+                  <p className="truncate text-sm font-medium text-synse-text">{item.title}</p>
+                  {item.summary && (
+                    <p className="truncate text-xs text-synse-muted">{item.summary}</p>
+                  )}
+                </Link>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 

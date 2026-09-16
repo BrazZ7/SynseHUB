@@ -1019,3 +1019,102 @@ export type ActivitySummary = {
   calories: number
   elevationGain: number
 }
+
+// ── Synse Body ───────────────────────────────────────────────────────────────
+
+/** De onde a medição entrou no Synse. Espelha o enum `body_measurement_source`. */
+export type BodyMeasurementSource =
+  | 'BLUETOOTH_SCALE'
+  | 'MANUAL'
+  | 'APPLE_HEALTH'
+  | 'HEALTH_CONNECT'
+  | 'VENDOR_CLOUD'
+
+/**
+ * Como aquele número chegou ali.
+ *
+ * `MEASURED` — o sensor leu: peso na célula de carga, impedância em ohms.
+ * `ESTIMATED` — a balança deduziu por bioimpedância, com fórmula que o
+ *   fabricante não publica. É palpite bem-informado, não medição.
+ * `CALCULATED` — o Synse calculou, a partir de dados que ele tem.
+ * `ABSENT` — o aparelho não informou. Diferente de zero.
+ *
+ * Sem esta distinção a tela não consegue dizer "seu IMC o Synse calculou; a
+ * gordura a balança estimou" — e apresentar estimativa de bioimpedância como
+ * medição direta é imprecisão que vira decisão sobre o próprio corpo.
+ */
+export type FieldOrigin = 'MEASURED' | 'ESTIMATED' | 'CALCULATED' | 'ABSENT'
+
+export type BodyMeasurementField =
+  | 'weightKg'
+  | 'bmi'
+  | 'bodyFatPercent'
+  | 'muscleMassKg'
+  | 'leanMassKg'
+  | 'bodyWaterPercent'
+  | 'visceralFat'
+  | 'boneMassKg'
+  | 'bmrKcal'
+  | 'impedanceOhm'
+
+export type FieldOriginMap = Partial<Record<BodyMeasurementField, FieldOrigin>>
+
+/** Uma pesagem, já normalizada: quilo, porcentagem, kcal. */
+export type BodyMeasurement = {
+  id?: string
+  /** Gerado no aparelho, antes de existir rede. É ele que absorve o reenvio. */
+  clientId: string
+  measuredAt: string
+  source: BodyMeasurementSource
+  deviceId?: string | null
+
+  weightKg: number
+  bmi?: number | null
+  bodyFatPercent?: number | null
+  muscleMassKg?: number | null
+  leanMassKg?: number | null
+  bodyWaterPercent?: number | null
+  visceralFat?: number | null
+  boneMassKg?: number | null
+  bmrKcal?: number | null
+  impedanceOhm?: number | null
+
+  fieldOrigin: FieldOriginMap
+  /** O pacote como chegou, para auditoria e para reprocessar parser corrigido. */
+  rawPayload?: Record<string, unknown> | null
+  createdAt?: string
+}
+
+export type UserDeviceStatus = 'ACTIVE' | 'INACTIVE' | 'REMOVED'
+
+/** Um aparelho vinculado a uma pessoa. */
+export type UserDevice = {
+  id: string
+  deviceType: 'SCALE'
+  provider: string
+  manufacturer: string | null
+  model: string | null
+  displayName: string
+  /** O identificador da plataforma. Ver `docs/SYNSE_SCALE_COMPATIBILITY.md`. */
+  platformDeviceId: string
+  protocol: string | null
+  capabilities: Record<string, boolean>
+  firmwareVersion: string | null
+  pairedAt: string
+  lastSeenAt: string | null
+  status: UserDeviceStatus
+}
+
+/** Uma autorização nominal para ver o corpo de alguém. */
+export type BodyMeasurementShare = {
+  id: string
+  userProfileId: string
+  sharedWithProfileId: string
+  sharedWithName: string | null
+  organizationId: string | null
+  grantedAt: string
+  revokedAt: string | null
+}
+
+/** As janelas do seletor de período da tela do Synse Body. */
+export type BodyPeriod = '7d' | '30d' | '3m' | '6m' | '1a' | 'tudo'

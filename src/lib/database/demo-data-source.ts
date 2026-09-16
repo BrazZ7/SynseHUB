@@ -2,6 +2,7 @@ import { generateSynseId } from '@/lib/synse-id'
 import { daysBetween } from '@/lib/utils'
 import type {
   ChargeWithStudent,
+  PairUserDeviceInput,
   CheckInWithStudent,
   DataSource,
   Paginated,
@@ -33,6 +34,10 @@ const MONTH_YEAR = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'nume
 
 import type {
   Activity,
+  BodyMeasurement,
+  BodyMeasurementShare,
+  BodyPeriod,
+  UserDevice,
   ActivityPrivacy,
   ActivityRoutePoint,
   ActivitySplit,
@@ -2477,6 +2482,199 @@ export class DemoDataSource implements DataSource {
   private static readonly rotas = new Map<string, ActivityRoutePoint[]>()
   private static readonly parciais = new Map<string, ActivitySplit[]>()
 
+  // ── Synse Body ─────────────────────────────────────────────────────────────
+  /*
+   * Mesma escolha das corridas: memória do processo, e não o diário. Uma
+   * pesagem carrega o pacote bruto do aparelho, e o orçamento do cookie é de
+   * 4 KB. Some ao recarregar, e é o comportamento honesto numa demonstração —
+   * melhor sumir do que fingir um histórico que ninguém pesou.
+   */
+  private static readonly pesagens = new Map<string, BodyMeasurement>()
+  private static readonly aparelhos = new Map<string, UserDevice>()
+  private static readonly autorizacoes = new Map<string, BodyMeasurementShare>()
+
+  /**
+   * Um histórico plausível para a demonstração começar com gráfico.
+   *
+   * Quinze semanas descendo devagar, com as oscilações que um corpo real tem —
+   * uma linha reta faria a tela parecer inventada, que é o que ela seria.
+   */
+  private semearPesagens() {
+    if (DemoDataSource.pesagens.size) return
+
+    const aparelho: UserDevice = {
+      id: 'dev_demo_1',
+      deviceType: 'SCALE',
+      provider: 'mock',
+      manufacturer: 'Synse',
+      model: 'Scale One',
+      displayName: 'Balança do banheiro',
+      platformDeviceId: 'mock-scale-0001',
+      protocol: 'BLE_BODY_COMPOSITION',
+      capabilities: { weight: true, bodyComposition: true, impedance: true },
+      firmwareVersion: '1.4.0',
+      pairedAt: new Date(Date.now() - 120 * 86_400_000).toISOString(),
+      lastSeenAt: new Date(Date.now() - 86_400_000).toISOString(),
+      status: 'ACTIVE',
+    }
+    DemoDataSource.aparelhos.set(aparelho.id, aparelho)
+
+    const oscilacao = [0, 0.3, -0.2, 0.1, -0.4, 0.2, 0, -0.3, 0.4, -0.1, 0.2, -0.2, 0.1, 0, -0.3]
+    oscilacao.forEach((delta, i) => {
+      const semanasAtras = oscilacao.length - 1 - i
+      const peso = 74.6 - i * 0.28 + delta
+      const gordura = 24.8 - i * 0.16
+      const clientId = `demo-body-${i}`
+
+      DemoDataSource.pesagens.set(clientId, {
+        id: `bm_demo_${i}`,
+        clientId,
+        measuredAt: new Date(Date.now() - semanasAtras * 7 * 86_400_000).toISOString(),
+        source: 'BLUETOOTH_SCALE',
+        deviceId: aparelho.id,
+        weightKg: Math.round(peso * 100) / 100,
+        bmi: Math.round((peso / (1.76 * 1.76)) * 100) / 100,
+        bodyFatPercent: Math.round(gordura * 10) / 10,
+        muscleMassKg: Math.round(peso * 0.385 * 100) / 100,
+        leanMassKg: Math.round(peso * (1 - gordura / 100) * 100) / 100,
+        bodyWaterPercent: Math.round((55 + i * 0.08) * 10) / 10,
+        visceralFat: null,
+        boneMassKg: null,
+        bmrKcal: Math.round(1580 + i * 2),
+        impedanceOhm: Math.round((508 + delta * 10) * 10) / 10,
+        fieldOrigin: {
+          weightKg: 'MEASURED',
+          impedanceOhm: 'MEASURED',
+          bodyFatPercent: 'ESTIMATED',
+          muscleMassKg: 'ESTIMATED',
+          leanMassKg: 'ESTIMATED',
+          bmrKcal: 'ESTIMATED',
+          bodyWaterPercent: 'CALCULATED',
+          bmi: 'CALCULATED',
+          visceralFat: 'ABSENT',
+          boneMassKg: 'ABSENT',
+        },
+        rawPayload: null,
+        createdAt: new Date(Date.now() - semanasAtras * 7 * 86_400_000).toISOString(),
+      })
+    })
+  }
+
+  private dentroDoPeriodo(medida: BodyMeasurement, period: BodyPeriod): boolean {
+    const desde = inicioDoPeriodoDemo(period)
+    return desde === null || new Date(medida.measuredAt).getTime() >= desde
+  }
+
+  async listBodyMeasurements(period: BodyPeriod): Promise<BodyMeasurement[]> {
+    this.semearPesagens()
+    return [...DemoDataSource.pesagens.values()]
+      .filter((m) => this.dentroDoPeriodo(m, period))
+      .sort((a, b) => b.measuredAt.localeCompare(a.measuredAt))
+  }
+
+  /**
+   * Na demonstração ninguém autorizou ninguém, então não há o que devolver.
+   *
+   * Devolver o próprio histórico aqui seria simular uma autorização que não
+   * existe — e esta é justamente a regra que o produto não pode afrouxar nem
+   * de brincadeira.
+   */
+  async listSharedBodyMeasurements(): Promise<BodyMeasurement[]> {
+    return []
+  }
+
+  async recordBodyMeasurement(measurement: BodyMeasurement): Promise<string> {
+    this.semearPesagens()
+    // Idempotente pelo clientId, como o banco: reenviar não cria linha nova.
+    const existente = DemoDataSource.pesagens.get(measurement.clientId)
+    const id = existente?.id ?? `bm_${measurement.clientId}`
+
+    DemoDataSource.pesagens.set(measurement.clientId, {
+      ...measurement,
+      id,
+      createdAt: existente?.createdAt ?? new Date().toISOString(),
+    })
+    return id
+  }
+
+  async deleteBodyMeasurement(measurementId: string): Promise<void> {
+    for (const [chave, medida] of DemoDataSource.pesagens) {
+      if (medida.id === measurementId) DemoDataSource.pesagens.delete(chave)
+    }
+  }
+
+  async listUserDevices(): Promise<UserDevice[]> {
+    this.semearPesagens()
+    return [...DemoDataSource.aparelhos.values()]
+      .filter((d) => d.status !== 'REMOVED')
+      .sort((a, b) => b.pairedAt.localeCompare(a.pairedAt))
+  }
+
+  async pairUserDevice(input: PairUserDeviceInput): Promise<string> {
+    this.semearPesagens()
+    const existente = [...DemoDataSource.aparelhos.values()].find(
+      (d) => d.platformDeviceId === input.platformDeviceId,
+    )
+    const id = existente?.id ?? `dev_${DemoDataSource.aparelhos.size + 1}`
+
+    DemoDataSource.aparelhos.set(id, {
+      id,
+      deviceType: 'SCALE',
+      provider: input.provider ?? 'standard_ble',
+      manufacturer: input.manufacturer ?? null,
+      model: input.model ?? null,
+      displayName: input.displayName,
+      platformDeviceId: input.platformDeviceId,
+      protocol: input.protocol ?? null,
+      capabilities: input.capabilities ?? {},
+      firmwareVersion: input.firmwareVersion ?? existente?.firmwareVersion ?? null,
+      pairedAt: existente?.pairedAt ?? new Date().toISOString(),
+      lastSeenAt: existente?.lastSeenAt ?? null,
+      // Revincular um aparelho removido o traz de volta, como no banco.
+      status: 'ACTIVE',
+    })
+    return id
+  }
+
+  async renameUserDevice(deviceId: string, displayName: string): Promise<void> {
+    const aparelho = DemoDataSource.aparelhos.get(deviceId)
+    if (aparelho) DemoDataSource.aparelhos.set(deviceId, { ...aparelho, displayName })
+  }
+
+  async unpairUserDevice(deviceId: string): Promise<void> {
+    const aparelho = DemoDataSource.aparelhos.get(deviceId)
+    if (aparelho) DemoDataSource.aparelhos.set(deviceId, { ...aparelho, status: 'REMOVED' })
+  }
+
+  async listBodyShares(): Promise<BodyMeasurementShare[]> {
+    return [...DemoDataSource.autorizacoes.values()].filter((a) => a.revokedAt === null)
+  }
+
+  async grantBodyShare(sharedWithProfileId: string, organizationId: string | null): Promise<void> {
+    const id = `share_${sharedWithProfileId}`
+    const pessoa = this.db.staff.find((m) => m.userProfileId === sharedWithProfileId)
+
+    DemoDataSource.autorizacoes.set(id, {
+      id,
+      userProfileId: this.db.studentIdForApp,
+      sharedWithProfileId,
+      sharedWithName: pessoa?.name ?? null,
+      organizationId,
+      grantedAt: new Date().toISOString(),
+      revokedAt: null,
+    })
+  }
+
+  async revokeBodyShare(shareId: string): Promise<void> {
+    const atual = DemoDataSource.autorizacoes.get(shareId)
+    if (atual) {
+      DemoDataSource.autorizacoes.set(shareId, {
+        ...atual,
+        revokedAt: new Date().toISOString(),
+      })
+    }
+  }
+
   async saveActivity(input: SaveActivityInput): Promise<string> {
     const id = `act_${input.clientId}`
 
@@ -2578,4 +2776,29 @@ export class DemoDataSource implements DataSource {
     DemoDataSource.rotas.delete(activityId)
     DemoDataSource.parciais.delete(activityId)
   }
+}
+
+/** O começo da janela escolhida, em milissegundos — ou nulo para "tudo". */
+function inicioDoPeriodoDemo(period: BodyPeriod, agora = new Date()): number | null {
+  const data = new Date(agora)
+  switch (period) {
+    case '7d':
+      data.setDate(data.getDate() - 7)
+      break
+    case '30d':
+      data.setDate(data.getDate() - 30)
+      break
+    case '3m':
+      data.setMonth(data.getMonth() - 3)
+      break
+    case '6m':
+      data.setMonth(data.getMonth() - 6)
+      break
+    case '1a':
+      data.setFullYear(data.getFullYear() - 1)
+      break
+    default:
+      return null
+  }
+  return data.getTime()
 }

@@ -9,6 +9,7 @@ import type {
   CheckInWithStudent,
   DataSource,
   Paginated,
+  PairUserDeviceInput,
   SaveActivityInput,
   SaveAssessmentInput,
   LogWorkoutSetInput,
@@ -26,6 +27,10 @@ import type { DemoStaff } from '@/lib/database/demo-seed'
 import { DEFAULT_WORKOUT_PREFERENCES } from '@/types/domain'
 import type {
   Activity,
+  BodyMeasurement,
+  BodyMeasurementShare,
+  BodyPeriod,
+  UserDevice,
   ActivityPrivacy,
   ActivityRoutePoint,
   ActivitySplit,
@@ -2364,6 +2369,231 @@ export class SupabaseDataSource implements DataSource {
     return String(data)
   }
 
+  // ── Synse Body ─────────────────────────────────────────────────────────────
+  private static readonly BODY_SELECT = `
+    id, client_id, measured_at, source, device_id, weight_kg, bmi,
+    body_fat_percent, muscle_mass_kg, lean_mass_kg, body_water_percent,
+    visceral_fat, bone_mass_kg, bmr_kcal, impedance_ohm, field_origin,
+    raw_payload, created_at
+  `
+
+  private mapBodyMeasurement(row: Row): BodyMeasurement {
+    return {
+      id: row.id,
+      clientId: row.client_id,
+      measuredAt: row.measured_at,
+      source: row.source,
+      deviceId: row.device_id ?? null,
+      weightKg: Number(row.weight_kg),
+      bmi: numero(row.bmi),
+      bodyFatPercent: numero(row.body_fat_percent),
+      muscleMassKg: numero(row.muscle_mass_kg),
+      leanMassKg: numero(row.lean_mass_kg),
+      bodyWaterPercent: numero(row.body_water_percent),
+      visceralFat: numero(row.visceral_fat),
+      boneMassKg: numero(row.bone_mass_kg),
+      bmrKcal: numero(row.bmr_kcal),
+      impedanceOhm: numero(row.impedance_ohm),
+      fieldOrigin: row.field_origin ?? {},
+      rawPayload: row.raw_payload ?? null,
+      createdAt: row.created_at,
+    }
+  }
+
+  async listBodyMeasurements(period: BodyPeriod): Promise<BodyMeasurement[]> {
+    /*
+     * Sem `user_profile_id` no filtro: a RLS já devolve só o que é da pessoa.
+     * Filtrar aqui exigiria descobrir o perfil antes, numa ida a mais ao banco,
+     * para chegar no mesmo lugar.
+     */
+    let query = this.client
+      .from('body_measurements')
+      .select(SupabaseDataSource.BODY_SELECT)
+      .order('measured_at', { ascending: false })
+
+    const desde = inicioDoPeriodo(period)
+    if (desde) query = query.gte('measured_at', desde)
+
+    const rows = (await this.select<Row[]>('listBodyMeasurements', query)) ?? []
+    return rows.map((row) => this.mapBodyMeasurement(row))
+  }
+
+  async listSharedBodyMeasurements(
+    userProfileId: string,
+    period: BodyPeriod,
+  ): Promise<BodyMeasurement[]> {
+    let query = this.client
+      .from('body_measurements')
+      .select(SupabaseDataSource.BODY_SELECT)
+      .eq('user_profile_id', userProfileId)
+      .order('measured_at', { ascending: false })
+
+    const desde = inicioDoPeriodo(period)
+    if (desde) query = query.gte('measured_at', desde)
+
+    const rows = (await this.select<Row[]>('listSharedBodyMeasurements', query)) ?? []
+    return rows.map((row) => this.mapBodyMeasurement(row))
+  }
+
+  /**
+   * Grava pela função, nunca por insert.
+   *
+   * `insert` está revogado na tabela de propósito: é a função que resolve a
+   * pessoa pelo `auth.uid()` e confere se o aparelho é dela. Numa balança de
+   * família, aceitar o dono vindo do cliente gravaria a pesagem de um no
+   * histórico de outro.
+   */
+  async recordBodyMeasurement(measurement: BodyMeasurement): Promise<string> {
+    const { data, error } = await this.client.rpc('record_body_measurement', {
+      p_client_id: measurement.clientId,
+      p_measured_at: measurement.measuredAt,
+      p_source: measurement.source,
+      p_weight_kg: measurement.weightKg,
+      p_device_id: measurement.deviceId ?? null,
+      p_bmi: measurement.bmi ?? null,
+      p_body_fat: measurement.bodyFatPercent ?? null,
+      p_muscle_mass: measurement.muscleMassKg ?? null,
+      p_lean_mass: measurement.leanMassKg ?? null,
+      p_body_water: measurement.bodyWaterPercent ?? null,
+      p_visceral_fat: measurement.visceralFat ?? null,
+      p_bone_mass: measurement.boneMassKg ?? null,
+      p_bmr_kcal: measurement.bmrKcal ?? null,
+      p_impedance: measurement.impedanceOhm ?? null,
+      p_raw_payload: measurement.rawPayload ?? null,
+      p_field_origin: measurement.fieldOrigin ?? {},
+    })
+    if (error) this.fail('recordBodyMeasurement', error)
+    return String(data)
+  }
+
+  async deleteBodyMeasurement(measurementId: string): Promise<void> {
+    const { error } = await this.client.from('body_measurements').delete().eq('id', measurementId)
+    if (error) this.fail('deleteBodyMeasurement', error)
+  }
+
+  async listUserDevices(): Promise<UserDevice[]> {
+    const rows =
+      (await this.select<Row[]>(
+        'listUserDevices',
+        this.client
+          .from('user_devices')
+          .select('*')
+          .neq('status', 'REMOVED')
+          .order('paired_at', { ascending: false }),
+      )) ?? []
+
+    return rows.map((row) => ({
+      id: row.id,
+      deviceType: row.device_type,
+      provider: row.provider,
+      manufacturer: row.manufacturer ?? null,
+      model: row.model ?? null,
+      displayName: row.display_name,
+      platformDeviceId: row.platform_device_identifier,
+      protocol: row.protocol ?? null,
+      capabilities: row.capabilities ?? {},
+      firmwareVersion: row.firmware_version ?? null,
+      pairedAt: row.paired_at,
+      lastSeenAt: row.last_seen_at ?? null,
+      status: row.status,
+    }))
+  }
+
+  async pairUserDevice(input: PairUserDeviceInput): Promise<string> {
+    const { data, error } = await this.client.rpc('pair_user_device', {
+      p_platform_identifier: input.platformDeviceId,
+      p_display_name: input.displayName,
+      p_provider: input.provider ?? 'standard_ble',
+      p_manufacturer: input.manufacturer ?? null,
+      p_model: input.model ?? null,
+      p_protocol: input.protocol ?? null,
+      p_capabilities: input.capabilities ?? {},
+      p_firmware: input.firmwareVersion ?? null,
+    })
+    if (error) this.fail('pairUserDevice', error)
+    return String(data)
+  }
+
+  async renameUserDevice(deviceId: string, displayName: string): Promise<void> {
+    const { error } = await this.client
+      .from('user_devices')
+      .update({ display_name: displayName, updated_at: new Date().toISOString() })
+      .eq('id', deviceId)
+    if (error) this.fail('renameUserDevice', error)
+  }
+
+  /**
+   * Desvincular marca como removido, não apaga a linha.
+   *
+   * As pesagens apontam para o aparelho, e o histórico do aparelho é o que diz
+   * de onde cada número veio. Apagar deixaria medições órfãs sem explicação.
+   */
+  async unpairUserDevice(deviceId: string): Promise<void> {
+    const { error } = await this.client
+      .from('user_devices')
+      .update({ status: 'REMOVED', updated_at: new Date().toISOString() })
+      .eq('id', deviceId)
+    if (error) this.fail('unpairUserDevice', error)
+  }
+
+  async listBodyShares(): Promise<BodyMeasurementShare[]> {
+    const rows =
+      (await this.select<Row[]>(
+        'listBodyShares',
+        this.client
+          .from('body_measurement_shares')
+          .select('id, user_profile_id, shared_with_profile_id, organization_id, granted_at, revoked_at, shared_with:user_profiles!body_measurement_shares_shared_with_profile_id_fkey(name)')
+          .is('revoked_at', null)
+          .order('granted_at', { ascending: false }),
+      )) ?? []
+
+    return rows.map((row) => ({
+      id: row.id,
+      userProfileId: row.user_profile_id,
+      sharedWithProfileId: row.shared_with_profile_id,
+      sharedWithName: row.shared_with?.name ?? null,
+      organizationId: row.organization_id ?? null,
+      grantedAt: row.granted_at,
+      revokedAt: row.revoked_at ?? null,
+    }))
+  }
+
+  async grantBodyShare(sharedWithProfileId: string, organizationId: string | null): Promise<void> {
+    const { data: perfil, error: erroPerfil } = await this.client
+      .from('user_profiles')
+      .select('id')
+      .eq('auth_user_id', (await this.client.auth.getUser()).data.user?.id ?? '')
+      .maybeSingle()
+    if (erroPerfil) this.fail('grantBodyShare:profile', erroPerfil)
+    if (!perfil) this.fail('grantBodyShare:profile', new Error('perfil não encontrado'))
+
+    /*
+     * `upsert` e não `insert`: reautorizar quem foi revogado é o caso comum —
+     * a pessoa troca de professor e volta. Sem isto, a segunda autorização
+     * esbarraria na unicidade e a tela mostraria erro por um gesto legítimo.
+     */
+    const { error } = await this.client.from('body_measurement_shares').upsert(
+      {
+        user_profile_id: perfil.id,
+        shared_with_profile_id: sharedWithProfileId,
+        organization_id: organizationId,
+        granted_at: new Date().toISOString(),
+        revoked_at: null,
+      },
+      { onConflict: 'user_profile_id,shared_with_profile_id' },
+    )
+    if (error) this.fail('grantBodyShare', error)
+  }
+
+  /** Revogar carimba a hora; a linha fica, para a pessoa ver o que já autorizou. */
+  async revokeBodyShare(shareId: string): Promise<void> {
+    const { error } = await this.client
+      .from('body_measurement_shares')
+      .update({ revoked_at: new Date().toISOString() })
+      .eq('id', shareId)
+    if (error) this.fail('revokeBodyShare', error)
+  }
+
   // ── Desafios da academia ───────────────────────────────────────────────────
   private mapChallenge(row: Row): GymChallenge {
     return {
@@ -3229,4 +3459,33 @@ function mapTotals(row: Row | undefined): WorkoutTotals {
 /** Numérico do Postgres vira número, e nulo continua nulo. */
 function numero(v: unknown): number | null {
   return v == null ? null : Number(v)
+}
+
+/**
+ * O começo da janela escolhida na tela, em ISO — ou nulo para "tudo".
+ *
+ * Meses contados em meses de calendário, e não em blocos de 30 dias: quem
+ * escolhe "3 meses" espera desde o mesmo dia três meses atrás.
+ */
+function inicioDoPeriodo(period: BodyPeriod, agora = new Date()): string | null {
+  const data = new Date(agora)
+  switch (period) {
+    case '7d':
+      data.setDate(data.getDate() - 7)
+      return data.toISOString()
+    case '30d':
+      data.setDate(data.getDate() - 30)
+      return data.toISOString()
+    case '3m':
+      data.setMonth(data.getMonth() - 3)
+      return data.toISOString()
+    case '6m':
+      data.setMonth(data.getMonth() - 6)
+      return data.toISOString()
+    case '1a':
+      data.setFullYear(data.getFullYear() - 1)
+      return data.toISOString()
+    default:
+      return null
+  }
 }

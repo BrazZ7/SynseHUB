@@ -1,5 +1,13 @@
+import type {
+  BodyMeasurement,
+  BodyMeasurementSource,
+  FieldOrigin,
+  FieldOriginMap,
+  UserDevice,
+} from '@/types/domain'
+
 /**
- * Synse Body — o vocabulário.
+ * Synse Body — o vocabulário do aparelho.
  *
  * Uma pesagem no Synse tem duas naturezas misturadas, e separá-las é o que
  * permite a tela ser honesta:
@@ -13,63 +21,8 @@
  * campo carrega de onde veio, em `fieldOrigin`.
  */
 
-/** De onde a medição entrou no Synse. Espelha o enum `body_measurement_source`. */
-export type BodyMeasurementSource =
-  | 'BLUETOOTH_SCALE'
-  | 'MANUAL'
-  | 'APPLE_HEALTH'
-  | 'HEALTH_CONNECT'
-  | 'VENDOR_CLOUD'
+export type { BodyMeasurement, BodyMeasurementSource, FieldOrigin, FieldOriginMap, UserDevice }
 
-/**
- * Como aquele número chegou ali.
- *
- * `MEASURED` — o sensor leu (peso na célula de carga, impedância em ohms).
- * `ESTIMATED` — a balança deduziu por bioimpedância, com uma fórmula que o
- *   fabricante não publica. É palpite bem-informado, não medição.
- * `CALCULATED` — o Synse calculou, e diz a partir de quê.
- * `ABSENT` — o aparelho não informou. Diferente de zero.
- */
-export type FieldOrigin = 'MEASURED' | 'ESTIMATED' | 'CALCULATED' | 'ABSENT'
-
-export type BodyMeasurementField =
-  | 'weightKg'
-  | 'bmi'
-  | 'bodyFatPercent'
-  | 'muscleMassKg'
-  | 'leanMassKg'
-  | 'bodyWaterPercent'
-  | 'visceralFat'
-  | 'boneMassKg'
-  | 'bmrKcal'
-  | 'impedanceOhm'
-
-export type FieldOriginMap = Partial<Record<BodyMeasurementField, FieldOrigin>>
-
-/** Uma pesagem, já normalizada: quilo, porcentagem, kcal. */
-export type BodyMeasurement = {
-  id?: string
-  /** Gerado no aparelho, antes de existir rede. É ele que absorve o reenvio. */
-  clientId: string
-  measuredAt: string
-  source: BodyMeasurementSource
-  deviceId?: string | null
-
-  weightKg: number
-  bmi?: number | null
-  bodyFatPercent?: number | null
-  muscleMassKg?: number | null
-  leanMassKg?: number | null
-  bodyWaterPercent?: number | null
-  visceralFat?: number | null
-  boneMassKg?: number | null
-  bmrKcal?: number | null
-  impedanceOhm?: number | null
-
-  fieldOrigin: FieldOriginMap
-  /** O pacote como chegou, para auditoria e para reprocessar parser corrigido. */
-  rawPayload?: Record<string, unknown> | null
-}
 
 /**
  * O que saiu do parser, antes de virar medição.
@@ -154,21 +107,6 @@ export type DiscoveredScale = {
   name: string | null
   /** Potência do sinal em dBm. Serve para "aproxime o celular da balança". */
   rssi: number | null
-}
-
-export type PairedScale = {
-  id: string
-  platformDeviceId: string
-  displayName: string
-  provider: string
-  manufacturer: string | null
-  model: string | null
-  protocol: string | null
-  capabilities: ScaleCapabilities
-  firmwareVersion: string | null
-  pairedAt: string
-  lastSeenAt: string | null
-  status: 'ACTIVE' | 'INACTIVE' | 'REMOVED'
 }
 
 /** O que o painel de desenvolvimento mostra: a comunicação como ela é. */

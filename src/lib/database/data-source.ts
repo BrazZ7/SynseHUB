@@ -1,5 +1,9 @@
 import type {
   Activity,
+  BodyMeasurement,
+  BodyMeasurementShare,
+  BodyPeriod,
+  UserDevice,
   ActivityPrivacy,
   ActivityRoutePoint,
   ActivitySplit,
@@ -208,6 +212,23 @@ export type SaveGymChallengeInput = {
  * campo a campo: salvar a refeição sem os itens deixaria o aluno com "Café da
  * manhã" e nada dentro se a segunda escrita falhasse.
  */
+export type PairUserDeviceInput = {
+  /**
+   * O identificador que a plataforma dá ao aparelho. No iOS é um UUID do
+   * CoreBluetooth, estável para aquele aparelho naquele iPhone; no Android é o
+   * endereço que o rádio anunciou. Ver `docs/SYNSE_SCALE_COMPATIBILITY.md`.
+   */
+  platformDeviceId: string
+  displayName: string
+  provider?: string
+  manufacturer?: string | null
+  model?: string | null
+  protocol?: string | null
+  /** O que o aparelho comprovadamente entrega, lido dele no pareamento. */
+  capabilities?: Record<string, boolean>
+  firmwareVersion?: string | null
+}
+
 export type SaveNutritionPlanInput = {
   id?: string
   organizationId: string
@@ -616,6 +637,39 @@ export interface DataSource {
   joinGymChallenge(challengeId: string, rankingOptIn: boolean): Promise<void>
   /** Só quem consentiu aparece — a tranca é da consulta, não da permissão. */
   getGymChallengeRanking(challengeId: string): Promise<GymChallengeRankRow[]>
+
+  // ── Synse Body ─────────────────────────────────────────────────────────────
+  /*
+   * Tudo aqui é da pessoa autenticada, e nenhum método recebe
+   * `organizationId`. Não é esquecimento: medição de bioimpedância não
+   * pertence à academia, e um parâmetro de academia nesta assinatura
+   * convidaria alguém a montar uma listagem por academia mais tarde.
+   */
+  /** O histórico da própria pessoa, do mais recente para trás. */
+  listBodyMeasurements(period: BodyPeriod): Promise<BodyMeasurement[]>
+  /**
+   * O histórico de outra pessoa — que só volta com linha se ela autorizou.
+   * A tranca é a RLS, não esta consulta.
+   */
+  listSharedBodyMeasurements(userProfileId: string, period: BodyPeriod): Promise<BodyMeasurement[]>
+  /**
+   * Grava a pesagem. Devolve o id, o mesmo no reenvio: é o que permite a fila
+   * offline parar de tentar sem duplicar linha.
+   */
+  recordBodyMeasurement(measurement: BodyMeasurement): Promise<string>
+  deleteBodyMeasurement(measurementId: string): Promise<void>
+
+  listUserDevices(): Promise<UserDevice[]>
+  /** Vincula o aparelho à pessoa autenticada. Idempotente pelo identificador. */
+  pairUserDevice(input: PairUserDeviceInput): Promise<string>
+  renameUserDevice(deviceId: string, displayName: string): Promise<void>
+  /** Desvincula sem apagar o histórico: as pesagens já feitas continuam sendo dela. */
+  unpairUserDevice(deviceId: string): Promise<void>
+
+  /** Quem a pessoa autorizou a ver o corpo dela. */
+  listBodyShares(): Promise<BodyMeasurementShare[]>
+  grantBodyShare(sharedWithProfileId: string, organizationId: string | null): Promise<void>
+  revokeBodyShare(shareId: string): Promise<void>
 
   // Nutrição
   listNutritionPlans(organizationId: string): Promise<NutritionPlan[]>

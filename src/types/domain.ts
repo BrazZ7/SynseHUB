@@ -653,6 +653,67 @@ export type GymChallengeRankRow = {
 }
 
 // ---------------------------------------------------------------------------
+// Nutrição
+// ---------------------------------------------------------------------------
+
+export type NutritionPlanStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED'
+
+export type MealItem = {
+  id: string
+  mealId: string
+  description: string
+  quantity: string | null
+  calories: number | null
+  /** Gramas. O nutricionista escreve grama na consulta, não percentual. */
+  proteinG: number | null
+  carbsG: number | null
+  fatG: number | null
+  position: number
+}
+
+export type Meal = {
+  id: string
+  nutritionPlanId: string
+  name: string
+  /** `HH:MM`. Nulo quando a refeição não tem hora marcada. */
+  timeOfDay: string | null
+  position: number
+  items: MealItem[]
+}
+
+export type NutritionTotals = {
+  calories: number
+  proteinG: number
+  carbsG: number
+  fatG: number
+  items: number
+}
+
+export type NutritionPlan = {
+  id: string
+  organizationId: string
+  studentId: string
+  studentName: string | null
+  authorStaffId: string
+  authorName: string | null
+  title: string
+  version: number
+  status: NutritionPlanStatus
+  publishedAt: string | null
+  notes: string | null
+  targetCalories: number | null
+  targetProteinG: number | null
+  targetCarbsG: number | null
+  targetFatG: number | null
+  createdAt: string
+}
+
+export type NutritionPlanWithMeals = NutritionPlan & {
+  meals: Meal[]
+  totals: NutritionTotals
+}
+
+// ---------------------------------------------------------------------------
 // CRM
 // ---------------------------------------------------------------------------
 

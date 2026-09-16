@@ -3,7 +3,9 @@ import { Info, Salad } from 'lucide-react'
 
 import { BackLink } from '@/components/synse/back-link'
 import { Badge } from '@/components/ui/badge'
+import { PrescribedPlan } from '@/features/nutrition/prescribed-plan'
 import { BASELINE_MEAL_PLAN } from '@/lib/baseline/meal-plan'
+import { getDataSource } from '@/lib/database'
 import { requireStudentSession } from '@/lib/auth/require-session'
 
 export const metadata: Metadata = { title: 'Alimentação' }
@@ -16,7 +18,28 @@ export const metadata: Metadata = { title: 'Alimentação' }
  * aparecer aqui no lugar deste — e aí sim é prescrição, com autor responsável.
  */
 export default async function StudentNutritionPage() {
-  await requireStudentSession()
+  const session = await requireStudentSession()
+  const dataSource = await getDataSource()
+
+  /*
+   * O plano prescrito vence o base. É o que o comentário acima sempre previu, e
+   * agora existe: quando a academia publica um plano individual, ele aparece
+   * aqui no lugar da sugestão geral.
+   */
+  const prescrito = await dataSource.getPublishedNutritionPlan(
+    session.organizationId,
+    session.studentId,
+  )
+
+  if (prescrito) {
+    return (
+      <div className="animate-fade-in-up space-y-5">
+        <BackLink href="/app" label="Hoje" />
+        <PrescribedPlan plano={prescrito} />
+      </div>
+    )
+  }
+
   const plano = BASELINE_MEAL_PLAN
 
   return (

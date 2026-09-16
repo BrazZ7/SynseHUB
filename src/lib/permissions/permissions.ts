@@ -66,8 +66,22 @@ const OWNER_PERMISSIONS: Permission[] = PERMISSIONS.filter(
   (p) => !p.startsWith('platform:'),
 ) as Permission[]
 
+/*
+ * Gerente vê quase tudo, menos nutrição.
+ *
+ * A RLS da 0004 restringe plano alimentar a NUTRITIONIST e OWNER, e o app dava
+ * a permissão ao gerente — a tela aparecia no menu e o banco devolvia lista
+ * vazia. Alinhado para o lado do banco, que é o mais defensável: plano
+ * alimentar é dado de saúde com responsável técnico, e gerenciar a academia não
+ * é a mesma coisa que acompanhar a alimentação de alguém.
+ */
 const MANAGER_PERMISSIONS: Permission[] = OWNER_PERMISSIONS.filter(
-  (p) => p !== 'settings:write' && p !== 'students:delete' && p !== 'finance:refund',
+  (p) =>
+    p !== 'settings:write' &&
+    p !== 'students:delete' &&
+    p !== 'finance:refund' &&
+    p !== 'nutrition:read' &&
+    p !== 'nutrition:write',
 )
 
 const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {

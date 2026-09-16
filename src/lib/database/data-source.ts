@@ -25,6 +25,8 @@ import type {
   GymChallengeMetric,
   GymChallengeRankRow,
   GymTrainingReport,
+  NutritionPlan,
+  NutritionPlanWithMeals,
   ExercisePersonalRecord,
   StudentAtRisk,
   WorkoutPreferences,
@@ -195,6 +197,38 @@ export type SaveGymChallengeInput = {
   status: 'DRAFT' | 'ACTIVE' | 'CLOSED'
   reward: string | null
   createdByStaffId: string | null
+}
+
+/**
+ * O plano inteiro, numa escrita só.
+ *
+ * Refeições e itens vão juntos porque um plano é editado como documento, não
+ * campo a campo: salvar a refeição sem os itens deixaria o aluno com "Café da
+ * manhã" e nada dentro se a segunda escrita falhasse.
+ */
+export type SaveNutritionPlanInput = {
+  id?: string
+  organizationId: string
+  studentId: string
+  authorStaffId: string
+  title: string
+  notes: string | null
+  targetCalories: number | null
+  targetProteinG: number | null
+  targetCarbsG: number | null
+  targetFatG: number | null
+  meals: Array<{
+    name: string
+    timeOfDay: string | null
+    items: Array<{
+      description: string
+      quantity: string | null
+      calories: number | null
+      proteinG: number | null
+      carbsG: number | null
+      fatG: number | null
+    }>
+  }>
 }
 
 export type Paginated<T> = {
@@ -565,6 +599,26 @@ export interface DataSource {
   joinGymChallenge(challengeId: string, rankingOptIn: boolean): Promise<void>
   /** Só quem consentiu aparece — a tranca é da consulta, não da permissão. */
   getGymChallengeRanking(challengeId: string): Promise<GymChallengeRankRow[]>
+
+  // Nutrição
+  listNutritionPlans(organizationId: string): Promise<NutritionPlan[]>
+  listNutritionPlansForStudent(
+    organizationId: string,
+    studentId: string,
+  ): Promise<NutritionPlan[]>
+  getNutritionPlan(
+    organizationId: string,
+    planId: string,
+  ): Promise<NutritionPlanWithMeals | null>
+  /** O que o aluno segue hoje. Nulo enquanto não houver plano publicado. */
+  getPublishedNutritionPlan(
+    organizationId: string,
+    studentId: string,
+  ): Promise<NutritionPlanWithMeals | null>
+  saveNutritionPlan(input: SaveNutritionPlanInput): Promise<NutritionPlan>
+  /** Publica e arquiva o anterior, numa transação só no banco. */
+  publishNutritionPlan(planId: string): Promise<void>
+  newNutritionPlanVersion(planId: string): Promise<string>
 
   // CRM
   listLeads(organizationId: string): Promise<Lead[]>

@@ -96,6 +96,14 @@ existem, não para conferir se subiram.
   seriam número digitado pelo aluno. As cinco métricas são as que o sistema mede
   sozinho, e três delas só passaram a existir com a 0026. O ranking exige dois
   consentimentos: a academia liga no desafio, e cada aluno decide se aparece.
+- **0030 (`0030_nutricao.sql`)** — nutrição. As quatro tabelas existem desde a
+  0003 e a RLS delas desde a 0004; faltavam macros, meta diária e publicação com
+  versão. A RLS **não foi alterada**: `meals_scoped` escapa por uma dependência
+  sutil — a subconsulta do `using` é avaliada sob a RLS de `nutrition_plans` —, o
+  que foi verificado antes de escrever a migration e está fixado em
+  `tests/db/nutricao.test.ts`. Junto, `nutrition:read/write` saiu do papel
+  MANAGER no app: a RLS já restringia a NUTRITIONIST e OWNER, e o menu mostrava
+  uma tela que o banco devolvia vazia.
 
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona

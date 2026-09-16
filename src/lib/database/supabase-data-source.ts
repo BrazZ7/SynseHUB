@@ -15,6 +15,7 @@ import type {
   SaveClassScheduleInput,
   SaveGymChallengeInput,
   SaveLeadInput,
+  SaveNutritionPlanInput,
   ScheduleWindow,
   StudentFilters,
   StudentListItem,
@@ -53,6 +54,8 @@ import type {
   GymChallengeForStudent,
   GymChallengeRankRow,
   GymTrainingReport,
+  NutritionPlan,
+  NutritionPlanWithMeals,
   ExercisePersonalRecord,
   StudentAtRisk,
   WorkoutPreferences,
@@ -63,6 +66,7 @@ import type {
   LeadEvent,
   LeadEventKind,
   LeadStage,
+  Meal,
   Membership,
   MembershipPlan,
   Organization,
@@ -1978,6 +1982,254 @@ export class SupabaseDataSource implements DataSource {
     })) satisfies ClassOccupancyRow[]
   }
 
+  // ── Nutrição ───────────────────────────────────────────────────────────────
+  private mapNutritionPlan(row: Row): NutritionPlan {
+    return {
+      id: row.id,
+      organizationId: row.organization_id,
+      studentId: row.student_id,
+      studentName: row.students?.user_profiles?.name ?? null,
+      authorStaffId: row.author_staff_id,
+      authorName: row.staff?.user_profiles?.name ?? null,
+      title: row.title,
+      version: Number(row.version),
+      status: row.status,
+      publishedAt: row.published_at ?? null,
+      notes: row.notes ?? null,
+      targetCalories: numero(row.target_calories),
+      targetProteinG: numero(row.target_protein_g),
+      targetCarbsG: numero(row.target_carbs_g),
+      targetFatG: numero(row.target_fat_g),
+      createdAt: row.created_at,
+    }
+  }
+
+  private static readonly NUTRICAO_SELECT =
+    '*, students:student_id(user_profiles:user_profile_id(name)), staff:author_staff_id(user_profiles:user_profile_id(name))'
+
+  async listNutritionPlans(organizationId: string): Promise<NutritionPlan[]> {
+    const rows =
+      (await this.select<Row[]>(
+        'listNutritionPlans',
+        this.client
+          .from('nutrition_plans')
+          .select(SupabaseDataSource.NUTRICAO_SELECT)
+          .eq('organization_id', organizationId)
+          .order('created_at', { ascending: false }),
+      )) ?? []
+    return rows.map((row) => this.mapNutritionPlan(row))
+  }
+
+  async listNutritionPlansForStudent(organizationId: string, studentId: string) {
+    const rows =
+      (await this.select<Row[]>(
+        'listNutritionPlansForStudent',
+        this.client
+          .from('nutrition_plans')
+          .select(SupabaseDataSource.NUTRICAO_SELECT)
+          .eq('organization_id', organizationId)
+          .eq('student_id', studentId)
+          .order('version', { ascending: false }),
+      )) ?? []
+    return rows.map((row) => this.mapNutritionPlan(row))
+  }
+
+  /** Monta o plano com refeições, itens e totais numa leitura só. */
+  private async montarPlano(row: Row): Promise<NutritionPlanWithMeals> {
+    const plano = this.mapNutritionPlan(row)
+
+    const refeicoes =
+      (await this.select<Row[]>(
+        'getNutritionPlan:meals',
+        this.client
+          .from('meals')
+          .select('*, meal_items(*)')
+          .eq('nutrition_plan_id', plano.id)
+          .order('position'),
+      )) ?? []
+
+    const meals: Meal[] = refeicoes.map((refeicao) => ({
+      id: refeicao.id,
+      nutritionPlanId: refeicao.nutrition_plan_id,
+      name: refeicao.name,
+      // `time` volta como 'HH:MM:SS'; a tela fala 'HH:MM'.
+      timeOfDay: refeicao.time_of_day ? String(refeicao.time_of_day).slice(0, 5) : null,
+      position: Number(refeicao.position),
+      items: ((refeicao.meal_items ?? []) as Row[])
+        .map((item) => ({
+          id: item.id,
+          mealId: item.meal_id,
+          description: item.description,
+          quantity: item.quantity ?? null,
+          calories: numero(item.calories),
+          proteinG: numero(item.protein_g),
+          carbsG: numero(item.carbs_g),
+          fatG: numero(item.fat_g),
+          position: Number(item.position ?? 1),
+        }))
+        .sort((a, b) => a.position - b.position),
+    }))
+
+    /*
+     * Os totais vêm da função da 0030, e não de uma soma aqui: a tela do aluno
+     * e a do profissional mostram o mesmo número, e duas contas em lugares
+     * diferentes divergem.
+     */
+    const { data } = await this.client.rpc('nutrition_plan_totals', { p_plan_id: plano.id })
+    const t = (data as Row[] | null)?.[0]
+
+    return {
+      ...plano,
+      meals,
+      totals: {
+        calories: Number(t?.calories ?? 0),
+        proteinG: Number(t?.protein_g ?? 0),
+        carbsG: Number(t?.carbs_g ?? 0),
+        fatG: Number(t?.fat_g ?? 0),
+        items: Number(t?.itens ?? 0),
+      },
+    }
+  }
+
+  async getNutritionPlan(organizationId: string, planId: string) {
+    const row = await this.select<Row>(
+      'getNutritionPlan',
+      this.client
+        .from('nutrition_plans')
+        .select(SupabaseDataSource.NUTRICAO_SELECT)
+        .eq('organization_id', organizationId)
+        .eq('id', planId)
+        .maybeSingle(),
+    )
+    return row ? this.montarPlano(row) : null
+  }
+
+  async getPublishedNutritionPlan(organizationId: string, studentId: string) {
+    const row = await this.select<Row>(
+      'getPublishedNutritionPlan',
+      this.client
+        .from('nutrition_plans')
+        .select(SupabaseDataSource.NUTRICAO_SELECT)
+        .eq('organization_id', organizationId)
+        .eq('student_id', studentId)
+        .eq('status', 'PUBLISHED')
+        .maybeSingle(),
+    )
+    return row ? this.montarPlano(row) : null
+  }
+
+  async saveNutritionPlan(input: SaveNutritionPlanInput): Promise<NutritionPlan> {
+    const cabecalho = {
+      organization_id: input.organizationId,
+      student_id: input.studentId,
+      author_staff_id: input.authorStaffId,
+      title: input.title,
+      notes: input.notes,
+      target_calories: input.targetCalories,
+      target_protein_g: input.targetProteinG,
+      target_carbs_g: input.targetCarbsG,
+      target_fat_g: input.targetFatG,
+      updated_at: new Date().toISOString(),
+    }
+
+    let planoId = input.id
+    let row: Row | null
+
+    if (planoId) {
+      row = await this.select<Row>(
+        'saveNutritionPlan:update',
+        this.client
+          .from('nutrition_plans')
+          .update(cabecalho)
+          .eq('organization_id', input.organizationId)
+          .eq('id', planoId)
+          .select(SupabaseDataSource.NUTRICAO_SELECT)
+          .single(),
+      )
+    } else {
+      /*
+       * A próxima versão livre deste aluno. `unique (student_id, version)` é o
+       * que garante de fato — se duas abas salvarem ao mesmo tempo, a segunda
+       * falha em vez de sobrescrever.
+       */
+      const existentes =
+        (await this.select<Row[]>(
+          'saveNutritionPlan:versions',
+          this.client
+            .from('nutrition_plans')
+            .select('version')
+            .eq('student_id', input.studentId)
+            .order('version', { ascending: false })
+            .limit(1),
+        )) ?? []
+
+      row = await this.select<Row>(
+        'saveNutritionPlan:insert',
+        this.client
+          .from('nutrition_plans')
+          .insert({ ...cabecalho, version: Number(existentes[0]?.version ?? 0) + 1 })
+          .select(SupabaseDataSource.NUTRICAO_SELECT)
+          .single(),
+      )
+      planoId = row!.id
+    }
+
+    /*
+     * Refeições são reescritas por inteiro a cada salvamento. Casar linha a
+     * linha exigiria id estável na tela e produziria diffs errados quando o
+     * nutricionista reordena as refeições — e o `on delete cascade` dos itens
+     * torna a troca barata. Isto só acontece em rascunho: plano publicado é
+     * editado abrindo uma versão nova.
+     */
+    await this.client.from('meals').delete().eq('nutrition_plan_id', planoId)
+
+    for (const [indice, refeicao] of input.meals.entries()) {
+      const criada = await this.select<Row>(
+        'saveNutritionPlan:meal',
+        this.client
+          .from('meals')
+          .insert({
+            nutrition_plan_id: planoId,
+            name: refeicao.name,
+            time_of_day: refeicao.timeOfDay,
+            position: indice + 1,
+          })
+          .select('id')
+          .single(),
+      )
+
+      if (refeicao.items.length === 0) continue
+      const { error } = await this.client.from('meal_items').insert(
+        refeicao.items.map((item, ordem) => ({
+          meal_id: criada!.id,
+          description: item.description,
+          quantity: item.quantity,
+          calories: item.calories,
+          protein_g: item.proteinG,
+          carbs_g: item.carbsG,
+          fat_g: item.fatG,
+          position: ordem + 1,
+        })),
+      )
+      if (error) this.fail('saveNutritionPlan:items', error)
+    }
+
+    return this.mapNutritionPlan(row!)
+  }
+
+  async publishNutritionPlan(planId: string): Promise<void> {
+    const { error } = await this.client.rpc('publish_nutrition_plan', { p_plan_id: planId })
+    if (error) this.fail('publishNutritionPlan', error)
+  }
+
+  async newNutritionPlanVersion(planId: string): Promise<string> {
+    const { data, error } = await this.client.rpc('new_nutrition_plan_version', {
+      p_plan_id: planId,
+    })
+    if (error) this.fail('newNutritionPlanVersion', error)
+    return String(data)
+  }
+
   // ── Desafios da academia ───────────────────────────────────────────────────
   private mapChallenge(row: Row): GymChallenge {
     return {
@@ -2838,4 +3090,9 @@ function mapTotals(row: Row | undefined): WorkoutTotals {
     averageRestSeconds: row?.descanso_medio_seg == null ? null : Number(row.descanso_medio_seg),
     distinctExercises: Number(row?.exercicios_distintos ?? 0),
   }
+}
+
+/** Numérico do Postgres vira número, e nulo continua nulo. */
+function numero(v: unknown): number | null {
+  return v == null ? null : Number(v)
 }

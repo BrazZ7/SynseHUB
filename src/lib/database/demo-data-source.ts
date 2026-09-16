@@ -11,6 +11,7 @@ import type {
   SaveClassScheduleInput,
   SaveGymChallengeInput,
   SaveLeadInput,
+  SaveNutritionPlanInput,
   ScheduleWindow,
   StudentFilters,
   StudentListItem,
@@ -19,6 +20,7 @@ import { DEMO_ORG_ID, getDemoDataset } from '@/lib/database/demo-seed'
 import { appendDemoMutation, type DemoMutation } from '@/lib/database/demo-journal'
 import { BASELINE_CHALLENGES, currentCycle } from '@/lib/baseline/challenges'
 import { CONSENT_DOCUMENTS } from '@/lib/consents/catalog'
+import { BASELINE_MEAL_PLAN } from '@/lib/baseline/meal-plan'
 import { DEFAULT_WORKOUT_PREFERENCES } from '@/types/domain'
 import {
   densidadeCorporal,
@@ -56,6 +58,9 @@ import type {
   GymChallengeForStudent,
   GymChallengeRankRow,
   GymTrainingReport,
+  NutritionPlan,
+  NutritionPlanWithMeals,
+  NutritionTotals,
   StudentAtRisk,
   WorkoutPreferences,
   WorkoutSessionSummary,
@@ -148,6 +153,8 @@ export class DemoDataSource implements DataSource {
     { rankingOptIn: boolean; progress: number; completedAt: string | null }
   >()
   private desafiosProntos = false
+  private readonly demoNutritionPlans: NutritionPlanWithMeals[] = []
+  private nutricaoPronta = false
 
   // ── Índices ────────────────────────────────────────────────────────────────
   private readonly planById = new Map(this.db.plans.map((p) => [p.id, p]))
@@ -1614,6 +1621,210 @@ export class DemoDataSource implements DataSource {
   }
 
   // ── CRM ────────────────────────────────────────────────────────────────────
+  // ── Nutrição ───────────────────────────────────────────────────────────────
+  /**
+   * Em demonstração o plano nasce do plano base, para a tela ter o que mostrar
+   * sem ninguém precisar digitar uma consulta inteira antes.
+   */
+  private montarNutricao() {
+    if (this.nutricaoPronta) return
+    this.nutricaoPronta = true
+
+    const staff = this.db.staff.find((m) => m.role === 'NUTRITIONIST') ?? this.db.staff[0]
+    const plano: NutritionPlanWithMeals = {
+      id: 'nplan_1',
+      organizationId: DEMO_ORG_ID,
+      studentId: this.db.studentIdForApp,
+      studentName: this.studentById.get(this.db.studentIdForApp)?.name ?? null,
+      authorStaffId: staff?.id ?? 'staff_1',
+      authorName: staff?.name ?? null,
+      title: 'Plano de manutenção',
+      version: 1,
+      status: 'PUBLISHED',
+      publishedAt: new Date(Date.now() - 6 * 86_400_000).toISOString(),
+      notes: 'Beber 2,5 litros de água por dia. Ajustar após a próxima avaliação.',
+      targetCalories: 2200,
+      targetProteinG: 150,
+      targetCarbsG: 230,
+      targetFatG: 70,
+      createdAt: new Date(Date.now() - 7 * 86_400_000).toISOString(),
+      meals: BASELINE_MEAL_PLAN.meals.map((refeicao, indice) => ({
+        id: `nmeal_${indice + 1}`,
+        nutritionPlanId: 'nplan_1',
+        name: refeicao.name,
+        timeOfDay: refeicao.time ?? null,
+        position: indice + 1,
+        items: [refeicao.suggestion, ...refeicao.swaps].map((descricao, ordem) => ({
+          id: `nitem_${indice + 1}_${ordem + 1}`,
+          mealId: `nmeal_${indice + 1}`,
+          description: ordem === 0 ? descricao : `Troca: ${descricao}`,
+          quantity: null,
+          // Só o item principal soma: as trocas substituem, não acrescentam.
+          calories: ordem === 0 ? 380 : null,
+          proteinG: ordem === 0 ? 26 : null,
+          carbsG: ordem === 0 ? 42 : null,
+          fatG: ordem === 0 ? 12 : null,
+          position: ordem + 1,
+        })),
+      })),
+      totals: { calories: 0, proteinG: 0, carbsG: 0, fatG: 0, items: 0 },
+    }
+
+    plano.totals = this.somar(plano)
+    this.demoNutritionPlans.push(plano)
+  }
+
+  /** A mesma conta da função da 0030, para os números baterem. */
+  private somar(plano: NutritionPlanWithMeals): NutritionTotals {
+    const itens = plano.meals.flatMap((refeicao) => refeicao.items)
+    return {
+      calories: itens.reduce((soma, i) => soma + (i.calories ?? 0), 0),
+      proteinG: itens.reduce((soma, i) => soma + (i.proteinG ?? 0), 0),
+      carbsG: itens.reduce((soma, i) => soma + (i.carbsG ?? 0), 0),
+      fatG: itens.reduce((soma, i) => soma + (i.fatG ?? 0), 0),
+      items: itens.length,
+    }
+  }
+
+  async listNutritionPlans(organizationId: string): Promise<NutritionPlan[]> {
+    this.montarNutricao()
+    return this.demoNutritionPlans.filter((p) => p.organizationId === organizationId)
+  }
+
+  async listNutritionPlansForStudent(organizationId: string, studentId: string) {
+    const planos = await this.listNutritionPlans(organizationId)
+    return planos
+      .filter((p) => p.studentId === studentId)
+      .sort((a, b) => b.version - a.version)
+  }
+
+  async getNutritionPlan(organizationId: string, planId: string) {
+    this.montarNutricao()
+    return (
+      this.demoNutritionPlans.find(
+        (p) => p.organizationId === organizationId && p.id === planId,
+      ) ?? null
+    )
+  }
+
+  async getPublishedNutritionPlan(organizationId: string, studentId: string) {
+    this.montarNutricao()
+    return (
+      this.demoNutritionPlans.find(
+        (p) =>
+          p.organizationId === organizationId &&
+          p.studentId === studentId &&
+          p.status === 'PUBLISHED',
+      ) ?? null
+    )
+  }
+
+  async saveNutritionPlan(input: SaveNutritionPlanInput): Promise<NutritionPlan> {
+    this.montarNutricao()
+    const existente = input.id
+      ? this.demoNutritionPlans.find((p) => p.id === input.id)
+      : undefined
+
+    const id = input.id ?? `nplan_${this.demoNutritionPlans.length + 1}`
+    const plano: NutritionPlanWithMeals = {
+      id,
+      organizationId: input.organizationId,
+      studentId: input.studentId,
+      studentName: this.studentById.get(input.studentId)?.name ?? null,
+      authorStaffId: input.authorStaffId,
+      authorName: this.staffById.get(input.authorStaffId)?.name ?? null,
+      title: input.title,
+      version:
+        existente?.version ??
+        Math.max(
+          0,
+          ...this.demoNutritionPlans
+            .filter((p) => p.studentId === input.studentId)
+            .map((p) => p.version),
+        ) + 1,
+      status: existente?.status ?? 'DRAFT',
+      publishedAt: existente?.publishedAt ?? null,
+      notes: input.notes,
+      targetCalories: input.targetCalories,
+      targetProteinG: input.targetProteinG,
+      targetCarbsG: input.targetCarbsG,
+      targetFatG: input.targetFatG,
+      createdAt: existente?.createdAt ?? new Date().toISOString(),
+      meals: input.meals.map((refeicao, indice) => ({
+        id: `${id}_m${indice + 1}`,
+        nutritionPlanId: id,
+        name: refeicao.name,
+        timeOfDay: refeicao.timeOfDay,
+        position: indice + 1,
+        items: refeicao.items.map((item, ordem) => ({
+          id: `${id}_m${indice + 1}_i${ordem + 1}`,
+          mealId: `${id}_m${indice + 1}`,
+          description: item.description,
+          quantity: item.quantity,
+          calories: item.calories,
+          proteinG: item.proteinG,
+          carbsG: item.carbsG,
+          fatG: item.fatG,
+          position: ordem + 1,
+        })),
+      })),
+      totals: { calories: 0, proteinG: 0, carbsG: 0, fatG: 0, items: 0 },
+    }
+    plano.totals = this.somar(plano)
+
+    const indice = this.demoNutritionPlans.findIndex((p) => p.id === id)
+    if (indice >= 0) this.demoNutritionPlans[indice] = plano
+    else this.demoNutritionPlans.push(plano)
+    return plano
+  }
+
+  async publishNutritionPlan(planId: string): Promise<void> {
+    this.montarNutricao()
+    const plano = this.demoNutritionPlans.find((p) => p.id === planId)
+    if (!plano) throw new Error('Plano não encontrado.')
+    if (plano.meals.length === 0) throw new Error('Um plano sem refeições não vai ajudar ninguém.')
+
+    // Só um publicado por aluno, como o índice parcial garante no banco.
+    for (const outro of this.demoNutritionPlans) {
+      if (outro.studentId === plano.studentId && outro.status === 'PUBLISHED' && outro.id !== planId) {
+        outro.status = 'ARCHIVED'
+      }
+    }
+    plano.status = 'PUBLISHED'
+    plano.publishedAt = plano.publishedAt ?? new Date().toISOString()
+  }
+
+  async newNutritionPlanVersion(planId: string): Promise<string> {
+    this.montarNutricao()
+    const base = this.demoNutritionPlans.find((p) => p.id === planId)
+    if (!base) throw new Error('Plano não encontrado.')
+
+    const nova = await this.saveNutritionPlan({
+      organizationId: base.organizationId,
+      studentId: base.studentId,
+      authorStaffId: base.authorStaffId,
+      title: base.title,
+      notes: base.notes,
+      targetCalories: base.targetCalories,
+      targetProteinG: base.targetProteinG,
+      targetCarbsG: base.targetCarbsG,
+      targetFatG: base.targetFatG,
+      meals: base.meals.map((refeicao) => ({
+        name: refeicao.name,
+        timeOfDay: refeicao.timeOfDay,
+        items: refeicao.items.map((item) => ({
+          description: item.description,
+          quantity: item.quantity,
+          calories: item.calories,
+          proteinG: item.proteinG,
+          carbsG: item.carbsG,
+          fatG: item.fatG,
+        })),
+      })),
+    })
+    return nova.id
+  }
+
   // ── Desafios da academia ───────────────────────────────────────────────────
   /**
    * Dois desafios de exemplo, relativos a hoje.

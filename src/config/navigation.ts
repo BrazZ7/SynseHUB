@@ -60,7 +60,7 @@ export const HUB_NAVIGATION: NavGroup[] = [
     items: [
       { label: 'Treinos', href: '/workouts', icon: Dumbbell, permission: 'workouts:read' },
       { label: 'Avaliações', href: '/assessments', icon: Activity, permission: 'assessments:read' },
-      { label: 'Nutrição', href: '/nutrition', icon: Apple, permission: 'nutrition:read', soon: true },
+      { label: 'Nutrição', href: '/nutrition', icon: Apple, permission: 'nutrition:read' },
       { label: 'Profissionais', href: '/staff', icon: UserRound, permission: 'staff:read' },
     ],
   },

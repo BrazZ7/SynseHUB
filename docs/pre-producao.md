@@ -57,8 +57,10 @@ ordem:
 - **0024 (`0024_agenda.sql`)** — a agenda de aulas: grade semanal, a aula de cada
   dia e as reservas, com a lotação conferida sob trava (`select ... for update`)
   e a lista de espera andando por gatilho. Sem ela, a tela de agenda não tem
-  onde gravar. Depois de aplicar, configurar o agendamento diário
-  `/api/cron/schedule` — sem ele a grade vai esvaziando conforme os dias passam.
+  onde gravar. A grade se repõe sozinha na leitura das telas, então ela não
+  depende do agendamento `/api/cron/schedule` — que existe como reforço, para a
+  academia que fica dias sem abrir o painel. Nenhuma rotina da agenda apaga
+  aula ou presença antiga: a materialização só insere.
 
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona

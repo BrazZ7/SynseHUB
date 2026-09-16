@@ -42,6 +42,12 @@ export default async function SchedulePage({ searchParams }: { searchParams: Sea
   const inicio = inicioDaSemana(Number.isNaN(referencia.getTime()) ? new Date() : referencia)
   const dias = diasDaSemana(inicio)
 
+  /*
+   * Repõe a grade antes de ler. Sai barato quando o horizonte está cheio, e é o
+   * que dispensa o agendamento externo: quem abre a agenda a mantém viva.
+   */
+  await dataSource.ensureClassSessions(session.organizationId, 21)
+
   const [sessoes, regras] = await Promise.all([
     dataSource.listClassSessions(session.organizationId, janelaDaSemana(inicio)),
     dataSource.listClassSchedules(session.organizationId),

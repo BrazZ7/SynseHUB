@@ -416,6 +416,14 @@ export interface DataSource {
   generateClassSessions(organizationId: string, daysAhead: number): Promise<number>
   /** A varredura de todas as academias. Só o agendamento diário chama. */
   generateAllClassSessions(daysAhead: number): Promise<number>
+  /**
+   * Garante que existe grade à frente, chamada na leitura das telas de agenda.
+   *
+   * Sai barato quando o horizonte está cheio. É o que faz a agenda se manter
+   * sozinha, sem depender de um agendamento externo que pode não existir no
+   * plano contratado nem avisar quando falha.
+   */
+  ensureClassSessions(organizationId: string, daysAhead: number): Promise<number>
   /** Presença. Só a equipe marca, e só depois que a aula começou. */
   markAttendance(
     organizationId: string,

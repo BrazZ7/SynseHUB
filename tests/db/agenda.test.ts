@@ -208,6 +208,87 @@ describe.skipIf(!temBanco)('quem pode mandar materializar', () => {
   })
 })
 
+describe.skipIf(!temBanco)('a grade se mantém sozinha', () => {
+  it('a leitura repõe o horizonte quando ele encolhe', async () => {
+    /*
+     * O cenário é a passagem do tempo: a academia materializou três semanas e
+     * ninguém mexeu na agenda por um mês. Sem reposição, o calendário fica sem
+     * futuro — nada é apagado, mas não há mais aula à frente para reservar.
+     * Aqui o encolhimento é simulado apagando o futuro da própria janela.
+     */
+    await client.query(
+      `insert into class_schedules (organization_id, name, weekday, start_time, capacity)
+       values ($1, 'Yoga', 4, '07:30', 12)`,
+      [ALPHA.orgId],
+    )
+    await asUser(client, ALPHA.authId, `select generate_org_class_sessions($1, 21)`, [
+      ALPHA.orgId,
+    ])
+
+    await client.query(
+      `delete from class_sessions
+       where organization_id = $1 and schedule_id is not null
+         and starts_at > now() + interval '8 days'`,
+      [ALPHA.orgId],
+    )
+
+    const reposta = await asUser<{ total: number }>(
+      client,
+      ALPHA.authId,
+      `select ensure_org_class_sessions($1, 21)::int as total`,
+      [ALPHA.orgId],
+    )
+    expect(reposta[0].total).toBeGreaterThan(0)
+  })
+
+  it('e não reescreve nada quando o horizonte já está cheio', async () => {
+    // A tela de agenda chama isto a cada abertura. Se não saísse barato, cada
+    // navegação viraria uma escrita.
+    const primeira = await asUser<{ total: number }>(
+      client,
+      ALPHA.authId,
+      `select ensure_org_class_sessions($1, 21)::int as total`,
+      [ALPHA.orgId],
+    )
+    expect(primeira[0].total).toBe(0)
+  })
+
+  it('a aula que já passou continua lá, com a presença de quem foi', async () => {
+    /*
+     * O que garante que ninguém perde histórico: a materialização só insere.
+     * Nenhuma rotina da agenda apaga aula antiga nem reserva antiga.
+     */
+    const { rows } = await client.query(
+      `insert into class_sessions (organization_id, name, starts_at, ends_at, capacity)
+       values ($1, 'Aula de outubro', now() - interval '60 days', now() - interval '60 days' + interval '1 hour', 10)
+       returning id`,
+      [ALPHA.orgId],
+    )
+    await client.query(
+      `insert into class_bookings (organization_id, session_id, student_id, status)
+       values ($1, $2, $3, 'ATTENDED')`,
+      [ALPHA.orgId, rows[0].id, alunos[0]],
+    )
+
+    await client.query(`select generate_class_sessions(21)`)
+    await asUser(client, ALPHA.authId, `select ensure_org_class_sessions($1, 21)`, [ALPHA.orgId])
+
+    const depois = await client.query(
+      `select b.status from class_bookings b
+       join class_sessions s on s.id = b.session_id
+       where s.name = 'Aula de outubro'`,
+    )
+    expect(depois.rows).toHaveLength(1)
+    expect(depois.rows[0].status).toBe('ATTENDED')
+  })
+
+  it('a reposição é da própria academia, não da vizinha', async () => {
+    await expect(
+      asUser(client, ALPHA.authId, `select ensure_org_class_sessions($1, 21)`, [BETA.orgId]),
+    ).rejects.toThrow(/não é desta academia/i)
+  })
+})
+
 describe.skipIf(!temBanco)('reserva e lista de espera', () => {
   it('enche até a capacidade e manda o excedente para a espera', async () => {
     const aula = await criarAula(2)

@@ -12,11 +12,16 @@ export const dynamic = 'force-dynamic'
 const DIAS_A_FRENTE = 21
 
 /**
- * Materialização diária da grade de aulas.
+ * Materialização diária da grade, como reforço.
  *
- * A regra é semanal e as aulas são linhas: sem esta rotina, a agenda iria
- * esvaziando conforme os dias passam, e um mês depois a academia abriria o
- * painel numa semana em branco.
+ * Não é o que sustenta a agenda: quem repõe o horizonte é a própria leitura das
+ * telas, por `ensure_org_class_sessions`. Amarrar a agenda a um agendamento
+ * externo a deixaria refém de um plano pago e de um serviço capaz de falhar
+ * calado — e o sintoma seria a academia abrindo o painel sem futuro.
+ *
+ * O valor desta rotina é outro: a academia que passa dias sem ninguém abrir a
+ * agenda chega de manhã com a grade pronta, e quem consulta pelo app do aluno
+ * não espera a primeira escrita.
  *
  * É seguro chamar duas vezes: o `unique (schedule_id, starts_at)` da 0024 é
  * quem garante uma aula por horário, não a contagem de chamadas.

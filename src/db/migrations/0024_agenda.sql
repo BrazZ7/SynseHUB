@@ -401,6 +401,64 @@ $$;
 revoke all on function generate_org_class_sessions(uuid, integer) from public, anon;
 grant execute on function generate_org_class_sessions(uuid, integer) to authenticated, service_role;
 
+/**
+ * A grade se mantém sozinha, na leitura.
+ *
+ * A materialização precisa acontecer de tempos em tempos, senão o calendário
+ * vai ficando sem futuro conforme os dias passam — nada some, mas três semanas
+ * depois a academia abre a agenda e não vê mais nada à frente.
+ *
+ * Deixar isso só num agendamento externo amarra a agenda a um plano pago e a um
+ * serviço que pode falhar calado. Aqui a própria leitura da tela garante o
+ * horizonte: se já existe aula suficiente à frente, a função não faz nada e sai
+ * barato; se o horizonte encolheu, ela repõe. É a mesma escolha que o
+ * fechamento mensal dos desafios já fazia.
+ */
+create or replace function ensure_org_class_sessions(
+  p_organization_id uuid,
+  p_days_ahead integer default 21
+)
+returns integer
+language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_horizonte timestamptz;
+begin
+  if is_org_member(p_organization_id) is not true then
+    raise exception 'Você não é desta academia.' using errcode = '42501';
+  end if;
+
+  /*
+   * A academia sem nenhuma regra ativa não tem o que materializar, e sem esta
+   * saída a função varreria a tabela a cada abertura de tela para nada.
+   */
+  if not exists (
+    select 1 from class_schedules
+    where organization_id = p_organization_id and status = 'ACTIVE'
+  ) then
+    return 0;
+  end if;
+
+  select max(starts_at) into v_horizonte
+  from class_sessions
+  where organization_id = p_organization_id and schedule_id is not null;
+
+  /*
+   * A folga de uma semana evita reescrever a cada abertura de tela: só repõe
+   * quando o futuro encolheu de verdade.
+   */
+  if v_horizonte is not null
+     and v_horizonte >= now() + make_interval(days => p_days_ahead - 7)
+  then
+    return 0;
+  end if;
+
+  return materialize_class_sessions(p_organization_id, p_days_ahead, current_date);
+end;
+$$;
+
+revoke all on function ensure_org_class_sessions(uuid, integer) from public, anon;
+grant execute on function ensure_org_class_sessions(uuid, integer) to authenticated, service_role;
+
 -- ── Reservar ─────────────────────────────────────────────────────────────────
 /**
  * Reserva a vaga e devolve o que aconteceu: 'BOOKED' ou 'WAITLIST'.

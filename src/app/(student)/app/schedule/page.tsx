@@ -20,6 +20,9 @@ export default async function StudentSchedulePage() {
    * aluno quer saber o que vem, e numa sexta-feira a semana civil só teria dois
    * dias para mostrar.
    */
+  // Mesmo motivo do painel: a leitura mantém o horizonte da grade.
+  await dataSource.ensureClassSessions(session.organizationId, 21)
+
   const agora = new Date()
   const sessoes = await dataSource.listClassSessionsForStudent(
     session.organizationId,

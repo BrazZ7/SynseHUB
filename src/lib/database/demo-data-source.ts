@@ -1242,6 +1242,10 @@ export class DemoDataSource implements DataSource {
     return this.generateAllClassSessions(daysAhead)
   }
 
+  async ensureClassSessions(_organizationId: string, daysAhead: number): Promise<number> {
+    return this.generateAllClassSessions(daysAhead)
+  }
+
   async generateAllClassSessions(daysAhead: number): Promise<number> {
     this.montarAgenda()
     const antes = this.demoSessions.length

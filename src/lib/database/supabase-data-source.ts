@@ -1620,6 +1620,23 @@ export class SupabaseDataSource implements DataSource {
     return Number(data ?? 0)
   }
 
+  async ensureClassSessions(organizationId: string, daysAhead: number): Promise<number> {
+    const { data, error } = await this.client.rpc('ensure_org_class_sessions', {
+      p_organization_id: organizationId,
+      p_days_ahead: daysAhead,
+    })
+    /*
+     * Falha aqui não derruba a tela. A agenda que já existe continua legível, e
+     * uma academia sem a 0024 aplicada veria erro numa página que deveria
+     * apenas mostrar o que tem.
+     */
+    if (error) {
+      logger.warn('ensureClassSessions:ignorado', { erro: String((error as Error).message) })
+      return 0
+    }
+    return Number(data ?? 0)
+  }
+
   async generateAllClassSessions(daysAhead: number): Promise<number> {
     const { data, error } = await this.client.rpc('generate_class_sessions', {
       p_days_ahead: daysAhead,

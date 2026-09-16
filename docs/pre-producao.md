@@ -61,6 +61,14 @@ ordem:
   depende do agendamento `/api/cron/schedule` — que existe como reforço, para a
   academia que fica dias sem abrir o painel. Nenhuma rotina da agenda apaga
   aula ou presença antiga: a materialização só insere.
+- **0025 (`0025_agenda_autorizacao.sql`)** — conserta os bancos que receberam a
+  primeira versão da 0024, publicada antes de ser revisada. Fecha o furo em que
+  uma academia reservava em nome de aluno de outra (`is_org_staff` devolve NULL,
+  e `if not null` não dispara), dá à equipe a função de materializar a própria
+  grade, e traz a reposição na leitura. Só `create or replace`: nenhuma tabela é
+  tocada. As duas versões da 0024 registram a mesma linha, então o registro não
+  distingue qual rodou — quem distingue é a sonda `agendaAutossuficiente` em
+  `/api/health?deep=1`.
 
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona

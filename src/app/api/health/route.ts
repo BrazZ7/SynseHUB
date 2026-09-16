@@ -165,6 +165,7 @@ const MIGRATIONS_ESPERADAS = [
   '0022_encerrar_conta.sql',
   '0023_avaliacao_fisica.sql',
   '0024_agenda.sql',
+  '0025_agenda_autorizacao.sql',
 ]
 
 async function schemaReadiness() {
@@ -199,10 +200,12 @@ async function schemaReadiness() {
     schemaCheck('assessments?select=body_density&limit=1'),
     /*
      * A 0024 saiu em duas versões antes de chegar a produção, e as duas
-     * registram a mesma linha em `schema_migrations` — o registro não distingue.
-     * `ensure_org_class_sessions` só existe na corrigida, a que repõe a grade na
-     * leitura e fecha o furo de autorização entre academias. A função é negada
-     * ao anônimo, então 401/403 é "existe" e 404 é "ficou a versão antiga".
+     * registram a mesma linha em `schema_migrations` — o registro diz que rodou,
+     * não qual rodou. Foi assim que um banco ficou com a versão que deixava uma
+     * academia reservar em nome de aluno de outra, com o registro em dia.
+     *
+     * `ensure_org_class_sessions` só existe depois da 0025. A função é negada ao
+     * anônimo, então 401/403 é "existe" e 404 é "o reparo ainda não foi colado".
      */
     rpcCheck('ensure_org_class_sessions', {
       p_organization_id: '00000000-0000-0000-0000-000000000000',
@@ -227,8 +230,11 @@ async function schemaReadiness() {
     if (avaliacaoFisica.present === false && !faltando.includes('0023_avaliacao_fisica.sql')) {
       faltando.push('0023_avaliacao_fisica.sql')
     }
-    if (agendaAutossuficiente.present === false && !faltando.includes('0024_agenda.sql')) {
-      faltando.push('0024_agenda.sql')
+    if (
+      agendaAutossuficiente.present === false &&
+      !faltando.includes('0025_agenda_autorizacao.sql')
+    ) {
+      faltando.push('0025_agenda_autorizacao.sql')
     }
     return {
       synseRun: corridas,
@@ -262,6 +268,7 @@ async function schemaReadiness() {
     '0022_encerrar_conta.sql',
     '0023_avaliacao_fisica.sql',
     '0024_agenda.sql',
+    '0025_agenda_autorizacao.sql',
   )
 
   return {

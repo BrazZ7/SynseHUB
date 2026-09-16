@@ -420,6 +420,82 @@ export type Assessment = {
 }
 
 // ---------------------------------------------------------------------------
+// Agenda de aulas
+// ---------------------------------------------------------------------------
+
+/**
+ * A regra semanal: "spinning, quarta, 19h, 20 vagas".
+ *
+ * `weekday` usa 0 = domingo, igual ao `getDay()` do JavaScript e ao
+ * `extract(dow)` do Postgres. Adotar a convenção do ISO num dos lados é como
+ * nasce a aula que aparece um dia deslocada.
+ */
+export type ClassSchedule = {
+  id: string
+  organizationId: string
+  name: string
+  description: string | null
+  staffId: string | null
+  staffName: string | null
+  weekday: number
+  /** `HH:MM`, hora local da academia. */
+  startTime: string
+  durationMinutes: number
+  capacity: number
+  room: string | null
+  startsOn: string
+  endsOn: string | null
+  status: 'ACTIVE' | 'ARCHIVED'
+}
+
+export type ClassSessionStatus = 'SCHEDULED' | 'CANCELLED'
+
+/** A aula de um dia específico, que pode ser cancelada sem derrubar a série. */
+export type ClassSession = {
+  id: string
+  organizationId: string
+  scheduleId: string | null
+  name: string
+  staffId: string | null
+  staffName: string | null
+  startsAt: string
+  endsAt: string
+  capacity: number
+  room: string | null
+  status: ClassSessionStatus
+  cancellationReason: string | null
+  /** Derivado no banco. Quem manda na lotação é a contagem sob trava. */
+  bookedCount: number
+}
+
+export type ClassBookingStatus =
+  | 'BOOKED'
+  | 'WAITLIST'
+  | 'CANCELLED'
+  | 'ATTENDED'
+  | 'NO_SHOW'
+
+export type ClassBooking = {
+  id: string
+  organizationId: string
+  sessionId: string
+  studentId: string
+  studentName: string | null
+  status: ClassBookingStatus
+  createdAt: string
+  cancelledAt: string | null
+  attendedAt: string | null
+}
+
+/** A aula como o aluno a enxerga: com a própria reserva junto. */
+export type ClassSessionForStudent = ClassSession & {
+  myBookingId: string | null
+  myBookingStatus: ClassBookingStatus | null
+  /** Posição na fila, a partir de 1. Nulo quando não está esperando. */
+  waitlistPosition: number | null
+}
+
+// ---------------------------------------------------------------------------
 // CRM
 // ---------------------------------------------------------------------------
 

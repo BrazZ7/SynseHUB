@@ -22,6 +22,8 @@ import { AppCheckInButton } from '@/features/checkin/app-checkin-button'
 import { getChallengeBoard } from '@/features/challenges/service'
 import { NotificationsBell } from '@/features/notifications/notifications-bell'
 import { getStudentHome } from '@/features/students/app-service'
+import { horaLocal } from '@/features/schedule/week'
+import { getDataSource } from '@/lib/database'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { cn, firstName, formatCurrency, formatDate, greeting } from '@/lib/utils'
 
@@ -29,12 +31,29 @@ export const metadata: Metadata = { title: 'Hoje' }
 
 export default async function StudentHomePage() {
   const session = await requireStudentSession()
-  const [home, challenges] = await Promise.all([
+  const agora = new Date()
+  const [home, challenges, aulas] = await Promise.all([
     getStudentHome(session.organizationId, session.studentId),
     getChallengeBoard(session),
+    getDataSource().then((dataSource) =>
+      dataSource.listClassSessionsForStudent(session.organizationId, session.studentId, {
+        from: agora.toISOString(),
+        to: new Date(agora.getTime() + 7 * 86_400_000).toISOString(),
+      }),
+    ),
   ])
 
   const desafio = challenges.active[0] ?? null
+
+  /*
+   * A próxima aula reservada, não a próxima aula da grade: o cartão existe para
+   * lembrar do compromisso que a pessoa assumiu. Sem reserva, ele convida a
+   * fazer uma.
+   */
+  const minhaProximaAula = aulas.find(
+    (aula) => aula.status === 'SCHEDULED' && aula.myBookingStatus === 'BOOKED',
+  )
+  const proximaDaGrade = aulas.find((aula) => aula.status === 'SCHEDULED')
 
   return (
     <div className="animate-fade-in-up space-y-5">
@@ -138,6 +157,47 @@ export default async function StudentHomePage() {
           </div>
         </div>
       </section>
+
+      {/* Aulas — some enquanto a grade da academia estiver vazia */}
+      {(minhaProximaAula || proximaDaGrade) && (
+        <section className="rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs text-synse-muted">
+                {minhaProximaAula ? 'Sua próxima aula' : 'Próxima aula na academia'}
+              </p>
+              <p className="mt-1 truncate text-lg font-semibold text-synse-text">
+                {(minhaProximaAula ?? proximaDaGrade)!.name}
+              </p>
+              <p className="text-sm text-synse-muted">
+                {new Date((minhaProximaAula ?? proximaDaGrade)!.startsAt).toLocaleDateString(
+                  'pt-BR',
+                  { weekday: 'long', day: '2-digit', month: '2-digit' },
+                )}{' '}
+                às {horaLocal((minhaProximaAula ?? proximaDaGrade)!.startsAt)}
+              </p>
+            </div>
+            <CalendarDays className="size-5 shrink-0 text-synse-primary" aria-hidden />
+          </div>
+
+          {minhaProximaAula ? (
+            <Badge variant="success" className="mt-3">
+              Vaga confirmada
+            </Badge>
+          ) : (
+            <p className="mt-3 text-xs text-synse-muted">
+              Você ainda não reservou nenhuma aula desta semana.
+            </p>
+          )}
+
+          <Button variant="outline" size="sm" asChild className="mt-3 w-full">
+            <Link href="/app/schedule">
+              Ver todas as aulas
+              <ArrowRight className="size-4" aria-hidden />
+            </Link>
+          </Button>
+        </section>
+      )}
 
       {/* Desafio do mês — some enquanto a migration 0014 não estiver aplicada */}
       {challenges.available && (

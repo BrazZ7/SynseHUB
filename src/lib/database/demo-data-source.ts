@@ -7,6 +7,8 @@ import type {
   Paginated,
   SaveActivityInput,
   SaveAssessmentInput,
+  SaveClassScheduleInput,
+  ScheduleWindow,
   StudentFilters,
   StudentListItem,
 } from '@/lib/database/data-source'
@@ -38,6 +40,11 @@ import type {
   ChallengeEntry,
   ChallengeMedal,
   Charge,
+  ClassBooking,
+  ClassBookingStatus,
+  ClassSchedule,
+  ClassSession,
+  ClassSessionForStudent,
   PersonalRecord,
   SportType,
   CheckIn,
@@ -107,6 +114,10 @@ export class DemoDataSource implements DataSource {
   private readonly demoInvites: StaffInvite[] = []
   private readonly addedAssessments: Assessment[] = []
   private readonly challengeEntries: ChallengeEntry[] = []
+  private readonly demoSchedules: ClassSchedule[] = []
+  private readonly demoSessions: ClassSession[] = []
+  private readonly demoBookings: ClassBooking[] = []
+  private agendaPronta = false
 
   // ── Índices ────────────────────────────────────────────────────────────────
   private readonly planById = new Map(this.db.plans.map((p) => [p.id, p]))
@@ -1018,6 +1029,326 @@ export class DemoDataSource implements DataSource {
   }
 
   // ── CRM ────────────────────────────────────────────────────────────────────
+  // ── Agenda ─────────────────────────────────────────────────────────────────
+  /**
+   * A grade da academia de demonstração.
+   *
+   * Materializada na primeira leitura, e não na semente, porque as aulas são
+   * relativas a hoje: um dataset com datas fixas envelhece e a agenda aparece
+   * vazia para quem abrir a demonstração no mês seguinte.
+   */
+  private montarAgenda() {
+    if (this.agendaPronta) return
+    this.agendaPronta = true
+
+    const professores = this.db.staff.filter(
+      (membro) => membro.role === 'TRAINER' || membro.role === 'PROFESSIONAL',
+    )
+    const grade: Array<[string, number, string, number, number, string]> = [
+      ['Spinning',        1, '06:00', 45, 18, 'Sala de bike'],
+      ['Funcional',       1, '19:00', 50, 16, 'Área funcional'],
+      ['Musculação guiada', 2, '07:00', 60, 12, 'Sala principal'],
+      ['Spinning',        3, '19:00', 45, 18, 'Sala de bike'],
+      ['Alongamento',     4, '08:00', 30, 20, 'Sala 2'],
+      ['Funcional',       5, '18:30', 50, 16, 'Área funcional'],
+      ['Treino livre assistido', 6, '09:00', 90, 25, 'Sala principal'],
+    ]
+
+    grade.forEach(([nome, diaDaSemana, hora, duracao, vagas, sala], indice) => {
+      const professor = professores[indice % Math.max(professores.length, 1)]
+      this.demoSchedules.push({
+        id: `sched_${indice + 1}`,
+        organizationId: DEMO_ORG_ID,
+        name: nome,
+        description: null,
+        staffId: professor?.id ?? null,
+        staffName: professor?.name ?? null,
+        weekday: diaDaSemana,
+        startTime: hora,
+        durationMinutes: duracao,
+        capacity: vagas,
+        room: sala,
+        startsOn: new Date().toISOString().slice(0, 10),
+        endsOn: null,
+        status: 'ACTIVE',
+      })
+    })
+
+    this.materializar(21)
+    this.semearReservas()
+  }
+
+  /** O mesmo que `generate_class_sessions` faz no banco, sem o `on conflict`. */
+  private materializar(diasAFrente: number) {
+    const hoje = new Date()
+    hoje.setHours(0, 0, 0, 0)
+
+    for (let passo = 0; passo <= diasAFrente; passo += 1) {
+      const dia = new Date(hoje.getTime() + passo * 86_400_000)
+      for (const regra of this.demoSchedules) {
+        if (regra.status !== 'ACTIVE' || dia.getDay() !== regra.weekday) continue
+
+        const [hora, minuto] = regra.startTime.split(':').map(Number)
+        const comeca = new Date(dia)
+        comeca.setHours(hora, minuto, 0, 0)
+        const id = `sess_${regra.id}_${comeca.toISOString().slice(0, 10)}`
+        if (this.demoSessions.some((sessao) => sessao.id === id)) continue
+
+        this.demoSessions.push({
+          id,
+          organizationId: DEMO_ORG_ID,
+          scheduleId: regra.id,
+          name: regra.name,
+          staffId: regra.staffId,
+          staffName: regra.staffName,
+          startsAt: comeca.toISOString(),
+          endsAt: new Date(comeca.getTime() + regra.durationMinutes * 60_000).toISOString(),
+          capacity: regra.capacity,
+          room: regra.room,
+          status: 'SCHEDULED',
+          cancellationReason: null,
+          bookedCount: 0,
+        })
+      }
+    }
+    this.demoSessions.sort((a, b) => a.startsAt.localeCompare(b.startsAt))
+  }
+
+  /**
+   * Turmas com gente dentro.
+   *
+   * Uma agenda vazia esconde justamente o que a tela precisa mostrar: turma
+   * cheia, fila de espera e a diferença entre as duas. A ocupação é derivada do
+   * id da aula, então é estável entre recarregamentos.
+   */
+  private semearReservas() {
+    const alunos = this.db.students.slice(0, 40)
+    this.demoSessions.forEach((sessao, indice) => {
+      // Uma das aulas nasce lotada com espera; as outras, parcialmente cheias.
+      const lotada = indice % 5 === 2
+      const quantos = lotada ? sessao.capacity + 2 : Math.floor(sessao.capacity * 0.45) + (indice % 3)
+
+      for (let i = 0; i < quantos && i < alunos.length; i += 1) {
+        const aluno = alunos[(indice * 3 + i) % alunos.length]
+        if (this.demoBookings.some((r) => r.sessionId === sessao.id && r.studentId === aluno.id)) continue
+        this.demoBookings.push({
+          id: `book_${sessao.id}_${i}`,
+          organizationId: DEMO_ORG_ID,
+          sessionId: sessao.id,
+          studentId: aluno.id,
+          studentName: aluno.name,
+          status: i < sessao.capacity ? 'BOOKED' : 'WAITLIST',
+          createdAt: new Date(Date.now() - (quantos - i) * 3_600_000).toISOString(),
+          cancelledAt: null,
+          attendedAt: null,
+        })
+      }
+      sessao.bookedCount = this.contarOcupadas(sessao.id)
+    })
+  }
+
+  private contarOcupadas(sessionId: string) {
+    return this.demoBookings.filter(
+      (r) => r.sessionId === sessionId && (r.status === 'BOOKED' || r.status === 'ATTENDED'),
+    ).length
+  }
+
+  async listClassSchedules(organizationId: string): Promise<ClassSchedule[]> {
+    this.montarAgenda()
+    return this.demoSchedules.filter((g) => g.organizationId === organizationId)
+  }
+
+  async getClassSchedule(organizationId: string, scheduleId: string) {
+    this.montarAgenda()
+    return (
+      this.demoSchedules.find((g) => g.organizationId === organizationId && g.id === scheduleId) ??
+      null
+    )
+  }
+
+  async saveClassSchedule(input: SaveClassScheduleInput): Promise<ClassSchedule> {
+    this.montarAgenda()
+    const professor = this.staffById.get(input.staffId ?? '')
+    const regra: ClassSchedule = {
+      id: input.id ?? `sched_${this.demoSchedules.length + 1}`,
+      organizationId: input.organizationId,
+      name: input.name,
+      description: input.description,
+      staffId: input.staffId,
+      staffName: professor?.name ?? null,
+      weekday: input.weekday,
+      startTime: input.startTime,
+      durationMinutes: input.durationMinutes,
+      capacity: input.capacity,
+      room: input.room,
+      startsOn: input.startsOn,
+      endsOn: input.endsOn,
+      status: input.status,
+    }
+
+    const existente = this.demoSchedules.findIndex((g) => g.id === regra.id)
+    if (existente >= 0) this.demoSchedules[existente] = regra
+    else this.demoSchedules.push(regra)
+
+    this.materializar(21)
+    return regra
+  }
+
+  async listClassSessions(organizationId: string, window: ScheduleWindow) {
+    this.montarAgenda()
+    return this.demoSessions.filter(
+      (sessao) =>
+        sessao.organizationId === organizationId &&
+        sessao.startsAt >= window.from &&
+        sessao.startsAt < window.to,
+    )
+  }
+
+  async getClassSession(organizationId: string, sessionId: string) {
+    this.montarAgenda()
+    return (
+      this.demoSessions.find((s) => s.organizationId === organizationId && s.id === sessionId) ??
+      null
+    )
+  }
+
+  async listClassBookings(organizationId: string, sessionId: string): Promise<ClassBooking[]> {
+    this.montarAgenda()
+    return this.demoBookings
+      .filter((r) => r.organizationId === organizationId && r.sessionId === sessionId)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+  }
+
+  async cancelClassSession(organizationId: string, sessionId: string, reason: string | null) {
+    this.montarAgenda()
+    const sessao = this.demoSessions.find(
+      (s) => s.organizationId === organizationId && s.id === sessionId,
+    )
+    if (!sessao) return
+    sessao.status = 'CANCELLED'
+    sessao.cancellationReason = reason
+    // O gatilho da 0024 faz isto no banco; aqui é na mão.
+    for (const reserva of this.demoBookings) {
+      if (reserva.sessionId !== sessionId) continue
+      if (reserva.status === 'BOOKED' || reserva.status === 'WAITLIST') {
+        reserva.status = 'CANCELLED'
+        reserva.cancelledAt = new Date().toISOString()
+      }
+    }
+    sessao.bookedCount = 0
+  }
+
+  async generateClassSessions(daysAhead: number): Promise<number> {
+    this.montarAgenda()
+    const antes = this.demoSessions.length
+    this.materializar(daysAhead)
+    return this.demoSessions.length - antes
+  }
+
+  async markAttendance(
+    organizationId: string,
+    bookingId: string,
+    status: 'ATTENDED' | 'NO_SHOW' | 'BOOKED',
+  ) {
+    this.montarAgenda()
+    const reserva = this.demoBookings.find(
+      (r) => r.organizationId === organizationId && r.id === bookingId,
+    )
+    if (!reserva) return
+    reserva.status = status
+    reserva.attendedAt = status === 'ATTENDED' ? new Date().toISOString() : null
+  }
+
+  /**
+   * A mesma decisão que `book_class` toma no banco.
+   *
+   * Aqui não há trava, e nem precisa: a demonstração roda numa requisição por
+   * vez, em memória. O que precisa ser igual é a *regra* — cheio vai para a
+   * espera —, senão a tela ensina um comportamento que produção não tem.
+   */
+  async bookClass(sessionId: string, studentId?: string): Promise<ClassBookingStatus> {
+    this.montarAgenda()
+    const sessao = this.demoSessions.find((s) => s.id === sessionId)
+    if (!sessao) throw new Error('Aula não encontrada.')
+    if (sessao.status === 'CANCELLED') throw new Error('Esta aula foi cancelada.')
+    if (new Date(sessao.startsAt).getTime() < Date.now()) throw new Error('Esta aula já começou.')
+
+    const aluno = studentId ?? this.db.studentIdForApp
+    const viva = this.demoBookings.find(
+      (r) =>
+        r.sessionId === sessionId &&
+        r.studentId === aluno &&
+        (r.status === 'BOOKED' || r.status === 'WAITLIST'),
+    )
+    if (viva) return viva.status
+
+    const status: ClassBookingStatus =
+      this.contarOcupadas(sessionId) >= sessao.capacity ? 'WAITLIST' : 'BOOKED'
+
+    this.demoBookings.push({
+      id: `book_${sessionId}_${this.demoBookings.length}`,
+      organizationId: sessao.organizationId,
+      sessionId,
+      studentId: aluno,
+      studentName: this.studentById.get(aluno)?.name ?? null,
+      status,
+      createdAt: new Date().toISOString(),
+      cancelledAt: null,
+      attendedAt: null,
+    })
+    sessao.bookedCount = this.contarOcupadas(sessionId)
+    return status
+  }
+
+  async cancelClassBooking(bookingId: string): Promise<void> {
+    this.montarAgenda()
+    const reserva = this.demoBookings.find((r) => r.id === bookingId)
+    if (!reserva || (reserva.status !== 'BOOKED' && reserva.status !== 'WAITLIST')) return
+
+    const eraConfirmada = reserva.status === 'BOOKED'
+    reserva.status = 'CANCELLED'
+    reserva.cancelledAt = new Date().toISOString()
+
+    // Promoção da fila: o gatilho faz no banco, aqui é explícito.
+    if (eraConfirmada) {
+      const proxima = this.demoBookings
+        .filter((r) => r.sessionId === reserva.sessionId && r.status === 'WAITLIST')
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0]
+      if (proxima) proxima.status = 'BOOKED'
+    }
+
+    const sessao = this.demoSessions.find((s) => s.id === reserva.sessionId)
+    if (sessao) sessao.bookedCount = this.contarOcupadas(sessao.id)
+  }
+
+  async listClassSessionsForStudent(
+    organizationId: string,
+    studentId: string,
+    window: ScheduleWindow,
+  ): Promise<ClassSessionForStudent[]> {
+    const sessoes = await this.listClassSessions(organizationId, window)
+
+    return sessoes.map((sessao) => {
+      const minha = this.demoBookings.find(
+        (r) =>
+          r.sessionId === sessao.id &&
+          r.studentId === studentId &&
+          (r.status === 'BOOKED' || r.status === 'WAITLIST' || r.status === 'ATTENDED'),
+      )
+      const fila = this.demoBookings
+        .filter((r) => r.sessionId === sessao.id && r.status === 'WAITLIST')
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      const posicao = fila.findIndex((r) => r.studentId === studentId)
+
+      return {
+        ...sessao,
+        myBookingId: minha?.id ?? null,
+        myBookingStatus: minha?.status ?? null,
+        waitlistPosition: minha?.status === 'WAITLIST' && posicao >= 0 ? posicao + 1 : null,
+      }
+    })
+  }
+
   async listLeads(organizationId: string): Promise<Lead[]> {
     return this.scoped(this.db.leads, organizationId)
   }

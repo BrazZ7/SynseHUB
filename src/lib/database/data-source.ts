@@ -13,6 +13,11 @@ import type {
   ChallengeMedal,
   Charge,
   CheckIn,
+  ClassBooking,
+  ClassBookingStatus,
+  ClassSchedule,
+  ClassSession,
+  ClassSessionForStudent,
   CollectionRule,
   ConsentState,
   StaffInvite,
@@ -98,6 +103,36 @@ export type SaveAssessmentInput = {
   skinfoldAbdominal: number | null
   skinfoldSuprailiac: number | null
   skinfoldThigh: number | null
+}
+
+/**
+ * A regra semanal de uma aula.
+ *
+ * Sem `id` cria; com `id` corrige. Não carrega as aulas já materializadas: a
+ * correção da regra vale para as próximas, e reescrever o passado apagaria a
+ * presença de quem já foi.
+ */
+export type SaveClassScheduleInput = {
+  id?: string
+  organizationId: string
+  name: string
+  description: string | null
+  staffId: string | null
+  weekday: number
+  startTime: string
+  durationMinutes: number
+  capacity: number
+  room: string | null
+  startsOn: string
+  endsOn: string | null
+  status: 'ACTIVE' | 'ARCHIVED'
+}
+
+export type ScheduleWindow = {
+  /** Início da janela, inclusivo, em ISO. */
+  from: string
+  /** Fim da janela, exclusivo. */
+  to: string
 }
 
 export type Paginated<T> = {
@@ -355,6 +390,44 @@ export interface DataSource {
   /** A última avaliação de cada aluno, para a tela de acompanhamento. */
   listLatestAssessments(organizationId: string): Promise<Assessment[]>
   saveAssessment(input: SaveAssessmentInput): Promise<Assessment>
+
+  // Agenda
+  listClassSchedules(organizationId: string): Promise<ClassSchedule[]>
+  getClassSchedule(organizationId: string, scheduleId: string): Promise<ClassSchedule | null>
+  saveClassSchedule(input: SaveClassScheduleInput): Promise<ClassSchedule>
+  /** As aulas de uma janela de datas, em ordem cronológica. */
+  listClassSessions(organizationId: string, window: ScheduleWindow): Promise<ClassSession[]>
+  getClassSession(organizationId: string, sessionId: string): Promise<ClassSession | null>
+  /** Quem está na aula, incluindo a fila de espera na ordem em que pediu. */
+  listClassBookings(organizationId: string, sessionId: string): Promise<ClassBooking[]>
+  cancelClassSession(
+    organizationId: string,
+    sessionId: string,
+    reason: string | null,
+  ): Promise<void>
+  /**
+   * Materializa as aulas da janela a partir das regras ativas. Idempotente —
+   * quem garante isso é o `unique (schedule_id, starts_at)` no banco.
+   */
+  generateClassSessions(daysAhead: number): Promise<number>
+  /** Presença. Só a equipe marca, e só depois que a aula começou. */
+  markAttendance(
+    organizationId: string,
+    bookingId: string,
+    status: Extract<ClassBookingStatus, 'ATTENDED' | 'NO_SHOW' | 'BOOKED'>,
+  ): Promise<void>
+  /**
+   * Reserva. Devolve o que aconteceu: entrou na aula ou na fila.
+   * A decisão é do banco, sob trava — nunca contada aqui.
+   */
+  bookClass(sessionId: string, studentId?: string): Promise<ClassBookingStatus>
+  cancelClassBooking(bookingId: string): Promise<void>
+  /** A grade que o aluno vê, com a própria reserva e a posição na fila. */
+  listClassSessionsForStudent(
+    organizationId: string,
+    studentId: string,
+    window: ScheduleWindow,
+  ): Promise<ClassSessionForStudent[]>
 
   // CRM
   listLeads(organizationId: string): Promise<Lead[]>

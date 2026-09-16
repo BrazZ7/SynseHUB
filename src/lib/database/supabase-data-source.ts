@@ -11,6 +11,8 @@ import type {
   Paginated,
   SaveActivityInput,
   SaveAssessmentInput,
+  SaveClassScheduleInput,
+  ScheduleWindow,
   StudentFilters,
   StudentListItem,
   FiscalData,
@@ -35,6 +37,11 @@ import type {
   PersonalRecord,
   SportType,
   CheckIn,
+  ClassBooking,
+  ClassBookingStatus,
+  ClassSchedule,
+  ClassSession,
+  ClassSessionForStudent,
   CollectionRule,
   Exercise,
   Lead,
@@ -1424,6 +1431,273 @@ export class SupabaseDataSource implements DataSource {
         )
 
     return this.mapAssessment(row!)
+  }
+
+  // ── Agenda ─────────────────────────────────────────────────────────────────
+  private mapSchedule(row: Row): ClassSchedule {
+    return {
+      id: row.id,
+      organizationId: row.organization_id,
+      name: row.name,
+      description: row.description ?? null,
+      staffId: row.staff_id ?? null,
+      staffName: row.staff?.user_profiles?.name ?? null,
+      weekday: Number(row.weekday),
+      // `time` volta como 'HH:MM:SS'; a tela e o formulário falam 'HH:MM'.
+      startTime: String(row.start_time ?? '').slice(0, 5),
+      durationMinutes: Number(row.duration_minutes),
+      capacity: Number(row.capacity),
+      room: row.room ?? null,
+      startsOn: row.starts_on,
+      endsOn: row.ends_on ?? null,
+      status: row.status ?? 'ACTIVE',
+    }
+  }
+
+  private mapSession(row: Row): ClassSession {
+    return {
+      id: row.id,
+      organizationId: row.organization_id,
+      scheduleId: row.schedule_id ?? null,
+      name: row.name,
+      staffId: row.staff_id ?? null,
+      staffName: row.staff?.user_profiles?.name ?? null,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+      capacity: Number(row.capacity),
+      room: row.room ?? null,
+      status: row.status ?? 'SCHEDULED',
+      cancellationReason: row.cancellation_reason ?? null,
+      bookedCount: Number(row.booked_count ?? 0),
+    }
+  }
+
+  /** O professor vem por join aninhado: staff → user_profiles → name. */
+  private static readonly SESSAO_SELECT =
+    '*, staff:staff_id(user_profiles:user_profile_id(name))'
+
+  async listClassSchedules(organizationId: string): Promise<ClassSchedule[]> {
+    const rows =
+      (await this.select<Row[]>(
+        'listClassSchedules',
+        this.client
+          .from('class_schedules')
+          .select(SupabaseDataSource.SESSAO_SELECT)
+          .eq('organization_id', organizationId)
+          .order('weekday')
+          .order('start_time'),
+      )) ?? []
+    return rows.map((row) => this.mapSchedule(row))
+  }
+
+  async getClassSchedule(organizationId: string, scheduleId: string) {
+    const row = await this.select<Row>(
+      'getClassSchedule',
+      this.client
+        .from('class_schedules')
+        .select(SupabaseDataSource.SESSAO_SELECT)
+        .eq('organization_id', organizationId)
+        .eq('id', scheduleId)
+        .maybeSingle(),
+    )
+    return row ? this.mapSchedule(row) : null
+  }
+
+  async saveClassSchedule(input: SaveClassScheduleInput): Promise<ClassSchedule> {
+    const linha = {
+      organization_id: input.organizationId,
+      name: input.name,
+      description: input.description,
+      staff_id: input.staffId,
+      weekday: input.weekday,
+      start_time: input.startTime,
+      duration_minutes: input.durationMinutes,
+      capacity: input.capacity,
+      room: input.room,
+      starts_on: input.startsOn,
+      ends_on: input.endsOn,
+      status: input.status,
+      updated_at: new Date().toISOString(),
+    }
+
+    const row = input.id
+      ? await this.select<Row>(
+          'saveClassSchedule:update',
+          this.client
+            .from('class_schedules')
+            .update(linha)
+            .eq('organization_id', input.organizationId)
+            .eq('id', input.id)
+            .select(SupabaseDataSource.SESSAO_SELECT)
+            .single(),
+        )
+      : await this.select<Row>(
+          'saveClassSchedule:insert',
+          this.client
+            .from('class_schedules')
+            .insert(linha)
+            .select(SupabaseDataSource.SESSAO_SELECT)
+            .single(),
+        )
+
+    return this.mapSchedule(row!)
+  }
+
+  async listClassSessions(organizationId: string, window: ScheduleWindow) {
+    const rows =
+      (await this.select<Row[]>(
+        'listClassSessions',
+        this.client
+          .from('class_sessions')
+          .select(SupabaseDataSource.SESSAO_SELECT)
+          .eq('organization_id', organizationId)
+          .gte('starts_at', window.from)
+          .lt('starts_at', window.to)
+          .order('starts_at'),
+      )) ?? []
+    return rows.map((row) => this.mapSession(row))
+  }
+
+  async getClassSession(organizationId: string, sessionId: string) {
+    const row = await this.select<Row>(
+      'getClassSession',
+      this.client
+        .from('class_sessions')
+        .select(SupabaseDataSource.SESSAO_SELECT)
+        .eq('organization_id', organizationId)
+        .eq('id', sessionId)
+        .maybeSingle(),
+    )
+    return row ? this.mapSession(row) : null
+  }
+
+  async listClassBookings(organizationId: string, sessionId: string): Promise<ClassBooking[]> {
+    const rows =
+      (await this.select<Row[]>(
+        'listClassBookings',
+        this.client
+          .from('class_bookings')
+          .select('*, students:student_id(user_profiles:user_profile_id(name))')
+          .eq('organization_id', organizationId)
+          .eq('session_id', sessionId)
+          // Ordem de chegada: é ela que define a fila de espera.
+          .order('created_at'),
+      )) ?? []
+
+    return rows.map((row) => ({
+      id: row.id,
+      organizationId: row.organization_id,
+      sessionId: row.session_id,
+      studentId: row.student_id,
+      studentName: row.students?.user_profiles?.name ?? null,
+      status: row.status,
+      createdAt: row.created_at,
+      cancelledAt: row.cancelled_at ?? null,
+      attendedAt: row.attended_at ?? null,
+    }))
+  }
+
+  async cancelClassSession(organizationId: string, sessionId: string, reason: string | null) {
+    /*
+     * Só marca o status. Avisar quem ia e desfazer as reservas é do gatilho da
+     * 0024 — fazer aqui deixaria o aluno sem aviso quando a aula fosse
+     * cancelada por qualquer outro caminho.
+     */
+    const { error } = await this.client
+      .from('class_sessions')
+      .update({ status: 'CANCELLED', cancellation_reason: reason, updated_at: new Date().toISOString() })
+      .eq('organization_id', organizationId)
+      .eq('id', sessionId)
+    if (error) this.fail('cancelClassSession', error)
+  }
+
+  async generateClassSessions(daysAhead: number): Promise<number> {
+    const { data, error } = await this.client.rpc('generate_class_sessions', {
+      p_days_ahead: daysAhead,
+    })
+    if (error) this.fail('generateClassSessions', error)
+    return Number(data ?? 0)
+  }
+
+  async markAttendance(
+    organizationId: string,
+    bookingId: string,
+    status: 'ATTENDED' | 'NO_SHOW' | 'BOOKED',
+  ) {
+    const { error } = await this.client
+      .from('class_bookings')
+      .update({ status, attended_at: status === 'ATTENDED' ? new Date().toISOString() : null })
+      .eq('organization_id', organizationId)
+      .eq('id', bookingId)
+    if (error) this.fail('markAttendance', error)
+  }
+
+  async bookClass(sessionId: string, studentId?: string): Promise<ClassBookingStatus> {
+    /*
+     * A vaga é decidida no banco, sob trava. Contar aqui e inserir depois é a
+     * corrida que coloca duas pessoas na última vaga.
+     */
+    const { data, error } = await this.client.rpc('book_class', {
+      p_session_id: sessionId,
+      p_student_id: studentId ?? null,
+    })
+    if (error) this.fail('bookClass', error)
+    return data as ClassBookingStatus
+  }
+
+  async cancelClassBooking(bookingId: string): Promise<void> {
+    const { error } = await this.client.rpc('cancel_class_booking', { p_booking_id: bookingId })
+    if (error) this.fail('cancelClassBooking', error)
+  }
+
+  async listClassSessionsForStudent(
+    organizationId: string,
+    studentId: string,
+    window: ScheduleWindow,
+  ): Promise<ClassSessionForStudent[]> {
+    const [sessoes, minhas] = await Promise.all([
+      this.listClassSessions(organizationId, window),
+      this.select<Row[]>(
+        'listClassSessionsForStudent:bookings',
+        this.client
+          .from('class_bookings')
+          .select('id, session_id, student_id, status, created_at')
+          .eq('organization_id', organizationId)
+          .in('status', ['BOOKED', 'WAITLIST', 'ATTENDED'])
+          .order('created_at'),
+      ),
+    ])
+
+    const todas = minhas ?? []
+    const minhasPorSessao = new Map(
+      todas.filter((linha) => linha.student_id === studentId).map((l) => [l.session_id, l]),
+    )
+
+    /*
+     * A posição na fila é contada entre as esperas anteriores da mesma aula.
+     * "Você está na lista" sem dizer em que lugar não ajuda ninguém a decidir
+     * se vale esperar.
+     */
+    const esperaPorSessao = new Map<string, string[]>()
+    for (const linha of todas) {
+      if (linha.status !== 'WAITLIST') continue
+      const fila = esperaPorSessao.get(linha.session_id) ?? []
+      fila.push(linha.student_id)
+      esperaPorSessao.set(linha.session_id, fila)
+    }
+
+    return sessoes.map((sessao) => {
+      const minha = minhasPorSessao.get(sessao.id)
+      const fila = esperaPorSessao.get(sessao.id) ?? []
+      const posicao = minha?.status === 'WAITLIST' ? fila.indexOf(studentId) + 1 : 0
+
+      return {
+        ...sessao,
+        myBookingId: minha?.id ?? null,
+        myBookingStatus: (minha?.status as ClassBookingStatus | undefined) ?? null,
+        waitlistPosition: posicao > 0 ? posicao : null,
+      }
+    })
   }
 
   async listLeads(organizationId: string) {

@@ -54,6 +54,11 @@ ordem:
   IMC, densidade corporal e percentual de gordura a cada escrita. Sem ela, a
   tela de avaliação grava as colunas que não existem e falha; com ela, nenhum
   desses três números pode chegar pronto do formulário.
+- **0024 (`0024_agenda.sql`)** — a agenda de aulas: grade semanal, a aula de cada
+  dia e as reservas, com a lotação conferida sob trava (`select ... for update`)
+  e a lista de espera andando por gatilho. Sem ela, a tela de agenda não tem
+  onde gravar. Depois de aplicar, configurar o agendamento diário
+  `/api/cron/schedule` — sem ele a grade vai esvaziando conforme os dias passam.
 
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona

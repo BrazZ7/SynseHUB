@@ -47,7 +47,10 @@ export const PERMISSIONS = [
   'crm:write',
 
   'reports:read',
+
   'schedule:read',
+  'schedule:write',
+
   'notifications:read',
 
   'settings:read',
@@ -81,6 +84,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'checkin:read',
     'checkin:write',
     'schedule:read',
+    'schedule:write',
     'crm:read',
     'crm:write',
     'notifications:read',
@@ -94,6 +98,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'assessments:read',
     'assessments:write',
     'schedule:read',
+    'schedule:write',
     'content:read',
     'notifications:read',
   ],

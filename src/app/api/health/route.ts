@@ -164,6 +164,7 @@ const MIGRATIONS_ESPERADAS = [
   '0021_biblioteca_de_exercicios.sql',
   '0022_encerrar_conta.sql',
   '0023_avaliacao_fisica.sql',
+  '0024_agenda.sql',
 ]
 
 async function schemaReadiness() {
@@ -244,6 +245,7 @@ async function schemaReadiness() {
     '0021_biblioteca_de_exercicios.sql',
     '0022_encerrar_conta.sql',
     '0023_avaliacao_fisica.sql',
+    '0024_agenda.sql',
   )
 
   return {

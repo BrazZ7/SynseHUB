@@ -9,6 +9,7 @@ import type {
   SaveAssessmentInput,
   LogWorkoutSetInput,
   SaveClassScheduleInput,
+  SaveLeadInput,
   ScheduleWindow,
   StudentFilters,
   StudentListItem,
@@ -61,6 +62,9 @@ import type {
   CollectionRule,
   Exercise,
   Lead,
+  LeadEvent,
+  LeadEventKind,
+  LeadStage,
   Membership,
   MembershipPlan,
   Organization,
@@ -131,6 +135,9 @@ export class DemoDataSource implements DataSource {
   private readonly demoWorkoutSessions: WorkoutSessionSummary[] = []
   private readonly demoSetLogs = new Map<string, { reps: number; weight: number | null }[]>()
   private demoWorkoutPrefs: WorkoutPreferences = { ...DEFAULT_WORKOUT_PREFERENCES }
+  private readonly addedLeads: Lead[] = []
+  private readonly leadEdits = new Map<string, Lead>()
+  private readonly demoLeadEvents: LeadEvent[] = []
 
   // ── Índices ────────────────────────────────────────────────────────────────
   private readonly planById = new Map(this.db.plans.map((p) => [p.id, p]))
@@ -1596,8 +1603,129 @@ export class DemoDataSource implements DataSource {
     return [...porNome.values()].sort((a, b) => b.occurrences - a.occurrences)
   }
 
+  // ── CRM ────────────────────────────────────────────────────────────────────
+  private leads(): Lead[] {
+    const base = [...this.db.leads, ...this.addedLeads]
+    return base.map((lead) => this.leadEdits.get(lead.id) ?? lead)
+  }
+
   async listLeads(organizationId: string): Promise<Lead[]> {
-    return this.scoped(this.db.leads, organizationId)
+    // Mesma ordem da produção: quem tem retorno marcado vem primeiro.
+    return this.scoped(this.leads(), organizationId).sort((a, b) => {
+      if (a.nextFollowUpAt && b.nextFollowUpAt) {
+        return a.nextFollowUpAt.localeCompare(b.nextFollowUpAt)
+      }
+      if (a.nextFollowUpAt) return -1
+      if (b.nextFollowUpAt) return 1
+      return b.createdAt.localeCompare(a.createdAt)
+    })
+  }
+
+  async getLead(organizationId: string, leadId: string) {
+    return this.leads().find((l) => l.organizationId === organizationId && l.id === leadId) ?? null
+  }
+
+  async saveLead(input: SaveLeadInput): Promise<Lead> {
+    const existente = input.id ? await this.getLead(input.organizationId, input.id) : null
+    const staff = this.staffById.get(input.ownerStaffId ?? '')
+
+    const lead: Lead = {
+      id: input.id ?? `lead_novo_${this.addedLeads.length + 1}`,
+      organizationId: input.organizationId,
+      name: input.name,
+      phone: input.phone,
+      email: input.email,
+      stage: existente?.stage ?? 'NEW',
+      source: input.source,
+      ownerStaffId: input.ownerStaffId,
+      ownerName: staff?.name ?? null,
+      notes: input.notes,
+      nextFollowUpAt: input.nextFollowUpAt,
+      convertedStudentId: existente?.convertedStudentId ?? null,
+      lostReason: existente?.lostReason ?? null,
+      createdAt: existente?.createdAt ?? new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+
+    if (existente) this.leadEdits.set(lead.id, lead)
+    else {
+      this.addedLeads.push(lead)
+      // O gatilho da 0028 faz isto no banco; aqui é explícito.
+      this.demoLeadEvents.push(this.evento(lead.id, 'CREATED', null, 'NEW', 'Lead cadastrado'))
+    }
+    return lead
+  }
+
+  private evento(
+    leadId: string,
+    kind: LeadEventKind,
+    fromStage: LeadStage | null,
+    toStage: LeadStage | null,
+    body: string | null,
+  ): LeadEvent {
+    return {
+      id: `levent_${this.demoLeadEvents.length + 1}`,
+      leadId,
+      kind,
+      fromStage,
+      toStage,
+      body,
+      actorName: null,
+      createdAt: new Date().toISOString(),
+    }
+  }
+
+  async moveLeadStage(
+    organizationId: string,
+    leadId: string,
+    stage: LeadStage,
+    lostReason: string | null,
+  ) {
+    const lead = await this.getLead(organizationId, leadId)
+    if (!lead || lead.stage === stage) return
+
+    this.demoLeadEvents.push(
+      this.evento(leadId, 'STAGE_CHANGE', lead.stage, stage, lostReason),
+    )
+    this.leadEdits.set(leadId, {
+      ...lead,
+      stage,
+      lostReason,
+      updatedAt: new Date().toISOString(),
+    })
+  }
+
+  async addLeadEvent(
+    _organizationId: string,
+    leadId: string,
+    kind: LeadEventKind,
+    body: string,
+  ) {
+    this.demoLeadEvents.push(this.evento(leadId, kind, null, null, body))
+  }
+
+  async listLeadEvents(_organizationId: string, leadId: string): Promise<LeadEvent[]> {
+    return this.demoLeadEvents
+      .filter((e) => e.leadId === leadId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  }
+
+  async convertLead(leadId: string): Promise<string> {
+    const lead = this.leads().find((l) => l.id === leadId)
+    if (!lead) throw new Error('Lead não encontrado.')
+    // Idempotente, como no banco: converter duas vezes devolve o mesmo aluno.
+    if (lead.convertedStudentId) return lead.convertedStudentId
+
+    const aluno = `stu_lead_${leadId}`
+    this.demoLeadEvents.push(this.evento(leadId, 'STAGE_CHANGE', lead.stage, 'ENROLLED', null))
+    this.leadEdits.set(leadId, {
+      ...lead,
+      stage: 'ENROLLED',
+      convertedStudentId: aluno,
+      nextFollowUpAt: null,
+      updatedAt: new Date().toISOString(),
+    })
+    return aluno
   }
 
   // ── Notificações ───────────────────────────────────────────────────────────

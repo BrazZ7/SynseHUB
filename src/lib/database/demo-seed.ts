@@ -1027,7 +1027,22 @@ function buildDemoDataset() {
       email: emailFor(name, 900 + index),
       stage: pick(LEAD_STAGES),
       source: pick(LEAD_SOURCES),
+      ownerStaffId: null,
+      ownerName: null,
+      notes: null,
+      /*
+       * Dois em cada três têm retorno marcado, alguns já vencidos. É o que faz
+       * a coluna "atrasados" da demonstração ter o que mostrar — funil sem
+       * contato vencido não parece um funil de verdade.
+       */
+      nextFollowUpAt:
+        index % 3 === 0
+          ? null
+          : addDays(DEMO_NOW, intBetween(-6, 10)).toISOString(),
+      convertedStudentId: null,
+      lostReason: null,
       createdAt: addDays(DEMO_NOW, -intBetween(0, 45)).toISOString(),
+      updatedAt: addDays(DEMO_NOW, -intBetween(0, 10)).toISOString(),
     }
   })
 

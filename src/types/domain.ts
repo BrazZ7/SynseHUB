@@ -605,6 +605,14 @@ export type ClassOccupancyRow = {
 
 export type LeadStage = 'NEW' | 'CONTACTED' | 'TRIAL_CLASS' | 'PROPOSAL' | 'ENROLLED' | 'LOST'
 
+export type LeadSource =
+  | 'INSTAGRAM'
+  | 'GOOGLE'
+  | 'REFERRAL'
+  | 'WEBSITE'
+  | 'WHATSAPP'
+  | 'OTHER'
+
 export type Lead = {
   id: string
   organizationId: string
@@ -612,7 +620,35 @@ export type Lead = {
   phone: string | null
   email: string | null
   stage: LeadStage
-  source: 'INSTAGRAM' | 'GOOGLE' | 'REFERRAL' | 'WEBSITE' | 'WHATSAPP' | 'OTHER'
+  source: LeadSource
+  ownerStaffId: string | null
+  ownerName: string | null
+  notes: string | null
+  /** O campo que faz alguém abrir o CRM de manhã. */
+  nextFollowUpAt: string | null
+  /** Preenchido pela conversão. Liga o funil ao resto do produto. */
+  convertedStudentId: string | null
+  lostReason: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type LeadEventKind =
+  | 'STAGE_CHANGE'
+  | 'NOTE'
+  | 'CALL'
+  | 'MESSAGE'
+  | 'VISIT'
+  | 'CREATED'
+
+export type LeadEvent = {
+  id: string
+  leadId: string
+  kind: LeadEventKind
+  fromStage: LeadStage | null
+  toStage: LeadStage | null
+  body: string | null
+  actorName: string | null
   createdAt: string
 }
 

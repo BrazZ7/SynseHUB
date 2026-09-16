@@ -84,6 +84,12 @@ existem, não para conferir se subiram.
   são SECURITY INVOKER, ao contrário das de escrita: sem nada a gravar, o
   `security definer` só criaria superfície nova de vazamento entre academias, e
   a RLS que já existe filtra melhor que qualquer checagem escrita à mão.
+- **0028 (`0028_crm.sql`)** — o CRM. `leads` existia desde a 0003 e nunca teve
+  tela. Acrescenta o histórico de etapa, sem o qual não há taxa de conversão —
+  `leads.stage` guarda onde a pessoa está, e sobrescrever a coluna apaga por
+  onde ela passou. `convert_lead_to_student` cria perfil, aluno e matrícula numa
+  transação só: em três chamadas da aplicação, a falha da segunda deixaria aluno
+  criado com lead aberto.
 
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona

@@ -33,6 +33,9 @@ import type {
   ConsentType,
   Exercise,
   Lead,
+  LeadEvent,
+  LeadEventKind,
+  LeadStage,
   Membership,
   MembershipPlan,
   Organization,
@@ -160,6 +163,18 @@ export type LogWorkoutSetInput = {
   restSeconds: number | null
   startedAt: string | null
   completedAt: string
+}
+
+export type SaveLeadInput = {
+  id?: string
+  organizationId: string
+  name: string
+  phone: string | null
+  email: string | null
+  source: Lead['source']
+  ownerStaffId: string | null
+  notes: string | null
+  nextFollowUpAt: string | null
 }
 
 export type Paginated<T> = {
@@ -520,6 +535,28 @@ export interface DataSource {
 
   // CRM
   listLeads(organizationId: string): Promise<Lead[]>
+  getLead(organizationId: string, leadId: string): Promise<Lead | null>
+  saveLead(input: SaveLeadInput): Promise<Lead>
+  /**
+   * Muda a etapa. O histórico é escrito por gatilho, não daqui — a etapa muda
+   * pela tela, por importação e por SQL de suporte.
+   */
+  moveLeadStage(
+    organizationId: string,
+    leadId: string,
+    stage: LeadStage,
+    lostReason: string | null,
+  ): Promise<void>
+  addLeadEvent(
+    organizationId: string,
+    leadId: string,
+    kind: LeadEventKind,
+    body: string,
+    actorStaffId: string | null,
+  ): Promise<void>
+  listLeadEvents(organizationId: string, leadId: string): Promise<LeadEvent[]>
+  /** Devolve o `students.id`. Idempotente: converter duas vezes não duplica. */
+  convertLead(leadId: string, planId: string | null, billingDay: number): Promise<string>
 
   /*
    * Notificações

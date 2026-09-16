@@ -13,6 +13,7 @@ import type {
   SaveAssessmentInput,
   LogWorkoutSetInput,
   SaveClassScheduleInput,
+  SaveLeadInput,
   ScheduleWindow,
   StudentFilters,
   StudentListItem,
@@ -55,6 +56,9 @@ import type {
   WorkoutTotals,
   Exercise,
   Lead,
+  LeadEvent,
+  LeadEventKind,
+  LeadStage,
   Membership,
   MembershipPlan,
   Organization,
@@ -1970,17 +1974,9 @@ export class SupabaseDataSource implements DataSource {
     })) satisfies ClassOccupancyRow[]
   }
 
-  async listLeads(organizationId: string) {
-    const rows =
-      (await this.select<Row[]>(
-        'listLeads',
-        this.client
-          .from('leads')
-          .select('*')
-          .eq('organization_id', organizationId)
-          .order('created_at', { ascending: false }),
-      )) ?? []
-    return rows.map((row) => ({
+  // ── CRM ────────────────────────────────────────────────────────────────────
+  private mapLead(row: Row): Lead {
+    return {
       id: row.id,
       organizationId: row.organization_id,
       name: row.name,
@@ -1988,8 +1984,155 @@ export class SupabaseDataSource implements DataSource {
       email: row.email,
       stage: row.stage,
       source: row.source,
+      ownerStaffId: row.owner_staff_id ?? null,
+      ownerName: row.staff?.user_profiles?.name ?? null,
+      notes: row.notes ?? null,
+      nextFollowUpAt: row.next_follow_up_at ?? null,
+      convertedStudentId: row.converted_student_id ?? null,
+      lostReason: row.lost_reason ?? null,
       createdAt: row.created_at,
-    })) satisfies Lead[]
+      updatedAt: row.updated_at ?? row.created_at,
+    }
+  }
+
+  private static readonly LEAD_SELECT = '*, staff:owner_staff_id(user_profiles:user_profile_id(name))'
+
+  async listLeads(organizationId: string) {
+    const rows =
+      (await this.select<Row[]>(
+        'listLeads',
+        this.client
+          .from('leads')
+          .select(SupabaseDataSource.LEAD_SELECT)
+          .eq('organization_id', organizationId)
+          /*
+           * Quem tem retorno marcado vem primeiro, do mais atrasado para o mais
+           * distante. Ordenar por criação deixaria o lead de hoje no topo e o
+           * contato vencido de terça no fim — e o vencido é o que esfria.
+           */
+          .order('next_follow_up_at', { ascending: true, nullsFirst: false })
+          .order('created_at', { ascending: false }),
+      )) ?? []
+    return rows.map((row) => this.mapLead(row))
+  }
+
+  async getLead(organizationId: string, leadId: string) {
+    const row = await this.select<Row>(
+      'getLead',
+      this.client
+        .from('leads')
+        .select(SupabaseDataSource.LEAD_SELECT)
+        .eq('organization_id', organizationId)
+        .eq('id', leadId)
+        .maybeSingle(),
+    )
+    return row ? this.mapLead(row) : null
+  }
+
+  async saveLead(input: SaveLeadInput): Promise<Lead> {
+    const linha = {
+      organization_id: input.organizationId,
+      name: input.name,
+      phone: input.phone,
+      email: input.email,
+      source: input.source,
+      owner_staff_id: input.ownerStaffId,
+      notes: input.notes,
+      next_follow_up_at: input.nextFollowUpAt,
+    }
+
+    const row = input.id
+      ? await this.select<Row>(
+          'saveLead:update',
+          this.client
+            .from('leads')
+            .update(linha)
+            .eq('organization_id', input.organizationId)
+            .eq('id', input.id)
+            .select(SupabaseDataSource.LEAD_SELECT)
+            .single(),
+        )
+      : await this.select<Row>(
+          'saveLead:insert',
+          this.client.from('leads').insert(linha).select(SupabaseDataSource.LEAD_SELECT).single(),
+        )
+
+    return this.mapLead(row!)
+  }
+
+  async moveLeadStage(
+    organizationId: string,
+    leadId: string,
+    stage: LeadStage,
+    lostReason: string | null,
+  ) {
+    /*
+     * Só o status. O evento de histórico é do gatilho da 0028 — escrever aqui
+     * deixaria a etapa mudada por importação ou por SQL fora do funil.
+     */
+    const { error } = await this.client
+      .from('leads')
+      .update({ stage, lost_reason: lostReason })
+      .eq('organization_id', organizationId)
+      .eq('id', leadId)
+    if (error) this.fail('moveLeadStage', error)
+  }
+
+  async addLeadEvent(
+    organizationId: string,
+    leadId: string,
+    kind: LeadEventKind,
+    body: string,
+    actorStaffId: string | null,
+  ) {
+    const { error } = await this.client.from('lead_events').insert({
+      organization_id: organizationId,
+      lead_id: leadId,
+      kind,
+      body,
+      actor_staff_id: actorStaffId,
+    })
+    if (error) this.fail('addLeadEvent', error)
+  }
+
+  async listLeadEvents(organizationId: string, leadId: string): Promise<LeadEvent[]> {
+    const rows =
+      (await this.select<Row[]>(
+        'listLeadEvents',
+        this.client
+          .from('lead_events')
+          .select('*, staff:actor_staff_id(user_profiles:user_profile_id(name))')
+          .eq('organization_id', organizationId)
+          .eq('lead_id', leadId)
+          .order('created_at', { ascending: false }),
+      )) ?? []
+
+    return rows.map((row) => ({
+      id: row.id,
+      leadId: row.lead_id,
+      kind: row.kind,
+      fromStage: row.from_stage ?? null,
+      toStage: row.to_stage ?? null,
+      body: row.body ?? null,
+      actorName: row.staff?.user_profiles?.name ?? null,
+      createdAt: row.created_at,
+    }))
+  }
+
+  async convertLead(leadId: string, planId: string | null, billingDay: number): Promise<string> {
+    /*
+     * Perfil, aluno, matrícula e fechamento do lead numa transação só, no
+     * banco. Em três chamadas daqui, a falha da segunda deixaria aluno criado
+     * com lead aberto — e ninguém percebe até ligar duas vezes para a mesma
+     * pessoa.
+     */
+    const { data, error } = await this.client.rpc('convert_lead_to_student', {
+      p_lead_id: leadId,
+      p_plan_id: planId,
+      p_billing_day: billingDay,
+    })
+    if (error) this.fail('convertLead', error)
+    return String(data)
   }
 
   // ── Notificações ───────────────────────────────────────────────────────────

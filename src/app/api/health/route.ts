@@ -168,6 +168,7 @@ const MIGRATIONS_ESPERADAS = [
   '0025_agenda_autorizacao.sql',
   '0026_treino_ativo.sql',
   '0027_relatorios.sql',
+  '0028_crm.sql',
 ]
 
 async function schemaReadiness() {
@@ -273,6 +274,7 @@ async function schemaReadiness() {
     '0025_agenda_autorizacao.sql',
     '0026_treino_ativo.sql',
     '0027_relatorios.sql',
+    '0028_crm.sql',
   )
 
   return {

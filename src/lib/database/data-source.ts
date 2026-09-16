@@ -18,8 +18,14 @@ import type {
   ClassSchedule,
   ClassSession,
   ClassSessionForStudent,
+  ClassOccupancyRow,
+  ExerciseProgressPoint,
+  GymTrainingReport,
+  ExercisePersonalRecord,
+  StudentAtRisk,
   WorkoutPreferences,
   WorkoutSessionSummary,
+  WorkoutTotals,
   CollectionRule,
   ConsentState,
   StaffInvite,
@@ -486,6 +492,31 @@ export interface DataSource {
     userProfileId: string,
     preferencias: WorkoutPreferences,
   ): Promise<WorkoutPreferences>
+
+  // Relatórios
+  /*
+   * A agregação é do banco. Uma academia com duzentos alunos produz cerca de
+   * 20 mil séries por mês, e trazer isso pela rede para somar aqui seria pagar
+   * transferência e memória para descartar quase tudo.
+   */
+  getExerciseProgress(
+    studentId: string,
+    exerciseId: string,
+    weeks: number,
+  ): Promise<ExerciseProgressPoint[]>
+  getPersonalRecords(studentId: string): Promise<ExercisePersonalRecord[]>
+  getWorkoutTotals(studentId: string, from: string, to: string): Promise<WorkoutTotals>
+  getGymTrainingReport(
+    organizationId: string,
+    from: string,
+    to: string,
+  ): Promise<GymTrainingReport>
+  listStudentsAtRisk(organizationId: string, dias: number): Promise<StudentAtRisk[]>
+  getClassOccupancyReport(
+    organizationId: string,
+    from: string,
+    to: string,
+  ): Promise<ClassOccupancyRow[]>
 
   // CRM
   listLeads(organizationId: string): Promise<Lead[]>

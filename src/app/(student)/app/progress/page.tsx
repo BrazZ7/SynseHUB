@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Activity, Dumbbell, Flame, TrendingUp } from 'lucide-react'
+import { Activity, Dumbbell, Flame, TrendingUp, Trophy } from 'lucide-react'
 
 import { ProgressLineChart } from '@/components/synse/charts/progress-line-chart'
 import { ChartCard } from '@/components/synse/chart-card'
@@ -8,7 +8,7 @@ import { ProgressRing } from '@/components/synse/progress-ring'
 import { getStudentHome } from '@/features/students/app-service'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
-import { formatDate } from '@/lib/utils'
+import { formatDate, formatNumber } from '@/lib/utils'
 
 export const metadata: Metadata = { title: 'Progresso' }
 
@@ -16,10 +16,24 @@ export default async function StudentProgressPage() {
   const session = await requireStudentSession()
   const dataSource = await getDataSource()
 
-  const [home, logs, assessments] = await Promise.all([
+  const agora = new Date()
+  const noventaDias = new Date(agora.getTime() - 90 * 86_400_000)
+
+  const [home, logs, assessments, recordes, totais] = await Promise.all([
     getStudentHome(session.organizationId, session.studentId),
     dataSource.listWorkoutLogs(session.organizationId, session.studentId),
     dataSource.listAssessments(session.organizationId, session.studentId),
+    /*
+     * Recordes e totais vêm do Treino Ativo, que grava série a série. O
+     * `listWorkoutLogs` acima continua alimentando o gráfico de carga enquanto
+     * houver histórico antigo — quem treinava antes da 0026 não perde a linha.
+     */
+    dataSource.getPersonalRecords(session.studentId),
+    dataSource.getWorkoutTotals(
+      session.studentId,
+      noventaDias.toISOString(),
+      agora.toISOString(),
+    ),
   ])
 
   const loadSeries = logs
@@ -55,6 +69,60 @@ export default async function StudentProgressPage() {
           </p>
         </div>
       </section>
+
+      {/* Os números que o Treino Ativo passou a gravar. Somem quando ainda não
+          há treino registrado — cartão zerado não ensina nada. */}
+      {totais.workouts > 0 && (
+        <section className="rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
+          <h2 className="text-sm font-semibold text-synse-text">Últimos 90 dias</h2>
+          <dl className="mt-3 grid grid-cols-2 gap-4">
+            <Numero rotulo="Treinos" valor={formatNumber(totais.workouts)} />
+            <Numero
+              rotulo="Volume"
+              valor={`${formatNumber(Math.round(totais.volumeKg / 1000))} t`}
+            />
+            <Numero rotulo="Séries" valor={formatNumber(totais.sets)} />
+            <Numero rotulo="Repetições" valor={formatNumber(totais.reps)} />
+            <Numero
+              rotulo="Duração média"
+              valor={
+                totais.averageDurationSeconds
+                  ? `${Math.round(totais.averageDurationSeconds / 60)} min`
+                  : '—'
+              }
+            />
+            <Numero
+              rotulo="Descanso médio"
+              valor={totais.averageRestSeconds ? `${totais.averageRestSeconds}s` : '—'}
+            />
+          </dl>
+        </section>
+      )}
+
+      {recordes.length > 0 && (
+        <section className="rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-synse-text">
+            <Trophy className="size-4 text-synse-primary" aria-hidden />
+            Seus recordes
+          </h2>
+          <ul className="mt-3 divide-y divide-synse-border">
+            {recordes.slice(0, 8).map((recorde) => (
+              <li key={recorde.exerciseId} className="flex items-center gap-3 py-2.5">
+                <span className="min-w-0 flex-1 truncate text-sm text-synse-text">
+                  {recorde.exerciseName}
+                </span>
+                <span className="text-xs text-synse-muted">{formatDate(recorde.achievedAt)}</span>
+                <span className="text-sm font-semibold tabular-nums text-synse-primary">
+                  {recorde.maxWeight} kg
+                  <span className="ml-1 text-xs font-normal text-synse-muted">
+                    × {recorde.reps}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="grid grid-cols-2 gap-3">
         <StatTile
@@ -132,6 +200,16 @@ function StatTile({
         {value}
       </p>
       <p className="text-[11px] text-synse-muted">{caption}</p>
+    </div>
+  )
+}
+
+/** Um número do resumo. Pequeno de propósito: a tela é um celular na mão. */
+function Numero({ rotulo, valor }: { rotulo: string; valor: string }) {
+  return (
+    <div>
+      <dt className="text-xs text-synse-muted">{rotulo}</dt>
+      <dd className="text-lg font-semibold tabular-nums text-synse-text">{valor}</dd>
     </div>
   )
 }

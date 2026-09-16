@@ -80,6 +80,10 @@ existem, não para conferir se subiram.
   do banco, em dois níveis: `unique (session_id, client_id)` absorve o reenvio
   da mesma ação, e `unique (session_id, exercise_id, set_number)` impede duas
   "série 2" ainda que venham com ids diferentes.
+- **0027 (`0027_relatorios.sql`)** — a agregação dos relatórios. Todas as funções
+  são SECURITY INVOKER, ao contrário das de escrita: sem nada a gravar, o
+  `security definer` só criaria superfície nova de vazamento entre academias, e
+  a RLS que já existe filtra melhor que qualquer checagem escrita à mão.
 
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona

@@ -537,6 +537,69 @@ export const DEFAULT_WORKOUT_PREFERENCES: WorkoutPreferences = {
 }
 
 // ---------------------------------------------------------------------------
+// Relatórios
+// ---------------------------------------------------------------------------
+
+export type ExerciseProgressPoint = {
+  /** Segunda-feira da semana. */
+  week: string
+  maxWeight: number | null
+  volumeKg: number
+  sets: number
+  reps: number
+}
+
+/**
+ * Recorde de carga num exercício.
+ *
+ * `ExercisePersonalRecord` e não `PersonalRecord` porque este último já existe
+ * desde a 0016, e é o recorde de corrida — distância e ritmo. Dois tipos com o
+ * mesmo nome em domínios vizinhos é confusão garantida na hora de importar.
+ */
+export type ExercisePersonalRecord = {
+  exerciseId: string
+  exerciseName: string
+  maxWeight: number
+  reps: number
+  achievedAt: string
+}
+
+export type WorkoutTotals = {
+  workouts: number
+  sets: number
+  reps: number
+  volumeKg: number
+  averageDurationSeconds: number | null
+  averageRestSeconds: number | null
+  distinctExercises: number
+}
+
+export type GymTrainingReport = {
+  workouts: number
+  studentsTraining: number
+  sets: number
+  volumeKg: number
+  averageDurationSeconds: number | null
+}
+
+export type StudentAtRisk = {
+  studentId: string
+  name: string
+  /** Nulo é quem nunca apareceu — não uma data inventada. */
+  lastVisitAt: string | null
+  daysAbsent: number
+}
+
+export type ClassOccupancyRow = {
+  className: string
+  occurrences: number
+  capacityOffered: number
+  bookings: number
+  attended: number
+  noShows: number
+}
+
+// ---------------------------------------------------------------------------
 // CRM
 // ---------------------------------------------------------------------------
 

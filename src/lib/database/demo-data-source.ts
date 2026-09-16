@@ -47,8 +47,14 @@ import type {
   ClassSchedule,
   ClassSession,
   ClassSessionForStudent,
+  ClassOccupancyRow,
+  ExercisePersonalRecord,
+  ExerciseProgressPoint,
+  GymTrainingReport,
+  StudentAtRisk,
   WorkoutPreferences,
   WorkoutSessionSummary,
+  WorkoutTotals,
   PersonalRecord,
   SportType,
   CheckIn,
@@ -1447,6 +1453,147 @@ export class DemoDataSource implements DataSource {
   async saveWorkoutPreferences(_userProfileId: string, p: WorkoutPreferences) {
     this.demoWorkoutPrefs = p
     return p
+  }
+
+  // ── Relatórios ─────────────────────────────────────────────────────────────
+  /**
+   * `workout_logs` aponta para a linha da prescrição, não para o exercício.
+   * Este índice faz a ponte — e evita varrer `workoutExercises` por log.
+   */
+  private exercicioDoLog(workoutExerciseId: string | null): string | null {
+    if (!workoutExerciseId) return null
+    const todos = [...this.db.workoutExercises, ...this.addedWorkoutExercises]
+    return todos.find((item) => item.id === workoutExerciseId)?.exerciseId ?? null
+  }
+  /**
+   * Em demonstração os números saem do histórico achatado (`workout_logs`) que
+   * a semente já produz, e não das séries do Treino Ativo — que só existem
+   * depois de alguém treinar de verdade. Uma tela de relatório vazia esconderia
+   * justamente o que ela serve para mostrar.
+   */
+  async getExerciseProgress(studentId: string, exerciseId: string, weeks: number) {
+    const logs = this.db.workoutLogs
+      .filter((log) => log.studentId === studentId && this.exercicioDoLog(log.workoutExerciseId) === exerciseId)
+      .slice(-weeks)
+
+    return logs.map((log, indice) => ({
+      week: new Date(Date.now() - (logs.length - indice) * 7 * 86_400_000)
+        .toISOString()
+        .slice(0, 10),
+      maxWeight: log.load,
+      volumeKg: (log.load ?? 0) * (log.reps ?? 0) * (log.sets ?? 1),
+      sets: log.sets ?? 0,
+      reps: (log.reps ?? 0) * (log.sets ?? 1),
+    })) satisfies ExerciseProgressPoint[]
+  }
+
+  async getPersonalRecords(studentId: string) {
+    const melhorPorExercicio = new Map<string, ExercisePersonalRecord>()
+
+    for (const log of this.db.workoutLogs) {
+      const exerciseId = this.exercicioDoLog(log.workoutExerciseId)
+      if (log.studentId !== studentId || log.load == null || !exerciseId) continue
+      const atual = melhorPorExercicio.get(exerciseId)
+      if (atual && atual.maxWeight >= log.load) continue
+
+      melhorPorExercicio.set(exerciseId, {
+        exerciseId,
+        exerciseName: this.db.exercises.find((e) => e.id === exerciseId)?.name ?? 'Exercício',
+        maxWeight: log.load,
+        reps: log.reps ?? 0,
+        achievedAt: log.performedAt,
+      })
+    }
+
+    return [...melhorPorExercicio.values()].sort((a, b) =>
+      a.exerciseName.localeCompare(b.exerciseName),
+    )
+  }
+
+  async getWorkoutTotals(studentId: string, from: string, to: string): Promise<WorkoutTotals> {
+    const logs = this.db.workoutLogs.filter(
+      (log) => log.studentId === studentId && log.performedAt >= from && log.performedAt < to,
+    )
+    const series = logs.reduce((soma, log) => soma + (log.sets ?? 0), 0)
+
+    return {
+      workouts: new Set(logs.map((log) => log.performedAt.slice(0, 10))).size,
+      sets: series,
+      reps: logs.reduce((soma, log) => soma + (log.reps ?? 0) * (log.sets ?? 1), 0),
+      volumeKg: Math.round(
+        logs.reduce((soma, log) => soma + (log.load ?? 0) * (log.reps ?? 0) * (log.sets ?? 1), 0),
+      ),
+      averageDurationSeconds: series > 0 ? 3600 : null,
+      averageRestSeconds: series > 0 ? 75 : null,
+      distinctExercises: new Set(logs.map((log) => log.workoutExerciseId)).size,
+    }
+  }
+
+  async getGymTrainingReport(organizationId: string, from: string, to: string) {
+    const logs = this.db.workoutLogs.filter(
+      (log) => log.performedAt >= from && log.performedAt < to,
+    )
+    const dias = new Set(logs.map((log) => `${log.studentId}:${log.performedAt.slice(0, 10)}`))
+
+    return {
+      workouts: dias.size,
+      studentsTraining: new Set(logs.map((log) => log.studentId)).size,
+      sets: logs.reduce((soma, log) => soma + (log.sets ?? 0), 0),
+      volumeKg: Math.round(
+        logs.reduce((soma, log) => soma + (log.load ?? 0) * (log.reps ?? 0) * (log.sets ?? 1), 0),
+      ),
+      averageDurationSeconds: dias.size > 0 ? 3480 : null,
+    } satisfies GymTrainingReport
+  }
+
+  async listStudentsAtRisk(organizationId: string, dias: number): Promise<StudentAtRisk[]> {
+    const limite = Date.now() - dias * 86_400_000
+    
+
+    return this.db.students
+      .filter((aluno) => aluno.status === 'ACTIVE' || aluno.status === 'OVERDUE')
+      .map((aluno) => {
+        const ultima = this.lastCheckInFor(aluno.id)
+        return {
+          studentId: aluno.id,
+          name: aluno.name,
+          lastVisitAt: ultima,
+          daysAbsent: ultima
+            ? Math.floor((Date.now() - new Date(ultima).getTime()) / 86_400_000)
+            : 9999,
+        }
+      })
+      .filter((linha) => !linha.lastVisitAt || new Date(linha.lastVisitAt).getTime() < limite)
+      .sort((a, b) => b.daysAbsent - a.daysAbsent)
+      .slice(0, 50)
+  }
+
+  async getClassOccupancyReport(organizationId: string, from: string, to: string) {
+    this.montarAgenda()
+    const porNome = new Map<string, ClassOccupancyRow>()
+
+    for (const sessao of this.demoSessions) {
+      if (sessao.status !== 'SCHEDULED' || sessao.startsAt < from || sessao.startsAt >= to) continue
+
+      const linha = porNome.get(sessao.name) ?? {
+        className: sessao.name,
+        occurrences: 0,
+        capacityOffered: 0,
+        bookings: 0,
+        attended: 0,
+        noShows: 0,
+      }
+      const reservas = this.demoBookings.filter((r) => r.sessionId === sessao.id)
+
+      linha.occurrences += 1
+      linha.capacityOffered += sessao.capacity
+      linha.bookings += reservas.filter((r) => r.status !== 'CANCELLED').length
+      linha.attended += reservas.filter((r) => r.status === 'ATTENDED').length
+      linha.noShows += reservas.filter((r) => r.status === 'NO_SHOW').length
+      porNome.set(sessao.name, linha)
+    }
+
+    return [...porNome.values()].sort((a, b) => b.occurrences - a.occurrences)
   }
 
   async listLeads(organizationId: string): Promise<Lead[]> {

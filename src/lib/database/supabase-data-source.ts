@@ -45,8 +45,14 @@ import type {
   ClassSession,
   ClassSessionForStudent,
   CollectionRule,
+  ClassOccupancyRow,
+  ExerciseProgressPoint,
+  GymTrainingReport,
+  ExercisePersonalRecord,
+  StudentAtRisk,
   WorkoutPreferences,
   WorkoutSessionSummary,
+  WorkoutTotals,
   Exercise,
   Lead,
   Membership,
@@ -1863,6 +1869,107 @@ export class SupabaseDataSource implements DataSource {
     return p
   }
 
+  // ── Relatórios ─────────────────────────────────────────────────────────────
+  /**
+   * As funções da 0027 são SECURITY INVOKER: rodam com o privilégio de quem
+   * chama, e a RLS filtra sozinha. Por isso não há checagem de academia aqui —
+   * duplicá-la criaria um segundo lugar para a regra divergir.
+   */
+  private async rpc<T>(nome: string, args: Record<string, unknown>, padrao: T): Promise<T> {
+    const { data, error } = await this.client.rpc(nome, args)
+    if (error) {
+      /*
+       * Relatório é leitura: falhar aqui não pode derrubar a página. Uma
+       * academia sem a 0027 aplicada veria erro numa tela que deveria mostrar
+       * o que tem.
+       */
+      logger.warn(`report:${nome}`, { erro: String((error as Error).message) })
+      return padrao
+    }
+    return (data as T) ?? padrao
+  }
+
+  async getExerciseProgress(studentId: string, exerciseId: string, weeks: number) {
+    const rows = await this.rpc<Row[]>(
+      'exercise_progress',
+      { p_student_id: studentId, p_exercise_id: exerciseId, p_weeks: weeks },
+      [],
+    )
+    return rows.map((row) => ({
+      week: row.semana,
+      maxWeight: row.carga_max === null ? null : Number(row.carga_max),
+      volumeKg: Number(row.volume_kg ?? 0),
+      sets: Number(row.series ?? 0),
+      reps: Number(row.reps ?? 0),
+    })) satisfies ExerciseProgressPoint[]
+  }
+
+  async getPersonalRecords(studentId: string) {
+    const rows = await this.rpc<Row[]>('personal_records', { p_student_id: studentId }, [])
+    return rows.map((row) => ({
+      exerciseId: row.exercise_id,
+      exerciseName: row.exercise_name,
+      maxWeight: Number(row.carga_max),
+      reps: Number(row.reps),
+      achievedAt: row.alcancado_em,
+    })) satisfies ExercisePersonalRecord[]
+  }
+
+  async getWorkoutTotals(studentId: string, from: string, to: string): Promise<WorkoutTotals> {
+    const rows = await this.rpc<Row[]>(
+      'workout_totals',
+      { p_student_id: studentId, p_from: from, p_to: to },
+      [],
+    )
+    return mapTotals(rows[0])
+  }
+
+  async getGymTrainingReport(organizationId: string, from: string, to: string) {
+    const rows = await this.rpc<Row[]>(
+      'gym_training_report',
+      { p_organization_id: organizationId, p_from: from, p_to: to },
+      [],
+    )
+    const row = rows[0]
+    return {
+      workouts: Number(row?.treinos ?? 0),
+      studentsTraining: Number(row?.alunos_treinando ?? 0),
+      sets: Number(row?.series ?? 0),
+      volumeKg: Number(row?.volume_kg ?? 0),
+      averageDurationSeconds: row?.duracao_media_seg == null ? null : Number(row.duracao_media_seg),
+    } satisfies GymTrainingReport
+  }
+
+  async listStudentsAtRisk(organizationId: string, dias: number) {
+    const rows = await this.rpc<Row[]>(
+      'students_at_risk',
+      { p_organization_id: organizationId, p_dias: dias },
+      [],
+    )
+    return rows.map((row) => ({
+      studentId: row.student_id,
+      name: row.nome,
+      lastVisitAt: row.ultima_visita ?? null,
+      daysAbsent: Number(row.dias_ausente ?? 0),
+    })) satisfies StudentAtRisk[]
+  }
+
+  async getClassOccupancyReport(organizationId: string, from: string, to: string) {
+    const rows = await this.rpc<Row[]>(
+      'class_occupancy_report',
+      { p_organization_id: organizationId, p_from: from, p_to: to },
+      [],
+    )
+    return rows.map((row) => ({
+      className: row.aula,
+      occurrences: Number(row.ocorrencias ?? 0),
+      capacityOffered: Number(row.vagas_ofertadas ?? 0),
+      bookings: Number(row.reservas ?? 0),
+      attended: Number(row.presencas ?? 0),
+      noShows: Number(row.faltas ?? 0),
+    })) satisfies ClassOccupancyRow[]
+  }
+
   async listLeads(organizationId: string) {
     const rows =
       (await this.select<Row[]>(
@@ -2425,5 +2532,18 @@ export class SupabaseDataSource implements DataSource {
   async deleteActivity(activityId: string) {
     const { error } = await this.client.from('activities').delete().eq('id', activityId)
     if (error) this.fail('deleteActivity', error)
+  }
+}
+
+/** Zero em vez de nulo: a tela mostra um número, e "—" esconde se é zero ou falha. */
+function mapTotals(row: Row | undefined): WorkoutTotals {
+  return {
+    workouts: Number(row?.treinos ?? 0),
+    sets: Number(row?.series ?? 0),
+    reps: Number(row?.reps ?? 0),
+    volumeKg: Number(row?.volume_kg ?? 0),
+    averageDurationSeconds: row?.duracao_media_seg == null ? null : Number(row.duracao_media_seg),
+    averageRestSeconds: row?.descanso_medio_seg == null ? null : Number(row.descanso_medio_seg),
+    distinctExercises: Number(row?.exercicios_distintos ?? 0),
   }
 }

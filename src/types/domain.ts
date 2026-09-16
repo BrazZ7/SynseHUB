@@ -496,6 +496,47 @@ export type ClassSessionForStudent = ClassSession & {
 }
 
 // ---------------------------------------------------------------------------
+// Treino Ativo
+// ---------------------------------------------------------------------------
+
+export type WorkoutSessionStatus = 'IN_PROGRESS' | 'PAUSED' | 'COMPLETED' | 'ABANDONED'
+
+/** O treino como o histórico o vê. Detalhe de série fica em `workout_set_logs`. */
+export type WorkoutSessionSummary = {
+  id: string
+  organizationId: string
+  studentId: string
+  workoutPlanId: string | null
+  planName: string | null
+  clientId: string
+  status: WorkoutSessionStatus
+  startedAt: string
+  completedAt: string | null
+  durationSeconds: number | null
+  totalSets: number
+  totalReps: number
+  volumeKg: number
+}
+
+export type WorkoutPreferences = {
+  autoRest: boolean
+  sound: boolean
+  vibration: boolean
+  autoAdvance: boolean
+  keepScreenAwake: boolean
+  defaultRestSeconds: number
+}
+
+export const DEFAULT_WORKOUT_PREFERENCES: WorkoutPreferences = {
+  autoRest: true,
+  sound: true,
+  vibration: true,
+  autoAdvance: false,
+  keepScreenAwake: true,
+  defaultRestSeconds: 90,
+}
+
+// ---------------------------------------------------------------------------
 // CRM
 // ---------------------------------------------------------------------------
 

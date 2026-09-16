@@ -18,6 +18,8 @@ import type {
   ClassSchedule,
   ClassSession,
   ClassSessionForStudent,
+  WorkoutPreferences,
+  WorkoutSessionSummary,
   CollectionRule,
   ConsentState,
   StaffInvite,
@@ -133,6 +135,25 @@ export type ScheduleWindow = {
   from: string
   /** Fim da janela, exclusivo. */
   to: string
+}
+
+/**
+ * Uma série concluída, a caminho do banco.
+ *
+ * `clientId` é gerado no aparelho antes de existir rede: é ele que faz o toque
+ * duplo e o reenvio da fila offline caírem na mesma linha.
+ */
+export type LogWorkoutSetInput = {
+  sessionId: string
+  exerciseId: string
+  setNumber: number
+  repsCompleted: number
+  clientId: string
+  weight: number | null
+  repsPlanned: number | null
+  restSeconds: number | null
+  startedAt: string | null
+  completedAt: string
 }
 
 export type Paginated<T> = {
@@ -442,6 +463,29 @@ export interface DataSource {
     studentId: string,
     window: ScheduleWindow,
   ): Promise<ClassSessionForStudent[]>
+
+  // Treino Ativo
+  /**
+   * Abre o treino, ou devolve o que já estava aberto.
+   *
+   * O aluno sai do usuário autenticado, no banco — nunca do que o cliente
+   * mandou. Idempotente por `clientId`.
+   */
+  startWorkoutSession(clientId: string, workoutPlanId: string | null): Promise<string>
+  logWorkoutSet(input: LogWorkoutSetInput): Promise<string>
+  finishWorkoutSession(
+    sessionId: string,
+    durationSeconds: number,
+    status: 'COMPLETED' | 'ABANDONED',
+  ): Promise<void>
+  /** O treino em andamento no servidor, para recuperar em outro aparelho. */
+  getActiveWorkoutSession(studentId: string): Promise<WorkoutSessionSummary | null>
+  listWorkoutSessions(studentId: string, limite: number): Promise<WorkoutSessionSummary[]>
+  getWorkoutPreferences(userProfileId: string): Promise<WorkoutPreferences>
+  saveWorkoutPreferences(
+    userProfileId: string,
+    preferencias: WorkoutPreferences,
+  ): Promise<WorkoutPreferences>
 
   // CRM
   listLeads(organizationId: string): Promise<Lead[]>

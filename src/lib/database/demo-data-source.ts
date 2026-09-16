@@ -7,6 +7,7 @@ import type {
   Paginated,
   SaveActivityInput,
   SaveAssessmentInput,
+  LogWorkoutSetInput,
   SaveClassScheduleInput,
   ScheduleWindow,
   StudentFilters,
@@ -16,6 +17,7 @@ import { DEMO_ORG_ID, getDemoDataset } from '@/lib/database/demo-seed'
 import { appendDemoMutation, type DemoMutation } from '@/lib/database/demo-journal'
 import { BASELINE_CHALLENGES, currentCycle } from '@/lib/baseline/challenges'
 import { CONSENT_DOCUMENTS } from '@/lib/consents/catalog'
+import { DEFAULT_WORKOUT_PREFERENCES } from '@/types/domain'
 import {
   densidadeCorporal,
   imc,
@@ -45,6 +47,8 @@ import type {
   ClassSchedule,
   ClassSession,
   ClassSessionForStudent,
+  WorkoutPreferences,
+  WorkoutSessionSummary,
   PersonalRecord,
   SportType,
   CheckIn,
@@ -118,6 +122,9 @@ export class DemoDataSource implements DataSource {
   private readonly demoSessions: ClassSession[] = []
   private readonly demoBookings: ClassBooking[] = []
   private agendaPronta = false
+  private readonly demoWorkoutSessions: WorkoutSessionSummary[] = []
+  private readonly demoSetLogs = new Map<string, { reps: number; weight: number | null }[]>()
+  private demoWorkoutPrefs: WorkoutPreferences = { ...DEFAULT_WORKOUT_PREFERENCES }
 
   // ── Índices ────────────────────────────────────────────────────────────────
   private readonly planById = new Map(this.db.plans.map((p) => [p.id, p]))
@@ -1355,6 +1362,91 @@ export class DemoDataSource implements DataSource {
         waitlistPosition: minha?.status === 'WAITLIST' && posicao >= 0 ? posicao + 1 : null,
       }
     })
+  }
+
+  // ── Treino Ativo ───────────────────────────────────────────────────────────
+  /**
+   * Em demonstração o treino vive em memória, com a mesma idempotência do
+   * banco: reabrir com o mesmo `clientId` devolve a sessão que já existe.
+   */
+  async startWorkoutSession(clientId: string, workoutPlanId: string | null): Promise<string> {
+    const existente = this.demoWorkoutSessions.find(
+      (sessao) => sessao.clientId === clientId || sessao.status === 'IN_PROGRESS',
+    )
+    if (existente) return existente.id
+
+    const id = `wsess_${this.demoWorkoutSessions.length + 1}`
+    this.demoWorkoutSessions.push({
+      id,
+      organizationId: DEMO_ORG_ID,
+      studentId: this.db.studentIdForApp,
+      workoutPlanId,
+      planName: null,
+      clientId,
+      status: 'IN_PROGRESS',
+      startedAt: new Date().toISOString(),
+      completedAt: null,
+      durationSeconds: null,
+      totalSets: 0,
+      totalReps: 0,
+      volumeKg: 0,
+    })
+    this.demoSetLogs.set(id, [])
+    return id
+  }
+
+  async logWorkoutSet(input: LogWorkoutSetInput): Promise<string> {
+    const sessao = this.demoWorkoutSessions.find((s) => s.id === input.sessionId)
+    if (!sessao) throw new Error('Treino não encontrado.')
+
+    const chave = `${input.sessionId}:${input.clientId}`
+    const series = this.demoSetLogs.get(input.sessionId) ?? []
+
+    // Mesma garantia do `unique (session_id, client_id)`: o reenvio não duplica.
+    if (!series.some((_, i) => `${input.sessionId}:${i}` === chave)) {
+      series.push({ reps: input.repsCompleted, weight: input.weight })
+      this.demoSetLogs.set(input.sessionId, series)
+      sessao.totalSets = series.length
+      sessao.totalReps = series.reduce((a, b) => a + b.reps, 0)
+      sessao.volumeKg = Math.round(series.reduce((a, b) => a + (b.weight ?? 0) * b.reps, 0))
+    }
+    return chave
+  }
+
+  async finishWorkoutSession(
+    sessionId: string,
+    durationSeconds: number,
+    status: 'COMPLETED' | 'ABANDONED',
+  ): Promise<void> {
+    const sessao = this.demoWorkoutSessions.find((s) => s.id === sessionId)
+    if (!sessao) return
+    sessao.status = status
+    sessao.completedAt = new Date().toISOString()
+    sessao.durationSeconds = durationSeconds
+  }
+
+  async getActiveWorkoutSession(studentId: string): Promise<WorkoutSessionSummary | null> {
+    return (
+      this.demoWorkoutSessions.find(
+        (s) => s.studentId === studentId && (s.status === 'IN_PROGRESS' || s.status === 'PAUSED'),
+      ) ?? null
+    )
+  }
+
+  async listWorkoutSessions(studentId: string, limite: number): Promise<WorkoutSessionSummary[]> {
+    return this.demoWorkoutSessions
+      .filter((s) => s.studentId === studentId && s.status === 'COMPLETED')
+      .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+      .slice(0, limite)
+  }
+
+  async getWorkoutPreferences(): Promise<WorkoutPreferences> {
+    return this.demoWorkoutPrefs
+  }
+
+  async saveWorkoutPreferences(_userProfileId: string, p: WorkoutPreferences) {
+    this.demoWorkoutPrefs = p
+    return p
   }
 
   async listLeads(organizationId: string): Promise<Lead[]> {

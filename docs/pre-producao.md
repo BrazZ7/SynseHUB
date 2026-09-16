@@ -69,6 +69,12 @@ ordem:
   tocada. As duas versões da 0024 registram a mesma linha, então o registro não
   distingue qual rodou — quem distingue é a sonda `agendaAutossuficiente` em
   `/api/health?deep=1`.
+- **0026 (`0026_treino_ativo.sql`)** — o Treino Ativo: sessão, passagem por
+  exercício e série. `workout_logs` continua intacta; ela é achatada demais para
+  série-a-série e é o que o histórico já lê. A garantia contra o toque duplo é
+  do banco, em dois níveis: `unique (session_id, client_id)` absorve o reenvio
+  da mesma ação, e `unique (session_id, exercise_id, set_number)` impede duas
+  "série 2" ainda que venham com ids diferentes.
 
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona

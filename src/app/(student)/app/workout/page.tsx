@@ -1,5 +1,8 @@
 import type { Metadata } from 'next'
-import { Timer } from 'lucide-react'
+import Link from 'next/link'
+import { Play, Timer } from 'lucide-react'
+
+import { Button } from '@/components/ui/button'
 
 import { Badge } from '@/components/ui/badge'
 import { BaselineWorkout } from '@/features/workouts/baseline-workout'
@@ -36,7 +39,8 @@ export default async function StudentWorkoutPage() {
       <header>
         <h1 className="text-2xl font-semibold text-synse-text">Seus treinos</h1>
         <p className="text-sm text-synse-muted">
-          Registre a carga a cada série para acompanhar a evolução.
+          Inicie o treino e o Synse acompanha série, carga e descanso — inclusive com a
+          tela bloqueada.
         </p>
       </header>
 
@@ -96,6 +100,20 @@ export default async function StudentWorkoutPage() {
                 </li>
               ))}
             </ol>
+
+            {/*
+              O botão fica no rodapé de cada plano, e não num lugar só da tela:
+              quem tem treino A e B começa o que vai fazer hoje, sem escolher
+              antes numa lista.
+            */}
+            <div className="border-t border-synse-border p-4">
+              <Button asChild size="lg" className="h-14 w-full text-base font-semibold">
+                <Link href={`/app/workout/active?plano=${plan.id}`}>
+                  <Play className="size-5" aria-hidden />
+                  Iniciar treino
+                </Link>
+              </Button>
+            </div>
           </section>
         ))
       )}

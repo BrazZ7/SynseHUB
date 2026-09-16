@@ -11,6 +11,7 @@ import type {
   Paginated,
   SaveActivityInput,
   SaveAssessmentInput,
+  LogWorkoutSetInput,
   SaveClassScheduleInput,
   ScheduleWindow,
   StudentFilters,
@@ -18,6 +19,7 @@ import type {
   FiscalData,
 } from '@/lib/database/data-source'
 import type { DemoStaff } from '@/lib/database/demo-seed'
+import { DEFAULT_WORKOUT_PREFERENCES } from '@/types/domain'
 import type {
   Activity,
   ActivityPrivacy,
@@ -43,6 +45,8 @@ import type {
   ClassSession,
   ClassSessionForStudent,
   CollectionRule,
+  WorkoutPreferences,
+  WorkoutSessionSummary,
   Exercise,
   Lead,
   Membership,
@@ -1724,6 +1728,139 @@ export class SupabaseDataSource implements DataSource {
         waitlistPosition: posicao > 0 ? posicao : null,
       }
     })
+  }
+
+  // ── Treino Ativo ───────────────────────────────────────────────────────────
+  async startWorkoutSession(clientId: string, workoutPlanId: string | null): Promise<string> {
+    /*
+     * A regra de quem é o aluno vive no banco, em `start_workout_session`.
+     * Mandar `student_id` daqui deixaria a aplicação decidir em nome de quem o
+     * treino é gravado — e é exatamente isso que não pode.
+     */
+    const { data, error } = await this.client.rpc('start_workout_session', {
+      p_client_id: clientId,
+      p_workout_plan_id: workoutPlanId,
+    })
+    if (error) this.fail('startWorkoutSession', error)
+    return String(data)
+  }
+
+  async logWorkoutSet(input: LogWorkoutSetInput): Promise<string> {
+    const { data, error } = await this.client.rpc('log_workout_set', {
+      p_session_id: input.sessionId,
+      p_exercise_id: input.exerciseId,
+      p_set_number: input.setNumber,
+      p_reps_completed: input.repsCompleted,
+      p_client_id: input.clientId,
+      p_weight: input.weight,
+      p_reps_planned: input.repsPlanned,
+      p_rest_seconds: input.restSeconds,
+      p_started_at: input.startedAt,
+      p_completed_at: input.completedAt,
+    })
+    if (error) this.fail('logWorkoutSet', error)
+    return String(data)
+  }
+
+  async finishWorkoutSession(
+    sessionId: string,
+    durationSeconds: number,
+    status: 'COMPLETED' | 'ABANDONED',
+  ): Promise<void> {
+    const { error } = await this.client.rpc('finish_workout_session', {
+      p_session_id: sessionId,
+      p_duration_seconds: durationSeconds,
+      p_status: status,
+    })
+    if (error) this.fail('finishWorkoutSession', error)
+  }
+
+  private mapWorkoutSession(row: Row): WorkoutSessionSummary {
+    const series = (row.workout_set_logs ?? []) as Row[]
+    return {
+      id: row.id,
+      organizationId: row.organization_id,
+      studentId: row.student_id,
+      workoutPlanId: row.workout_plan_id ?? null,
+      planName: row.workout_plans?.name ?? null,
+      clientId: row.client_id,
+      status: row.status,
+      startedAt: row.started_at,
+      completedAt: row.completed_at ?? null,
+      durationSeconds: row.duration_seconds ?? null,
+      totalSets: series.length,
+      totalReps: series.reduce((soma, s) => soma + Number(s.reps_completed ?? 0), 0),
+      volumeKg: Math.round(
+        series.reduce((soma, s) => soma + Number(s.weight ?? 0) * Number(s.reps_completed ?? 0), 0),
+      ),
+    }
+  }
+
+  private static readonly SESSAO_TREINO_SELECT =
+    '*, workout_plans:workout_plan_id(name), workout_set_logs(reps_completed, weight)'
+
+  async getActiveWorkoutSession(studentId: string): Promise<WorkoutSessionSummary | null> {
+    const row = await this.select<Row>(
+      'getActiveWorkoutSession',
+      this.client
+        .from('workout_sessions')
+        .select(SupabaseDataSource.SESSAO_TREINO_SELECT)
+        .eq('student_id', studentId)
+        .in('status', ['IN_PROGRESS', 'PAUSED'])
+        .maybeSingle(),
+    )
+    return row ? this.mapWorkoutSession(row) : null
+  }
+
+  async listWorkoutSessions(studentId: string, limite: number): Promise<WorkoutSessionSummary[]> {
+    const rows =
+      (await this.select<Row[]>(
+        'listWorkoutSessions',
+        this.client
+          .from('workout_sessions')
+          .select(SupabaseDataSource.SESSAO_TREINO_SELECT)
+          .eq('student_id', studentId)
+          .eq('status', 'COMPLETED')
+          .order('started_at', { ascending: false })
+          .limit(limite),
+      )) ?? []
+    return rows.map((row) => this.mapWorkoutSession(row))
+  }
+
+  async getWorkoutPreferences(userProfileId: string): Promise<WorkoutPreferences> {
+    const row = await this.select<Row>(
+      'getWorkoutPreferences',
+      this.client
+        .from('workout_preferences')
+        .select('*')
+        .eq('user_profile_id', userProfileId)
+        .maybeSingle(),
+    )
+    // Sem linha é quem nunca mexeu nas preferências: o padrão serve.
+    if (!row) return DEFAULT_WORKOUT_PREFERENCES
+    return {
+      autoRest: row.auto_rest,
+      sound: row.sound_enabled,
+      vibration: row.vibration_enabled,
+      autoAdvance: row.auto_advance,
+      keepScreenAwake: row.keep_screen_awake,
+      defaultRestSeconds: Number(row.default_rest_seconds),
+    }
+  }
+
+  async saveWorkoutPreferences(userProfileId: string, p: WorkoutPreferences) {
+    const { error } = await this.client.from('workout_preferences').upsert({
+      user_profile_id: userProfileId,
+      auto_rest: p.autoRest,
+      sound_enabled: p.sound,
+      vibration_enabled: p.vibration,
+      auto_advance: p.autoAdvance,
+      keep_screen_awake: p.keepScreenAwake,
+      default_rest_seconds: p.defaultRestSeconds,
+      updated_at: new Date().toISOString(),
+    })
+    if (error) this.fail('saveWorkoutPreferences', error)
+    return p
   }
 
   async listLeads(organizationId: string) {

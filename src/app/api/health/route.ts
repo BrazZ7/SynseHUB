@@ -185,6 +185,8 @@ async function schemaReadiness() {
     consentimento,
     avaliacaoFisica,
     agendaAutossuficiente,
+    synseBody,
+    escritaDoCorpo,
   ] = await Promise.all([
     schemaCheck('user_profiles?select=tier&limit=1'),
     schemaCheck('baseline_challenges?select=code&limit=1'),
@@ -218,6 +220,23 @@ async function schemaReadiness() {
       p_organization_id: '00000000-0000-0000-0000-000000000000',
       p_days_ahead: 21,
     }),
+    /*
+     * Synse Body. `body_measurements` só existe depois da 0032, e a RLS nega
+     * toda linha ao anônimo — o que a sonda lê é o schema ter aceitado a
+     * pergunta, não o conteúdo.
+     */
+    schemaCheck('body_measurements?select=id&limit=1'),
+    /*
+     * A tabela sem a função seria pior do que nenhuma das duas: a tela abriria
+     * e a pesagem falharia na hora de gravar. `record_body_measurement` é
+     * negada ao anônimo por `revoke`, então 401/403 é "existe" e 404 é "não
+     * existe" — e o POST não grava nada, porque o anônimo não pode executá-la.
+     */
+    rpcCheck('record_body_measurement', {
+      p_client_id: 'sonda',
+      p_measured_at: '2000-01-01T00:00:00Z',
+      p_source: 'MANUAL',
+    }),
   ])
 
   const registradas = await migracoesRegistradas()
@@ -243,6 +262,16 @@ async function schemaReadiness() {
     ) {
       faltando.push('0025_agenda_autorizacao.sql')
     }
+    /*
+     * As duas sondas do Synse Body, pelo mesmo motivo das de cima: o registro
+     * guarda que a 0032 rodou, e não que a tabela e a função continuam lá.
+     */
+    if (
+      (synseBody.present === false || escritaDoCorpo.present === false) &&
+      !faltando.includes('0032_synse_body.sql')
+    ) {
+      faltando.push('0032_synse_body.sql')
+    }
     return {
       synseRun: corridas,
       entradaSemVinculo,
@@ -252,6 +281,8 @@ async function schemaReadiness() {
       consentimento,
       avaliacaoFisica,
       agendaAutossuficiente,
+      synseBody,
+      escritaDoCorpo,
       appliedMigrations: registradas.length,
       pendingMigrations: faltando,
     }
@@ -294,6 +325,8 @@ async function schemaReadiness() {
     consentimento,
     avaliacaoFisica,
     agendaAutossuficiente,
+    synseBody,
+    escritaDoCorpo,
     pendingMigrations: pendentes,
   }
 }

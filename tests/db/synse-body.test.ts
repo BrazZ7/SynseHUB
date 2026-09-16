@@ -24,9 +24,7 @@ const AUTH_PROFESSOR = '55555555-0000-0000-0000-000000000003'
 const AUTH_ESTRANHO = '55555555-0000-0000-0000-000000000004'
 
 let perfilDona: string
-let perfilColega: string
 let perfilProfessor: string
-let perfilEstranho: string
 let balancaDaDona: string
 
 /** Dá conta a um aluno da semente, para exercitar a RLS de verdade. */
@@ -50,8 +48,8 @@ beforeAll(async () => {
 
   // Dona e colega treinam na MESMA academia — que é justamente o ponto.
   perfilDona = await darConta(ALPHA.orgId, 0, AUTH_DONA, 'dona.do.corpo@alpha.test')
-  perfilColega = await darConta(ALPHA.orgId, 1, AUTH_COLEGA, 'colega@alpha.test')
-  perfilEstranho = await darConta(BETA.orgId, 0, AUTH_ESTRANHO, 'estranho@beta.test')
+  await darConta(ALPHA.orgId, 1, AUTH_COLEGA, 'colega@alpha.test')
+  await darConta(BETA.orgId, 0, AUTH_ESTRANHO, 'estranho@beta.test')
 
   // O professor é staff da academia da dona, com papel e tudo.
   await client.query(`insert into auth.users (id, email) values ($1,$2)`, [

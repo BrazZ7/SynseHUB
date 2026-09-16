@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -71,4 +72,28 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+
+    <!--
+      Bluetooth do Synse Body.
+
+      A partir do Android 12 o modelo mudou: `BLUETOOTH_SCAN` e
+      `BLUETOOTH_CONNECT` substituem as antigas, e `neverForLocation` declara
+      que a varredura não serve para descobrir onde a pessoa está. Sem essa
+      declaração o sistema exigiria permissão de localização para ler uma
+      balança — desproporcional, e a Play Console pergunta por quê.
+
+      As duas antigas ficam com `maxSdkVersion` porque em Android 11 e abaixo
+      não existe outro caminho, e ali a varredura BLE realmente exige
+      localização: é limitação da plataforma, não escolha do produto.
+    -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="s" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" tools:targetApi="s" />
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+
+    <!-- Balança é acessório, não requisito: o app funciona sem nenhuma. -->
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
 </manifest>

@@ -111,6 +111,22 @@ existem, não para conferir se subiram.
   outras academias **e ao visitante anônimo** — o rótulo é a armadilha, porque
   "grátis" lê como "sem custo para os meus alunos". FREE passa a exigir
   `organization_id is null`, e uma restrição impede a escolha na origem.
+- **0032 (`0032_synse_body.sql`)** — Synse Body, a balança inteligente ligada ao
+  app. Tabela separada de `assessments` de propósito: a avaliação é documento
+  profissional, com responsável técnico e adipômetro, e acontece três vezes por
+  ano; a pesagem é leitura de aparelho, acontece toda semana, e o número de
+  composição vem de bioimpedância — que é estimativa. Misturá-las faria cem
+  pesagens inundarem o gráfico da avaliação e daria à leitura da balança a
+  mesma autoridade do adipômetro.
+
+  A medição pertence a `user_profiles` e **não** a `students`: quem cancela a
+  matrícula, troca de academia e volta um ano depois continua dono do próprio
+  histórico. E pertencer à mesma academia não dá acesso nenhum — nem para o
+  professor, nem para o dono. A abertura é nominal, por pessoa, e revogável
+  (`body_measurement_shares`). `insert` e `update` em `body_measurements` ficam
+  revogados: quem grava é `record_body_measurement`, que resolve a pessoa pelo
+  `auth.uid()` e confere se o aparelho é dela — numa balança de família, gravar
+  a pesagem de um no histórico do outro é o erro mais fácil de cometer.
 
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona

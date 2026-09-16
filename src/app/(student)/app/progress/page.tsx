@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
-import { Activity, Dumbbell, Flame, TrendingUp, Trophy } from 'lucide-react'
+import Link from 'next/link'
+import { Activity, ChevronRight, Dumbbell, Flame, Scale, TrendingUp, Trophy } from 'lucide-react'
 
 import { ProgressLineChart } from '@/components/synse/charts/progress-line-chart'
 import { ChartCard } from '@/components/synse/chart-card'
@@ -57,6 +58,25 @@ export default async function StudentProgressPage() {
           O que mudou desde que você começou — carga, frequência e medidas.
         </p>
       </header>
+
+      {/*
+        A porta do Synse Body. Fica no Progresso e não na navegação de baixo
+        porque peso e composição corporal são acompanhamento, não uma atividade
+        diária — e a barra de cinco itens já está cheia.
+      */}
+      <Link
+        href="/app/corpo"
+        className="flex items-center gap-4 rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm transition-colors hover:bg-synse-surface-2"
+      >
+        <Scale className="size-5 shrink-0 text-synse-primary" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-synse-text">Synse Body</p>
+          <p className="text-xs text-synse-muted">
+            Peso e composição corporal, da sua balança Bluetooth.
+          </p>
+        </div>
+        <ChevronRight className="size-4 shrink-0 text-synse-muted" aria-hidden />
+      </Link>
 
       <section className="flex items-center gap-5 rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
         <ProgressRing value={home.weeklyGoal.percentage} size={96} caption="semana" />

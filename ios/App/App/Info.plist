@@ -47,6 +47,16 @@
 	<string>O Synse usa os sensores de movimento para contar passos e melhorar a precisão da distância quando o sinal de GPS está fraco.</string>
 
 	<!--
+	  Synse Body. `NSBluetoothAlwaysUsageDescription` é a chave atual; a
+	  `Peripheral` continua aqui porque iOS 12 ainda a exige e um app que só
+	  declara a nova é encerrado pelo sistema naquela versão.
+	-->
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>O Synse usa o Bluetooth para ler seu peso e sua composição corporal diretamente da sua balança inteligente. Nenhum dado sai do seu histórico sem você autorizar.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>O Synse usa o Bluetooth para ler seu peso e sua composição corporal diretamente da sua balança inteligente.</string>
+
+	<!--
 	  Modos de segundo plano do SynseRun. `location` é o que mantém a corrida
 	  sendo medida com o celular no bolso; sem ele, o percurso vira uma linha
 	  reta entre o momento em que a tela apagou e o momento em que voltou.
@@ -56,6 +66,15 @@
 		<string>location</string>
 		<string>remote-notification</string>
 	</array>
+	<!--
+	  `bluetooth-central` fica de fora de propósito.
+
+	  Ele serviria para reconectar a uma balança com o app fechado — e a Apple
+	  exige justificar por que o app precisa disso, num produto em que a pessoa
+	  abre a tela de pesagem antes de subir na balança. Declarar um modo de
+	  segundo plano que não se usa é pedir rejeição na revisão. Ver
+	  `docs/SYNSE_SCALE_COMPATIBILITY.md`.
+	-->
 
 	<key>LSRequiresIPhoneOS</key>
 	<true/>

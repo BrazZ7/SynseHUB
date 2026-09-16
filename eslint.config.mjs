@@ -14,7 +14,21 @@ const compat = new FlatCompat({ baseDirectory: dirname(fileURLToPath(import.meta
 
 const config = [
   {
-    ignores: ['.next/**', 'out/**', 'build/**', 'next-env.d.ts', 'coverage/**'],
+    /*
+     * `build/**` só casa com a raiz. O Gradle gera `android/app/build/`, que
+     * carrega uma cópia do bridge do Capacitor — código de terceiro, apagado a
+     * cada compilação, e que enchia o lint de erro que ninguém pode corrigir.
+     */
+    ignores: [
+      '.next/**',
+      'out/**',
+      'build/**',
+      'android/**/build/**',
+      'ios/**/Pods/**',
+      'mobile/www/**',
+      'next-env.d.ts',
+      'coverage/**',
+    ],
   },
   ...compat.extends('next/core-web-vitals', 'next/typescript', 'prettier'),
   {

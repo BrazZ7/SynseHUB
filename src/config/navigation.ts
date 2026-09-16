@@ -68,7 +68,7 @@ export const HUB_NAVIGATION: NavGroup[] = [
     label: 'Crescimento',
     items: [
       { label: 'Conteúdos', href: '/content', icon: Library, permission: 'content:read', soon: true },
-      { label: 'Desafios', href: '/challenges', icon: Trophy, permission: 'challenges:read', soon: true },
+      { label: 'Desafios', href: '/challenges', icon: Trophy, permission: 'challenges:read' },
       { label: 'CRM', href: '/crm', icon: KanbanSquare, permission: 'crm:read' },
       { label: 'Relatórios', href: '/reports', icon: BarChart3, permission: 'reports:read' },
       { label: 'Notificações', href: '/notifications', icon: Bell, permission: 'notifications:read' },

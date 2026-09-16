@@ -9,6 +9,8 @@ import { ChallengePicker } from '@/features/challenges/challenge-picker'
 import { MedalBadge } from '@/features/challenges/medal-badge'
 import { ProgressForm } from '@/features/challenges/progress-form'
 import { cycleLabel, getChallengeBoard } from '@/features/challenges/service'
+import { GymChallengeList } from '@/features/gym-challenges/gym-challenge-list'
+import { getDataSource } from '@/lib/database'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { CHALLENGES_PER_CYCLE } from '@/lib/plans/tiers'
 
@@ -16,7 +18,21 @@ export const metadata: Metadata = { title: 'Desafios' }
 
 export default async function ChallengesPage() {
   const session = await requireStudentSession()
-  const board = await getChallengeBoard(session)
+  const dataSource = await getDataSource()
+
+  const [board, daAcademia] = await Promise.all([
+    getChallengeBoard(session),
+    /*
+     * Os desafios da academia vêm em paralelo e independem da 0014: se o
+     * catálogo do Synse estiver fora, os da academia continuam aparecendo.
+     */
+    dataSource.listGymChallengesForStudent(session.organizationId, session.userProfileId),
+  ])
+
+  const hoje = new Date().toISOString().slice(0, 10)
+  const abertos = daAcademia.filter(
+    (desafio) => desafio.status === 'ACTIVE' && desafio.endsAt >= hoje,
+  )
 
   const cicloAtual = cycleLabel(new Date().toISOString())
 
@@ -35,6 +51,8 @@ export default async function ChallengesPage() {
           Os desafios estão indisponíveis neste momento. Seu treino base e seu plano alimentar
           continuam funcionando normalmente.
         </p>
+
+        <GymChallengeList desafios={abertos} />
 
         {board.failure && (
           <details className="rounded-xl border border-synse-border bg-synse-surface p-4">
@@ -181,6 +199,8 @@ export default async function ChallengesPage() {
           </span>
         </Link>
       )}
+
+      <GymChallengeList desafios={abertos} />
     </div>
   )
 }

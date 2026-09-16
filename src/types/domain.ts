@@ -600,6 +600,59 @@ export type ClassOccupancyRow = {
 }
 
 // ---------------------------------------------------------------------------
+// Desafios da academia
+// ---------------------------------------------------------------------------
+
+/**
+ * O que o sistema mede sozinho.
+ *
+ * Passos e hidratação, citados no comentário original da 0003, nunca entraram:
+ * seriam número digitado pelo próprio aluno, e ranking sobre valor
+ * auto-declarado é competição de quem mente melhor.
+ */
+export type GymChallengeMetric =
+  | 'CHECKINS'
+  | 'WORKOUTS'
+  | 'SETS'
+  | 'VOLUME_KG'
+  | 'CLASS_ATTENDANCE'
+
+export type GymChallengeStatus = 'DRAFT' | 'ACTIVE' | 'CLOSED'
+
+export type GymChallenge = {
+  id: string
+  organizationId: string
+  title: string
+  description: string | null
+  metric: GymChallengeMetric
+  targetValue: number
+  unit: string
+  startsAt: string
+  endsAt: string
+  /** A academia liga; cada aluno ainda decide se aparece. */
+  rankingEnabled: boolean
+  status: GymChallengeStatus
+  reward: string | null
+  participants: number
+  createdAt: string
+}
+
+/** O desafio como o aluno o vê, com a própria participação junto. */
+export type GymChallengeForStudent = GymChallenge & {
+  joined: boolean
+  rankingOptIn: boolean
+  progressValue: number
+  completedAt: string | null
+}
+
+export type GymChallengeRankRow = {
+  position: number
+  name: string
+  progressValue: number
+  completedAt: string | null
+}
+
+// ---------------------------------------------------------------------------
 // CRM
 // ---------------------------------------------------------------------------
 

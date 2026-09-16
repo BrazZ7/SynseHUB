@@ -13,6 +13,7 @@ import type {
   SaveAssessmentInput,
   LogWorkoutSetInput,
   SaveClassScheduleInput,
+  SaveGymChallengeInput,
   SaveLeadInput,
   ScheduleWindow,
   StudentFilters,
@@ -48,6 +49,9 @@ import type {
   CollectionRule,
   ClassOccupancyRow,
   ExerciseProgressPoint,
+  GymChallenge,
+  GymChallengeForStudent,
+  GymChallengeRankRow,
   GymTrainingReport,
   ExercisePersonalRecord,
   StudentAtRisk,
@@ -1972,6 +1976,151 @@ export class SupabaseDataSource implements DataSource {
       attended: Number(row.presencas ?? 0),
       noShows: Number(row.faltas ?? 0),
     })) satisfies ClassOccupancyRow[]
+  }
+
+  // ── Desafios da academia ───────────────────────────────────────────────────
+  private mapChallenge(row: Row): GymChallenge {
+    return {
+      id: row.id,
+      organizationId: row.organization_id,
+      title: row.title,
+      description: row.description ?? null,
+      metric: row.metric,
+      targetValue: Number(row.target_value),
+      unit: row.unit ?? 'pontos',
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+      rankingEnabled: Boolean(row.ranking_enabled),
+      status: row.status ?? 'ACTIVE',
+      reward: row.reward ?? null,
+      // PostgREST devolve a contagem do relacionamento como [{count}].
+      participants: Number(row.challenge_participants?.[0]?.count ?? 0),
+      createdAt: row.created_at,
+    }
+  }
+
+  private static readonly DESAFIO_SELECT = '*, challenge_participants(count)'
+
+  async listGymChallenges(organizationId: string): Promise<GymChallenge[]> {
+    const rows =
+      (await this.select<Row[]>(
+        'listGymChallenges',
+        this.client
+          .from('challenges')
+          .select(SupabaseDataSource.DESAFIO_SELECT)
+          .eq('organization_id', organizationId)
+          .order('ends_at', { ascending: false }),
+      )) ?? []
+    return rows.map((row) => this.mapChallenge(row))
+  }
+
+  async getGymChallenge(organizationId: string, challengeId: string) {
+    const row = await this.select<Row>(
+      'getGymChallenge',
+      this.client
+        .from('challenges')
+        .select(SupabaseDataSource.DESAFIO_SELECT)
+        .eq('organization_id', organizationId)
+        .eq('id', challengeId)
+        .maybeSingle(),
+    )
+    return row ? this.mapChallenge(row) : null
+  }
+
+  async saveGymChallenge(input: SaveGymChallengeInput): Promise<GymChallenge> {
+    const linha = {
+      organization_id: input.organizationId,
+      title: input.title,
+      description: input.description,
+      metric: input.metric,
+      target_value: input.targetValue,
+      unit: input.unit,
+      starts_at: input.startsAt,
+      ends_at: input.endsAt,
+      ranking_enabled: input.rankingEnabled,
+      status: input.status,
+      reward: input.reward,
+      created_by_staff_id: input.createdByStaffId,
+    }
+
+    const row = input.id
+      ? await this.select<Row>(
+          'saveGymChallenge:update',
+          this.client
+            .from('challenges')
+            .update(linha)
+            .eq('organization_id', input.organizationId)
+            .eq('id', input.id)
+            .select(SupabaseDataSource.DESAFIO_SELECT)
+            .single(),
+        )
+      : await this.select<Row>(
+          'saveGymChallenge:insert',
+          this.client
+            .from('challenges')
+            .insert(linha)
+            .select(SupabaseDataSource.DESAFIO_SELECT)
+            .single(),
+        )
+
+    return this.mapChallenge(row!)
+  }
+
+  async listGymChallengesForStudent(
+    organizationId: string,
+    userProfileId: string,
+  ): Promise<GymChallengeForStudent[]> {
+    const [desafios, minhas] = await Promise.all([
+      this.listGymChallenges(organizationId),
+      this.select<Row[]>(
+        'listGymChallengesForStudent:participations',
+        this.client
+          .from('challenge_participants')
+          .select('*')
+          .eq('user_profile_id', userProfileId),
+      ),
+    ])
+
+    const porDesafio = new Map((minhas ?? []).map((linha) => [linha.challenge_id, linha]))
+
+    return desafios.map((desafio) => {
+      const minha = porDesafio.get(desafio.id)
+      return {
+        ...desafio,
+        joined: Boolean(minha),
+        rankingOptIn: Boolean(minha?.ranking_opt_in),
+        progressValue: Number(minha?.progress_value ?? 0),
+        completedAt: minha?.completed_at ?? null,
+      }
+    })
+  }
+
+  async joinGymChallenge(challengeId: string, rankingOptIn: boolean): Promise<void> {
+    /*
+     * A academia, a matrícula e a janela são conferidas no banco. O consentimento
+     * do ranking viaja como argumento porque é escolha da pessoa, não do plano.
+     */
+    const { error } = await this.client.rpc('join_gym_challenge', {
+      p_challenge_id: challengeId,
+      p_ranking_opt_in: rankingOptIn,
+    })
+    if (error) this.fail('joinGymChallenge', error)
+  }
+
+  async getGymChallengeRanking(challengeId: string): Promise<GymChallengeRankRow[]> {
+    const { data, error } = await this.client.rpc('gym_challenge_ranking', {
+      p_challenge_id: challengeId,
+    })
+    if (error) {
+      logger.warn('gymChallengeRanking', { erro: String((error as Error).message) })
+      return []
+    }
+    return ((data as Row[]) ?? []).map((row) => ({
+      position: Number(row.posicao),
+      name: row.nome,
+      progressValue: Number(row.progresso),
+      completedAt: row.concluido_em ?? null,
+    }))
   }
 
   // ── CRM ────────────────────────────────────────────────────────────────────

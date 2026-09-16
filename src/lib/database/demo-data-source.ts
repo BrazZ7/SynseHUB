@@ -9,6 +9,7 @@ import type {
   SaveAssessmentInput,
   LogWorkoutSetInput,
   SaveClassScheduleInput,
+  SaveGymChallengeInput,
   SaveLeadInput,
   ScheduleWindow,
   StudentFilters,
@@ -51,6 +52,9 @@ import type {
   ClassOccupancyRow,
   ExercisePersonalRecord,
   ExerciseProgressPoint,
+  GymChallenge,
+  GymChallengeForStudent,
+  GymChallengeRankRow,
   GymTrainingReport,
   StudentAtRisk,
   WorkoutPreferences,
@@ -138,6 +142,12 @@ export class DemoDataSource implements DataSource {
   private readonly addedLeads: Lead[] = []
   private readonly leadEdits = new Map<string, Lead>()
   private readonly demoLeadEvents: LeadEvent[] = []
+  private readonly demoGymChallenges: GymChallenge[] = []
+  private readonly demoParticipations = new Map<
+    string,
+    { rankingOptIn: boolean; progress: number; completedAt: string | null }
+  >()
+  private desafiosProntos = false
 
   // ── Índices ────────────────────────────────────────────────────────────────
   private readonly planById = new Map(this.db.plans.map((p) => [p.id, p]))
@@ -1604,6 +1614,143 @@ export class DemoDataSource implements DataSource {
   }
 
   // ── CRM ────────────────────────────────────────────────────────────────────
+  // ── Desafios da academia ───────────────────────────────────────────────────
+  /**
+   * Dois desafios de exemplo, relativos a hoje.
+   *
+   * Datas fixas envelheceriam: quem abrisse a demonstração no mês seguinte
+   * veria só desafio encerrado.
+   */
+  private montarDesafios() {
+    if (this.desafiosProntos) return
+    this.desafiosProntos = true
+
+    const hoje = new Date()
+    const dia = (n: number) =>
+      new Date(hoje.getTime() + n * 86_400_000).toISOString().slice(0, 10)
+
+    this.demoGymChallenges.push(
+      {
+        id: 'gch_1',
+        organizationId: DEMO_ORG_ID,
+        title: 'Constância do mês',
+        description: 'Quinze check-ins no mês. Conta sozinho, pela catraca.',
+        metric: 'CHECKINS',
+        targetValue: 15,
+        unit: 'check-ins',
+        startsAt: dia(-12),
+        endsAt: dia(18),
+        rankingEnabled: true,
+        status: 'ACTIVE',
+        reward: 'Camiseta da academia',
+        participants: 34,
+        createdAt: new Date(hoje.getTime() - 12 * 86_400_000).toISOString(),
+      },
+      {
+        id: 'gch_2',
+        organizationId: DEMO_ORG_ID,
+        title: 'Tonelada do mês',
+        description: 'Somar 50 toneladas de volume: carga vezes repetições.',
+        metric: 'VOLUME_KG',
+        targetValue: 50_000,
+        unit: 'kg',
+        startsAt: dia(-5),
+        endsAt: dia(25),
+        rankingEnabled: false,
+        status: 'ACTIVE',
+        reward: null,
+        participants: 11,
+        createdAt: new Date(hoje.getTime() - 5 * 86_400_000).toISOString(),
+      },
+    )
+  }
+
+  async listGymChallenges(organizationId: string): Promise<GymChallenge[]> {
+    this.montarDesafios()
+    return this.demoGymChallenges.filter((d) => d.organizationId === organizationId)
+  }
+
+  async getGymChallenge(organizationId: string, challengeId: string) {
+    this.montarDesafios()
+    return (
+      this.demoGymChallenges.find(
+        (d) => d.organizationId === organizationId && d.id === challengeId,
+      ) ?? null
+    )
+  }
+
+  async saveGymChallenge(input: SaveGymChallengeInput): Promise<GymChallenge> {
+    this.montarDesafios()
+    const desafio: GymChallenge = {
+      id: input.id ?? `gch_${this.demoGymChallenges.length + 1}`,
+      organizationId: input.organizationId,
+      title: input.title,
+      description: input.description,
+      metric: input.metric,
+      targetValue: input.targetValue,
+      unit: input.unit,
+      startsAt: input.startsAt,
+      endsAt: input.endsAt,
+      rankingEnabled: input.rankingEnabled,
+      status: input.status,
+      reward: input.reward,
+      participants: 0,
+      createdAt: new Date().toISOString(),
+    }
+
+    const existente = this.demoGymChallenges.findIndex((d) => d.id === desafio.id)
+    if (existente >= 0) {
+      this.demoGymChallenges[existente] = {
+        ...desafio,
+        participants: this.demoGymChallenges[existente].participants,
+      }
+    } else this.demoGymChallenges.push(desafio)
+
+    return desafio
+  }
+
+  async listGymChallengesForStudent(organizationId: string): Promise<GymChallengeForStudent[]> {
+    const desafios = await this.listGymChallenges(organizationId)
+    return desafios.map((desafio) => {
+      const minha = this.demoParticipations.get(desafio.id)
+      return {
+        ...desafio,
+        joined: Boolean(minha),
+        rankingOptIn: Boolean(minha?.rankingOptIn),
+        progressValue: minha?.progress ?? 0,
+        completedAt: minha?.completedAt ?? null,
+      }
+    })
+  }
+
+  async joinGymChallenge(challengeId: string, rankingOptIn: boolean): Promise<void> {
+    this.montarDesafios()
+    const atual = this.demoParticipations.get(challengeId)
+    // Idempotente como no banco: entrar de novo muda o consentimento e mantém
+    // o progresso.
+    this.demoParticipations.set(challengeId, {
+      rankingOptIn,
+      progress: atual?.progress ?? 0,
+      completedAt: atual?.completedAt ?? null,
+    })
+    const desafio = this.demoGymChallenges.find((d) => d.id === challengeId)
+    if (desafio && !atual) desafio.participants += 1
+  }
+
+  async getGymChallengeRanking(challengeId: string): Promise<GymChallengeRankRow[]> {
+    this.montarDesafios()
+    const desafio = this.demoGymChallenges.find((d) => d.id === challengeId)
+    // A mesma tranca da produção: sem ranking ligado, não há quadro.
+    if (!desafio?.rankingEnabled) return []
+
+    return this.db.students.slice(0, 8).map((aluno, indice) => ({
+      position: indice + 1,
+      name: aluno.name,
+      progressValue: Math.max(desafio.targetValue - indice * 2, 1),
+      completedAt: indice < 3 ? new Date().toISOString() : null,
+    }))
+  }
+
   private leads(): Lead[] {
     const base = [...this.db.leads, ...this.addedLeads]
     return base.map((lead) => this.leadEdits.get(lead.id) ?? lead)

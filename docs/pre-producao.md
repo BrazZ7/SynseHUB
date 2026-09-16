@@ -90,6 +90,12 @@ existem, não para conferir se subiram.
   onde ela passou. `convert_lead_to_student` cria perfil, aluno e matrícula numa
   transação só: em três chamadas da aplicação, a falha da segunda deixaria aluno
   criado com lead aberto.
+- **0029 (`0029_desafios_da_academia.sql`)** — os desafios da academia.
+  `challenges` existia desde a 0003 com `metric` em texto livre e o comentário
+  "CHECKINS, STEPS, HYDRATION…"; passos e hidratação nunca entraram, porque
+  seriam número digitado pelo aluno. As cinco métricas são as que o sistema mede
+  sozinho, e três delas só passaram a existir com a 0026. O ranking exige dois
+  consentimentos: a academia liga no desafio, e cada aluno decide se aparece.
 
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona

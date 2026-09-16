@@ -20,6 +20,10 @@ import type {
   ClassSessionForStudent,
   ClassOccupancyRow,
   ExerciseProgressPoint,
+  GymChallenge,
+  GymChallengeForStudent,
+  GymChallengeMetric,
+  GymChallengeRankRow,
   GymTrainingReport,
   ExercisePersonalRecord,
   StudentAtRisk,
@@ -175,6 +179,22 @@ export type SaveLeadInput = {
   ownerStaffId: string | null
   notes: string | null
   nextFollowUpAt: string | null
+}
+
+export type SaveGymChallengeInput = {
+  id?: string
+  organizationId: string
+  title: string
+  description: string | null
+  metric: GymChallengeMetric
+  targetValue: number
+  unit: string
+  startsAt: string
+  endsAt: string
+  rankingEnabled: boolean
+  status: 'DRAFT' | 'ACTIVE' | 'CLOSED'
+  reward: string | null
+  createdByStaffId: string | null
 }
 
 export type Paginated<T> = {
@@ -532,6 +552,19 @@ export interface DataSource {
     from: string,
     to: string,
   ): Promise<ClassOccupancyRow[]>
+
+  // Desafios da academia
+  listGymChallenges(organizationId: string): Promise<GymChallenge[]>
+  getGymChallenge(organizationId: string, challengeId: string): Promise<GymChallenge | null>
+  saveGymChallenge(input: SaveGymChallengeInput): Promise<GymChallenge>
+  /** Os desafios da academia do aluno, com a participação dele junto. */
+  listGymChallengesForStudent(
+    organizationId: string,
+    userProfileId: string,
+  ): Promise<GymChallengeForStudent[]>
+  joinGymChallenge(challengeId: string, rankingOptIn: boolean): Promise<void>
+  /** Só quem consentiu aparece — a tranca é da consulta, não da permissão. */
+  getGymChallengeRanking(challengeId: string): Promise<GymChallengeRankRow[]>
 
   // CRM
   listLeads(organizationId: string): Promise<Lead[]>

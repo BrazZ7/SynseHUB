@@ -62,9 +62,22 @@ async function criarAula(capacidade: number, org = ALPHA.orgId, daquiHoras = 1) 
   return rows[0].id as string
 }
 
+/**
+ * Reserva como a recepção da Alpha reservaria: com sessão de gente da equipe.
+ *
+ * A primeira versão deste helper chamava `book_class` sem sessão nenhuma, como
+ * superusuário, e passava — porque `is_org_staff` devolve NULL para quem não
+ * tem sessão e o `not NULL` da função não disparava. Os testes ficavam verdes
+ * sobre um furo de autorização. Sessão de verdade é o que os torna honestos.
+ */
 const reservar = async (aulaId: string, alunoId: string) => {
-  const { rows } = await client.query(`select book_class($1, $2) as status`, [aulaId, alunoId])
-  return rows[0].status as string
+  const rows = await asUser<{ status: string }>(
+    client,
+    ALPHA.authId,
+    `select book_class($1, $2) as status`,
+    [aulaId, alunoId],
+  )
+  return rows[0].status
 }
 
 const reservasDa = async (aulaId: string) => {
@@ -156,6 +169,45 @@ describe.skipIf(!temBanco)('materialização da grade', () => {
   })
 })
 
+describe.skipIf(!temBanco)('quem pode mandar materializar', () => {
+  it('a equipe gera as aulas da própria academia', async () => {
+    /*
+     * A recepção acabou de cadastrar a aula de amanhã e precisa vê-la agora,
+     * sem esperar a rotina da madrugada. A primeira versão desta migration só
+     * dava a função ao service_role, e a tela salvava a regra e não criava aula
+     * nenhuma — a grade aparecia vazia até o dia seguinte.
+     */
+    await client.query(
+      `insert into class_schedules (organization_id, name, weekday, start_time, capacity)
+       values ($1, 'Pilates', 2, '10:00', 8)`,
+      [ALPHA.orgId],
+    )
+
+    const criadas = await asUser<{ total: number }>(
+      client,
+      ALPHA.authId,
+      `select generate_org_class_sessions($1, 14)::int as total`,
+      [ALPHA.orgId],
+    )
+    expect(criadas[0].total).toBeGreaterThan(0)
+  })
+
+  it('e não as de outra academia', async () => {
+    await expect(
+      asUser(client, ALPHA.authId, `select generate_org_class_sessions($1, 14)`, [BETA.orgId]),
+    ).rejects.toThrow(/não é da equipe/i)
+  })
+
+  it('a varredura global não é da conta de quem está logado', async () => {
+    // Ela varre todas as academias da plataforma: é do agendamento diário, que
+    // roda como service_role. Aberta ao autenticado, qualquer conta dispararia
+    // a geração da base inteira.
+    await expect(
+      asUser(client, ALPHA.authId, `select generate_class_sessions(14)`),
+    ).rejects.toThrow(/permission denied|permissão/i)
+  })
+})
+
 describe.skipIf(!temBanco)('reserva e lista de espera', () => {
   it('enche até a capacidade e manda o excedente para a espera', async () => {
     const aula = await criarAula(2)
@@ -196,7 +248,7 @@ describe.skipIf(!temBanco)('reserva e lista de espera', () => {
       `select id from class_bookings where session_id = $1 and student_id = $2`,
       [aula, alunos[0]],
     )
-    await client.query(`select cancel_class_booking($1)`, [reserva[0].id])
+    await asUser(client, ALPHA.authId, `select cancel_class_booking($1)`, [reserva[0].id])
 
     const { rows } = await client.query(
       `select status from class_bookings where session_id = $1 and student_id = $2`,
@@ -245,8 +297,14 @@ describe.skipIf(!temBanco)('a última vaga, com duas pessoas ao mesmo tempo', ()
     const segunda = await connect()
 
     try {
-      await primeira.query('begin')
-      await segunda.query('begin')
+      for (const conexao of [primeira, segunda]) {
+        await conexao.query('begin')
+        await conexao.query('select set_config($1, $2, true)', [
+          'request.jwt.claim.sub',
+          ALPHA.authId,
+        ])
+        await conexao.query('set local role authenticated')
+      }
 
       // A primeira reserva e SEGURA a trava da aula, sem commitar.
       const r1 = await primeira.query(`select book_class($1, $2) as status`, [aula, alunos[0]])

@@ -1611,11 +1611,20 @@ export class SupabaseDataSource implements DataSource {
     if (error) this.fail('cancelClassSession', error)
   }
 
-  async generateClassSessions(daysAhead: number): Promise<number> {
-    const { data, error } = await this.client.rpc('generate_class_sessions', {
+  async generateClassSessions(organizationId: string, daysAhead: number): Promise<number> {
+    const { data, error } = await this.client.rpc('generate_org_class_sessions', {
+      p_organization_id: organizationId,
       p_days_ahead: daysAhead,
     })
     if (error) this.fail('generateClassSessions', error)
+    return Number(data ?? 0)
+  }
+
+  async generateAllClassSessions(daysAhead: number): Promise<number> {
+    const { data, error } = await this.client.rpc('generate_class_sessions', {
+      p_days_ahead: daysAhead,
+    })
+    if (error) this.fail('generateAllClassSessions', error)
     return Number(data ?? 0)
   }
 

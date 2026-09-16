@@ -32,7 +32,7 @@ export async function GET(request: Request) {
 
   try {
     const dataSource = await getDataSource()
-    const criadas = await dataSource.generateClassSessions(DIAS_A_FRENTE)
+    const criadas = await dataSource.generateAllClassSessions(DIAS_A_FRENTE)
 
     logger.info('cron:schedule_generated', { criadas, diasAFrente: DIAS_A_FRENTE })
     return NextResponse.json({ ok: true, criadas, diasAFrente: DIAS_A_FRENTE })

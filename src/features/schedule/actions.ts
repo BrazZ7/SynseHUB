@@ -81,7 +81,7 @@ export async function saveClassScheduleAction(
      * Materializa já. Sem isto a aula nova só apareceria quando o agendamento
      * diário rodasse — e a recepção acabou de cadastrar a aula de amanhã.
      */
-    const criadas = await dataSource.generateClassSessions(21)
+    const criadas = await dataSource.generateClassSessions(session.organizationId, 21)
 
     logger.info(scheduleId ? 'schedule:updated' : 'schedule:created', {
       organizationId: session.organizationId,

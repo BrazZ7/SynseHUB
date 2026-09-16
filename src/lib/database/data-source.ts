@@ -406,10 +406,16 @@ export interface DataSource {
     reason: string | null,
   ): Promise<void>
   /**
-   * Materializa as aulas da janela a partir das regras ativas. Idempotente —
-   * quem garante isso é o `unique (schedule_id, starts_at)` no banco.
+   * Materializa as aulas de uma academia. Idempotente — quem garante isso é o
+   * `unique (schedule_id, starts_at)` no banco.
+   *
+   * Exige `organizationId` de propósito: a varredura global é do agendamento
+   * diário, que roda como service_role. Expor a global à sessão da academia
+   * deixaria qualquer conta autenticada gerar aula de toda a plataforma.
    */
-  generateClassSessions(daysAhead: number): Promise<number>
+  generateClassSessions(organizationId: string, daysAhead: number): Promise<number>
+  /** A varredura de todas as academias. Só o agendamento diário chama. */
+  generateAllClassSessions(daysAhead: number): Promise<number>
   /** Presença. Só a equipe marca, e só depois que a aula começou. */
   markAttendance(
     organizationId: string,

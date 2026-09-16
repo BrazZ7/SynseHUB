@@ -295,15 +295,19 @@ create trigger class_sessions_cancelled
 
 -- ── Materialização da grade ──────────────────────────────────────────────────
 /**
- * Cria as aulas dos próximos dias a partir das regras ativas.
+ * O trabalho em si. Sem grant: quem chama são as duas funções abaixo.
+ *
+ * `p_organization_id` nulo varre todas as academias — é o agendamento diário.
+ * Preenchido, materializa só a de quem pediu.
  *
  * Idempotente pelo `unique (schedule_id, starts_at)`: rodar de novo — ou dois
  * processos ao mesmo tempo, que é o que um agendamento repetido faz — não
  * duplica nada. Devolve quantas criou.
  */
-create or replace function generate_class_sessions(
-  p_days_ahead integer default 21,
-  p_reference  date default current_date
+create or replace function materialize_class_sessions(
+  p_organization_id uuid,
+  p_days_ahead integer,
+  p_reference  date
 )
 returns integer
 language plpgsql volatile security definer set search_path = public as $$
@@ -334,6 +338,7 @@ begin
     from class_schedules g
     join dias d on extract(dow from d.dia) = g.weekday
     where g.status = 'ACTIVE'
+      and (p_organization_id is null or g.organization_id = p_organization_id)
       and d.dia >= g.starts_on
       and (g.ends_on is null or d.dia <= g.ends_on)
     on conflict (schedule_id, starts_at) do nothing
@@ -345,8 +350,56 @@ begin
 end;
 $$;
 
-revoke all on function generate_class_sessions(integer, date) from public, anon;
+revoke all on function materialize_class_sessions(uuid, integer, date) from public, anon, authenticated;
+
+/** A varredura de todas as academias. Roda no agendamento diário. */
+create or replace function generate_class_sessions(
+  p_days_ahead integer default 21,
+  p_reference  date default current_date
+)
+returns integer
+language sql volatile security definer set search_path = public as $$
+  select materialize_class_sessions(null, p_days_ahead, p_reference)
+$$;
+
+revoke all on function generate_class_sessions(integer, date) from public, anon, authenticated;
 grant execute on function generate_class_sessions(integer, date) to service_role;
+
+/**
+ * A materialização que a própria academia dispara ao salvar a grade.
+ *
+ * Existe separada da varredura global por uma razão concreta: a recepção acaba
+ * de cadastrar a aula de amanhã e precisa vê-la agora, sem esperar a rotina da
+ * madrugada. Dar à equipe a função global resolveria — e deixaria qualquer
+ * conta autenticada disparar a geração de todas as academias da plataforma.
+ */
+create or replace function generate_org_class_sessions(
+  p_organization_id uuid,
+  p_days_ahead integer default 21
+)
+returns integer
+language plpgsql volatile security definer set search_path = public as $$
+begin
+/*
+ * `is not true` em vez de `not`, e não é preciosismo.
+ *
+ * `is_org_staff` é `is_super_admin() or org_role(target) in (...)`. Para quem
+ * não pertence à academia, `org_role` devolve nulo, e `null in (...)` é nulo —
+ * a função inteira devolve NULL, não false. Em política de RLS isso é seguro,
+ * porque o Postgres trata nulo como negado. Dentro de plpgsql, `if not null`
+ * não é verdadeiro: o `raise` não dispara e a execução segue. Foi assim que a
+ * primeira versão desta migration deixou a dona da Alpha mandar materializar a
+ * grade da Beta.
+ */
+  if is_org_staff(p_organization_id) is not true then
+    raise exception 'Você não é da equipe desta academia.' using errcode = '42501';
+  end if;
+  return materialize_class_sessions(p_organization_id, p_days_ahead, current_date);
+end;
+$$;
+
+revoke all on function generate_org_class_sessions(uuid, integer) from public, anon;
+grant execute on function generate_org_class_sessions(uuid, integer) to authenticated, service_role;
 
 -- ── Reservar ─────────────────────────────────────────────────────────────────
 /**
@@ -383,7 +436,8 @@ begin
       raise exception 'Você não é aluno desta academia.' using errcode = '42501';
     end if;
   else
-    if not is_org_staff(v_aula.organization_id) then
+    -- `is not true`: ver a nota em generate_org_class_sessions.
+    if is_org_staff(v_aula.organization_id) is not true then
       raise exception 'Só a equipe reserva em nome de outra pessoa.' using errcode = '42501';
     end if;
     select * into v_student from students
@@ -439,7 +493,7 @@ begin
     raise exception 'Reserva não encontrada.' using errcode = 'P0002';
   end if;
 
-  if not (owns_student(v_reserva.student_id) or is_org_staff(v_reserva.organization_id)) then
+  if (owns_student(v_reserva.student_id) or is_org_staff(v_reserva.organization_id)) is not true then
     raise exception 'Esta reserva não é sua.' using errcode = '42501';
   end if;
 

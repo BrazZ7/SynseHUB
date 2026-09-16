@@ -1,8 +1,9 @@
 'use client'
 
-import { Bluetooth, Loader2, RefreshCw, Signal, Trash2, Wrench } from 'lucide-react'
+import { Bluetooth, Loader2, Pencil, RefreshCw, Signal, Trash2, Wrench } from 'lucide-react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -36,6 +37,23 @@ export function DevicesScreen({
   const [renomeando, setRenomeando] = useState<string | null>(null)
   const [novoNome, setNovoNome] = useState('')
   const [erro, setErro] = useState<string | null>(null)
+  const [aviso, setAviso] = useState<string | null>(null)
+  /*
+   * Se este ambiente lê Bluetooth. Só dá para saber no cliente, depois da
+   * montagem: no servidor não existe `navigator`. Começa como `null` — "ainda
+   * não sei" — porque assumir que não lê piscaria o aviso em todo celular.
+   */
+  const [leBluetooth, setLeBluetooth] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    let vivo = true
+    void provider.isAvailable().then((tem) => {
+      if (vivo) setLeBluetooth(tem)
+    })
+    return () => {
+      vivo = false
+    }
+  }, [provider])
 
   async function parear(platformDeviceId: string, nome: string | null) {
     setErro(null)
@@ -71,7 +89,12 @@ export function DevicesScreen({
       <section className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-sm font-semibold text-synse-text">Aparelhos vinculados</h2>
-          <Button size="sm" variant="outline" onClick={() => void scan.procurar()} disabled={scan.varrendo}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => void scan.procurar()}
+            disabled={scan.varrendo || leBluetooth === false}
+          >
             {scan.varrendo ? (
               <Loader2 className="size-4 animate-spin" aria-hidden />
             ) : (
@@ -81,14 +104,43 @@ export function DevicesScreen({
           </Button>
         </div>
 
+        {/*
+          O aviso vem antes da tentativa. Num navegador de computador não
+          existe Bluetooth, e deixar a pessoa tocar em Procurar para receber
+          uma mensagem em inglês é fazê-la descobrir sozinha o que o produto
+          já sabia.
+        */}
+        {leBluetooth === false && (
+          <div className="rounded-lg border border-synse-border bg-synse-surface p-4">
+            <p className="text-sm font-medium text-synse-text">
+              Este navegador não lê Bluetooth
+            </p>
+            <p className="mt-1 text-sm text-synse-muted">
+              A leitura da balança acontece no aplicativo Synse no celular. Aqui você pode
+              registrar o peso à mão — o histórico é o mesmo.
+            </p>
+            <Button asChild size="sm" variant="outline" className="mt-3">
+              <Link href="/app/corpo/manual">
+                <Pencil className="size-4" aria-hidden />
+                Digitar peso
+              </Link>
+            </Button>
+          </div>
+        )}
+
         {erro && <p className="text-sm text-synse-danger">{erro}</p>}
+        {aviso && <p className="text-sm text-synse-muted">{aviso}</p>}
         {scan.erro && <p className="text-sm text-synse-danger">{scan.erro}</p>}
 
         {aparelhos.length === 0 ? (
           <EmptyState
             icon={Bluetooth}
             title="Nenhuma balança vinculada"
-            description="Ligue o Bluetooth, suba na balança para acordá-la e toque em Procurar."
+            description={
+              leBluetooth === false
+                ? 'Abra o aplicativo Synse no celular para vincular uma balança.'
+                : 'Ligue o Bluetooth, suba na balança para acordá-la e toque em Procurar.'
+            }
           />
         ) : (
           <ul className="space-y-3">
@@ -154,7 +206,20 @@ export function DevicesScreen({
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => void provider.identify(aparelho.platformDeviceId)}
+                        onClick={() => {
+                          setErro(null)
+                          setAviso(null)
+                          /*
+                            Sem o catch a rejeição sobe sem dono e a tela não
+                            diz nada — o toque parece não ter feito efeito.
+                          */
+                          provider
+                            .identify(aparelho.platformDeviceId)
+                            .then(() => setAviso(`${aparelho.displayName} respondeu.`))
+                            .catch((e: unknown) =>
+                              setErro(e instanceof Error ? e.message : 'O aparelho não respondeu.'),
+                            )
+                        }}
                       >
                         <Signal className="size-4" aria-hidden />
                         Identificar

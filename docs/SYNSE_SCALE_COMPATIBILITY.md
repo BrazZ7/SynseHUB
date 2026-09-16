@@ -96,6 +96,42 @@ dá coisas diferentes:
 Por isso o vínculo é `unique (user_profile_id, platform_device_identifier)` e
 não único global: a mesma balança de família é um vínculo por morador.
 
+## Onde a leitura da balança funciona
+
+| Ambiente | Lê balança? | Como |
+| --- | --- | --- |
+| **App Android** (Capacitor) | Sim | Varredura contínua: lista ao vivo, com RSSI |
+| **App iOS** (Capacitor) | Sim | Idem |
+| **Chrome/Edge no Android** | Sim | Seletor do próprio navegador, um aparelho por vez, sem RSSI |
+| **Chrome/Edge no computador** | Depende | Seletor do navegador, se o Web Bluetooth estiver habilitado |
+| **Safari** (iOS e macOS) | Não | Não implementa Web Bluetooth |
+| **Firefox** | Não | Não implementa Web Bluetooth |
+
+Onde não dá, a tela de aparelhos diz isso **antes** da tentativa e oferece a
+entrada manual — em vez de deixar a pessoa tocar em *Procurar* para receber uma
+falha.
+
+### Por que o navegador usa o seletor, e o app usa a varredura
+
+`requestLEScan` — a varredura contínua, que devolve lista ao vivo e potência de
+sinal — está atrás de `chrome://flags/#enable-experimental-web-platform-features`
+e não existe num Chrome comum. O que existe é `requestDevice`, que abre o
+seletor do próprio navegador: a pessoa escolhe ali dentro e volta um aparelho
+só, sem RSSI. É menos rico que o caminho nativo, e é o que a plataforma dá.
+
+Duas outras diferenças do navegador, que o provider contorna:
+
+- **`discoverServices` não existe no web.** A descoberta é implícita em
+  `getPrimaryServices`, então a chamada explícita é best-effort — sem isso, o
+  pareamento morria logo no primeiro passo.
+- **`readRssi` não existe no web.** O botão *Identificar* cai para a leitura da
+  característica de fabricante, que atravessa o mesmo GATT e prova a mesma
+  coisa: o aparelho respondeu.
+
+No navegador, tudo o que a página vai ler precisa ser declarado no momento da
+escolha (`optionalServices`) — o Web Bluetooth tranca o acesso ao que não foi
+pedido ali.
+
 ## Permissões
 
 **Android 12+** — `BLUETOOTH_SCAN` com `neverForLocation` e

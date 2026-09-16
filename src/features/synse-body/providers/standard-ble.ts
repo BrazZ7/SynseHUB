@@ -1,11 +1,14 @@
 'use client'
 
 import { BleClient, type BleService, type ScanResult } from '@capacitor-community/bluetooth-le'
+import { Capacitor } from '@capacitor/core'
 
 import {
   BODY_COMPOSITION_FEATURE_CHAR,
   BODY_COMPOSITION_MEASUREMENT_CHAR,
   BODY_COMPOSITION_SERVICE,
+  DEVICE_INFORMATION_SERVICE,
+  MANUFACTURER_NAME_CHAR,
   WEIGHT_MEASUREMENT_CHAR,
   WEIGHT_SCALE_FEATURE_CHAR,
   WEIGHT_SCALE_SERVICE,
@@ -44,6 +47,16 @@ import { NENHUMA_CAPACIDADE } from '@/features/synse-body/engine/types'
 
 const SERVICOS_DE_BALANCA = [WEIGHT_SCALE_SERVICE, BODY_COMPOSITION_SERVICE]
 
+/*
+ * No navegador, tudo o que a página vai ler precisa ser declarado no momento
+ * em que a pessoa escolhe o aparelho. O Web Bluetooth tranca o acesso ao que
+ * não foi pedido ali — e a descoberta de serviços depois falharia em silêncio.
+ */
+const SERVICOS_OPCIONAIS = [...SERVICOS_DE_BALANCA, DEVICE_INFORMATION_SERVICE]
+
+/** O app nativo (Android/iOS) ou a página no navegador? */
+const noNativo = () => Capacitor.isNativePlatform()
+
 let inicializado = false
 
 async function inicializar(): Promise<void> {
@@ -63,6 +76,28 @@ function comoErro(erro: unknown): string {
   return typeof erro === 'string' ? erro : 'Falha na comunicação com o aparelho.'
 }
 
+/**
+ * Por que este navegador não lê balança.
+ *
+ * A mensagem crua do plugin é "Web Bluetooth API not available in this
+ * browser" — em inglês, e sem dizer o que fazer. Quem lê isso num computador
+ * não descobre que o caminho é o celular.
+ */
+export function porQueIndisponivel(erro: unknown): string {
+  const texto = comoErro(erro)
+
+  if (/not available in this browser/i.test(texto)) {
+    return (
+      'Este navegador não lê Bluetooth. A balança funciona no aplicativo Synse ' +
+      'no celular; aqui, use "Digitar peso".'
+    )
+  }
+  if (/no bluetooth radio/i.test(texto)) {
+    return 'Nenhum rádio Bluetooth disponível neste aparelho.'
+  }
+  return `Não foi possível abrir o Bluetooth: ${texto}`
+}
+
 export const standardBleScaleProvider: ScaleDeviceProvider = {
   id: 'standard_ble',
   label: 'Balança Bluetooth (padrão SIG)',
@@ -80,11 +115,7 @@ export const standardBleScaleProvider: ScaleDeviceProvider = {
     try {
       await inicializar()
     } catch (erro) {
-      return {
-        granted: false,
-        reason: 'UNAVAILABLE',
-        message: `Este aparelho não disponibilizou o Bluetooth ao app: ${comoErro(erro)}`,
-      }
+      return { granted: false, reason: 'UNAVAILABLE', message: porQueIndisponivel(erro) }
     }
 
     try {
@@ -112,12 +143,45 @@ export const standardBleScaleProvider: ScaleDeviceProvider = {
    * Rádio ligado indefinidamente derruba a bateria e, a partir do Android 7, o
    * sistema passa a ignorar quem inicia varredura demais — o app simplesmente
    * para de encontrar aparelhos, sem erro nenhum.
+   *
+   * São dois caminhos porque as plataformas oferecem coisas diferentes, e o
+   * primeiro rascunho deste arquivo usava só um — o nativo — o que deixava o
+   * navegador sem nenhum caminho que funcionasse.
    */
   async scan(options: ScanOptions): Promise<DiscoveredScale[]> {
     await inicializar()
     const encontrados = new Map<string, DiscoveredScale>()
 
     options.onDiagnostic?.({ at: Date.now(), kind: 'SCAN', message: 'Varredura iniciada' })
+
+    /*
+     * No navegador quem lista é o próprio Chrome.
+     *
+     * `requestLEScan` — a varredura contínua que dá RSSI e lista ao vivo — está
+     * atrás de uma flag experimental e não existe num Chrome comum. O que
+     * existe é `requestDevice`, que abre o seletor do navegador: a pessoa
+     * escolhe ali e volta um aparelho só, sem sinal. Menos rico que o nativo, e
+     * é o que a plataforma dá.
+     */
+    if (!noNativo()) {
+      const escolhido = await BleClient.requestDevice({
+        services: options.onlyScales === false ? undefined : SERVICOS_DE_BALANCA,
+        optionalServices: SERVICOS_OPCIONAIS,
+      })
+
+      const aparelho: DiscoveredScale = {
+        platformDeviceId: escolhido.deviceId,
+        name: escolhido.name ?? null,
+        rssi: null,
+      }
+      options.onDiscover?.(aparelho)
+      options.onDiagnostic?.({
+        at: Date.now(),
+        kind: 'SCAN',
+        message: `Escolhido no seletor do navegador: ${aparelho.name ?? 'sem nome'}`,
+      })
+      return [aparelho]
+    }
 
     const aoEncontrar = (resultado: ScanResult) => {
       const aparelho: DiscoveredScale = {
@@ -176,16 +240,40 @@ export const standardBleScaleProvider: ScaleDeviceProvider = {
    * "É esta mesmo?"
    *
    * O padrão de balança não tem comando de bipar. O que dá para fazer sem
-   * inventar protocolo é ler a característica de fabricante: a balança
-   * responde, e a tela confirma que está falando com aquele aparelho — sem
-   * prometer uma luz que não vai acender.
+   * inventar protocolo é provocar uma resposta do aparelho: a balança
+   * responde, e a tela confirma que está falando com aquele — sem prometer uma
+   * luz que não vai acender.
+   *
+   * O RSSI é a via barata e só existe no nativo. No navegador vale a leitura
+   * do fabricante, que atravessa o mesmo GATT e prova a mesma coisa.
    */
-  async identify(platformDeviceId: string) {
-    await BleClient.readRssi(platformDeviceId)
+  async identify(platformDeviceId: string): Promise<void> {
+    try {
+      await BleClient.readRssi(platformDeviceId)
+      return
+    } catch {
+      /* navegador, ou aparelho que não informa potência */
+    }
+
+    try {
+      await BleClient.read(platformDeviceId, DEVICE_INFORMATION_SERVICE, MANUFACTURER_NAME_CHAR)
+    } catch {
+      throw new Error('O aparelho não respondeu. Confira se ele está ligado e por perto.')
+    }
   },
 
   async discoverServices(platformDeviceId: string): Promise<DiscoveredService[]> {
-    await BleClient.discoverServices(platformDeviceId)
+    /*
+     * A descoberta explícita só existe no nativo. No navegador ela é implícita
+     * — `getPrimaryServices` já descobre — e chamar assim mesmo derruba tudo
+     * com "discoverServices is not available on web", logo no pareamento.
+     */
+    try {
+      await BleClient.discoverServices(platformDeviceId)
+    } catch {
+      /* navegador: segue para o getServices, que faz a descoberta sozinho */
+    }
+
     const servicos: BleService[] = await BleClient.getServices(platformDeviceId)
 
     return servicos.map((servico) => ({

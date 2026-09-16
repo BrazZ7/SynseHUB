@@ -118,6 +118,29 @@ describe('a balança simulada', () => {
     expect(leituras).toHaveLength(0)
   })
 
+  it('reconectar depois de uma queda volta a receber leituras', async () => {
+    /*
+     * Balança sai de alcance no meio da pesagem — a pessoa levou o celular
+     * para o outro cômodo. Reconectar precisa recomeçar limpo, e não herdar o
+     * pacote pela metade da tentativa anterior.
+     */
+    const provider = createMockScaleProvider({ pesosKg: [70.4, 70.4, 70.4] })
+
+    const primeira: ParsedScaleReading[] = []
+    const cancelar = await provider.subscribeToMeasurements('x', (l) => primeira.push(l))
+    await vi.advanceTimersByTimeAsync(400)
+    cancelar()
+    await provider.disconnect('x')
+
+    expect(primeira.length).toBeGreaterThan(0)
+    expect(primeira.length).toBeLessThan(3)
+
+    await provider.connect('x')
+    const segunda = await pesar(provider)
+    expect(segunda).toHaveLength(3)
+    expect(segunda.at(-1)?.weightKg).toBeCloseTo(70.4, 1)
+  })
+
   it('as capacidades declaradas são as que o mock entrega', async () => {
     const provider = createMockScaleProvider()
     const capacidades = await provider.getCapabilities('x')

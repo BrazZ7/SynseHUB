@@ -59,12 +59,13 @@ create table user_devices (
   model           text,
   display_name    text not null,
   /*
-   * O identificador que a plataforma dá — e não o MAC.
+   * O identificador que a plataforma dá, seja ele qual for.
    *
-   * Android e iOS aleatorizam o endereço por privacidade, e no iOS o
-   * CoreBluetooth nem expõe MAC: devolve um UUID próprio, estável para aquele
-   * aparelho naquele iPhone. Guardar MAC significaria perder o vínculo na
-   * próxima rotação do endereço.
+   * No iOS o CoreBluetooth não expõe MAC: devolve um UUID próprio, estável
+   * para aquele aparelho naquele iPhone. No Android vem o endereço anunciado,
+   * normalmente o MAC. Guardar "o que a plataforma deu" é o que permite o
+   * mesmo código nos dois — e é por isso que a coluna não se chama `mac`.
+   * As consequências de cada caso estão em `docs/SYNSE_SCALE_COMPATIBILITY.md`.
    */
   platform_device_identifier text not null,
   protocol        text,

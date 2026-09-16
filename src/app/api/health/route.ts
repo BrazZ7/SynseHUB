@@ -176,6 +176,7 @@ async function schemaReadiness() {
     corridas,
     consentimento,
     avaliacaoFisica,
+    agendaAutossuficiente,
   ] = await Promise.all([
     schemaCheck('user_profiles?select=tier&limit=1'),
     schemaCheck('baseline_challenges?select=code&limit=1'),
@@ -196,6 +197,17 @@ async function schemaReadiness() {
      * outra pergunta: a coluna continua lá.
      */
     schemaCheck('assessments?select=body_density&limit=1'),
+    /*
+     * A 0024 saiu em duas versões antes de chegar a produção, e as duas
+     * registram a mesma linha em `schema_migrations` — o registro não distingue.
+     * `ensure_org_class_sessions` só existe na corrigida, a que repõe a grade na
+     * leitura e fecha o furo de autorização entre academias. A função é negada
+     * ao anônimo, então 401/403 é "existe" e 404 é "ficou a versão antiga".
+     */
+    rpcCheck('ensure_org_class_sessions', {
+      p_organization_id: '00000000-0000-0000-0000-000000000000',
+      p_days_ahead: 21,
+    }),
   ])
 
   const registradas = await migracoesRegistradas()
@@ -215,6 +227,9 @@ async function schemaReadiness() {
     if (avaliacaoFisica.present === false && !faltando.includes('0023_avaliacao_fisica.sql')) {
       faltando.push('0023_avaliacao_fisica.sql')
     }
+    if (agendaAutossuficiente.present === false && !faltando.includes('0024_agenda.sql')) {
+      faltando.push('0024_agenda.sql')
+    }
     return {
       synseRun: corridas,
       entradaSemVinculo,
@@ -223,6 +238,7 @@ async function schemaReadiness() {
       professionalPlan: profissional,
       consentimento,
       avaliacaoFisica,
+      agendaAutossuficiente,
       appliedMigrations: registradas.length,
       pendingMigrations: faltando,
     }
@@ -256,6 +272,7 @@ async function schemaReadiness() {
     professionalPlan: profissional,
     consentimento,
     avaliacaoFisica,
+    agendaAutossuficiente,
     pendingMigrations: pendentes,
   }
 }

@@ -25,6 +25,7 @@
     "mobile:ios": "cap open ios"
   },
   "dependencies": {
+    "@capacitor-community/bluetooth-le": "^8.3.0",
     "@capacitor/android": "^8.5.2",
     "@capacitor/app": "^8.1.1",
     "@capacitor/core": "^8.5.2",
@@ -46,6 +47,7 @@
     "@radix-ui/react-tooltip": "^1.1.6",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.47.10",
+    "@synse/workout-activity": "file:native/synse-workout-activity",
     "@tanstack/react-query": "^5.62.11",
     "@types/leaflet": "^1.9.22",
     "class-variance-authority": "^0.7.1",
@@ -60,8 +62,7 @@
     "recharts": "^3.10.1",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
-    "zod": "^3.24.1",
-    "@synse/workout-activity": "file:native/synse-workout-activity"
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",

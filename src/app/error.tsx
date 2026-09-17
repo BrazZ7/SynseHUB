@@ -1,6 +1,6 @@
 'use client'
 
-import { RotateCcw, TriangleAlert } from 'lucide-react'
+import { RotateCcw, TriangleAlert, WifiOff } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -35,8 +35,23 @@ export default function GlobalError({
   reset: () => void
 }) {
   const [detalhe, setDetalhe] = useState<Detalhe | null>(null)
+  /*
+   * Rede caída não é defeito da aplicação.
+   *
+   * Sem esta distinção, o elevador e o subsolo da academia produziam "algo saiu
+   * do esperado, nossa equipe recebeu o registro" — o que é falso duas vezes:
+   * não saiu nada do esperado, e ninguém recebeu registro nenhum, porque o
+   * envio também depende da rede que não existe.
+   */
+  const [semRede, setSemRede] = useState(false)
 
   useEffect(() => {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      setSemRede(true)
+      // Sem rede não há diagnóstico a buscar: a busca falharia junto.
+      return
+    }
+
     console.error('[synse] unhandled error', { digest: error.digest, message: error.message })
 
     let ativo = true
@@ -63,17 +78,18 @@ export default function GlobalError({
         className="bg-synse-warning/14 flex size-14 items-center justify-center rounded-2xl text-synse-warning"
         aria-hidden
       >
-        <TriangleAlert className="size-6" />
+        {semRede ? <WifiOff className="size-6" /> : <TriangleAlert className="size-6" />}
       </span>
       <div className="space-y-2">
         <h1 className="text-subtitle font-semibold text-synse-text">
-          Não foi possível concluir esta operação
+          {semRede ? 'Sem conexão' : 'Não foi possível concluir esta operação'}
         </h1>
         <p className="max-w-md text-sm text-synse-muted">
-          Algo saiu do esperado ao carregar esta página. Tente novamente — se continuar, nossa
-          equipe já recebeu o registro do problema.
+          {semRede
+            ? 'Esta tela precisa de internet para carregar. O que você registrou sem rede — treino, corrida, pesagem — continua guardado no aparelho e sobe sozinho.'
+            : 'Algo saiu do esperado ao carregar esta página. Tente novamente — se continuar, nossa equipe já recebeu o registro do problema.'}
         </p>
-        {error.digest && (
+        {!semRede && error.digest && (
           <p className="text-synse-muted/70 text-xs">Referência do erro: {error.digest}</p>
         )}
       </div>

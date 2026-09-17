@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next'
 import { APP } from '@/config/app'
 import { ThemeScript } from '@/components/synse/theme-script'
 import { NativeShell } from '@/features/native/native-shell'
+import { OfflineBanner } from '@/features/native/offline-banner'
 
 import './globals.css'
 
@@ -76,6 +77,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           botão voltar do Android e revalida a tela ao voltar do segundo plano.
         */}
         <NativeShell />
+        {/*
+          A tela de `errorPath` cobre o app que não conseguiu abrir. Esta cobre
+          a rede que cai com o app já na mão — que é o caso comum no subsolo de
+          uma academia.
+        */}
+        <OfflineBanner />
         {children}
       </body>
     </html>

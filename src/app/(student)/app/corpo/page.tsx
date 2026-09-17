@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/synse/empty-state'
 import { ProgressLineChart } from '@/components/synse/charts/progress-line-chart'
 import { Button } from '@/components/ui/button'
 import { MeasurementField } from '@/features/synse-body/components/measurement-field'
+import { PendingBodySync } from '@/features/synse-body/components/pending-body-sync'
 import { PeriodSelector } from '@/features/synse-body/components/period-selector'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
@@ -90,6 +91,12 @@ export default async function SynseBodyPage({
           </Link>
         </Button>
       </div>
+
+      {/*
+        As pesagens feitas sem rede. Só aparece quando há o que dizer, e é ele
+        que efetivamente sobe a fila — não basta gravá-la.
+      */}
+      <PendingBodySync />
 
       <PeriodSelector atual={janela} />
 

@@ -3,6 +3,34 @@ import SwiftUI
 import WidgetKit
 
 /*
+ A fase que a tela deve desenhar, que nem sempre é a que o app mandou.
+
+ O descanso vence enquanto o celular está bloqueado. Nesse momento o app está
+ suspenso — o `setTimeout` do WebView não roda em segundo plano — e a atividade
+ continua com `phase: "REST"` e um `restEndsAt` que já passou.
+
+ Isso importa por dois motivos. O visual: o cartão ficaria mostrando "descanso"
+ depois de o descanso acabar. E o grave: `Text(timerInterval:)` recebe um
+ `ClosedRange<Date>`, e formar `agora...fim` com `fim` no passado **encerra o
+ processo** — a extensão morre e a Live Activity some da tela bloqueada.
+
+ Decidir aqui deixa o widget se corrigir sozinho, sem depender de o app acordar.
+*/
+@available(iOS 16.1, *)
+func faseVisivel(_ estado: SynseWorkoutAttributes.ContentState, agora: Date = .now) -> String {
+    if estado.phase == "REST", let fim = estado.restEndsAt, fim <= agora {
+        return "REST_FINISHED"
+    }
+    return estado.phase
+}
+
+/** O intervalo do contador, nunca invertido. */
+@available(iOS 16.1, *)
+func intervaloDoDescanso(_ fim: Date, agora: Date = .now) -> ClosedRange<Date> {
+    agora...max(fim, agora)
+}
+
+/*
  O cartão da tela bloqueada e a Dynamic Island.
 
  Uma `ActivityConfiguration` atende os dois: o sistema escolhe o que desenhar
@@ -36,13 +64,13 @@ struct SynseWorkoutLiveActivity: Widget {
                         .foregroundStyle(.secondary)
                 }
                 DynamicIslandExpandedRegion(.center) {
-                    if let fim = context.state.restEndsAt, context.state.phase == "REST" {
-                        Text(timerInterval: Date.now...fim, countsDown: true)
+                    if let fim = context.state.restEndsAt, faseVisivel(context.state) == "REST" {
+                        Text(timerInterval: intervaloDoDescanso(fim), countsDown: true)
                             .font(.system(size: 34, weight: .semibold, design: .rounded))
                             .monospacedDigit()
                             .foregroundStyle(Self.cyan)
                             .multilineTextAlignment(.center)
-                    } else if context.state.phase == "REST_FINISHED" {
+                    } else if faseVisivel(context.state) == "REST_FINISHED" {
                         Text("Descanso concluído")
                             .font(.headline)
                             .foregroundStyle(Self.mint)
@@ -56,15 +84,15 @@ struct SynseWorkoutLiveActivity: Widget {
                     // Botão só a partir do iOS 17. Antes disso o cartão informa
                     // e o toque abre o app — não há como contornar.
                     if #available(iOS 17.0, *) {
-                        BotoesDaAtividade(phase: context.state.phase)
+                        BotoesDaAtividade(phase: faseVisivel(context.state))
                     }
                 }
             } compactLeading: {
                 Image(systemName: "figure.strengthtraining.traditional")
                     .foregroundStyle(Self.cyan)
             } compactTrailing: {
-                if let fim = context.state.restEndsAt, context.state.phase == "REST" {
-                    Text(timerInterval: Date.now...fim, countsDown: true)
+                if let fim = context.state.restEndsAt, faseVisivel(context.state) == "REST" {
+                    Text(timerInterval: intervaloDoDescanso(fim), countsDown: true)
                         .monospacedDigit()
                         .frame(width: 44)
                         .foregroundStyle(Self.cyan)
@@ -96,7 +124,9 @@ private struct LockScreenView: View {
     private static let mint = Color(red: 0.56, green: 0.96, blue: 0.85)
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let fase = faseVisivel(state)
+
+        return VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("SYNSE")
                     .font(.caption2.weight(.bold))
@@ -113,19 +143,26 @@ private struct LockScreenView: View {
                 .font(.title3.weight(.semibold))
                 .lineLimit(1)
 
-            if state.phase == "REST", let fim = state.restEndsAt {
+            if fase == "REST", let fim = state.restEndsAt {
                 Text("DESCANSO")
                     .font(.caption2.weight(.semibold))
                     .tracking(1.5)
                     .foregroundStyle(.secondary)
-                Text(timerInterval: Date.now...fim, countsDown: true)
+                Text(timerInterval: intervaloDoDescanso(fim), countsDown: true)
                     .font(.system(size: 44, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(Self.cyan)
-                Text("Próxima: série \(state.setNumber + 1)/\(state.totalSets)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else if state.phase == "REST_FINISHED" {
+                if state.setNumber < state.totalSets {
+                    // Sem o guarda, a última série anunciava uma "série 4/3".
+                    Text("Próxima: série \(state.setNumber + 1)/\(state.totalSets)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Última série deste exercício")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } else if fase == "REST_FINISHED" {
                 Text("DESCANSO CONCLUÍDO")
                     .font(.headline)
                     .foregroundStyle(Self.mint)
@@ -146,7 +183,7 @@ private struct LockScreenView: View {
                 .tint(Self.cyan)
 
             if #available(iOS 17.0, *) {
-                BotoesDaAtividade(phase: state.phase)
+                BotoesDaAtividade(phase: fase)
             }
         }
         .padding(16)

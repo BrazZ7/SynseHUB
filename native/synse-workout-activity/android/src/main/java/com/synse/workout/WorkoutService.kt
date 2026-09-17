@@ -8,7 +8,9 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.SystemClock
 import android.view.View
 import android.widget.RemoteViews
@@ -69,7 +71,45 @@ class WorkoutService : Service() {
         val progress: Double = 0.0,
     )
 
+    /*
+     * O despertador do próprio serviço.
+     *
+     * A auto-correção da fase resolve o desenho, mas só quando alguém manda
+     * redesenhar — e quem mandaria é o app, que é justamente quem está
+     * estrangulado com a tela bloqueada. Sem isto, o aviso de fim de descanso
+     * chegava quando a pessoa desbloqueava o celular, que é tarde: o ponto do
+     * recurso é ela não precisar olhar.
+     *
+     * O serviço está em primeiro plano, então o processo está vivo e um
+     * `Handler` basta — não precisa de `AlarmManager`, que exigiria permissão
+     * de alarme exato a partir do Android 12.
+     */
+    private val relogio = Handler(Looper.getMainLooper())
+    private var aviso: Runnable? = null
+
+    private fun agendarFimDoDescanso(s: WorkoutState) {
+        aviso?.let { relogio.removeCallbacks(it) }
+        aviso = null
+
+        val fim = s.restEndsAt ?: return
+        if (s.phase != "REST") return
+
+        val faltam = fim - System.currentTimeMillis()
+        if (faltam <= 0) return
+
+        val tarefa = Runnable { manager().notify(NOTIFICATION_ID, construir()) }
+        aviso = tarefa
+        relogio.postDelayed(tarefa, faltam)
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onDestroy() {
+        // O treino encerrado não pode deixar um aviso pendurado disparando
+        // notificação de um serviço que já morreu.
+        aviso?.let { relogio.removeCallbacks(it) }
+        super.onDestroy()
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -79,6 +119,7 @@ class WorkoutService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
+                aviso?.let { relogio.removeCallbacks(it) }
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
                 return START_NOT_STICKY
@@ -100,6 +141,10 @@ class WorkoutService : Service() {
         } else {
             startForeground(NOTIFICATION_ID, construir())
         }
+
+        // Todo estado novo reprograma o despertador; um descanso pulado ou
+        // estendido precisa cancelar o aviso do anterior.
+        agendarFimDoDescanso(state)
         return START_STICKY
     }
 
@@ -142,7 +187,26 @@ class WorkoutService : Service() {
         val contando: Boolean,
     )
 
-    private fun conteudo(s: WorkoutState): Conteudo = when (s.phase) {
+    /**
+     * A fase que a notificação deve desenhar, que nem sempre é a que o app mandou.
+     *
+     * Com a tela bloqueada, o Chrome estrangula os temporizadores do WebView —
+     * o `setTimeout` que avisaria o fim do descanso pode demorar ou não rodar.
+     * A notificação continuaria dizendo "descanso" com um cronômetro vencido,
+     * contando para trás do zero.
+     *
+     * Decidir aqui deixa a notificação se corrigir sozinha, sem depender de o
+     * app acordar. Mesma regra do `faseVisivel` no lado iOS.
+     */
+    private fun faseVisivel(s: WorkoutState): String {
+        val fim = s.restEndsAt
+        if (s.phase == "REST" && fim != null && fim <= System.currentTimeMillis()) {
+            return "REST_FINISHED"
+        }
+        return s.phase
+    }
+
+    private fun conteudo(s: WorkoutState): Conteudo = when (faseVisivel(s)) {
         "REST" -> Conteudo(
             titulo = s.exerciseName.ifEmpty { "Descanso" },
             subtitulo = "Descanso · série ${s.setNumber}/${s.totalSets}",
@@ -204,7 +268,7 @@ class WorkoutService : Service() {
             views.setViewVisibility(R.id.cronometro, View.GONE)
 
             val carga = s.weight?.takeIf { it > 0 }?.let { "${it.toInt()} kg" }
-            if (carga != null && s.phase == "SET") {
+            if (carga != null && faseVisivel(s) == "SET") {
                 views.setTextViewText(R.id.carga, carga)
                 views.setViewVisibility(R.id.carga, View.VISIBLE)
             } else {
@@ -267,7 +331,7 @@ class WorkoutService : Service() {
             .setContentTitle(c.titulo)
             .setContentText(c.subtitulo)
 
-        if (s.phase == "REST_FINISHED") {
+        if (faseVisivel(s) == "REST_FINISHED") {
             // A única fase que pode tocar e vibrar: é o aviso de voltar à barra.
             builder.setOnlyAlertOnce(false)
                 .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)

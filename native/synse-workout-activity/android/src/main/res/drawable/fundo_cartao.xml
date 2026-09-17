@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- O cartão escuro que faz a notificação parecer parte do app. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/synse_surface" />
+    <corners android:radius="14dp" />
+</shape>

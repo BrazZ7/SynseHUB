@@ -1,2 +1,20 @@
 R_DEF: Internal format may change without notice
 local
+color synse_botao
+color synse_muted
+color synse_primary
+color synse_surface
+color synse_text
+drawable fundo_botao
+drawable fundo_botao_primario
+drawable fundo_cartao
+drawable ic_synse_notification
+id botao_primario
+id botao_secundario
+id carga
+id cronometro
+id progresso
+id subtitulo
+id titulo
+layout notification_treino
+layout notification_treino_expandido

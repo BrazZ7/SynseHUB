@@ -1,5 +1,7 @@
 import 'server-only'
 
+import { cache } from 'react'
+
 import { cookies } from 'next/headers'
 
 import { getDataSource } from '@/lib/database'
@@ -233,7 +235,21 @@ export type SessionResolution =
   | { status: 'no-account' }
   | { status: 'unavailable'; step: string; code: string | null }
 
-export async function resolveSession(): Promise<SessionResolution> {
+/**
+ * Resolve a sessão, uma vez por requisição.
+ *
+ * Sem o `cache`, toda navegação pagava isto **duas vezes** — o layout do app
+ * chama e a página chama de novo —, e cada vez são três idas à rede: validar o
+ * token no Supabase, ler o perfil e ler o vínculo com a academia. Seis
+ * viagens antes de a tela começar a buscar o que ela precisa mostrar.
+ *
+ * `cache` do React deduplica dentro de uma renderização e nada além dela: a
+ * requisição seguinte resolve de novo, então continua valendo a mesma
+ * validação no servidor. Não é cache entre usuários nem entre requisições.
+ */
+export const resolveSession = cache(resolverSessao)
+
+async function resolverSessao(): Promise<SessionResolution> {
   if (isDemoMode()) {
     const cookieStore = await cookies()
     const persona = findDemoPersona(cookieStore.get(DEMO_SESSION_COOKIE)?.value)

@@ -63,13 +63,31 @@ export function NativeShell() {
     }).then((h) => listeners.push(h))
 
     /**
-     * Voltar do segundo plano revalida a tela.
+     * Voltar do segundo plano revalida a tela — mas não a cada vez.
      *
      * O app pode ficar horas em segundo plano com uma página renderizada no
-     * servidor congelada na memória — check-ins de ontem, aula que já passou.
-     * `router.refresh()` refaz a requisição sem perder o estado do cliente.
+     * servidor congelada na memória: check-ins de ontem, aula que já passou.
+     * `router.refresh()` conserta isso.
+     *
+     * Revalidar em **todo** retorno era caro demais. Trocar para o WhatsApp e
+     * voltar em dez segundos disparava uma renderização inteira no servidor —
+     * com a validação da sessão e as consultas da tela —, e a pessoa via o app
+     * engasgar num gesto que deveria ser instantâneo.
+     *
+     * Um minuto é o corte: abaixo disso nada do que a tela mostra mudou o
+     * suficiente para valer a viagem.
      */
-    void CapacitorApp.addListener('resume', () => router.refresh()).then((h) => listeners.push(h))
+    const IDADE_PARA_REVALIDAR_MS = 60_000
+    let saiuEm = 0
+
+    void CapacitorApp.addListener('pause', () => {
+      saiuEm = Date.now()
+    }).then((h) => listeners.push(h))
+
+    void CapacitorApp.addListener('resume', () => {
+      if (saiuEm && Date.now() - saiuEm >= IDADE_PARA_REVALIDAR_MS) router.refresh()
+      saiuEm = 0
+    }).then((h) => listeners.push(h))
 
     return () => listeners.forEach((l) => l.remove())
   }, [router])

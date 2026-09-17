@@ -28,20 +28,69 @@ import {
 /** Depois disto a operação para de tentar sozinha e espera a próxima abertura. */
 const MAX_TENTATIVAS = 8
 
-export type SyncOutcome = { enviadas: number; pendentes: number; sessionId: string | null }
+export type SyncOutcome = {
+  enviadas: number
+  pendentes: number
+  /**
+   * O que a fila desistiu de enviar. Separado em dois porque a perda é de
+   * tamanhos diferentes: um treino inteiro que nunca chegou ao servidor não é
+   * a mesma notícia que uma série solta.
+   */
+  treinosPerdidos: number
+  seriesPerdidas: number
+  sessionId: string | null
+}
+
+/**
+ * Tira da fila o que não tem mais salvação.
+ *
+ * Antes disto, a operação que estourava as tentativas era apenas pulada — e
+ * ficava na fila para sempre. O contador de pendentes nunca chegava a zero, e
+ * a tela mostrava "3 a sincronizar" indefinidamente, sem explicar e sem
+ * resolver.
+ *
+ * Quando é o **início** do treino que se esgota, tudo o que depende dele cai
+ * junto: série e encerramento precisam do id que o servidor daria ao abrir a
+ * sessão, e sem esse id não há para onde enviá-los. Deixá-los enfileirados
+ * seria manter um pendente que nunca poderia ser resolvido.
+ */
+export async function expurgar(fila: PendingOperation[]): Promise<{
+  restante: PendingOperation[]
+  treinosPerdidos: number
+  seriesPerdidas: number
+}> {
+  const esgotadas = fila.filter((operacao) => operacao.tentativas >= MAX_TENTATIVAS)
+  if (!esgotadas.length) return { restante: fila, treinosPerdidos: 0, seriesPerdidas: 0 }
+
+  const sessoesPerdidas = new Set(
+    esgotadas.filter((operacao) => operacao.kind === 'START').map((operacao) => operacao.clientId),
+  )
+
+  const morrer = (operacao: PendingOperation) =>
+    operacao.tentativas >= MAX_TENTATIVAS ||
+    (operacao.kind !== 'START' && sessoesPerdidas.has(operacao.sessionClientId))
+
+  const condenadas = fila.filter(morrer)
+  for (const operacao of condenadas) await removerDaFila(operacao.clientId)
+
+  return {
+    restante: fila.filter((operacao) => !morrer(operacao)),
+    treinosPerdidos: sessoesPerdidas.size,
+    // O encerramento cai junto da série: para quem treinou, os dois são "o que fiz".
+    seriesPerdidas: condenadas.filter((operacao) => operacao.kind !== 'START').length,
+  }
+}
 
 /**
  * Processa a fila em ordem. Devolve o id da sessão no servidor quando ele
  * aparece — é ele que as operações seguintes precisam.
  */
 export async function sincronizar(sessionIdConhecido: string | null): Promise<SyncOutcome> {
-  const fila = await lerFila()
+  const { restante: fila, treinosPerdidos, seriesPerdidas } = await expurgar(await lerFila())
   let sessionId = sessionIdConhecido
   let enviadas = 0
 
   for (const operacao of fila) {
-    if (operacao.tentativas >= MAX_TENTATIVAS) continue
-
     /*
      * Série e encerramento precisam do id do servidor. Sem ele, a abertura
      * ainda não subiu — e insistir aqui só gastaria rede. A fila é ordenada,
@@ -67,7 +116,7 @@ export async function sincronizar(sessionIdConhecido: string | null): Promise<Sy
   }
 
   const restante = await lerFila()
-  return { enviadas, pendentes: restante.length, sessionId }
+  return { enviadas, pendentes: restante.length, treinosPerdidos, seriesPerdidas, sessionId }
 }
 
 async function executar(operacao: PendingOperation, sessionId: string | null) {

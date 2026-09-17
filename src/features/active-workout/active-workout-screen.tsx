@@ -1,7 +1,16 @@
 'use client'
 
 import Link from 'next/link'
-import { Check, ChevronRight, Minus, Plus, SkipForward, Timer, TrendingUp } from 'lucide-react'
+import {
+  Check,
+  ChevronRight,
+  Minus,
+  Plus,
+  SkipForward,
+  Timer,
+  TrendingUp,
+  TriangleAlert,
+} from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -11,6 +20,7 @@ import {
   resumo,
 } from '@/features/active-workout/engine/workout-engine'
 import type { PlannedExercise, WorkoutSession } from '@/features/active-workout/engine/types'
+import type { ResumoDoTreino } from '@/features/active-workout/state'
 import { useActiveWorkout, useRestCountdown } from '@/features/active-workout/use-active-workout'
 import { cn, formatNumber } from '@/lib/utils'
 
@@ -76,7 +86,12 @@ export function ActiveWorkoutScreen({
 
   return (
     <div className="space-y-4">
-      <Cabecalho sessao={sessao} progresso={treino.progresso} pendentes={treino.pendentes} />
+      <Cabecalho
+        sessao={sessao}
+        progresso={treino.progresso}
+        pendentes={treino.pendentes}
+        resumoDaFila={treino.resumoDaFila}
+      />
 
       {sessao.state === 'RESTING' || sessao.state === 'REST_FINISHED' ? (
         <PainelDescanso treino={treino} sessao={sessao} />
@@ -140,10 +155,12 @@ function Cabecalho({
   sessao,
   progresso,
   pendentes,
+  resumoDaFila,
 }: {
   sessao: WorkoutSession
   progresso: number
   pendentes: number
+  resumoDaFila: ResumoDoTreino
 }) {
   return (
     <header className="rounded-2xl border border-synse-border bg-synse-surface p-4 shadow-synse-sm">
@@ -160,6 +177,21 @@ function Cabecalho({
           </Badge>
         )}
       </div>
+
+      {/*
+        O que a fila desistiu de enviar. O contador acima não serve para isto:
+        ele diz quantas estão a caminho, e uma série descartada não está a
+        caminho de lugar nenhum.
+      */}
+      {resumoDaFila?.tom === 'alerta' && (
+        <p
+          role="status"
+          className="mt-3 flex items-start gap-2 rounded-lg border border-synse-warning/40 bg-synse-warning/5 px-3 py-2 text-xs text-synse-text"
+        >
+          <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+          {resumoDaFila.texto}
+        </p>
+      )}
 
       <div className="mt-3 flex items-center gap-3">
         <div

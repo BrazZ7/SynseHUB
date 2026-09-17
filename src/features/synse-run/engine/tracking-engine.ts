@@ -384,6 +384,24 @@ export class ActivityTrackingEngine {
   }
 
   /**
+   * Tempo pausado acumulado, em milissegundos, incluindo a pausa em curso.
+   *
+   * Existe para ser **gravado**. Sem ele, a camada de armazenamento escrevia
+   * `pausedMs: 0` — o campo estava lá, o motor sabia o valor, e ninguém os
+   * ligava. Consequência: uma corrida retomada depois de o navegador descartar
+   * a página voltava com a pausa zerada, e uma corrida que subia pela fila
+   * offline reportava o tempo parado como tempo em movimento. O pace médio
+   * saía melhor do que foi.
+   *
+   * A mesma conta do `snapshot`: o acumulado mais o que está correndo agora.
+   */
+  pausedMs(agora = Date.now()): number {
+    const pausaEmCurso =
+      this.pausaComecouEm === null ? 0 : (this.fimMs ?? agora) - this.pausaComecouEm
+    return this.pausadoMs + pausaEmCurso
+  }
+
+  /**
    * Retoma uma atividade que já existia — o app fechou no meio, e os pontos
    * estavam guardados no aparelho (item 45).
    */

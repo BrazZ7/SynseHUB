@@ -5,6 +5,7 @@ import { Play, Timer } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 import { Badge } from '@/components/ui/badge'
+import { PendingWorkoutSync } from '@/features/active-workout/components/pending-workout-sync'
 import { BaselineWorkout } from '@/features/workouts/baseline-workout'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
@@ -43,6 +44,13 @@ export default async function StudentWorkoutPage() {
           tela bloqueada.
         </p>
       </header>
+
+      {/*
+        O treino feito sem rede. Fica aqui, e não na tela do treino ativo,
+        porque o caso que ele resolve é justamente o de não haver treino
+        aberto — encerrado no subsolo da academia e com o app fechado depois.
+      */}
+      <PendingWorkoutSync />
 
       {/*
         Sem plano atribuído não é mais tela vazia: o treino base do Synse vale

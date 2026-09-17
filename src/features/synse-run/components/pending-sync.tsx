@@ -19,6 +19,18 @@ import {
  * Não desenha nada enquanto não há o que subir. Uma faixa "tudo sincronizado"
  * seria ruído permanente para informar o estado normal.
  */
+/** Do primeiro ponto ao fim, incluindo o que estava parado. */
+function decorridoSegundos(corrida: StoredActivity): number {
+  const ultimo = corrida.points[corrida.points.length - 1]
+  if (!ultimo) return 0
+  return Math.max(0, (ultimo.timestamp - corrida.startedAt) / 1000)
+}
+
+/** O decorrido menos o que a pessoa passou parada. Nunca negativo. */
+function emMovimentoSegundos(corrida: StoredActivity): number {
+  return Math.max(0, decorridoSegundos(corrida) - (corrida.pausedMs ?? 0) / 1000)
+}
+
 export function PendingSync() {
   const [pendentes, setPendentes] = useState<StoredActivity[]>([])
   const [enviando, setEnviando] = useState(false)
@@ -48,10 +60,18 @@ export function PendingSync() {
           title: null,
           startedAt: new Date(corrida.startedAt).toISOString(),
           endedAt: new Date(corrida.finishedAt ?? Date.now()).toISOString(),
-          elapsedSeconds: (pontos[pontos.length - 1].timestamp - corrida.startedAt) / 1000,
-          // O servidor recalcula tudo a partir da rota; o que vai daqui é o
-          // que ele não tem como saber — quanto tempo esteve em movimento.
-          movingSeconds: (pontos[pontos.length - 1].timestamp - corrida.startedAt) / 1000,
+          elapsedSeconds: decorridoSegundos(corrida),
+          /*
+           * O servidor recalcula tudo a partir da rota; o que vai daqui é o
+           * único número que ele não tem como saber — quanto tempo esteve em
+           * movimento.
+           *
+           * O tempo pausado precisa sair da conta. Mandar o decorrido inteiro
+           * como movimento fazia o pace médio de uma corrida com pausa sair
+           * melhor do que foi: dez minutos parado no semáforo entravam como
+           * dez minutos correndo.
+           */
+          movingSeconds: emMovimentoSegundos(corrida),
           distanceMeters: pontos[pontos.length - 1].totalDistance,
           averagePace: null,
           bestPace: null,

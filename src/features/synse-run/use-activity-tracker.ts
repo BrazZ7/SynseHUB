@@ -152,7 +152,8 @@ export function useActivityTracker(sport: SportType, weightKg?: number) {
       clientId: clientIdRef.current,
       sport,
       startedAt: atual.startedAt,
-      pausedMs: 0,
+      // O que o motor acumulou, e não zero: ver `pausedMs()` no motor.
+      pausedMs: atual.pausedMs(),
       points: [...atual.trackPoints],
       syncStatus: 'pending',
       finishedAt: null,
@@ -320,7 +321,7 @@ export function useActivityTracker(sport: SportType, weightKg?: number) {
         clientId: clientIdRef.current,
         sport,
         startedAt: atual.startedAt,
-        pausedMs: 0,
+        pausedMs: atual.pausedMs(),
         points: [...atual.trackPoints],
         syncStatus: 'pending',
         finishedAt: Date.now(),

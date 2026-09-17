@@ -25,6 +25,7 @@ import {
   lerSessao,
   salvarSessao,
 } from '@/features/active-workout/storage/local-workout'
+import { resumoDoTreino, type ResumoDoTreino } from '@/features/active-workout/state'
 import { sincronizar } from '@/features/active-workout/sync'
 
 /**
@@ -49,6 +50,12 @@ export function useActiveWorkout() {
   const [sessao, setSessao] = useState<WorkoutSession | null>(null)
   const [carregando, setCarregando] = useState(true)
   const [pendentes, setPendentes] = useState(0)
+  /*
+   * O que a fila desistiu de enviar. Antes de existir, a operação esgotada
+   * ficava rodando e o contador nunca chegava a zero: a tela dizia
+   * "3 a sincronizar" para sempre, sem explicar e sem resolver.
+   */
+  const [resumoDaFila, setResumoDaFila] = useState<ResumoDoTreino>(null)
 
   const liveActivity = useMemo(() => criarLiveActivity(), [])
   const feedback = useMemo(() => criarFeedback(), [])
@@ -145,15 +152,37 @@ export function useActiveWorkout() {
       setSessao((atual) => (atual ? { ...atual, serverId: resultado.sessionId } : atual))
     }
     setPendentes(resultado.pendentes)
+    setResumoDaFila(
+      resumoDoTreino({
+        pendentes: resultado.pendentes,
+        treinosPerdidos: resultado.treinosPerdidos,
+        seriesPerdidas: resultado.seriesPerdidas,
+      }),
+    )
   }, [])
 
   useEffect(() => {
     if (!sessao) return
     void empurrarFila()
+
     // A volta da rede é o momento óbvio de tentar de novo.
-    const aoVoltar = () => void empurrarFila()
-    window.addEventListener('online', aoVoltar)
-    return () => window.removeEventListener('online', aoVoltar)
+    const aoConectar = () => void empurrarFila()
+    /*
+     * E a volta do segundo plano também: no aplicativo, o evento `online` pode
+     * ter acontecido com o processo suspenso, sem ninguém para ouvir. Sem isto,
+     * o treino ficava pendente até a pessoa tocar em alguma coisa.
+     */
+    const aoVoltar = () => {
+      if (document.visibilityState === 'visible') void empurrarFila()
+    }
+
+    window.addEventListener('online', aoConectar)
+    document.addEventListener('visibilitychange', aoVoltar)
+
+    return () => {
+      window.removeEventListener('online', aoConectar)
+      document.removeEventListener('visibilitychange', aoVoltar)
+    }
   }, [sessao?.completedSets.length, sessao?.state, empurrarFila, sessao])
 
   // ── Ações ──────────────────────────────────────────────────────────────────
@@ -273,6 +302,7 @@ export function useActiveWorkout() {
     sessao,
     carregando,
     pendentes,
+    resumoDaFila,
     iniciar,
     concluirSerie,
     encerrar,

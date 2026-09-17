@@ -167,16 +167,40 @@ describe('tentativas', () => {
     expect(fila[0].tentativas).toBe(1)
   })
 
-  it('depois do limite a operação deixa de ser tentada sozinha', async () => {
+  it('depois do limite a operação sai da fila, e a perda é contada', async () => {
     /*
      * Oito falhas é erro que não é de rede — payload recusado pelo banco, por
      * exemplo. Insistir para sempre gastaria bateria a cada abertura do app.
+     *
+     * Antes, ela era apenas pulada e **ficava na fila**: o contador de
+     * pendentes nunca chegava a zero, e a tela dizia "1 a sincronizar"
+     * indefinidamente, sem explicar e sem resolver. Agora sai, e sai contada —
+     * porque um treino que não subiu precisa ser dito, não escondido.
      */
     fila.push({ kind: 'START', clientId: 'local-1', workoutPlanId: null, tentativas: 8 })
     const resultado = await sincronizar(null)
 
     expect(chamadas).toHaveLength(0)
-    expect(resultado.pendentes).toBe(1)
+    expect(resultado.pendentes).toBe(0)
+    expect(resultado.treinosPerdidos).toBe(1)
+  })
+
+  it('a série órfã não fica pendente para sempre', async () => {
+    /*
+     * O caso mais sorrateiro: a série depende do id que o servidor daria ao
+     * abrir a sessão. Com a abertura esgotada, esse id nunca existirá — e o
+     * laço de sincronização pula a série por falta dele, então ela nunca soma
+     * tentativa e nunca se esgota sozinha. Pendente eterno.
+     */
+    fila.push({ kind: 'START', clientId: 'local-1', workoutPlanId: null, tentativas: 8 })
+    fila.push(serie(1))
+
+    const resultado = await sincronizar(null)
+
+    expect(resultado.pendentes).toBe(0)
+    expect(resultado.treinosPerdidos).toBe(1)
+    expect(resultado.seriesPerdidas).toBe(1)
+    expect(fila).toHaveLength(0)
   })
 })
 

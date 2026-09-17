@@ -19,6 +19,23 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!--
+              App Links: link do Synse abre no app, não no navegador.
+
+              `autoVerify` faz o Android buscar
+              https://synse.com.br/.well-known/assetlinks.json na instalação e
+              conferir se o domínio autoriza este aplicativo. Sem o arquivo do
+              outro lado, a verificação falha e o link volta a abrir no
+              navegador — silenciosamente.
+            -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="synse.com.br" />
+                <data android:scheme="https" android:host="www.synse.com.br" />
+            </intent-filter>
         </activity>
 
         <!--

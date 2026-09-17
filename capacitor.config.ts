@@ -33,9 +33,8 @@ const config: CapacitorConfig = {
   appId: 'br.com.synse.app',
   appName: 'Synse',
   /*
-   * Pasta vazia de propósito. Com `server.url` o conteúdo vem da rede; o
-   * Capacitor exige o caminho existir, e `mobile/www` guarda só o fallback
-   * offline.
+   * Com `server.url` o conteúdo vem da rede; `mobile/www` guarda só a tela de
+   * falha de conexão, apontada por `server.errorPath` logo abaixo.
    */
   webDir: 'mobile/www',
   server: {
@@ -48,6 +47,18 @@ const config: CapacitorConfig = {
      * as permissões que o usuário concedeu ao Synse.
      */
     allowNavigation: ['synse.com.br', 'www.synse.com.br'],
+    /*
+     * A tela de quando o aparelho não alcança o servidor.
+     *
+     * Sem isto, celular sem rede abre o app na página de erro do navegador —
+     * em inglês, com o endereço exposto, e com cara de aplicativo quebrado. O
+     * arquivo mora em `mobile/www/index.html`, que é por isso que `webDir`
+     * aponta para lá.
+     *
+     * No Android essa página **não** tem acesso a plugin do Capacitor, então
+     * ela não pode depender de nada além de HTML e JavaScript comum.
+     */
+    errorPath: 'index.html',
   },
   ios: {
     contentInset: 'always',

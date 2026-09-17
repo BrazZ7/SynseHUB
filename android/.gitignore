@@ -99,3 +99,10 @@ app/src/main/assets/public
 app/src/main/assets/capacitor.config.json
 app/src/main/assets/capacitor.plugins.json
 app/src/main/res/xml/config.xml
+
+# Chave de assinatura do release. Perdê-la significa não poder mais atualizar o
+# app na loja; vazá-la significa outra pessoa poder. Nunca entra no repositório.
+keystore.properties
+*.jks
+*.keystore
+*.p12

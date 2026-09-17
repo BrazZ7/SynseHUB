@@ -22,7 +22,10 @@
     "env:check": "node scripts/env-check.mjs",
     "mobile:sync": "cap sync",
     "mobile:android": "cap open android",
-    "mobile:ios": "cap open ios"
+    "mobile:ios": "cap open ios",
+    "mobile:build:aab": "cap sync android && cd android && ./gradlew bundleRelease",
+    "mobile:build:apk": "cap sync android && cd android && ./gradlew assembleRelease",
+    "mobile:assets": "capacitor-assets generate"
   },
   "dependencies": {
     "@capacitor-community/bluetooth-le": "^8.3.0",
@@ -31,6 +34,7 @@
     "@capacitor/core": "^8.5.2",
     "@capacitor/haptics": "^8.0.2",
     "@capacitor/ios": "^8.5.2",
+    "@capacitor/splash-screen": "^8.0.2",
     "@capacitor/status-bar": "^8.0.3",
     "@hookform/resolvers": "^3.9.1",
     "@radix-ui/react-avatar": "^1.1.2",

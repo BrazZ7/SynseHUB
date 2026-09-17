@@ -6,6 +6,7 @@
     <title>Synse</title>
     <style>
       :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
       body {
         margin: 0;
         min-height: 100dvh;
@@ -14,22 +15,69 @@
         background: #041d1b;
         color: #e8f5f2;
         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
-        padding: 24px;
+        padding: 24px calc(24px + env(safe-area-inset-left)) 24px calc(24px + env(safe-area-inset-right));
         text-align: center;
       }
+      .marca { width: 44px; height: 44px; margin: 0 auto 20px; }
       strong { display: block; font-size: 20px; margin-bottom: 8px; color: #17c4a5; }
-      p { margin: 0; color: #9db8b3; max-width: 30ch; }
+      p { margin: 0 auto; color: #9db8b3; max-width: 32ch; }
+      button {
+        margin-top: 24px;
+        padding: 12px 24px;
+        font: inherit;
+        font-weight: 600;
+        color: #04231f;
+        background: #17c4a5;
+        border: 0;
+        border-radius: 10px;
+        cursor: pointer;
+      }
+      button:disabled { opacity: 0.6; }
+      .aviso { margin-top: 16px; font-size: 13px; min-height: 1.5em; color: #9db8b3; }
     </style>
   </head>
   <body>
     <!--
-      Só aparece quando o aparelho não alcança synse.com.br. O app carrega a
-      aplicação publicada; sem rede, esta é a tela — e ela precisa dizer o que
-      houve em vez de deixar um branco que parece defeito.
+      Só aparece quando o aparelho não alcança o servidor — é o `errorPath` do
+      Capacitor. Sem ela, o app abre na página de erro do navegador: em inglês,
+      com o endereço cru na tela, com cara de aplicativo quebrado.
+
+      Sem plugin do Capacitor de propósito: no Android esta página não tem
+      acesso a eles. Só HTML e JavaScript comum, que é o que sempre funciona.
     -->
-    <div>
+    <main>
+      <svg class="marca" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z" stroke="#17c4a5" stroke-width="1.5" />
+        <path d="M8 13.5c1.2 1.1 2.5 1.6 4 1.6s2.8-.5 4-1.6" stroke="#17c4a5" stroke-width="1.5" stroke-linecap="round" />
+      </svg>
       <strong>Sem conexão</strong>
-      <p>O Synse precisa de internet para abrir. Verifique a rede e tente de novo.</p>
-    </div>
+      <p>
+        O Synse precisa de internet para abrir. As medições e os treinos que você
+        registrou sem rede continuam guardados no aparelho e sobem sozinhos.
+      </p>
+      <button type="button" id="tentar">Tentar de novo</button>
+      <p class="aviso" id="aviso" role="status"></p>
+    </main>
+
+    <script>
+      var botao = document.getElementById('tentar')
+      var aviso = document.getElementById('aviso')
+
+      function tentar() {
+        botao.disabled = true
+        aviso.textContent = 'Reconectando…'
+        /*
+          `reload` e não um endereço fixo: a página carregada é a que o
+          Capacitor tentou abrir, então recarregar volta exatamente para onde a
+          pessoa estava indo — e não para a raiz.
+        */
+        window.location.reload()
+      }
+
+      botao.addEventListener('click', tentar)
+
+      // A rede voltou sozinha: tenta de novo sem a pessoa precisar tocar.
+      window.addEventListener('online', tentar)
+    </script>
   </body>
 </html>

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 
 import { APP } from '@/config/app'
 import { ThemeScript } from '@/components/synse/theme-script'
+import { NativeShell } from '@/features/native/native-shell'
 
 import './globals.css'
 
@@ -69,7 +70,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
         <ThemeScript />
       </head>
-      <body className="font-sans">{children}</body>
+      <body className="font-sans">
+        {/*
+          No navegador não faz nada. No APK é quem esconde a splash, trata o
+          botão voltar do Android e revalida a tela ao voltar do segundo plano.
+        */}
+        <NativeShell />
+        {children}
+      </body>
     </html>
   )
 }

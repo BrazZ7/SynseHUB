@@ -54,3 +54,8 @@ ios/DerivedData/
 *.xcuserstate
 # Fontes dos ícones: geradas do SVG da marca por script.
 /assets/
+
+# Saída do Gradle do plugin nativo. O plugin é fonte; `build/` é produto, e
+# entra com milhares de arquivos a cada compilação.
+native/*/android/build/
+native/*/android/.gradle/

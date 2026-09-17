@@ -21,14 +21,21 @@ const ITEMS = [
   { href: '/app/profile', label: 'Perfil', icon: UserRound },
 ] as const
 
-/** Navegação principal do Synse App. Fica fixa e respeita a safe area do iOS. */
+/**
+ * Navegação principal do Synse App. Fica fixa e respeita a safe area do iOS.
+ *
+ * Sem `backdrop-blur`: o fundo já era 95% opaco, então o desfoque não aparecia
+ * — e `backdrop-filter` num elemento fixo obriga o compositor a refazer a
+ * região borrada a cada quadro de rolagem. Era o item mais caro da tela,
+ * presente em todas elas, pagando por um efeito que ninguém via.
+ */
 export function AppBottomNavigation() {
   const pathname = usePathname()
 
   return (
     <nav
       aria-label="Navegação do Synse App"
-      className="bg-synse-surface/95 fixed inset-x-0 bottom-0 z-40 border-t border-synse-border pb-[env(safe-area-inset-bottom)] backdrop-blur-lg"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-synse-border bg-synse-surface pb-[env(safe-area-inset-bottom)]"
     >
       <ul className="mx-auto flex max-w-lg items-stretch">
         {ITEMS.map((item) => {

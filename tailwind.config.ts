@@ -119,7 +119,17 @@ const config: Config = {
         },
       },
       animation: {
-        'fade-in-up': 'fade-in-up 260ms ease-out both',
+        /*
+         * 160ms, e não 260ms.
+         *
+         * A animação roda a cada navegação, e `both` mantém o conteúdo
+         * invisível até ela começar. Com o esqueleto de carregamento agora no
+         * lugar, eram duas esperas em série — o esqueleto e depois a entrada.
+         * O tempo mais curto ainda dá a sensação de movimento sem adiar o
+         * conteúdo. Quem pediu menos movimento não vê nenhuma: `globals.css`
+         * zera tudo em `prefers-reduced-motion`.
+         */
+        'fade-in-up': 'fade-in-up 160ms ease-out both',
         'fade-in': 'fade-in 200ms ease-out both',
         'accordion-down': 'accordion-down 200ms ease-out',
         'accordion-up': 'accordion-up 200ms ease-out',

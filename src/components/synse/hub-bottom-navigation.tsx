@@ -38,7 +38,7 @@ export function HubBottomNavigation({
   return (
     <nav
       aria-label="Navegação do painel"
-      className="bg-synse-surface/95 fixed inset-x-0 bottom-0 z-30 border-t border-synse-border pb-[env(safe-area-inset-bottom)] backdrop-blur-lg lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-30 border-t border-synse-border bg-synse-surface pb-[env(safe-area-inset-bottom)] lg:hidden"
     >
       <ul className="flex items-stretch">
         {itens.map((item) => {

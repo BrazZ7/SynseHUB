@@ -142,6 +142,15 @@
    *    vidro iluminado de retângulo com contorno.
    * 4. **Uma sombra escura embaixo**, discreta, que descola o cartão do fundo.
    *
+   * ── Cuidado com `shadow-*` do Tailwind ──────────────────────────────────
+   *
+   * As utilitárias do Tailwind são emitidas depois da camada de componentes,
+   * então um `shadow-synse-sm` no mesmo elemento **apaga** o `box-shadow`
+   * daqui inteiro — o fio e o brilho interno somem e sobra só o degradê.
+   * Aconteceu em quatro cartões e não dava para ver sem comparar um ao lado do
+   * outro. Quem usar `.vidro-led` não põe `shadow-*`: a sombra de apoio já
+   * está aqui.
+   *
    * Nada anima e não há `backdrop-filter`. Vidro de verdade pediria
    * `backdrop-blur`, mas com dezoito cartões sobre um fundo que rola, o
    * compositor refaria o desfoque a cada quadro — foi assim que a navegação

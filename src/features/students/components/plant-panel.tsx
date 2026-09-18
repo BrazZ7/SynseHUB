@@ -115,8 +115,14 @@ const FOLHAS_AO_VENTO = [
   },
 ] as const
 
-/** O quanto ela se inclina na direção do dedo, no máximo. */
-const INCLINACAO_MAXIMA = 7
+/**
+ * O quanto ela verga na direção do dedo, no máximo.
+ *
+ * Também em `skewX`, pelo mesmo motivo da rajada: girar em direção ao dedo
+ * arrastaria a base junto, e a base está enterrada. O valor é maior que o da
+ * rajada porque aqui é a pessoa empurrando, não o vento.
+ */
+const INCLINACAO_MAXIMA = 9
 
 /**
  * O tamanho da planta no primeiro nível.
@@ -160,7 +166,11 @@ export function PainelPlanta({ planta }: { planta: Planta }) {
         const caixa = evento.currentTarget.getBoundingClientRect()
         const meio = caixa.left + caixa.width / 2
         const desvio = (evento.clientX - meio) / (caixa.width / 2)
-        inclinar(Math.max(-1, Math.min(1, desvio)) * INCLINACAO_MAXIMA)
+        /*
+         * Invertido: empurrar o dedo para a direita verga a planta para a
+         * direita, e `skewX` positivo joga o topo para a esquerda.
+         */
+        inclinar(-Math.max(-1, Math.min(1, desvio)) * INCLINACAO_MAXIMA)
       }}
       onPointerLeave={() => inclinar(0)}
       onPointerCancel={() => inclinar(0)}
@@ -227,35 +237,49 @@ export function PainelPlanta({ planta }: { planta: Planta }) {
         )}
 
         {/*
-         * O caule balança em volta do ponto onde encontra o chão, e é o mesmo
-         * elemento que recebe a inclinação do dedo.
+         * ── O caule, em duas voltas ───────────────────────────────────────
          *
-         * A rajada anima a propriedade `rotate` e a inclinação vive no
-         * `transform`: propriedades separadas que o navegador compõe sem uma
-         * apagar a outra.
+         * A nutação por fora, a deriva por dentro, a mão da pessoa na imagem.
+         * Três transformações que se compõem, e é a composição que faz o
+         * movimento não parecer um laço.
          *
-         * Sem `duration-*` do Tailwind aqui: o plugin `tailwindcss-animate`
-         * faz essas classes valerem também para `animation-duration`, e elas
-         * atropelavam a rajada — conferido, a animação rodava em 0,3s.
+         * Dois ciclos que não dividem um ao outro: 11s e 7,5s só voltam a
+         * coincidir depois de mais de um minuto. Uma animação só, por melhor
+         * desenhada que fosse, entrega o período em poucos segundos — foi
+         * exatamente o que o dono do produto chamou de genérico.
+         *
+         * O eixo das três é o mesmo `pivo`: o ponto onde a planta encontra o
+         * chão. Sem isso cada camada vergaria em torno de um lugar diferente e
+         * a planta se desmontaria.
          */}
-        <Image
-          ref={caule}
-          src={arte.caule}
-          alt=""
-          width={arte.largura}
-          height={arte.altura}
-          sizes="(max-width: 640px) 100vw, 512px"
-          className="absolute inset-0 size-full animate-brisa group-hover:[--brisa:2.6] group-hover:[animation-duration:3s] motion-reduce:animate-none"
-          style={{
-            transformOrigin: arte.pivo,
-            // `--inclinacao` é escrita direto no nó a cada movimento do dedo.
-            ['--inclinacao' as string]: '0deg',
-            transform: 'rotate(var(--inclinacao))',
-            transitionProperty: 'transform',
-            transitionDuration: '300ms',
-            transitionTimingFunction: 'cubic-bezier(0, 0, 0.2, 1)',
-          }}
-        />
+        <div
+          className="absolute inset-0 animate-nutacao group-hover:[--vida:1.8] group-hover:[animation-duration:6s] motion-reduce:animate-none"
+          style={{ transformOrigin: arte.pivo }}
+        >
+          <div
+            className="absolute inset-0 animate-deriva group-hover:[animation-duration:4s] motion-reduce:animate-none"
+            style={{ transformOrigin: arte.pivo }}
+          >
+            <Image
+              ref={caule}
+              src={arte.caule}
+              alt=""
+              width={arte.largura}
+              height={arte.altura}
+              sizes="(max-width: 640px) 100vw, 512px"
+              className="absolute inset-0 size-full"
+              style={{
+                transformOrigin: arte.pivo,
+                // `--inclinacao` é escrita direto no nó a cada movimento do dedo.
+                ['--inclinacao' as string]: '0deg',
+                transform: 'skewX(var(--inclinacao))',
+                transitionProperty: 'transform',
+                transitionDuration: '420ms',
+                transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)',
+              }}
+            />
+          </div>
+        </div>
 
         {/* A terra não balança. Fica por cima, parada. */}
         <Image

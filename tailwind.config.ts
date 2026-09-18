@@ -171,26 +171,71 @@ const config: Config = {
           '100%': { transform: 'translateY(-26px) scale(1)', opacity: '0' },
         },
         /*
-         * A brisa da muda. `--brisa` multiplica a amplitude, então o mesmo
-         * keyframe serve para o repouso e para o ponteiro em cima — quem passa
-         * o mouse só troca o multiplicador e a duração.
+         * ── A nutação ───────────────────────────────────────────────────────
+         *
+         * Não é vento. Planta parada, num time-lapse, não balança: ela
+         * **circula**. A ponta do broto descreve uma elipse lenta enquanto
+         * cresce — chama-se circunutação, e é o movimento que aparece nos
+         * vídeos de feijão que o dono do produto mandou como referência.
+         *
+         * Um balanço para os lados é o que todo mundo faz, e foi o que ele
+         * chamou de genérico. Circular é o que planta faz.
+         *
+         * ── Como se desenha uma elipse em CSS ───────────────────────────────
+         *
+         * Com as duas componentes defasadas em um quarto de ciclo: o
+         * `skewX` corre como seno e o `scaleY` como cosseno. Quando a planta
+         * está no extremo lateral ela tem altura média; quando está no meio,
+         * está no ponto mais alto ou mais baixo. A ponta, então, não vai e
+         * volta pela mesma linha — ela contorna.
+         *
+         * `skewX`, e não `rotate`: girar move base e ponta pelo mesmo ângulo,
+         * e a base está enterrada. O cisalhamento desloca cada ponto em
+         * proporção à altura, que é como uma haste flexível se comporta. O
+         * `rotate` fica pequeno, só para o talo não parecer rígido dentro do
+         * cisalhamento.
          */
-        brisa: {
-          /*
-           * Rajada, não metrônomo.
-           *
-           * Empurra para um lado, recua pouco, empurra de novo: é o que faz
-           * ler como vento em vez de pêndulo. Anima `rotate`, e não
-           * `transform`, porque a inclinação que segue o dedo mora no
-           * `transform` da mesma imagem — como propriedades separadas, o
-           * navegador compõe as duas, e a planta fica num elemento só, que é o
-           * que o `mix-blend-screen` precisa para achar o fundo do painel.
-           */
-          '0%': { rotate: 'calc(var(--brisa, 1) * -0.9deg)' },
-          '28%': { rotate: 'calc(var(--brisa, 1) * 1.2deg)' },
-          '46%': { rotate: 'calc(var(--brisa, 1) * 0.25deg)' },
-          '68%': { rotate: 'calc(var(--brisa, 1) * 1.4deg)' },
-          '100%': { rotate: 'calc(var(--brisa, 1) * -0.9deg)' },
+        nutacao: {
+          '0%': { transform: 'skewX(0deg) rotate(0deg) scaleY(1.013)' },
+          '12%': {
+            transform:
+              'skewX(calc(var(--vida, 1) * -3.2deg)) rotate(calc(var(--vida, 1) * 0.5deg)) scaleY(1.011)',
+          },
+          '25%': {
+            transform:
+              'skewX(calc(var(--vida, 1) * -5.8deg)) rotate(calc(var(--vida, 1) * 0.95deg)) scaleY(1)',
+          },
+          '38%': {
+            transform:
+              'skewX(calc(var(--vida, 1) * -4.4deg)) rotate(calc(var(--vida, 1) * 0.7deg)) scaleY(0.99)',
+          },
+          '50%': { transform: 'skewX(0deg) rotate(0deg) scaleY(0.987)' },
+          '62%': {
+            transform:
+              'skewX(calc(var(--vida, 1) * 3.6deg)) rotate(calc(var(--vida, 1) * -0.55deg)) scaleY(0.99)',
+          },
+          '75%': {
+            transform:
+              'skewX(calc(var(--vida, 1) * 5.4deg)) rotate(calc(var(--vida, 1) * -0.9deg)) scaleY(1)',
+          },
+          '88%': {
+            transform:
+              'skewX(calc(var(--vida, 1) * 2.8deg)) rotate(calc(var(--vida, 1) * -0.45deg)) scaleY(1.011)',
+          },
+          '100%': { transform: 'skewX(0deg) rotate(0deg) scaleY(1.013)' },
+        },
+        /*
+         * A deriva: a mesma elipse, menor, num ciclo que não divide o da
+         * nutação. Onze segundos contra sete e meio só voltam a coincidir
+         * depois de mais de um minuto — na prática, nunca. Planta de verdade
+         * também não fecha duas voltas iguais, e é isso que tira do laço a
+         * cara de laço.
+         */
+        deriva: {
+          '0%, 100%': { transform: 'skewX(0.8deg) scaleY(0.997)' },
+          '30%': { transform: 'skewX(calc(var(--vida, 1) * -1.4deg)) scaleY(1.004)' },
+          '55%': { transform: 'skewX(calc(var(--vida, 1) * 1.2deg)) scaleY(1.002)' },
+          '78%': { transform: 'skewX(calc(var(--vida, 1) * -0.5deg)) scaleY(0.996)' },
         },
         /*
          * As folhas e gotas paradas no ar, no painel do jardim. Bóiam de leve,
@@ -241,7 +286,9 @@ const config: Config = {
         'accordion-up': 'accordion-up 200ms ease-out',
         /* A duração real vem de cada fagulha, para elas não subirem em bloco. */
         faisca: 'faisca 5s ease-out infinite',
-        brisa: 'brisa 7s ease-in-out infinite',
+        /* Linear: a volta é contínua, e `ease` faria a planta parar nas pontas. */
+        nutacao: 'nutacao 11s linear infinite',
+        deriva: 'deriva 7.5s ease-in-out infinite',
         boiar: 'boiar 11s ease-in-out infinite',
         /* A duração real vem de cada folha, para elas não cruzarem juntas. */
         voar: 'voar 12s linear infinite',

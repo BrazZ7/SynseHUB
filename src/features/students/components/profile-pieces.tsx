@@ -38,7 +38,9 @@ import { cn } from '@/lib/utils'
  * buraco foi preenchido por difusão e recebeu de volta a textura de céu da
  * faixa logo acima.
  *
- * A tela também subiu, de 912×211 para 912×584, na proporção do cartão. Sem
+ * A tela também subiu, de 912×211 para 912×584, na proporção do cartão. A
+ * arte fica no topo e o escuro desce por baixo dela: a árvore precisa ficar em
+ * cima, e é sobre esse escuro que o nome se assenta. Sem
  * isso o `object-cover` teria que ampliar a arte quase três vezes para cobrir
  * a altura, e uma foto ampliada assim fica borrada num aparelho 3x.
  *
@@ -58,7 +60,7 @@ export function CapaPerfil({ children }: { children: React.ReactNode }) {
   return (
     <section className="dark relative overflow-hidden rounded-2xl border border-synse-border shadow-synse-sm">
       <Image
-        src="/synse-capa.webp"
+        src="/synse-capa-topo.webp"
         alt=""
         aria-hidden
         width={912}
@@ -67,9 +69,10 @@ export function CapaPerfil({ children }: { children: React.ReactNode }) {
            ela apareceria depois e daria um pulo no cartão. */
         priority
         sizes="(max-width: 512px) 100vw, 512px"
-        /* Ancorada embaixo: se o cartão crescer — nome comprido, e-mail longo —
-           o que se perde é céu, não a árvore nem a montanha. */
-        className="absolute inset-0 size-full object-cover object-bottom"
+        /* Ancorada em cima: a árvore e a montanha ficam no topo do cartão, e
+           o que se perde quando ele cresce — nome comprido, e-mail longo — é o
+           escuro de baixo. */
+        className="absolute inset-0 size-full object-cover object-top"
       />
 
       {/*

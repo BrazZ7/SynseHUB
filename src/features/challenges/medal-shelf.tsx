@@ -41,7 +41,7 @@ export function MedalShelf({ medals }: { medals: ChallengeMedal[] }) {
   const recentes = [...medals].sort((a, b) => b.awardedAt.localeCompare(a.awardedAt))
 
   return (
-    <section className="borda-led rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
+    <section className="vidro-led rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
       <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-synse-text">
         <Trophy className="size-4 text-synse-primary" aria-hidden />
         Suas medalhas

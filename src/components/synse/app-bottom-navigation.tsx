@@ -35,7 +35,7 @@ export function AppBottomNavigation() {
   return (
     <nav
       aria-label="Navegação do Synse App"
-      className="borda-led fixed inset-x-0 bottom-0 z-40 border-t border-synse-border bg-synse-surface pb-[env(safe-area-inset-bottom)]"
+      className="vidro-led fixed inset-x-0 bottom-0 z-40 border-t border-synse-border bg-synse-surface pb-[env(safe-area-inset-bottom)]"
     >
       <ul className="mx-auto flex max-w-lg items-stretch">
         {ITEMS.map((item) => {

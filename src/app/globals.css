@@ -120,30 +120,54 @@
   }
 
   /*
-   * ── Borda de LED ──────────────────────────────────────────────────────────
+   * ── Vidro com LED ─────────────────────────────────────────────────────────
    *
-   * O fio aceso em volta dos cartões do app do aluno. Duas camadas:
+   * A primeira tentativa foi um anel de néon saturado com brilho para fora.
+   * O dono do produto reprovou, e com razão: aquilo é um tubo aceso em volta
+   * do cartão. Na referência a luz **bate no vidro** — ela entra pela borda e
+   * se espalha para dentro, e o painel é translúcido o bastante para pegar um
+   * degradê.
    *
-   * 1. Um `::before` de 1px com degradê, recortado em anel pela composição de
-   *    duas máscaras. É o que dá o fio *desigual* — mais aceso num canto, quase
-   *    apagado no oposto. Uma borda de cor única lê como contorno; o LED
-   *    precisa ter um ponto de luz e uma sombra.
-   * 2. Um `box-shadow` para fora, o brilho que vaza no fundo.
+   * São quatro coisas, e nenhuma delas é um contorno:
    *
-   * Tudo estático: nenhuma animação, nenhum `backdrop-filter`. O navegador
-   * pinta uma vez e não toca mais enquanto a página rola — foi por causa de
-   * `backdrop-blur` em elemento fixo que a navegação ficou pesada antes.
+   * 1. **O painel** ganha um degradê diagonal: mais claro no canto de cima à
+   *    esquerda, transparente no meio, acendendo de novo embaixo à direita. É
+   *    isso que faz parecer uma placa de vidro pegando luz, e não uma caixa
+   *    pintada.
+   * 2. **O fio** é fraco e desigual — um `::before` de 1px recortado em anel
+   *    pela composição de duas máscaras. Metade da opacidade da versão
+   *    anterior: vidro reflete, não emite.
+   * 3. **O brilho para dentro**: uma sombra interna larga, que é a luz da
+   *    borda vazando no miolo. Era isto que faltava, e é o que diferencia
+   *    vidro iluminado de retângulo com contorno.
+   * 4. **Uma sombra escura embaixo**, discreta, que descola o cartão do fundo.
    *
-   * No tema claro o brilho quase some: neon sobre branco não lê como luz, lê
-   * como borrão. Fica só o fio, um pouco mais firme que a borda comum.
+   * Nada anima e não há `backdrop-filter`. Vidro de verdade pediria
+   * `backdrop-blur`, mas com dezoito cartões sobre um fundo que rola, o
+   * compositor refaria o desfoque a cada quadro — foi assim que a navegação
+   * ficou pesada antes. O degradê no painel faz o mesmo trabalho de graça.
    */
-  .borda-led {
+  .vidro-led {
     position: relative;
     border-color: transparent;
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--synse-primary) 10%, transparent);
+    background-image:
+      radial-gradient(
+        130% 100% at 100% 100%,
+        color-mix(in srgb, var(--synse-primary) 10%, transparent) 0%,
+        transparent 58%
+      ),
+      linear-gradient(
+        152deg,
+        color-mix(in srgb, var(--synse-mint) 9%, transparent) 0%,
+        transparent 46%,
+        transparent 100%
+      );
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, var(--synse-primary) 12%, transparent),
+      0 10px 28px -20px rgb(0 0 0 / 0.75);
   }
 
-  .borda-led::before {
+  .vidro-led::before {
     content: '';
     position: absolute;
     inset: 0;
@@ -152,11 +176,11 @@
     border-radius: inherit;
     pointer-events: none;
     background: linear-gradient(
-      145deg,
-      color-mix(in srgb, var(--synse-primary) 78%, transparent) 0%,
-      color-mix(in srgb, var(--synse-cyan) 48%, transparent) 28%,
-      color-mix(in srgb, var(--synse-primary) 10%, transparent) 62%,
-      color-mix(in srgb, var(--synse-primary) 58%, transparent) 100%
+      152deg,
+      color-mix(in srgb, var(--synse-mint) 50%, transparent) 0%,
+      color-mix(in srgb, var(--synse-primary) 30%, transparent) 26%,
+      color-mix(in srgb, var(--synse-primary) 22%, transparent) 62%,
+      color-mix(in srgb, var(--synse-primary) 45%, transparent) 100%
     );
     /* O anel: pinta a caixa toda, desconta o miolo, sobra a moldura. */
     -webkit-mask:
@@ -169,10 +193,14 @@
     mask-composite: exclude;
   }
 
-  .dark .borda-led {
+  .dark .vidro-led {
     box-shadow:
-      0 0 0 1px color-mix(in srgb, var(--synse-primary) 16%, transparent),
-      0 0 26px -10px color-mix(in srgb, var(--synse-primary) 85%, transparent);
+      /* o fio */
+      inset 0 0 0 1px color-mix(in srgb, var(--synse-primary) 15%, transparent),
+      /* a luz que entra pela borda de cima e escorre para dentro */ inset 0 1px 0 0
+        color-mix(in srgb, var(--synse-mint) 20%, transparent),
+      inset 0 0 30px -16px color-mix(in srgb, var(--synse-primary) 62%, transparent),
+      /* o cartão descolado do fundo */ 0 12px 32px -22px rgb(0 0 0 / 0.9);
   }
 
   /* Scrollbar leve */

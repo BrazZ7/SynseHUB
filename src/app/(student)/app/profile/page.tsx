@@ -95,8 +95,8 @@ export default async function StudentProfilePage() {
         </div>
       </section>
 
-      {/* ── Os quatro números ────────────────────────────────────────────── */}
-      <section className="grid grid-cols-2 gap-3">
+      {/* ── Os quatro números, numa linha só ─────────────────────────────── */}
+      <section className="grid grid-cols-4 gap-2">
         <StatTile
           icone={ICONES_DO_TOPO.Dumbbell}
           valor={String(perfil.totais.treinos)}

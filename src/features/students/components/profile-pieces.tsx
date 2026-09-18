@@ -72,6 +72,19 @@ export function CapaPerfil() {
 }
 
 // ── Números do topo ──────────────────────────────────────────────────────────
+/**
+ * Os quatro números, numa linha só.
+ *
+ * Eram dois por linha, grandes, e ocupavam quase um terço da primeira tela do
+ * perfil sem dizer mais por isso — quem abre o perfil quer bater o olho nos
+ * quatro de uma vez, não rolar entre eles. Em quatro colunas cada quadro fica
+ * com cerca de 80px numa tela de 390, então o conteúdo é centralizado e o
+ * texto encolhe junto: ícone menor, número em `text-sm` e rótulo em 10px.
+ *
+ * `leading-tight` no rótulo porque "Medalhas" e "Desafios" cabem numa linha
+ * nessa largura, mas um rótulo maior no futuro quebra em duas sem desalinhar
+ * os quatro quadros.
+ */
 export function StatTile({
   icone: Icone,
   valor,
@@ -82,10 +95,10 @@ export function StatTile({
   rotulo: string
 }) {
   return (
-    <div className="rounded-2xl border border-synse-border bg-synse-surface p-4">
-      <Icone className="size-5 text-synse-primary" aria-hidden />
-      <p className="mt-2 text-xl font-semibold tabular-nums text-synse-text">{valor}</p>
-      <p className="text-xs text-synse-muted">{rotulo}</p>
+    <div className="rounded-xl border border-synse-border bg-synse-surface px-2 py-3 text-center">
+      <Icone className="mx-auto size-4 text-synse-primary" aria-hidden />
+      <p className="mt-1.5 text-sm font-semibold tabular-nums text-synse-text">{valor}</p>
+      <p className="text-[10px] leading-tight text-synse-muted">{rotulo}</p>
     </div>
   )
 }

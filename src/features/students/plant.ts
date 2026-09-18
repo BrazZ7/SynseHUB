@@ -39,31 +39,36 @@ export type ArteDaPlanta = {
   src: string
   largura: number
   altura: number
+  /**
+   * O quanto a arte escapa pela borda esquerda do painel.
+   *
+   * A do broto é uma cena larga com terra correndo na base: cortá-la um pouco
+   * faz o chão continuar para fora do quadro, que é o que dá profundidade. A
+   * do arbusto é uma planta centrada e alta — cortar ali só come folha.
+   */
+  sangra: string
 }
 
 /**
- * A muda, para os três primeiros estágios.
+ * O broto, para os três primeiros estágios.
  *
- * ── Como ela perdeu o fundo ─────────────────────────────────────────────────
+ * Arte transparente de verdade, enviada pelo dono do produto. Substituiu a
+ * versão que eu havia recortado do fundo preto: aquela era um quadrado quase
+ * quadrado, e esta é uma composição larga, com a terra correndo na base — que
+ * é o formato do painel.
  *
- * O arquivo original era luz sobre preto. Por um tempo o preto foi escondido
- * com `mix-blend-screen` mais `contrast(1.55)`, o que funcionava no Chromium e
- * **não** funcionava no iPhone do dono do produto: lá o retângulo preto
- * aparecia atrás da planta. Mesclagem depende de como cada navegador monta as
- * camadas, e esta imagem tinha `transform`, `filter` e animação no mesmo
- * elemento — pedir para compor bem em cima disso é pedir demais.
+ * ── O que aprendemos com a anterior ─────────────────────────────────────────
  *
- * Agora o fundo não existe mais no arquivo. O alfa não foi adivinhado por
- * limiar, que foi o que deixou o halo pálido na primeira chama: para arte
- * luminosa sobre preto, o pixel *é* a cor já pré-multiplicada, então
- * `alfa = max(r,g,b)` e `cor = pixel / alfa` devolvem exatamente a arte. O
- * `contrast(1.55)` que antes rodava no navegador foi aplicado uma vez no
- * arquivo, para zerar o quase-preto da vinheta antes da conta.
+ * Por um tempo o fundo preto foi escondido com `mix-blend-screen`. Funcionava
+ * no Chromium e **não** funcionava no iPhone: lá o retângulo preto aparecia
+ * atrás da planta. Mesclagem depende de como cada navegador monta as camadas.
+ * Arte que chega já transparente não tem esse risco em navegador nenhum.
  */
-const ARTE_MUDA: ArteDaPlanta = {
-  src: '/synse-muda.webp',
-  largura: 237,
-  altura: 211,
+const ARTE_BROTO: ArteDaPlanta = {
+  src: '/synse-broto.webp',
+  largura: 900,
+  altura: 446,
+  sangra: '-6%',
 }
 
 /**
@@ -77,6 +82,7 @@ const ARTE_ARBUSTO: ArteDaPlanta = {
   src: '/synse-arbusto.webp',
   largura: 488,
   altura: 540,
+  sangra: '0%',
 }
 
 export type EstagioDaPlanta = {
@@ -95,21 +101,21 @@ export const ESTAGIOS: readonly EstagioDaPlanta[] = [
     nome: 'Semente',
     nivelMinimo: 1,
     legenda: 'Tudo começa aqui.',
-    arte: ARTE_MUDA,
+    arte: ARTE_BROTO,
   },
   {
     chave: 'BROTO',
     nome: 'Broto',
     nivelMinimo: 2,
     legenda: 'A primeira folha abriu.',
-    arte: ARTE_MUDA,
+    arte: ARTE_BROTO,
   },
   {
     chave: 'MUDA',
     nome: 'Muda',
     nivelMinimo: 4,
     legenda: 'Já tem raiz para segurar.',
-    arte: ARTE_MUDA,
+    arte: ARTE_BROTO,
   },
   {
     chave: 'ARBUSTO',

@@ -170,6 +170,24 @@ const config: Config = {
           '20%': { opacity: '0.85' },
           '100%': { transform: 'translateY(-26px) scale(1)', opacity: '0' },
         },
+        /*
+         * A brisa da muda. `--brisa` multiplica a amplitude, então o mesmo
+         * keyframe serve para o repouso e para o ponteiro em cima — quem passa
+         * o mouse só troca o multiplicador e a duração.
+         */
+        brisa: {
+          /*
+           * Anima `rotate`, e não `transform`.
+           *
+           * A inclinação que segue o dedo mora no `transform` da mesma
+           * imagem. Se a brisa também usasse `transform`, uma apagaria a
+           * outra. Como propriedades separadas, o navegador compõe as duas —
+           * e a planta fica no mesmo elemento, que é o que o
+           * `mix-blend-screen` precisa para achar o fundo do painel.
+           */
+          '0%, 100%': { rotate: 'calc(var(--brisa, 1) * -1.1deg)' },
+          '50%': { rotate: 'calc(var(--brisa, 1) * 1.1deg)' },
+        },
       },
       animation: {
         /*
@@ -188,6 +206,7 @@ const config: Config = {
         'accordion-up': 'accordion-up 200ms ease-out',
         /* A duração real vem de cada fagulha, para elas não subirem em bloco. */
         faisca: 'faisca 5s ease-out infinite',
+        brisa: 'brisa 7s ease-in-out infinite',
       },
     },
   },

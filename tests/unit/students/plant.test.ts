@@ -45,16 +45,29 @@ describe('os estágios', () => {
 })
 
 describe('a planta', () => {
-  it('nasce viva: o nível 1 já desenha alguma coisa', () => {
-    expect(plantaDoNivel(nivelCru(1)).vigor).toBeGreaterThan(0.4)
+  it('nasce viva: o nível 1 já brilha, mesmo sendo pequena', () => {
+    const inicio = plantaDoNivel(nivelCru(1))
+    expect(inicio.vigor).toBeGreaterThan(0.4)
+    // Pequena de verdade: a árvore precisa ter para onde crescer.
+    expect(inicio.crescimento).toBe(0)
+  })
+
+  it('o tamanho vai de zero a um, do primeiro nível até a árvore', () => {
+    expect(plantaDoNivel(nivelCru(NIVEL_DA_ARVORE)).crescimento).toBe(1)
+    expect(plantaDoNivel(nivelCru(500)).crescimento).toBe(1)
+    // Nível inválido não empurra o tamanho para fora da faixa.
+    expect(plantaDoNivel(nivelCru(-3)).crescimento).toBe(0)
   })
 
   it('nunca encolhe quando o nível sobe', () => {
-    let anterior = -1
+    let vigorAnterior = -1
+    let tamanhoAnterior = -1
     for (let nivel = 1; nivel <= 60; nivel += 1) {
-      const vigor = plantaDoNivel(nivelCru(nivel)).vigor
-      expect(vigor).toBeGreaterThanOrEqual(anterior)
-      anterior = vigor
+      const { vigor, crescimento } = plantaDoNivel(nivelCru(nivel))
+      expect(vigor).toBeGreaterThanOrEqual(vigorAnterior)
+      expect(crescimento).toBeGreaterThanOrEqual(tamanhoAnterior)
+      vigorAnterior = vigor
+      tamanhoAnterior = crescimento
     }
   })
 
@@ -62,6 +75,7 @@ describe('a planta', () => {
     const comeco = plantaDoNivel(nivelCru(3, 0))
     const fim = plantaDoNivel(nivelCru(3, 0.9))
     expect(fim.vigor).toBeGreaterThan(comeco.vigor)
+    expect(fim.crescimento).toBeGreaterThan(comeco.crescimento)
     expect(fim.progresso).toBeGreaterThan(comeco.progresso)
   })
 

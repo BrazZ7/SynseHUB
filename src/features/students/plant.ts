@@ -69,7 +69,15 @@ export type Planta = {
   niveisParaOProximo: number
   /** 0 a 1, o caminho andado dentro do estágio atual. */
   progresso: number
-  /** 0 a 1, o quanto a arte aparece: escala, brilho e partículas saem daqui. */
+  /**
+   * 0 a 1, do primeiro nível até a árvore. É o tamanho da planta.
+   *
+   * Cru de propósito: no nível 1 ela precisa ser pequena de verdade, para a
+   * árvore ter para onde crescer. Quem segura o piso é o `vigor`, que cuida
+   * do brilho — pequena sim, apagada não.
+   */
+  crescimento: number
+  /** 0 a 1, o quanto a arte brilha: luz, halo e fagulhas saem daqui. */
   vigor: number
 }
 
@@ -110,14 +118,15 @@ export function plantaDoNivel(nivel: NivelSynse): Planta {
    * idêntica durante os cinco níveis de um arbusto e daria um salto na
    * virada. Assim ela cresce um pouco toda semana.
    */
-  const caminho = Math.min(1, (exato - 1) / (NIVEL_DA_ARVORE - 1))
-  const vigor = VIGOR_MINIMO + (1 - VIGOR_MINIMO) * caminho
+  const crescimento = Math.min(1, Math.max(0, (exato - 1) / (NIVEL_DA_ARVORE - 1)))
+  const vigor = VIGOR_MINIMO + (1 - VIGOR_MINIMO) * crescimento
 
   return {
     estagio,
     proximo,
     niveisParaOProximo: proximo ? Math.max(0, Math.ceil(proximo.nivelMinimo - exato)) : 0,
     progresso,
+    crescimento,
     vigor,
   }
 }

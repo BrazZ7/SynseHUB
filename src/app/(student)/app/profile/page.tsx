@@ -43,10 +43,7 @@ export default async function StudentProfilePage() {
     dataSource.listConsents(session.userProfileId).catch(() => []),
   ])
 
-  const perfil = await getPerfilCompleto(
-    session,
-    organization?.timezone ?? 'America/Sao_Paulo',
-  )
+  const perfil = await getPerfilCompleto(session, organization?.timezone ?? 'America/Sao_Paulo')
 
   let fotoAssinada: string | null = null
   try {
@@ -68,32 +65,26 @@ export default async function StudentProfilePage() {
         <ThemeToggle />
       </header>
 
-      <section className="overflow-hidden rounded-2xl border border-synse-border bg-synse-surface shadow-synse-sm">
-        <CapaPerfil />
+      <CapaPerfil>
+        <AvatarPicker nome={session.name} fotoAtual={fotoAssinada} />
 
-        <div className="space-y-4 p-5 pt-3">
-          <AvatarPicker nome={session.name} fotoAtual={fotoAssinada} />
-
-          <div className="min-w-0 border-t border-synse-border pt-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="truncate text-lg font-semibold text-synse-text">{session.name}</p>
-              <span className="inline-flex items-center gap-1 rounded-full border border-synse-primary/40 bg-synse-primary/10 px-2.5 py-0.5 text-xs font-medium text-synse-primary">
-                Nível {perfil.nivel.nivel}
+        <div className="min-w-0 border-t border-synse-border pt-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="truncate text-lg font-semibold text-synse-text">{session.name}</p>
+            <span className="inline-flex items-center gap-1 rounded-full border border-synse-primary/40 bg-synse-primary/10 px-2.5 py-0.5 text-xs font-medium text-synse-primary">
+              Nível {perfil.nivel.nivel}
+            </span>
+            {perfil.sequencia.hoje && (
+              <span className="inline-flex items-center gap-1 text-xs text-synse-muted">
+                <span className="size-1.5 rounded-full bg-synse-success" aria-hidden />
+                Ativo hoje
               </span>
-              {perfil.sequencia.hoje && (
-                <span className="inline-flex items-center gap-1 text-xs text-synse-muted">
-                  <span className="size-1.5 rounded-full bg-synse-success" aria-hidden />
-                  Ativo hoje
-                </span>
-              )}
-            </div>
-            <p className="truncate text-sm text-synse-muted">{session.email}</p>
-            <p className="mt-1 font-mono text-xs tracking-wide text-synse-muted">
-              {session.synseId}
-            </p>
+            )}
           </div>
+          <p className="truncate text-sm text-synse-muted">{session.email}</p>
+          <p className="mt-1 font-mono text-xs tracking-wide text-synse-muted">{session.synseId}</p>
         </div>
-      </section>
+      </CapaPerfil>
 
       {/* ── Os quatro números, numa linha só ─────────────────────────────── */}
       <section className="grid grid-cols-4 gap-2">

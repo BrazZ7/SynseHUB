@@ -23,51 +23,72 @@ import { cn } from '@/lib/utils'
 
 // ── A arte da marca ──────────────────────────────────────────────────────────
 /**
- * A capa do perfil.
+ * A capa do perfil — e o cartão inteiro por dentro dela.
  *
- * Mesma decisão da chama: é a arte do Synse, não um degradê que lembra o
- * Synse. Veio do material de marca do dono do produto, recortada da prancha de
- * assets — sem extração por luminância, que foi o que produziu o halo pálido
- * em volta da primeira chama.
+ * Era uma faixa no topo com o conteúdo abaixo, sobre a superfície do tema.
+ * Agora a arte é o fundo de tudo: nome, nível, e-mail e Synse ID ficam por
+ * cima dela.
  *
- * ── Por que uma faixa, e não o fundo do cartão ──────────────────────────────
+ * ── O logotipo saiu do arquivo ──────────────────────────────────────────────
  *
- * A arte é escura nos dois temas — é uma foto. Se ela fosse o fundo do cartão
- * inteiro, os botões de foto e o nome ficariam por cima dela, e no tema claro
- * o texto escuro sumiria no fundo escuro. Como faixa, a foto é foto e o
- * conteúdo continua sobre `bg-synse-surface`, legível nos dois temas.
+ * A arte trazia "SYNSE · SAÚDE • EQUILÍBRIO • EVOLUÇÃO" escrito dentro. Com o
+ * nome da pessoa por cima, viravam dois títulos brigando. O texto foi apagado
+ * no arquivo: as letras chegam a 216–255 de luminância e o céu em volta não
+ * passa de 96, então um limiar em 110 separa os dois sem tocar na nuvem — o
+ * buraco foi preenchido por difusão e recebeu de volta a textura de céu da
+ * faixa logo acima.
  *
- * O degradê no pé costura a foto ao cartão: sem ele fica uma aresta dura entre
- * a noite da arte e a superfície da interface.
+ * A tela também subiu, de 912×211 para 912×584, na proporção do cartão. Sem
+ * isso o `object-cover` teria que ampliar a arte quase três vezes para cobrir
+ * a altura, e uma foto ampliada assim fica borrada num aparelho 3x.
+ *
+ * O arquivo mudou de nome junto com o conteúdo, e não por capricho: o
+ * otimizador de imagem do Next guarda o resultado pela URL de origem. Trocar
+ * os pixels mantendo o nome serviu a versão velha — com o logotipo — e eu só
+ * percebi olhando a captura.
+ *
+ * ── Por que a `dark` fixa ───────────────────────────────────────────────────
+ *
+ * A arte é uma noite nos dois temas. No tema claro, `text-synse-text` seria
+ * quase preto sobre ela, e os botões de foto sumiriam. Marcando o cartão como
+ * `dark`, as variáveis do tema escuro valem só aqui dentro — e todo componente
+ * que já usa os tokens continua legível, sem precisar de uma variante nova.
  */
-export function CapaPerfil() {
+export function CapaPerfil({ children }: { children: React.ReactNode }) {
   return (
-    /*
-     * A faixa tem a proporção exata do arquivo, então nada é cortado.
-     *
-     * A primeira versão fixava a altura e deixava o `object-cover` recortar as
-     * laterais. Num celular de 390px sobravam 25px de folga horizontal, e
-     * qualquer ancoragem fora do centro comia o logotipo: "SAÚDE" aparecia
-     * como "AÚDE". Com a proporção travada não há folga para gastar.
-     */
-    <div className="relative aspect-[912/211] w-full overflow-hidden">
+    <section className="dark relative overflow-hidden rounded-2xl border border-synse-border shadow-synse-sm">
       <Image
-        src="/synse-capa-perfil.webp"
+        src="/synse-capa.webp"
         alt=""
         aria-hidden
         width={912}
-        height={211}
-        /* Fica acima da dobra do perfil: carregada preguiçosamente, ela
-           apareceria depois e empurraria o resto da tela. */
+        height={584}
+        /* Primeira coisa acima da dobra do perfil: carregada preguiçosamente,
+           ela apareceria depois e daria um pulo no cartão. */
         priority
         sizes="(max-width: 512px) 100vw, 512px"
-        className="size-full object-cover"
+        /* Ancorada embaixo: se o cartão crescer — nome comprido, e-mail longo —
+           o que se perde é céu, não a árvore nem a montanha. */
+        className="absolute inset-0 size-full object-cover object-bottom"
+      />
+
+      {/*
+       * O véu corre da esquerda para a direita porque o texto fica à esquerda
+       * e a árvore à direita: assim ele protege a leitura sem apagar a arte.
+       */}
+      <div
+        aria-hidden
+        className="absolute inset-0 bg-gradient-to-r from-synse-bg/92 via-synse-bg/50 to-transparent"
       />
       <div
         aria-hidden
-        className="absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-synse-surface to-transparent"
+        className="absolute inset-0 bg-gradient-to-t from-synse-bg/35 to-transparent"
       />
-    </div>
+
+      <div className="relative flex min-h-[15.5rem] flex-col justify-center gap-4 p-5">
+        {children}
+      </div>
+    </section>
   )
 }
 

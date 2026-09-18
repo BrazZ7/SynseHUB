@@ -12,6 +12,7 @@ import {
   Weight,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import Image from 'next/image'
 
 import type { Conquista } from '@/features/students/achievements'
 import type { DiaDaSemana, RecordePessoal } from '@/features/students/profile-service'
@@ -19,6 +20,99 @@ import type { NivelSynse } from '@/features/students/level'
 import { cn } from '@/lib/utils'
 
 /** As peças do perfil. Sem estado: tudo vem calculado do servidor. */
+
+// ── A arte da marca ──────────────────────────────────────────────────────────
+/**
+ * A capa do perfil.
+ *
+ * Mesma decisão da chama: é a arte do Synse, não um degradê que lembra o
+ * Synse. Veio do material de marca do dono do produto, recortada da prancha de
+ * assets — sem extração por luminância, que foi o que produziu o halo pálido
+ * em volta da primeira chama.
+ *
+ * ── Por que uma faixa, e não o fundo do cartão ──────────────────────────────
+ *
+ * A arte é escura nos dois temas — é uma foto. Se ela fosse o fundo do cartão
+ * inteiro, os botões de foto e o nome ficariam por cima dela, e no tema claro
+ * o texto escuro sumiria no fundo escuro. Como faixa, a foto é foto e o
+ * conteúdo continua sobre `bg-synse-surface`, legível nos dois temas.
+ *
+ * O degradê no pé costura a foto ao cartão: sem ele fica uma aresta dura entre
+ * a noite da arte e a superfície da interface.
+ */
+export function CapaPerfil() {
+  return (
+    /*
+     * A faixa tem a proporção exata do arquivo, então nada é cortado.
+     *
+     * A primeira versão fixava a altura e deixava o `object-cover` recortar as
+     * laterais. Num celular de 390px sobravam 25px de folga horizontal, e
+     * qualquer ancoragem fora do centro comia o logotipo: "SAÚDE" aparecia
+     * como "AÚDE". Com a proporção travada não há folga para gastar.
+     */
+    <div className="relative aspect-[912/211] w-full overflow-hidden">
+      <Image
+        src="/synse-capa-perfil.webp"
+        alt=""
+        aria-hidden
+        width={912}
+        height={211}
+        /* Fica acima da dobra do perfil: carregada preguiçosamente, ela
+           apareceria depois e empurraria o resto da tela. */
+        priority
+        sizes="(max-width: 512px) 100vw, 512px"
+        className="size-full object-cover"
+      />
+      <div
+        aria-hidden
+        className="absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-synse-surface to-transparent"
+      />
+    </div>
+  )
+}
+
+/**
+ * O painel da muda, ao lado do nível.
+ *
+ * Vem do mesmo lugar e carrega o mesmo recado do nível: começa pequeno e
+ * cresce. O texto por cima é branco fixo, e não `text-synse-text`, porque o
+ * fundo aqui é a foto — que é escura nos dois temas.
+ */
+export function PainelPlanta() {
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-synse-border bg-synse-dark">
+      {/*
+       * No celular a foto ocupa metade do painel; no tablet para cima, o painel
+       * inteiro. O arquivo tem 237px de largura: esticado numa faixa de 390px
+       * ele fica borrado, e foi assim que a primeira versão saiu. Em metade da
+       * largura o navegador reduz em vez de ampliar.
+       */}
+      <div className="absolute inset-y-0 left-0 w-1/2 sm:w-full">
+        <Image
+          src="/synse-planta.webp"
+          alt=""
+          aria-hidden
+          width={237}
+          height={211}
+          sizes="(max-width: 640px) 50vw, 200px"
+          className="size-full object-cover"
+        />
+        {/* Sem o véu, as palavras caem em cima das folhas acesas. */}
+        <div
+          aria-hidden
+          className="absolute inset-0 bg-gradient-to-r from-transparent via-synse-dark/30 to-synse-dark"
+        />
+      </div>
+
+      <p className="relative flex min-h-28 flex-col items-end justify-center gap-1 p-4 text-right text-[11px] font-medium uppercase tracking-[0.2em] text-white/85">
+        <span>Cresça</span>
+        <span>Evolua</span>
+        <span>Inspire</span>
+        <span className="text-synse-primary-light">Synse</span>
+      </p>
+    </div>
+  )
+}
 
 // ── Números do topo ──────────────────────────────────────────────────────────
 export function StatTile({

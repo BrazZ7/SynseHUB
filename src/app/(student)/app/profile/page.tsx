@@ -10,9 +10,11 @@ import { CloseAccountCard } from '@/features/account/close-account-card'
 import { MedalShelf } from '@/features/challenges/medal-shelf'
 import { ConsentList } from '@/features/consents/consent-list'
 import {
+  CapaPerfil,
   ConquistaHex,
   ICONES_DO_TOPO,
   NivelCard,
+  PainelPlanta,
   RecordeRow,
   SemanaChart,
   StatTile,
@@ -65,24 +67,30 @@ export default async function StudentProfilePage() {
         <ThemeToggle />
       </header>
 
-      <section className="space-y-4 rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
-        <AvatarPicker nome={session.name} fotoAtual={fotoAssinada} />
+      <section className="overflow-hidden rounded-2xl border border-synse-border bg-synse-surface shadow-synse-sm">
+        <CapaPerfil />
 
-        <div className="min-w-0 border-t border-synse-border pt-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="truncate text-lg font-semibold text-synse-text">{session.name}</p>
-            <span className="inline-flex items-center gap-1 rounded-full border border-synse-primary/40 bg-synse-primary/10 px-2.5 py-0.5 text-xs font-medium text-synse-primary">
-              Nível {perfil.nivel.nivel}
-            </span>
-            {perfil.sequencia.hoje && (
-              <span className="inline-flex items-center gap-1 text-xs text-synse-muted">
-                <span className="size-1.5 rounded-full bg-synse-success" aria-hidden />
-                Ativo hoje
+        <div className="space-y-4 p-5 pt-3">
+          <AvatarPicker nome={session.name} fotoAtual={fotoAssinada} />
+
+          <div className="min-w-0 border-t border-synse-border pt-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="truncate text-lg font-semibold text-synse-text">{session.name}</p>
+              <span className="inline-flex items-center gap-1 rounded-full border border-synse-primary/40 bg-synse-primary/10 px-2.5 py-0.5 text-xs font-medium text-synse-primary">
+                Nível {perfil.nivel.nivel}
               </span>
-            )}
+              {perfil.sequencia.hoje && (
+                <span className="inline-flex items-center gap-1 text-xs text-synse-muted">
+                  <span className="size-1.5 rounded-full bg-synse-success" aria-hidden />
+                  Ativo hoje
+                </span>
+              )}
+            </div>
+            <p className="truncate text-sm text-synse-muted">{session.email}</p>
+            <p className="mt-1 font-mono text-xs tracking-wide text-synse-muted">
+              {session.synseId}
+            </p>
           </div>
-          <p className="truncate text-sm text-synse-muted">{session.email}</p>
-          <p className="mt-1 font-mono text-xs tracking-wide text-synse-muted">{session.synseId}</p>
         </div>
       </section>
 
@@ -110,7 +118,13 @@ export default async function StudentProfilePage() {
         />
       </section>
 
-      <NivelCard nivel={perfil.nivel} />
+      {/* O nível e a muda dividem a linha, como no desenho. No celular a muda
+          vira uma faixa abaixo: a barra de XP com "1.840 / 2.000 XP" na mesma
+          linha não cabe em dois terços de 360px sem quebrar. */}
+      <section className="grid gap-3 sm:grid-cols-[1.7fr_1fr]">
+        <NivelCard nivel={perfil.nivel} />
+        <PainelPlanta />
+      </section>
 
       {/* ── Três marcadores ──────────────────────────────────────────────── */}
       <section className="grid grid-cols-3 gap-3">

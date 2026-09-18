@@ -15,6 +15,20 @@ import type { UserRole } from '@/types/domain'
 
 export const DEMO_SESSION_COOKIE = 'synse_demo_session'
 
+/**
+ * O contexto escolhido por uma conta de plataforma.
+ *
+ * `pessoal` ou o id de uma academia. O cookie diz o que a pessoa **pediu**; é
+ * o banco que diz se ela pode — `is_super_admin()` é consultado a cada
+ * requisição, e um cookie forjado por quem não tem o papel é simplesmente
+ * ignorado.
+ */
+export const PLATFORM_CONTEXT_COOKIE = 'synse_contexto'
+export const CONTEXTO_PESSOAL = 'pessoal'
+
+/** A organização reservada que hospeda as contas de plataforma (0034). */
+export const SYNSE_PLATFORM_ORG_ID = '00000000-0000-0000-0000-000000000002'
+
 export type SessionContext = {
   userProfileId: string
   synseId: string
@@ -33,6 +47,12 @@ export type SessionContext = {
   /** Assinatura que libera abrir o próprio espaço como profissional. */
   professionalPlan: boolean
   isDemo: boolean
+  /**
+   * A conta é de plataforma. Diferente de `role`, que diz como ela está agindo
+   * agora: um super admin em contexto pessoal tem `role: 'STUDENT'` e este
+   * campo verdadeiro — é ele que faz o seletor de contexto aparecer.
+   */
+  isPlatformAccount: boolean
 }
 
 // ── Personas de demonstração ────────────────────────────────────────────────
@@ -129,6 +149,7 @@ function demoSessionFor(persona: DemoPersona): SessionContext {
     tier: 'FREE',
     professionalPlan: false,
     isDemo: true,
+    isPlatformAccount: false,
   }
 }
 
@@ -247,6 +268,13 @@ export type SessionResolution =
  * requisição seguinte resolve de novo, então continua valendo a mesma
  * validação no servidor. Não é cache entre usuários nem entre requisições.
  */
+/** O contexto pedido no cookie. Nulo quando não há escolha guardada. */
+async function contextoEscolhido(): Promise<string | null> {
+  const cookieStore = await cookies()
+  const valor = cookieStore.get(PLATFORM_CONTEXT_COOKIE)?.value?.trim()
+  return valor ? valor : null
+}
+
 export const resolveSession = cache(resolverSessao)
 
 async function resolverSessao(): Promise<SessionResolution> {
@@ -273,11 +301,92 @@ async function resolverSessao(): Promise<SessionResolution> {
   // Autenticado sem ficha é conta recém-criada: o cadastro é o destino certo.
   if (!profile) return { status: 'no-account' }
 
+  /*
+   * A conta é de plataforma?
+   *
+   * A pergunta vai ao banco, e não ao cookie. O cookie diz o que a pessoa
+   * pediu; quem decide se ela pode é a linha em `organization_members` — e um
+   * cookie forjado por quem não tem o papel não encontra nada aqui.
+   */
+  const { data: papelPlataforma } = await supabase
+    .from('organization_members')
+    .select('organization_id')
+    .eq('user_profile_id', profile.id)
+    .eq('role', 'SUPER_ADMIN')
+    .eq('status', 'ACTIVE')
+    .limit(1)
+    .maybeSingle()
+
+  const plataforma = papelPlataforma != null
+
+  if (plataforma) {
+    const escolhido = await contextoEscolhido()
+
+    /*
+     * Agir como uma academia. A RLS já libera: `is_org_staff` chama
+     * `is_super_admin` desde a 0004. O que muda aqui é só qual academia a tela
+     * mostra — e o papel, que vira SUPER_ADMIN para as permissões abrirem.
+     */
+    if (escolhido && escolhido !== CONTEXTO_PESSOAL) {
+      const { data: alvo } = await supabase
+        .from('organizations')
+        .select('id, name')
+        .eq('id', escolhido)
+        .maybeSingle()
+
+      if (alvo) {
+        const { data: matricula } = await supabase
+          .from('students')
+          .select('id')
+          .eq('user_profile_id', profile.id)
+          .eq('organization_id', alvo.id)
+          .maybeSingle()
+
+        return {
+          status: 'ok',
+          session: {
+            userProfileId: profile.id,
+            synseId: profile.synse_id,
+            name: profile.name,
+            email: profile.email,
+            avatarUrl: profile.avatar_url,
+            role: 'SUPER_ADMIN' as UserRole,
+            organizationId: alvo.id,
+            organizationName: alvo.name ?? 'Organização',
+            studentId: matricula?.id ?? null,
+            isSoloStudent: false,
+            tier: (profile.tier ?? 'FREE') as UserTier,
+            professionalPlan: profile.professional_plan === true,
+            isDemo: false,
+            isPlatformAccount: true,
+          },
+        }
+      }
+      /*
+       * Academia escolhida que não existe mais — apagada enquanto o cookie
+       * ficou guardado. Cair para o fluxo normal é melhor que erro: a pessoa
+       * volta ao contexto pessoal e escolhe de novo.
+       */
+    }
+
+    /*
+     * Contexto pessoal pedido explicitamente: segue o caminho comum, que vai
+     * encontrar a matrícula da pessoa como encontraria para qualquer aluno. O
+     * vínculo de plataforma é pulado logo abaixo para não sequestrar a sessão.
+     */
+  }
+
   const vinculo = await supabase
     .from('organization_members')
     .select('organization_id, role, organizations ( name )')
     .eq('user_profile_id', profile.id)
     .eq('status', 'ACTIVE')
+    /*
+     * A organização da plataforma fica de fora. Ela existe só para hospedar o
+     * papel; tratá-la como a academia da pessoa abriria o painel numa
+     * organização sem alunos, sem cobranças e sem sentido.
+     */
+    .neq('organization_id', SYNSE_PLATFORM_ORG_ID)
     .limit(1)
     .maybeSingle()
 
@@ -353,6 +462,7 @@ async function resolverSessao(): Promise<SessionResolution> {
         tier: (profile.tier ?? 'FREE') as UserTier,
         professionalPlan: profile.professional_plan === true,
         isDemo: false,
+        isPlatformAccount: plataforma,
       },
     }
   }
@@ -382,6 +492,7 @@ async function resolverSessao(): Promise<SessionResolution> {
       tier: (profile.tier ?? 'FREE') as UserTier,
       professionalPlan: profile.professional_plan === true,
       isDemo: false,
+      isPlatformAccount: plataforma,
     },
   }
 }

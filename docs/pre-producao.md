@@ -142,6 +142,21 @@ existem, não para conferir se subiram.
   do `exists`, o `name` do objeto colidia com a coluna `name` de
   `user_profiles`, e o Postgres mandava o *nome da pessoa* para um cast de
   uuid.
+- **0034 (`0034_super_admin.sql`)** — a conta de plataforma. O papel
+  `SUPER_ADMIN` existe desde a 0001 e a RLS já o reconhecia desde a 0004
+  (`is_super_admin()` está dentro de `is_org_member`, `is_org_staff` e
+  `is_org_admin`); o que nunca existiu foi **como criar a conta** e **onde ela
+  mora**. Uma segunda organização reservada, `...0002`, hospeda o papel — sem
+  encostar na dos alunos solo, cuja promessa é justamente não ter equipe.
+
+  `grant_super_admin` e `revoke_super_admin` só executam como `service_role`,
+  ou seja, pelo SQL Editor: se a aplicação pudesse promover, um defeito numa
+  tela criaria uma conta que lê o banco inteiro.
+
+  E há trilha. Essa conta lê dado de saúde de qualquer aluno de qualquer
+  academia, e sem registro não há como responder "quem abriu aquela ficha, e
+  quando". `platform_access_log` é lida só por conta de plataforma e não aceita
+  update nem delete de ninguém — trilha que o auditado apaga não é trilha.
 
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona

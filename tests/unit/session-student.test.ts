@@ -41,7 +41,34 @@ function construirClient() {
 
     const resultado = () => {
       const erro = erroDeColuna()
-      return erro ? { data: null, error: erro } : { data: linha(), error: null }
+      return erro ? { data: null, error: erro } : { data: filtrado(), error: null }
+    }
+
+    /*
+     * Os filtros são aplicados de verdade.
+     *
+     * O mock antes ignorava `eq`, e a mesma linha voltava para qualquer
+     * consulta na tabela. Isso parou de servir quando a sessão passou a
+     * perguntar "existe vínculo com papel SUPER_ADMIN?" na mesma
+     * `organization_members`: sem filtrar, o vínculo comum respondia que sim,
+     * e todo aluno destes testes virava conta de plataforma.
+     */
+    const filtros: { coluna: string; valor: unknown; negado: boolean }[] = []
+
+    const passaNosFiltros = (dado: unknown) => {
+      if (dado === null || typeof dado !== 'object') return true
+      const registro = dado as Record<string, unknown>
+      return filtros.every(({ coluna, valor, negado }) => {
+        if (!(coluna in registro)) return true
+        const igual = registro[coluna] === valor
+        return negado ? !igual : igual
+      })
+    }
+
+    const filtrado = () => {
+      const dado = linha()
+      if (Array.isArray(dado)) return dado.filter(passaNosFiltros)
+      return passaNosFiltros(dado) ? dado : null
     }
 
     // A consulta de matrículas é aguardada direto (devolve lista); a de equipe
@@ -51,7 +78,14 @@ function construirClient() {
         colunas = cols
         return alvo
       },
-      eq: () => alvo,
+      eq: (coluna: string, valor: unknown) => {
+        filtros.push({ coluna, valor, negado: false })
+        return alvo
+      },
+      neq: (coluna: string, valor: unknown) => {
+        filtros.push({ coluna, valor, negado: true })
+        return alvo
+      },
       order: () => alvo,
       limit: () => alvo,
       maybeSingle: async () => resultado(),
@@ -71,7 +105,14 @@ vi.mock('@/lib/database/env', () => ({ isDemoMode: () => false }))
 vi.mock('@/lib/database/supabase-server', () => ({
   createSupabaseServerClient: async () => construirClient(),
 }))
-vi.mock('next/headers', () => ({ cookies: async () => ({ get: () => undefined }) }))
+/** O contexto que a conta de plataforma pediu. Editável pelos testes. */
+let cookieContexto: string | undefined
+vi.mock('next/headers', () => ({
+  cookies: async () => ({
+    get: (nome: string) =>
+      nome === 'synse_contexto' && cookieContexto ? { value: cookieContexto } : undefined,
+  }),
+}))
 
 const { getSession, resolveSession } = await import('@/lib/auth/session')
 
@@ -91,6 +132,7 @@ beforeEach(() => {
   for (const chave of Object.keys(tabelas)) delete tabelas[chave]
   semColunaTier = false
   erroDuro = null
+  cookieContexto = undefined
 })
 
 describe('getSession', () => {
@@ -259,5 +301,72 @@ describe('getSession', () => {
     tabelas.user_profiles = null
 
     expect(await getSession()).toBeNull()
+  })
+})
+
+/**
+ * A conta de plataforma.
+ *
+ * O cookie diz o que a pessoa pediu; quem decide é o vínculo no banco. O teste
+ * que mais importa aqui é o do cookie forjado — se ele passasse, qualquer
+ * aluno entraria em qualquer academia digitando um id no navegador.
+ */
+describe('contexto da conta de plataforma', () => {
+  const VINCULO_PLATAFORMA = {
+    organization_id: '00000000-0000-0000-0000-000000000002',
+    role: 'SUPER_ADMIN',
+    status: 'ACTIVE',
+    organizations: { name: 'Synse Plataforma' },
+  }
+
+  it('cookie forjado por quem não é conta de plataforma é ignorado', async () => {
+    tabelas.user_profiles = PERFIL
+    tabelas.organization_members = null
+    tabelas.students = [
+      { id: 'aluno-1', organization_id: 'org-1', status: 'ACTIVE', organizations: { name: 'Alpha' } },
+    ]
+    // O aluno escreve o id de outra academia no cookie e recarrega.
+    cookieContexto = '11111111-2222-3333-4444-555555555555'
+
+    const sessao = await getSession()
+
+    expect(sessao).toMatchObject({
+      role: 'STUDENT',
+      organizationId: 'org-1',
+      isPlatformAccount: false,
+    })
+  })
+
+  it('conta comum nunca é marcada como plataforma', async () => {
+    tabelas.user_profiles = PERFIL
+    tabelas.organization_members = {
+      organization_id: 'org-1',
+      role: 'OWNER',
+      status: 'ACTIVE',
+      organizations: { name: 'Alpha' },
+    }
+
+    expect(await getSession()).toMatchObject({ role: 'OWNER', isPlatformAccount: false })
+  })
+
+  it('sem contexto escolhido, a organização da plataforma não vira a academia', async () => {
+    /*
+     * O vínculo de plataforma existe só para hospedar o papel. Tratá-lo como a
+     * academia da pessoa abriria o painel numa organização sem alunos e sem
+     * cobranças — e sem nada que explicasse por quê.
+     */
+    tabelas.user_profiles = PERFIL
+    tabelas.organization_members = VINCULO_PLATAFORMA
+    tabelas.students = [
+      { id: 'aluno-1', organization_id: 'org-1', status: 'ACTIVE', organizations: { name: 'Alpha' } },
+    ]
+
+    const sessao = await getSession()
+
+    expect(sessao).toMatchObject({
+      organizationId: 'org-1',
+      role: 'STUDENT',
+      isPlatformAccount: true,
+    })
   })
 })

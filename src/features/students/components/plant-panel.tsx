@@ -179,12 +179,14 @@ export function PainelPlanta({ planta }: { planta: Planta }) {
       aria-expanded={aberto}
       aria-controls="detalhe-da-planta"
       /*
-       * O fundo é fixo, e não `bg-synse-dark`: a arte dos primeiros estágios
-       * ainda tem preto colado e depende do `screen`, que só funciona sobre
-       * escuro. O tom veio da própria arte. `isolate` prende a mesclagem aqui
-       * dentro — sem ele o `screen` procuraria o fundo da página.
+       * O fundo é fixo, e não `bg-synse-surface`.
+       *
+       * Não é mais por causa de mesclagem — nenhuma arte precisa dela agora.
+       * É porque a planta é desenhada como luz: no tema claro, luz sobre
+       * branco desaparece. Este painel é uma vitrine escura nos dois temas, do
+       * mesmo jeito que a capa lá em cima.
        */
-      className="group relative isolate w-full overflow-hidden rounded-2xl border border-synse-border bg-[#04100e] text-left outline-none transition focus-visible:ring-2 focus-visible:ring-synse-primary/60 active:scale-[0.99]"
+      className="group relative w-full overflow-hidden rounded-2xl border border-synse-border bg-[#04100e] text-left outline-none transition focus-visible:ring-2 focus-visible:ring-synse-primary/60 active:scale-[0.99]"
     >
       <div className="pointer-events-none absolute inset-0">
         {/* No celular a planta ocupa metade do painel; do tablet para cima, tudo. */}
@@ -203,17 +205,12 @@ export function PainelPlanta({ planta }: { planta: Planta }) {
           {/*
            * ── Um elemento só, e não uma pilha de divs ─────────────────────
            *
-           * A primeira versão tinha a brisa num `div` e a inclinação em outro,
-           * com a imagem dentro. Parecia organizado e quebrava o efeito: um
-           * `transform` num elemento acima cria contexto de empilhamento, e o
-           * `mix-blend-screen` da imagem passava a mesclar com aquele grupo
-           * vazio em vez de mesclar com o fundo do painel. O preto da arte
-           * voltava a aparecer — inclinado junto com ela, o que denunciou a
-           * causa.
-           *
-           * Aqui a rajada anima a propriedade `rotate` e a inclinação vive no
-           * `transform`. São propriedades separadas no mesmo elemento: o
-           * navegador compõe as duas.
+           * A brisa e a inclinação ficam no mesmo elemento: a rajada anima a
+           * propriedade `rotate` e a inclinação vive no `transform`, que são
+           * propriedades separadas e o navegador compõe as duas. Separá-las em
+           * dois `div` parece mais organizado e custou caro uma vez — cada
+           * `transform` intermediário cria contexto de empilhamento, e naquela
+           * época a imagem dependia de mesclagem para esconder o fundo.
            *
            * Sem `duration-*` do Tailwind: o plugin `tailwindcss-animate` faz
            * essas classes valerem também para `animation-duration`, e elas
@@ -228,10 +225,7 @@ export function PainelPlanta({ planta }: { planta: Planta }) {
             width={arte.largura}
             height={arte.altura}
             sizes="(max-width: 640px) 50vw, 240px"
-            className={
-              'absolute inset-0 size-full origin-bottom animate-brisa object-contain object-bottom group-hover:[--brisa:2.6] group-hover:[animation-duration:3s] motion-reduce:animate-none' +
-              (arte.precisaDeMescla ? ' mix-blend-screen' : '')
-            }
+            className="absolute inset-0 size-full origin-bottom animate-brisa object-contain object-bottom group-hover:[--brisa:2.6] group-hover:[animation-duration:3s] motion-reduce:animate-none"
             style={{
               // `--inclinacao` é escrita direto no nó a cada movimento do dedo.
               ['--inclinacao' as string]: '0deg',
@@ -240,17 +234,10 @@ export function PainelPlanta({ planta }: { planta: Planta }) {
               transitionDuration: '300ms',
               transitionTimingFunction: 'cubic-bezier(0, 0, 0.2, 1)',
               /*
-               * Só para a arte com preto colado. `contrast(1.55)` empurra tudo
-               * abaixo de ~16% para o preto de verdade, e preto no `screen` é
-               * transparente — sem isso a moldura do arquivo aparecia. O valor
-               * saiu de comparar 1.15, 1.25, 1.35, 1.5 e 1.6 lado a lado.
-               *
                * O brilho nunca desce de 1: a planta pequena precisa ser pequena
                * e acesa. Quem mostra o nível é o tamanho, não a penumbra.
                */
-              filter: arte.precisaDeMescla
-                ? `contrast(1.55) brightness(${(0.98 + 0.14 * vigor).toFixed(3)})`
-                : `brightness(${(0.94 + 0.14 * vigor).toFixed(3)})`,
+              filter: `brightness(${(0.96 + 0.14 * vigor).toFixed(3)})`,
             }}
           />
         </div>

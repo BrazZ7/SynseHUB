@@ -30,25 +30,40 @@ export type ChaveDoEstagio = 'SEMENTE' | 'BROTO' | 'MUDA' | 'ARBUSTO' | 'ARVORE'
 /**
  * A arte de um estágio.
  *
- * `precisaDeMescla` marca o arquivo que ainda tem o fundo preto colado: ele só
- * desaparece com `mix-blend-screen`, e isso obriga o painel a ter fundo escuro
- * fixo nos dois temas. O arquivo do arbusto já veio com transparência de
- * verdade e não precisa de nada — quando os outros estágios vierem assim, a
- * bandeira some daqui e o painel volta a seguir o tema.
+ * Toda arte aqui tem transparência de verdade. Não há modo de mesclagem nem
+ * filtro compensando fundo colado: a imagem compõe sobre o painel como
+ * qualquer PNG recortado, e é isso que faz ela se comportar igual em todo
+ * navegador.
  */
 export type ArteDaPlanta = {
   src: string
   largura: number
   altura: number
-  precisaDeMescla: boolean
 }
 
-/** A muda original, sobre preto. Serve os três primeiros estágios. */
+/**
+ * A muda, para os três primeiros estágios.
+ *
+ * ── Como ela perdeu o fundo ─────────────────────────────────────────────────
+ *
+ * O arquivo original era luz sobre preto. Por um tempo o preto foi escondido
+ * com `mix-blend-screen` mais `contrast(1.55)`, o que funcionava no Chromium e
+ * **não** funcionava no iPhone do dono do produto: lá o retângulo preto
+ * aparecia atrás da planta. Mesclagem depende de como cada navegador monta as
+ * camadas, e esta imagem tinha `transform`, `filter` e animação no mesmo
+ * elemento — pedir para compor bem em cima disso é pedir demais.
+ *
+ * Agora o fundo não existe mais no arquivo. O alfa não foi adivinhado por
+ * limiar, que foi o que deixou o halo pálido na primeira chama: para arte
+ * luminosa sobre preto, o pixel *é* a cor já pré-multiplicada, então
+ * `alfa = max(r,g,b)` e `cor = pixel / alfa` devolvem exatamente a arte. O
+ * `contrast(1.55)` que antes rodava no navegador foi aplicado uma vez no
+ * arquivo, para zerar o quase-preto da vinheta antes da conta.
+ */
 const ARTE_MUDA: ArteDaPlanta = {
-  src: '/synse-planta.webp',
+  src: '/synse-muda.webp',
   largura: 237,
   altura: 211,
-  precisaDeMescla: true,
 }
 
 /**
@@ -62,7 +77,6 @@ const ARTE_ARBUSTO: ArteDaPlanta = {
   src: '/synse-arbusto.webp',
   largura: 488,
   altura: 540,
-  precisaDeMescla: false,
 }
 
 export type EstagioDaPlanta = {

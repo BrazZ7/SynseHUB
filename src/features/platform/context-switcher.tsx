@@ -57,6 +57,13 @@ export function ContextSwitcher({
         setErro(resposta.message)
         return
       }
+      /*
+       * `push` e depois `refresh`. Só o refresh recarregaria a rota atual, e
+       * quem estava no painel pedindo "conta pessoal" continuava no painel; só
+       * o push reusaria o cache do cliente e mostraria a tela com os dados do
+       * contexto anterior.
+       */
+      router.push(resposta.rota)
       router.refresh()
     })
   }

@@ -3,6 +3,7 @@ import type { ContextoDisponivel } from '@/features/platform/state'
 import { CONTEXTO_PESSOAL, SYNSE_PLATFORM_ORG_ID, type SessionContext } from '@/lib/auth/session'
 import { getDataSource } from '@/lib/database'
 import { isPendingMigration } from '@/lib/database/pending-migration'
+import { createSupabaseServerClient } from '@/lib/database/supabase-server'
 import { SYNSE_SOLO_ORG_ID } from '@/lib/organizations/solo'
 
 /**
@@ -31,13 +32,26 @@ export async function ContextBar({ session }: { session: SessionContext }) {
     if (!isPendingMigration(erro)) throw erro
   }
 
+  /*
+   * "Conta pessoal" só entra na lista se existir matrícula.
+   *
+   * Oferecer o contexto pessoal a quem nunca foi aluno de nada devolveria a
+   * pessoa ao painel — o mesmo sintoma de botão que não responde que esta
+   * tela existe para resolver. Melhor não oferecer do que oferecer e não ir.
+   */
+  const temMatricula = await contaTemMatricula(session.userProfileId)
+
   const opcoes: ContextoDisponivel[] = [
-    {
-      valor: CONTEXTO_PESSOAL,
-      rotulo: 'Conta pessoal',
-      detalhe: 'Seu app de aluno',
-      tipo: 'PESSOAL',
-    },
+    ...(temMatricula
+      ? [
+          {
+            valor: CONTEXTO_PESSOAL,
+            rotulo: 'Conta pessoal',
+            detalhe: 'Seu app de aluno',
+            tipo: 'PESSOAL' as const,
+          },
+        ]
+      : []),
     ...academias.map(
       (org): ContextoDisponivel => ({
         valor: org.id,
@@ -57,4 +71,26 @@ export async function ContextBar({ session }: { session: SessionContext }) {
       emAcademiaDeCliente={emAcademia}
     />
   )
+}
+
+/** A conta tem alguma matrícula de aluno? */
+async function contaTemMatricula(userProfileId: string): Promise<boolean> {
+  try {
+    const supabase = await createSupabaseServerClient()
+    // Sem Supabase é modo de demonstração, onde a persona sempre tem matrícula.
+    if (!supabase) return true
+
+    const { data } = await supabase
+      .from('students')
+      .select('id')
+      .eq('user_profile_id', userProfileId)
+      .limit(1)
+      .maybeSingle()
+
+    return data != null
+  } catch {
+    // Na dúvida, oferece: esconder uma opção legítima é pior que oferecer uma
+    // que talvez não leve a lugar nenhum.
+    return true
+  }
 }

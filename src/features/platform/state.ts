@@ -9,7 +9,19 @@ export type ContextoDisponivel = {
 }
 
 export type TrocaResult =
-  | { status: 'success'; destino: string }
+  | {
+      status: 'success'
+      destino: string
+      /**
+       * Para onde o navegador deve ir.
+       *
+       * Recarregar a rota atual não bastava: quem estava no painel e pedia
+       * "conta pessoal" continuava no painel, e o botão parecia não responder.
+       * Contexto pessoal vive em `/app`, academia vive em `/dashboard` — a
+       * troca de contexto é também uma troca de lugar.
+       */
+      rota: string
+    }
   | { status: 'error'; message: string }
 
 /**

@@ -370,10 +370,55 @@ async function resolverSessao(): Promise<SessionResolution> {
     }
 
     /*
-     * Contexto pessoal pedido explicitamente: segue o caminho comum, que vai
-     * encontrar a matrícula da pessoa como encontraria para qualquer aluno. O
-     * vínculo de plataforma é pulado logo abaixo para não sequestrar a sessão.
+     * Contexto pessoal.
+     *
+     * Vai direto à matrícula, sem passar pelo fluxo comum. Cair no fluxo comum
+     * era o defeito: ele procura vínculo de **equipe** primeiro, então quem
+     * também é dono de uma academia pedia "conta pessoal" e aterrissava no
+     * painel dela como OWNER. O botão parecia não funcionar.
      */
+    if (escolhido === CONTEXTO_PESSOAL) {
+      const { data: matriculas } = await supabase
+        .from('students')
+        .select('id,organization_id,organizations(name)')
+        .eq('user_profile_id', profile.id)
+        .order('enrolled_at', { ascending: false })
+        .limit(5)
+
+      const lista = matriculas ?? []
+      const matricula = lista.find((row) => !isSoloOrganization(row.organization_id)) ?? lista[0]
+
+      if (matricula) {
+        const gym = matricula.organizations as { name?: string } | null
+        const solo = isSoloOrganization(matricula.organization_id)
+
+        return {
+          status: 'ok',
+          session: {
+            userProfileId: profile.id,
+            synseId: profile.synse_id,
+            name: profile.name,
+            email: profile.email,
+            avatarUrl: profile.avatar_url,
+            role: 'STUDENT' as UserRole,
+            organizationId: matricula.organization_id,
+            organizationName: solo ? SOLO_ORGANIZATION_LABEL : (gym?.name ?? 'Minha academia'),
+            studentId: matricula.id,
+            isSoloStudent: solo,
+            tier: (profile.tier ?? 'FREE') as UserTier,
+            professionalPlan: profile.professional_plan === true,
+            isDemo: false,
+            isPlatformAccount: true,
+          },
+        }
+      }
+
+      /*
+       * Conta de plataforma que nunca foi aluna de nada. Seguir para o fluxo
+       * comum a devolve ao painel, que é o único lugar que faz sentido —
+       * melhor que despejá-la no cadastro como se não tivesse conta.
+       */
+    }
   }
 
   const vinculo = await supabase

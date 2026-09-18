@@ -69,7 +69,7 @@ export async function trocarContextoAction(destino: string): Promise<TrocaResult
     // O layout inteiro muda de contexto: revalidar só a rota atual deixaria a
     // navegação e o cabeçalho mostrando a academia anterior.
     revalidatePath('/', 'layout')
-    return { status: 'success', destino }
+    return { status: 'success', destino, rota: pessoal ? '/app' : '/dashboard' }
   } catch (erro) {
     logger.error('plataforma:troca_falhou', { erro: String(erro) })
     return { status: 'error', message: 'Não foi possível trocar de contexto.' }

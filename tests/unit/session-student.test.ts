@@ -88,7 +88,18 @@ function construirClient() {
       },
       order: () => alvo,
       limit: () => alvo,
-      maybeSingle: async () => resultado(),
+      /*
+       * `maybeSingle` devolve a primeira linha; o `await` direto devolve a
+       * lista. É o que o Supabase faz — e é o que permite uma tabela guardar
+       * várias linhas aqui. Sem isso, `organization_members` só podia ter uma,
+       * e uma conta de plataforma tem duas: o papel e o vínculo da academia
+       * dela.
+       */
+      maybeSingle: async () => {
+        const { data, error } = resultado()
+        if (error) return { data: null, error }
+        return { data: Array.isArray(data) ? (data[0] ?? null) : data, error: null }
+      },
       then: (resolver: (valor: { data: unknown; error: unknown }) => unknown) =>
         Promise.resolve(resolver(resultado())),
     }
@@ -335,6 +346,57 @@ describe('contexto da conta de plataforma', () => {
       organizationId: 'org-1',
       isPlatformAccount: false,
     })
+  })
+
+  it('contexto pessoal leva ao app, mesmo para quem também é dono de academia', async () => {
+    /*
+     * Este era o defeito. O contexto pessoal caía no fluxo comum, que procura
+     * vínculo de **equipe** primeiro — então quem é conta de plataforma e
+     * também dono de uma academia pedia "conta pessoal" e aterrissava no
+     * painel dela como OWNER. Da tela, o botão parecia não funcionar.
+     */
+    tabelas.user_profiles = PERFIL
+    // As duas linhas que uma conta de plataforma tem de verdade.
+    tabelas.organization_members = [
+      VINCULO_PLATAFORMA,
+      {
+        organization_id: 'org-1',
+        role: 'OWNER',
+        status: 'ACTIVE',
+        organizations: { name: 'Academia do Emerson' },
+      },
+    ]
+    tabelas.students = [
+      { id: 'aluno-1', organization_id: 'org-1', status: 'ACTIVE', organizations: { name: 'Alpha' } },
+    ]
+    cookieContexto = 'pessoal'
+
+    const sessao = await getSession()
+
+    expect(sessao).toMatchObject({
+      role: 'STUDENT',
+      studentId: 'aluno-1',
+      isPlatformAccount: true,
+    })
+  })
+
+  it('sem matrícula nenhuma, o contexto pessoal devolve ao painel em vez de ao cadastro', async () => {
+    // Despejar uma conta de plataforma no onboarding, como se ela não
+    // existisse, seria pior que abrir o painel.
+    tabelas.user_profiles = PERFIL
+    tabelas.organization_members = [
+      VINCULO_PLATAFORMA,
+      {
+        organization_id: 'org-1',
+        role: 'OWNER',
+        status: 'ACTIVE',
+        organizations: { name: 'Academia do Emerson' },
+      },
+    ]
+    tabelas.students = []
+    cookieContexto = 'pessoal'
+
+    expect(await getSession()).toMatchObject({ role: 'OWNER', organizationId: 'org-1' })
   })
 
   it('conta comum nunca é marcada como plataforma', async () => {

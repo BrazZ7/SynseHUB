@@ -13,14 +13,15 @@ import type { Sequencia } from '@/features/students/streak'
  *
  * ── Por que imagem e não SVG ────────────────────────────────────────────────
  *
- * A primeira versão foi um SVG desenhado à mão, que pesava quase nada e
- * acompanhava o tema. Esta é a arte de verdade, recortada do original: as
- * camadas translúcidas e o degradê de dentro não se reproduzem em dois traços
- * de `path`. Custa 11 KB, servidos uma vez e cacheados.
+ * A primeira versão foi um SVG desenhado à mão, leve e fiel ao tema, mas era
+ * uma aproximação. Esta é a arte da marca: as camadas translúcidas e o degradê
+ * de dentro não se reproduzem em dois traços de `path`. Custa 9 KB, servidos
+ * uma vez e cacheados.
  *
- * O recorte guarda só o corpo da chama, sem o halo do original. O halo é lindo
- * sobre preto e vira névoa sobre branco — e o app tem tema claro. O brilho
- * volta aqui no CSS, que sabe em qual tema está.
+ * O arquivo já vem com transparência, e é por isso que ele funciona nos dois
+ * temas. A tentativa anterior recortava a arte de um fundo escuro pela
+ * luminância, e o halo que sobrava aparecia como um retângulo pálido em volta
+ * da chama — o tipo de coisa que só se vê no aparelho.
  *
  * ── Os dois estados ─────────────────────────────────────────────────────────
  *
@@ -48,7 +49,7 @@ export function StreakFlame({ sequencia }: { sequencia: Sequencia }) {
       <Image
         src="/synse-chama.webp"
         alt=""
-        width={103}
+        width={136}
         height={168}
         /*
          * `priority` porque ela fica no cabeçalho da tela inicial, acima da
@@ -59,9 +60,12 @@ export function StreakFlame({ sequencia }: { sequencia: Sequencia }) {
         className={cn(
           'h-7 w-auto shrink-0 transition',
           acesa
-            ? // Brilho no escuro; no claro, um contorno que separa o quase-branco
-              // do miolo da chama do fundo da página.
-              'drop-shadow-[0_0_5px_rgba(23,196,165,0.55)] dark:drop-shadow-[0_0_7px_var(--synse-primary)]'
+            ? /*
+               * Só no tema escuro. A arte tem sombra escura própria, então no
+               * tema claro ela já se separa do fundo sozinha — somar um halo
+               * ali só embaçaria a silhueta.
+               */
+              'dark:drop-shadow-[0_0_7px_var(--synse-primary)]'
             : // Fria perde cor, não tamanho: encolher mexeria na linha de base
               // do nome ao lado a cada dia.
               'opacity-55 grayscale-[0.55]',

@@ -12,35 +12,27 @@ import type { Planta } from '@/features/students/plant'
  *
  * Ela cresce. O tamanho sai do nível, que sai do histórico, e anda um pouco a
  * cada treino — não só na virada de nível. No nível 1 é uma plantinha no canto
- * do quadro; na árvore, ocupa o quadro inteiro. É a mesma informação do cartão
- * ao lado, dita de um jeito que se entende sem ler número nenhum.
+ * do quadro; na árvore, ocupa o quadro inteiro. Cada estágio tem a arte dele,
+ * declarada em `plant.ts`.
  *
- * ── Como a arte fica sem fundo ──────────────────────────────────────────────
+ * ── O vento ─────────────────────────────────────────────────────────────────
  *
- * O arquivo é uma planta acesa sobre preto, e não um PNG recortado. Encolher
- * um arquivo assim mostraria o retângulo escuro dele por cima do painel.
+ * O corpo balança em rajada, não em metrônomo: o `brisa` empurra para um lado,
+ * recua pouco e empurra de novo. As folhas soltas atravessam o painel com o
+ * vento, girando, e somem no escuro da direita.
  *
- * A saída não é recortar — foi a extração por luminância que deixou o halo
- * pálido em volta da primeira chama. É `mix-blend-mode: screen`, que é a
- * operação certa para arte luminosa sobre preto: o preto some contra o fundo
- * escuro do painel e só a luz atravessa. Nada é adivinhado, é a conta do
- * próprio modo de mesclagem. A máscara radial por cima apaga a aresta do
- * retângulo, que o `screen` sozinho ainda deixaria de leve.
+ * Elas são arquivos próprios, recortados do alfa da arte original — no arquivo
+ * que o dono do produto enviou, as folhinhas em volta eram ilhas separadas do
+ * corpo. Sem isso elas seriam parte do desenho e balançariam junto, que é o
+ * oposto de voar.
  *
- * A tentativa anterior escondia o topo da planta com uma máscara que subia com
- * o nível. Crescia, mas crescia apagando — e o que a planta precisa é
- * aparecer.
+ * Com o ponteiro em cima o vento aperta: a rajada fica quase três vezes mais
+ * forte e as folhas cruzam em menos da metade do tempo. E a planta se inclina
+ * para onde está o dedo ou o cursor.
  *
- * ── A interação ─────────────────────────────────────────────────────────────
- *
- * Parada, ela balança devagar. Com o ponteiro em cima, balança mais forte e
- * mais rápido, acende e solta mais fagulhas. E ela se inclina para onde está o
- * dedo ou o cursor.
- *
- * A inclinação não passa por estado do React: seria um `setState` a cada
- * `pointermove`, e isso rerenderiza a árvore inteira dezenas de vezes por
- * segundo. Ela escreve uma variável CSS no próprio nó, dentro de um
- * `requestAnimationFrame`, que é o que o navegador faz de graça.
+ * A inclinação não passa por estado do React — seria um `setState` a cada
+ * `pointermove`, rerenderizando dezenas de vezes por segundo. Ela escreve uma
+ * variável CSS no próprio nó, dentro de um `requestAnimationFrame`.
  *
  * ── Por que este arquivo é cliente e o resto do perfil não ──────────────────
  *
@@ -50,21 +42,92 @@ import type { Planta } from '@/features/students/plant'
  */
 
 /**
- * As fagulhas.
+ * Os caminhos do vento.
  *
- * Posições fixas, não sorteadas: sorteio daria HTML diferente no servidor e no
- * navegador, e o React reclamaria de hidratação a cada carregamento. Elas
- * parecem aleatórias porque os números foram escolhidos assim.
+ * Fixos, não sorteados: sorteio daria HTML diferente no servidor e no
+ * navegador, e o React reclamaria de hidratação a cada carregamento. Todos
+ * sobem e vão para a direita, porque vento que sopra para todo lado ao mesmo
+ * tempo não lê como vento.
  */
-const FAGULHAS = [
-  { esquerda: '18%', base: '22%', atraso: '0s', duracao: '5.2s' },
-  { esquerda: '64%', base: '14%', atraso: '1.4s', duracao: '4.4s' },
-  { esquerda: '38%', base: '46%', atraso: '2.6s', duracao: '6.1s' },
-  { esquerda: '78%', base: '38%', atraso: '0.7s', duracao: '5.7s' },
-  { esquerda: '8%', base: '52%', atraso: '3.3s', duracao: '4.9s' },
-  { esquerda: '52%', base: '64%', atraso: '1.9s', duracao: '6.6s' },
-  { esquerda: '28%', base: '70%', atraso: '4.1s', duracao: '5.4s' },
-  { esquerda: '70%', base: '58%', atraso: '2.2s', duracao: '6.3s' },
+const FOLHAS_AO_VENTO = [
+  {
+    src: '/synse-folha-1.webp',
+    w: 98,
+    h: 100,
+    alt: 26,
+    x: '2%',
+    y: '16%',
+    dx: '210px',
+    dy: '-96px',
+    giro: '190deg',
+    atraso: '0s',
+    dur: '11s',
+  },
+  {
+    src: '/synse-folha-2.webp',
+    w: 62,
+    h: 92,
+    alt: 20,
+    x: '10%',
+    y: '46%',
+    dx: '240px',
+    dy: '-120px',
+    giro: '-260deg',
+    atraso: '2.4s',
+    dur: '13s',
+  },
+  {
+    src: '/synse-folha-3.webp',
+    w: 68,
+    h: 88,
+    alt: 22,
+    x: '-4%',
+    y: '62%',
+    dx: '265px',
+    dy: '-70px',
+    giro: '300deg',
+    atraso: '5.1s',
+    dur: '12s',
+  },
+  {
+    src: '/synse-folha-4.webp',
+    w: 44,
+    h: 56,
+    alt: 15,
+    x: '16%',
+    y: '8%',
+    dx: '200px',
+    dy: '-58px',
+    giro: '-210deg',
+    atraso: '7.3s',
+    dur: '14s',
+  },
+  {
+    src: '/synse-folha-2.webp',
+    w: 62,
+    h: 92,
+    alt: 16,
+    x: '6%',
+    y: '74%',
+    dx: '280px',
+    dy: '-130px',
+    giro: '240deg',
+    atraso: '3.6s',
+    dur: '15s',
+  },
+  {
+    src: '/synse-folha-1.webp',
+    w: 98,
+    h: 100,
+    alt: 18,
+    x: '20%',
+    y: '54%',
+    dx: '190px',
+    dy: '-104px',
+    giro: '-180deg',
+    atraso: '9.2s',
+    dur: '12.5s',
+  },
 ] as const
 
 /** O quanto ela se inclina na direção do dedo, no máximo. */
@@ -73,6 +136,7 @@ const INCLINACAO_MAXIMA = 7
 export function PainelPlanta({ planta }: { planta: Planta }) {
   const [aberto, setAberto] = useState(false)
   const { crescimento, vigor, estagio, proximo, niveisParaOProximo, progresso } = planta
+  const arte = estagio.arte
 
   const caule = useRef<HTMLImageElement>(null)
   const quadro = useRef<number | null>(null)
@@ -82,7 +146,7 @@ export function PainelPlanta({ planta }: { planta: Planta }) {
    * planta que some no nível 1 é um painel vazio para quem acabou de chegar.
    */
   const escala = 0.44 + 0.56 * crescimento
-  const fagulhas = FAGULHAS.slice(0, Math.round(3 + vigor * 5))
+  const folhas = FOLHAS_AO_VENTO.slice(0, Math.round(2 + vigor * 4))
 
   const inclinar = useCallback((valor: number) => {
     if (quadro.current !== null) return
@@ -115,103 +179,112 @@ export function PainelPlanta({ planta }: { planta: Planta }) {
       aria-expanded={aberto}
       aria-controls="detalhe-da-planta"
       /*
-       * O fundo é fixo, e não `bg-synse-dark`: o `screen` precisa de um fundo
-       * escuro para o preto da arte desaparecer, e este painel é uma foto
-       * escura nos dois temas. O tom veio da própria arte.
-       *
-       * `isolate` prende a mesclagem aqui dentro: sem ele, o `screen` da
-       * planta procuraria o fundo da página.
+       * O fundo é fixo, e não `bg-synse-dark`: a arte dos primeiros estágios
+       * ainda tem preto colado e depende do `screen`, que só funciona sobre
+       * escuro. O tom veio da própria arte. `isolate` prende a mesclagem aqui
+       * dentro — sem ele o `screen` procuraria o fundo da página.
        */
       className="group relative isolate w-full overflow-hidden rounded-2xl border border-synse-border bg-[#04100e] text-left outline-none transition focus-visible:ring-2 focus-visible:ring-synse-primary/60 active:scale-[0.99]"
     >
-      {/* No celular a planta ocupa metade do painel; do tablet para cima, tudo. */}
-      <div className="pointer-events-none absolute inset-y-0 left-0 w-1/2 sm:w-full">
-        {/* O halo. Fica atrás da planta e acende junto com ela. */}
-        <div
-          aria-hidden
-          className="absolute inset-0 transition-opacity duration-500 group-hover:opacity-100"
-          style={{
-            opacity: (vigor * (aberto ? 0.55 : 0.34)).toFixed(3),
-            background:
-              'radial-gradient(52% 46% at 50% 68%, var(--synse-primary) 0%, transparent 72%)',
-          }}
-        />
+      <div className="pointer-events-none absolute inset-0">
+        {/* No celular a planta ocupa metade do painel; do tablet para cima, tudo. */}
+        <div className="absolute inset-y-0 left-0 w-1/2 sm:w-full">
+          {/* O halo. Fica atrás da planta e acende junto com ela. */}
+          <div
+            aria-hidden
+            className="absolute inset-0 transition-opacity duration-500"
+            style={{
+              opacity: (vigor * (aberto ? 0.5 : 0.3)).toFixed(3),
+              background:
+                'radial-gradient(52% 46% at 50% 68%, var(--synse-primary) 0%, transparent 72%)',
+            }}
+          />
+
+          {/*
+           * ── Um elemento só, e não uma pilha de divs ─────────────────────
+           *
+           * A primeira versão tinha a brisa num `div` e a inclinação em outro,
+           * com a imagem dentro. Parecia organizado e quebrava o efeito: um
+           * `transform` num elemento acima cria contexto de empilhamento, e o
+           * `mix-blend-screen` da imagem passava a mesclar com aquele grupo
+           * vazio em vez de mesclar com o fundo do painel. O preto da arte
+           * voltava a aparecer — inclinado junto com ela, o que denunciou a
+           * causa.
+           *
+           * Aqui a rajada anima a propriedade `rotate` e a inclinação vive no
+           * `transform`. São propriedades separadas no mesmo elemento: o
+           * navegador compõe as duas.
+           *
+           * Sem `duration-*` do Tailwind: o plugin `tailwindcss-animate` faz
+           * essas classes valerem também para `animation-duration`, e elas
+           * atropelavam a rajada — conferido, a animação rodava em 0,3s. A
+           * transição vai no `style`, onde não encosta na animação.
+           */}
+          <Image
+            ref={caule}
+            src={arte.src}
+            alt=""
+            aria-hidden
+            width={arte.largura}
+            height={arte.altura}
+            sizes="(max-width: 640px) 50vw, 240px"
+            className={
+              'absolute inset-0 size-full origin-bottom animate-brisa object-contain object-bottom group-hover:[--brisa:2.6] group-hover:[animation-duration:3s] motion-reduce:animate-none' +
+              (arte.precisaDeMescla ? ' mix-blend-screen' : '')
+            }
+            style={{
+              // `--inclinacao` é escrita direto no nó a cada movimento do dedo.
+              ['--inclinacao' as string]: '0deg',
+              transform: `rotate(var(--inclinacao)) scale(${escala.toFixed(3)})`,
+              transitionProperty: 'transform',
+              transitionDuration: '300ms',
+              transitionTimingFunction: 'cubic-bezier(0, 0, 0.2, 1)',
+              /*
+               * Só para a arte com preto colado. `contrast(1.55)` empurra tudo
+               * abaixo de ~16% para o preto de verdade, e preto no `screen` é
+               * transparente — sem isso a moldura do arquivo aparecia. O valor
+               * saiu de comparar 1.15, 1.25, 1.35, 1.5 e 1.6 lado a lado.
+               *
+               * O brilho nunca desce de 1: a planta pequena precisa ser pequena
+               * e acesa. Quem mostra o nível é o tamanho, não a penumbra.
+               */
+              filter: arte.precisaDeMescla
+                ? `contrast(1.55) brightness(${(0.98 + 0.14 * vigor).toFixed(3)})`
+                : `brightness(${(0.94 + 0.14 * vigor).toFixed(3)})`,
+            }}
+          />
+        </div>
 
         {/*
-         * ── Um elemento só, e não uma pilha de divs ───────────────────────
-         *
-         * A primeira versão tinha a brisa num `div` e a inclinação em outro,
-         * com a imagem dentro. Parecia organizado e quebrava o efeito: um
-         * `transform` num elemento acima cria contexto de empilhamento, e aí
-         * o `mix-blend-screen` da imagem passa a mesclar com aquele grupo
-         * vazio em vez de mesclar com o fundo do painel. O preto da arte
-         * voltava a aparecer — e voltava inclinado junto com ela, o que
-         * denunciava a causa.
-         *
-         * Aqui a brisa anima a propriedade `rotate` e a inclinação vive no
-         * `transform`. São propriedades separadas no mesmo elemento: o
-         * navegador compõe as duas, e a imagem continua vizinha direta do
-         * fundo que ela precisa mesclar.
+         * As folhas cruzam o painel inteiro, não só a metade da planta. Elas
+         * passam por baixo do véu, então somem no escuro da direita em vez de
+         * atravessarem o texto.
          */}
-        <Image
-          ref={caule}
-          src="/synse-planta.webp"
-          alt=""
-          aria-hidden
-          width={237}
-          height={211}
-          sizes="(max-width: 640px) 50vw, 200px"
-          /*
-           * Sem `duration-300` aqui: o plugin `tailwindcss-animate` faz as
-           * classes `duration-*` valerem também para `animation-duration`, e
-           * ela atropelava os 7s da brisa — conferido no navegador, a
-           * animação estava rodando em 0,3s. A transição da inclinação vai no
-           * `style`, onde não encosta na animação.
-           */
-          className="absolute inset-0 size-full origin-bottom animate-brisa object-contain object-bottom mix-blend-screen group-hover:[--brisa:2.6] group-hover:[animation-duration:3s] motion-reduce:animate-none"
-          style={{
-            // `--inclinacao` é escrita direto no nó a cada movimento do dedo.
-            ['--inclinacao' as string]: '0deg',
-            transform: `rotate(var(--inclinacao)) scale(${escala.toFixed(3)})`,
-            transitionProperty: 'transform',
-            transitionDuration: '300ms',
-            transitionTimingFunction: 'cubic-bezier(0, 0, 0.2, 1)',
-            /*
-             * O contraste é o que apaga o retângulo.
-             *
-             * Sozinho, o `screen` ainda deixava o fundo da arte visível: ele
-             * não é preto puro, é um quase-preto esverdeado, e quase-preto
-             * sobre escuro ainda clareia. `contrast(1.55)` empurra tudo
-             * abaixo de ~16% para o preto de verdade — e preto no `screen` é
-             * transparente. A planta, que é clara, só ganha com isso. O valor
-             * saiu de comparar 1.15, 1.25, 1.35, 1.5 e 1.6 lado a lado: até
-             * 1.25 a moldura ainda aparecia.
-             *
-             * O brilho nunca desce de 1. A planta pequena precisa ser pequena
-             * e acesa — quem mostra o nível é o tamanho, não a penumbra.
-             */
-            filter: `contrast(1.55) brightness(${(0.98 + 0.14 * vigor).toFixed(3)})`,
-          }}
-        />
-
-        {fagulhas.map((fagulha) => (
-          <span
-            key={fagulha.esquerda + fagulha.base}
+        {folhas.map((folha) => (
+          <Image
+            key={`${folha.src}-${folha.x}-${folha.y}`}
+            src={folha.src}
+            alt=""
             aria-hidden
+            width={folha.w}
+            height={folha.h}
             /*
              * A duração sai de `--dur`, e não de um `style` direto: estilo em
-             * linha ganha da folha de estilos, então o `group-hover` não
-             * conseguia acelerar nada — conferido, as fagulhas continuavam nos
-             * mesmos 5,2s com o ponteiro em cima. Com a variável, o hover só
-             * multiplica, e cada fagulha mantém o ritmo próprio em vez de
-             * todas passarem a subir juntas.
+             * linha ganha da folha de estilos, e o `group-hover` não
+             * conseguiria acelerar nada — foi o que aconteceu com as fagulhas
+             * antes. Com a variável, o hover só multiplica, e cada folha
+             * mantém o ritmo próprio em vez de todas cruzarem juntas.
              */
-            className="pointer-events-none absolute size-1 animate-faisca rounded-full bg-synse-primary-light/80 [animation-duration:calc(var(--dur)*var(--pressa,1))] group-hover:[--pressa:0.45] motion-reduce:animate-none"
+            className="pointer-events-none absolute w-auto animate-voar [animation-duration:calc(var(--dur)*var(--pressa,1))] group-hover:[--pressa:0.4] motion-reduce:hidden"
             style={{
-              left: fagulha.esquerda,
-              bottom: fagulha.base,
-              animationDelay: fagulha.atraso,
-              ['--dur' as string]: fagulha.duracao,
+              left: folha.x,
+              bottom: folha.y,
+              height: `${folha.alt}px`,
+              ['--dur' as string]: folha.dur,
+              ['--vx' as string]: folha.dx,
+              ['--vy' as string]: folha.dy,
+              ['--vg' as string]: folha.giro,
+              animationDelay: folha.atraso,
             }}
           />
         ))}
@@ -223,7 +296,7 @@ export function PainelPlanta({ planta }: { planta: Planta }) {
        */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-y-0 left-0 w-1/2 bg-gradient-to-r from-transparent via-[#04100e]/20 to-[#04100e] sm:w-full"
+        className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-[#04100e]/55 to-[#04100e]"
       />
 
       {/*

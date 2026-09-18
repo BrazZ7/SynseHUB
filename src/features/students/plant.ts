@@ -27,6 +27,44 @@ import type { NivelSynse } from '@/features/students/level'
 
 export type ChaveDoEstagio = 'SEMENTE' | 'BROTO' | 'MUDA' | 'ARBUSTO' | 'ARVORE'
 
+/**
+ * A arte de um estágio.
+ *
+ * `precisaDeMescla` marca o arquivo que ainda tem o fundo preto colado: ele só
+ * desaparece com `mix-blend-screen`, e isso obriga o painel a ter fundo escuro
+ * fixo nos dois temas. O arquivo do arbusto já veio com transparência de
+ * verdade e não precisa de nada — quando os outros estágios vierem assim, a
+ * bandeira some daqui e o painel volta a seguir o tema.
+ */
+export type ArteDaPlanta = {
+  src: string
+  largura: number
+  altura: number
+  precisaDeMescla: boolean
+}
+
+/** A muda original, sobre preto. Serve os três primeiros estágios. */
+const ARTE_MUDA: ArteDaPlanta = {
+  src: '/synse-planta.webp',
+  largura: 237,
+  altura: 211,
+  precisaDeMescla: true,
+}
+
+/**
+ * O arbusto, recortado do arquivo transparente que o dono do produto enviou.
+ *
+ * As folhas que voavam soltas em volta não estavam encostadas no corpo — eram
+ * ilhas próprias no canal alfa. Foram separadas por preenchimento a partir do
+ * caule, e cada uma virou um arquivo que o vento carrega por conta própria.
+ */
+const ARTE_ARBUSTO: ArteDaPlanta = {
+  src: '/synse-arbusto.webp',
+  largura: 488,
+  altura: 540,
+  precisaDeMescla: false,
+}
+
 export type EstagioDaPlanta = {
   chave: ChaveDoEstagio
   nome: string
@@ -34,19 +72,46 @@ export type EstagioDaPlanta = {
   nivelMinimo: number
   /** Uma linha sobre o que ele significa. */
   legenda: string
+  arte: ArteDaPlanta
 }
 
 export const ESTAGIOS: readonly EstagioDaPlanta[] = [
-  { chave: 'SEMENTE', nome: 'Semente', nivelMinimo: 1, legenda: 'Tudo começa aqui.' },
-  { chave: 'BROTO', nome: 'Broto', nivelMinimo: 2, legenda: 'A primeira folha abriu.' },
-  { chave: 'MUDA', nome: 'Muda', nivelMinimo: 4, legenda: 'Já tem raiz para segurar.' },
+  {
+    chave: 'SEMENTE',
+    nome: 'Semente',
+    nivelMinimo: 1,
+    legenda: 'Tudo começa aqui.',
+    arte: ARTE_MUDA,
+  },
+  {
+    chave: 'BROTO',
+    nome: 'Broto',
+    nivelMinimo: 2,
+    legenda: 'A primeira folha abriu.',
+    arte: ARTE_MUDA,
+  },
+  {
+    chave: 'MUDA',
+    nome: 'Muda',
+    nivelMinimo: 4,
+    legenda: 'Já tem raiz para segurar.',
+    arte: ARTE_MUDA,
+  },
   {
     chave: 'ARBUSTO',
     nome: 'Arbusto',
     nivelMinimo: 7,
     legenda: 'Cresceu o bastante para dar sombra.',
+    arte: ARTE_ARBUSTO,
   },
-  { chave: 'ARVORE', nome: 'Árvore', nivelMinimo: 12, legenda: 'A árvore da capa é você.' },
+  {
+    chave: 'ARVORE',
+    nome: 'Árvore',
+    nivelMinimo: 12,
+    legenda: 'A árvore da capa é você.',
+    /* Ainda o arbusto, maior: a arte da árvore não chegou. */
+    arte: ARTE_ARBUSTO,
+  },
 ] as const
 
 /** O nível em que a planta está inteira. Depois dele só sobra o brilho. */

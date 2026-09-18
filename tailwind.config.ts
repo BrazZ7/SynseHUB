@@ -177,16 +177,35 @@ const config: Config = {
          */
         brisa: {
           /*
-           * Anima `rotate`, e não `transform`.
+           * Rajada, não metrônomo.
            *
-           * A inclinação que segue o dedo mora no `transform` da mesma
-           * imagem. Se a brisa também usasse `transform`, uma apagaria a
-           * outra. Como propriedades separadas, o navegador compõe as duas —
-           * e a planta fica no mesmo elemento, que é o que o
-           * `mix-blend-screen` precisa para achar o fundo do painel.
+           * Empurra para um lado, recua pouco, empurra de novo: é o que faz
+           * ler como vento em vez de pêndulo. Anima `rotate`, e não
+           * `transform`, porque a inclinação que segue o dedo mora no
+           * `transform` da mesma imagem — como propriedades separadas, o
+           * navegador compõe as duas, e a planta fica num elemento só, que é o
+           * que o `mix-blend-screen` precisa para achar o fundo do painel.
            */
-          '0%, 100%': { rotate: 'calc(var(--brisa, 1) * -1.1deg)' },
-          '50%': { rotate: 'calc(var(--brisa, 1) * 1.1deg)' },
+          '0%': { rotate: 'calc(var(--brisa, 1) * -0.9deg)' },
+          '28%': { rotate: 'calc(var(--brisa, 1) * 1.2deg)' },
+          '46%': { rotate: 'calc(var(--brisa, 1) * 0.25deg)' },
+          '68%': { rotate: 'calc(var(--brisa, 1) * 1.4deg)' },
+          '100%': { rotate: 'calc(var(--brisa, 1) * -0.9deg)' },
+        },
+        /*
+         * A folha que o vento leva. Sobe e vai para a direita girando, some no
+         * escuro. Só `transform` e `opacity`, que a GPU compõe sem refazer
+         * layout nem pintura enquanto a página rola.
+         */
+        voar: {
+          '0%': { opacity: '0', transform: 'translate3d(0, 0, 0) rotate(0deg) scale(0.85)' },
+          '12%': { opacity: '0.95' },
+          '72%': { opacity: '0.8' },
+          '100%': {
+            opacity: '0',
+            transform:
+              'translate3d(var(--vx, 200px), var(--vy, -90px), 0) rotate(var(--vg, 200deg)) scale(1.05)',
+          },
         },
       },
       animation: {
@@ -207,6 +226,8 @@ const config: Config = {
         /* A duração real vem de cada fagulha, para elas não subirem em bloco. */
         faisca: 'faisca 5s ease-out infinite',
         brisa: 'brisa 7s ease-in-out infinite',
+        /* A duração real vem de cada folha, para elas não cruzarem juntas. */
+        voar: 'voar 12s linear infinite',
       },
     },
   },

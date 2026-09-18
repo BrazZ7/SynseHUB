@@ -1,3 +1,6 @@
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
 import { calcularNivel } from '@/features/students/level'
@@ -34,6 +37,18 @@ describe('os estágios', () => {
       expect(atual.nivelMinimo).toBeGreaterThan(anterior.nivelMinimo)
       expect(estagioDoNivel(atual.nivelMinimo - 1).chave).toBe(anterior.chave)
       expect(estagioDoNivel(atual.nivelMinimo).chave).toBe(atual.chave)
+    }
+  })
+
+  /*
+   * Cada estágio aponta para um arquivo em `public/`. Um nome errado não
+   * quebra build nem tipo: a tela carrega e a planta simplesmente não aparece,
+   * e isso só se descobre olhando o aparelho. Aqui descobre-se em 2ms.
+   */
+  it('toda arte declarada existe em public/', () => {
+    for (const estagio of ESTAGIOS) {
+      const caminho = join(process.cwd(), 'public', estagio.arte.src)
+      expect(existsSync(caminho), `${estagio.chave} aponta para ${estagio.arte.src}`).toBe(true)
     }
   })
 

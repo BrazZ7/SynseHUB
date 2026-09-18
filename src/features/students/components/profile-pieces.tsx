@@ -71,49 +71,6 @@ export function CapaPerfil() {
   )
 }
 
-/**
- * O painel da muda, ao lado do nível.
- *
- * Vem do mesmo lugar e carrega o mesmo recado do nível: começa pequeno e
- * cresce. O texto por cima é branco fixo, e não `text-synse-text`, porque o
- * fundo aqui é a foto — que é escura nos dois temas.
- */
-export function PainelPlanta() {
-  return (
-    <div className="relative overflow-hidden rounded-2xl border border-synse-border bg-synse-dark">
-      {/*
-       * No celular a foto ocupa metade do painel; no tablet para cima, o painel
-       * inteiro. O arquivo tem 237px de largura: esticado numa faixa de 390px
-       * ele fica borrado, e foi assim que a primeira versão saiu. Em metade da
-       * largura o navegador reduz em vez de ampliar.
-       */}
-      <div className="absolute inset-y-0 left-0 w-1/2 sm:w-full">
-        <Image
-          src="/synse-planta.webp"
-          alt=""
-          aria-hidden
-          width={237}
-          height={211}
-          sizes="(max-width: 640px) 50vw, 200px"
-          className="size-full object-cover"
-        />
-        {/* Sem o véu, as palavras caem em cima das folhas acesas. */}
-        <div
-          aria-hidden
-          className="absolute inset-0 bg-gradient-to-r from-transparent via-synse-dark/30 to-synse-dark"
-        />
-      </div>
-
-      <p className="relative flex min-h-28 flex-col items-end justify-center gap-1 p-4 text-right text-[11px] font-medium uppercase tracking-[0.2em] text-white/85">
-        <span>Cresça</span>
-        <span>Evolua</span>
-        <span>Inspire</span>
-        <span className="text-synse-primary-light">Synse</span>
-      </p>
-    </div>
-  )
-}
-
 // ── Números do topo ──────────────────────────────────────────────────────────
 export function StatTile({
   icone: Icone,

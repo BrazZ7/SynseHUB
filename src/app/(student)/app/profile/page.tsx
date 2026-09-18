@@ -14,11 +14,12 @@ import {
   ConquistaHex,
   ICONES_DO_TOPO,
   NivelCard,
-  PainelPlanta,
   RecordeRow,
   SemanaChart,
   StatTile,
 } from '@/features/students/components/profile-pieces'
+import { PainelPlanta } from '@/features/students/components/plant-panel'
+import { plantaDoNivel } from '@/features/students/plant'
 import { getPerfilCompleto } from '@/features/students/profile-service'
 import { signOut } from '@/lib/auth/actions'
 import { requireStudentSession } from '@/lib/auth/require-session'
@@ -123,7 +124,7 @@ export default async function StudentProfilePage() {
           linha não cabe em dois terços de 360px sem quebrar. */}
       <section className="grid gap-3 sm:grid-cols-[1.7fr_1fr]">
         <NivelCard nivel={perfil.nivel} />
-        <PainelPlanta />
+        <PainelPlanta planta={plantaDoNivel(perfil.nivel)} />
       </section>
 
       {/* ── Três marcadores ──────────────────────────────────────────────── */}

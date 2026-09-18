@@ -160,6 +160,16 @@ const config: Config = {
         shimmer: {
           '100%': { transform: 'translateX(100%)' },
         },
+        /*
+         * As fagulhas da muda do perfil. Só `transform` e `opacity`: as duas
+         * são compostas na GPU, então elas não obrigam o navegador a refazer
+         * layout nem pintura enquanto a página rola.
+         */
+        faisca: {
+          '0%': { transform: 'translateY(6px) scale(0.6)', opacity: '0' },
+          '20%': { opacity: '0.85' },
+          '100%': { transform: 'translateY(-26px) scale(1)', opacity: '0' },
+        },
       },
       animation: {
         /*
@@ -176,6 +186,8 @@ const config: Config = {
         'fade-in': 'fade-in 200ms ease-out both',
         'accordion-down': 'accordion-down 200ms ease-out',
         'accordion-up': 'accordion-up 200ms ease-out',
+        /* A duração real vem de cada fagulha, para elas não subirem em bloco. */
+        faisca: 'faisca 5s ease-out infinite',
       },
     },
   },

@@ -25,6 +25,8 @@ import { getStudentHome } from '@/features/students/app-service'
 import { horaLocal } from '@/features/schedule/week'
 import { getDataSource } from '@/lib/database'
 import { requireStudentSession } from '@/lib/auth/require-session'
+import { StreakFlame } from '@/features/students/streak-flame'
+import { calcularSequencia } from '@/features/students/streak'
 import { cn, firstName, formatCurrency, formatDate, greeting } from '@/lib/utils'
 
 export const metadata: Metadata = { title: 'Hoje' }
@@ -32,7 +34,7 @@ export const metadata: Metadata = { title: 'Hoje' }
 export default async function StudentHomePage() {
   const session = await requireStudentSession()
   const agora = new Date()
-  const [home, challenges, aulas, conteudos] = await Promise.all([
+  const [home, challenges, aulas, conteudos, organizacao, checkIns] = await Promise.all([
     getStudentHome(session.organizationId, session.studentId),
     getChallengeBoard(session),
     getDataSource().then((dataSource) =>
@@ -45,7 +47,27 @@ export default async function StudentHomePage() {
     getDataSource().then((dataSource) =>
       dataSource.listPublishedContent(session.organizationId, 3),
     ),
+    /*
+     * A academia, pelo fuso. O dia de um check-in às 23h só cai no lugar certo
+     * se for agrupado no fuso de quem treinou — em UTC ele viraria o dia
+     * seguinte e partiria a sequência de quem treina tarde.
+     */
+    getDataSource().then((dataSource) => dataSource.getOrganization(session.organizationId)),
+    /*
+     * Cento e oitenta check-ins cobrem meio ano de treino diário. A sequência
+     * mais longa que existe é a que começou no primeiro deles; buscar o
+     * histórico inteiro para contar dias seguidos seria carregar anos de linha
+     * para usar as últimas semanas.
+     */
+    getDataSource().then((dataSource) =>
+      dataSource.listCheckInsForStudent(session.organizationId, session.studentId, 180),
+    ),
   ])
+
+  const sequencia = calcularSequencia(checkIns, {
+    fuso: organizacao?.timezone ?? 'America/Sao_Paulo',
+    agora,
+  })
 
   const desafio = challenges.active[0] ?? null
 
@@ -64,8 +86,9 @@ export default async function StudentHomePage() {
       <header className="flex items-center justify-between gap-3">
         <div>
           <p className="text-sm text-synse-muted">{greeting()},</p>
-          <h1 className="text-2xl font-semibold text-synse-text">
-            {firstName(home.name)} <span aria-hidden>👋</span>
+          <h1 className="flex items-center gap-2 text-2xl font-semibold text-synse-text">
+            {firstName(home.name)}
+            <StreakFlame sequencia={sequencia} />
           </h1>
         </div>
         <div className="flex items-center gap-1">

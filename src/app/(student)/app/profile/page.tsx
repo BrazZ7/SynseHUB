@@ -28,7 +28,17 @@ import { isPendingMigration } from '@/lib/database/pending-migration'
 
 export const metadata: Metadata = { title: 'Perfil' }
 
-export default async function StudentProfilePage() {
+export default async function StudentProfilePage({
+  searchParams,
+}: {
+  /*
+   * ⚠️ Temporário: `?jardim=previa` mostra o seletor de estágio da planta.
+   * Ver `src/features/students/components/plant-preview.tsx` — inclusive como
+   * remover quando não precisar mais.
+   */
+  searchParams: Promise<{ jardim?: string }>
+}) {
+  const { jardim } = await searchParams
   const session = await requireStudentSession()
   const dataSource = await getDataSource()
 
@@ -120,7 +130,11 @@ export default async function StudentProfilePage() {
           linha não cabe em dois terços de 360px sem quebrar. */}
       <section className="grid gap-3 sm:grid-cols-[1.7fr_1fr]">
         <NivelCard nivel={perfil.nivel} />
-        <PainelPlanta planta={plantaDoNivel(perfil.nivel)} />
+        <PainelPlanta
+          planta={plantaDoNivel(perfil.nivel)}
+          nivel={perfil.nivel}
+          previa={jardim === 'previa'}
+        />
       </section>
 
       {/* ── Três marcadores ──────────────────────────────────────────────── */}

@@ -1,9 +1,11 @@
 'use client'
 
 import Image from 'next/image'
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
-import type { Planta } from '@/features/students/plant'
+import type { NivelSynse } from '@/features/students/level'
+import { type Planta, plantaDoNivel } from '@/features/students/plant'
+import { SeletorDeEstagio, nivelDePrevia } from '@/features/students/components/plant-preview'
 
 /**
  * A muda do perfil.
@@ -134,8 +136,26 @@ const INCLINACAO_MAXIMA = 9
  */
 const ESCALA_MINIMA = 0.58
 
-export function PainelPlanta({ planta }: { planta: Planta }) {
-  const { crescimento, vigor, estagio, proximo, niveisParaOProximo, progresso } = planta
+export function PainelPlanta({
+  planta,
+  nivel,
+  previa = false,
+}: {
+  planta: Planta
+  /** Só para a prévia: o nível de verdade, para poder voltar a ele. */
+  nivel?: NivelSynse
+  /** ⚠️ Temporário. Ver `plant-preview.tsx`. */
+  previa?: boolean
+}) {
+  /*
+   * ⚠️ Temporário: o estágio escolhido na prévia. `null` é o nível de verdade.
+   * Nada disso é gravado — a prévia só troca o que a tela desenha.
+   */
+  const [espiado, setEspiado] = useState<number | null>(null)
+  const mostrada =
+    previa && espiado !== null && nivel ? plantaDoNivel(nivelDePrevia(nivel, espiado)) : planta
+
+  const { crescimento, vigor, estagio, proximo, niveisParaOProximo, progresso } = mostrada
   const arte = estagio.arte
 
   const caule = useRef<HTMLImageElement>(null)
@@ -362,6 +382,14 @@ export function PainelPlanta({ planta }: { planta: Planta }) {
           <p className="mt-2 text-[11px] leading-snug text-white/55">
             Ela cresceu tudo o que tinha para crescer.
           </p>
+        )}
+
+        {previa && nivel && (
+          <SeletorDeEstagio
+            nivelEscolhido={espiado}
+            aoEscolher={setEspiado}
+            nivelReal={nivel.nivel}
+          />
         )}
       </div>
     </section>

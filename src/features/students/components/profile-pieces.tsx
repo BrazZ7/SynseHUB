@@ -159,7 +159,7 @@ export function StatTile({
   rotulo: string
 }) {
   return (
-    <div className="rounded-xl border border-synse-border bg-synse-surface px-2 py-3 text-center">
+    <div className="borda-led rounded-xl border border-synse-border bg-synse-surface px-2 py-3 text-center">
       <Icone className="mx-auto size-4 text-synse-primary" aria-hidden />
       <p className="mt-1.5 text-sm font-semibold tabular-nums text-synse-text">{valor}</p>
       <p className="text-[10px] leading-tight text-synse-muted">{rotulo}</p>
@@ -179,7 +179,7 @@ export const ICONES_DO_TOPO = { Dumbbell, Footprints, Trophy, Medal }
  */
 export function NivelCard({ nivel }: { nivel: NivelSynse }) {
   return (
-    <section className="rounded-2xl border border-synse-border bg-synse-surface p-5">
+    <section className="borda-led rounded-2xl border border-synse-border bg-synse-surface p-5">
       <h2 className="text-sm font-semibold text-synse-text">Seu nível Synse</h2>
 
       <div className="mt-3 flex items-end justify-between gap-3">

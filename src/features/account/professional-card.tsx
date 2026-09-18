@@ -30,7 +30,7 @@ export function ProfessionalCard({ ativo, defaultName }: { ativo: boolean; defau
   const [state, formAction] = useActionState(openProfessionalSpaceAction, initialAccountState)
 
   return (
-    <section className="rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
+    <section className="borda-led rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold text-synse-text">Perfil profissional</h2>
         <Badge variant={ativo ? 'success' : 'outline'}>{ativo ? 'Plano ativo' : 'Synse Pro'}</Badge>

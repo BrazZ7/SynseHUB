@@ -26,7 +26,7 @@ export function ConsentList({ consents }: { consents: readonly ConsentState[] })
   const semRegistro = consents.filter((item) => item.required && !item.accepted)
 
   return (
-    <section className="rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
+    <section className="borda-led rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
       <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-synse-text">
         <ShieldCheck className="size-4 text-synse-muted" aria-hidden />
         Privacidade

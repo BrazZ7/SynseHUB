@@ -41,7 +41,7 @@ export function MedalShelf({ medals }: { medals: ChallengeMedal[] }) {
   const recentes = [...medals].sort((a, b) => b.awardedAt.localeCompare(a.awardedAt))
 
   return (
-    <section className="rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
+    <section className="borda-led rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
       <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-synse-text">
         <Trophy className="size-4 text-synse-primary" aria-hidden />
         Suas medalhas
@@ -61,10 +61,7 @@ export function MedalShelf({ medals }: { medals: ChallengeMedal[] }) {
           */}
           <ul className="mb-4 flex flex-wrap gap-2">
             {porNivel.map(({ nivel, total }) => (
-              <li
-                key={nivel}
-                className="flex items-center gap-2 rounded-lg bg-synse-bg px-3 py-2"
-              >
+              <li key={nivel} className="flex items-center gap-2 rounded-lg bg-synse-bg px-3 py-2">
                 <MedalBadge level={nivel} size="sm" />
                 <span className="text-sm font-semibold tabular-nums text-synse-text">{total}</span>
                 <span className="sr-only">

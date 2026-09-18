@@ -157,7 +157,7 @@ export default async function StudentProfilePage({
       </section>
 
       {/* ── Conquistas ───────────────────────────────────────────────────── */}
-      <section className="rounded-2xl border border-synse-border bg-synse-surface p-5">
+      <section className="borda-led rounded-2xl border border-synse-border bg-synse-surface p-5">
         <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-synse-text">
           <Star className="size-4 text-synse-primary" aria-hidden />
           Suas conquistas
@@ -172,7 +172,7 @@ export default async function StudentProfilePage({
       </section>
 
       {/* ── Evolução ─────────────────────────────────────────────────────── */}
-      <section className="rounded-2xl border border-synse-border bg-synse-surface p-5">
+      <section className="borda-led rounded-2xl border border-synse-border bg-synse-surface p-5">
         <div className="mb-4 flex items-baseline justify-between gap-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-synse-text">
             <BarChart3 className="size-4 text-synse-primary" aria-hidden />
@@ -202,7 +202,7 @@ export default async function StudentProfilePage({
       </section>
 
       {/* ── Recordes ─────────────────────────────────────────────────────── */}
-      <section className="rounded-2xl border border-synse-border bg-synse-surface p-5">
+      <section className="borda-led rounded-2xl border border-synse-border bg-synse-surface p-5">
         <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-synse-text">
           <Star className="size-4 text-synse-primary" aria-hidden />
           Recordes pessoais
@@ -216,7 +216,7 @@ export default async function StudentProfilePage({
 
       <MedalShelf medals={perfil.medalhas} />
 
-      <section className="rounded-2xl border border-synse-border bg-gradient-to-br from-synse-surface to-synse-surface-2 p-5">
+      <section className="borda-led rounded-2xl border border-synse-border bg-gradient-to-br from-synse-surface to-synse-surface-2 p-5">
         <p className="text-lg font-medium italic leading-snug text-synse-text">
           Disciplina hoje,
           <br />
@@ -233,7 +233,7 @@ export default async function StudentProfilePage({
         academia, plano, privacidade, encerrar conta — está nesta mesma
         página. Uma seta aqui prometeria uma tela que não existe.
       */}
-      <section className="flex items-center gap-3 rounded-2xl border border-synse-border bg-synse-surface p-5">
+      <section className="borda-led flex items-center gap-3 rounded-2xl border border-synse-border bg-synse-surface p-5">
         <UserRound className="size-5 shrink-0 text-synse-primary" aria-hidden />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-synse-text">Minha conta Synse</p>
@@ -269,7 +269,7 @@ function Marcador({
   rotulo: string
 }) {
   return (
-    <div className="rounded-2xl border border-synse-border bg-synse-surface p-4 text-center">
+    <div className="borda-led rounded-2xl border border-synse-border bg-synse-surface p-4 text-center">
       <span className="grid place-items-center">{icone}</span>
       <p className="mt-2 text-lg font-semibold tabular-nums text-synse-text">{valor}</p>
       <p className="text-[11px] leading-tight text-synse-muted">{rotulo}</p>

@@ -119,6 +119,62 @@
     @apply bg-synse-gradient bg-clip-text text-transparent;
   }
 
+  /*
+   * ── Borda de LED ──────────────────────────────────────────────────────────
+   *
+   * O fio aceso em volta dos cartões do app do aluno. Duas camadas:
+   *
+   * 1. Um `::before` de 1px com degradê, recortado em anel pela composição de
+   *    duas máscaras. É o que dá o fio *desigual* — mais aceso num canto, quase
+   *    apagado no oposto. Uma borda de cor única lê como contorno; o LED
+   *    precisa ter um ponto de luz e uma sombra.
+   * 2. Um `box-shadow` para fora, o brilho que vaza no fundo.
+   *
+   * Tudo estático: nenhuma animação, nenhum `backdrop-filter`. O navegador
+   * pinta uma vez e não toca mais enquanto a página rola — foi por causa de
+   * `backdrop-blur` em elemento fixo que a navegação ficou pesada antes.
+   *
+   * No tema claro o brilho quase some: neon sobre branco não lê como luz, lê
+   * como borrão. Fica só o fio, um pouco mais firme que a borda comum.
+   */
+  .borda-led {
+    position: relative;
+    border-color: transparent;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--synse-primary) 10%, transparent);
+  }
+
+  .borda-led::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    padding: 1px;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--synse-primary) 78%, transparent) 0%,
+      color-mix(in srgb, var(--synse-cyan) 48%, transparent) 28%,
+      color-mix(in srgb, var(--synse-primary) 10%, transparent) 62%,
+      color-mix(in srgb, var(--synse-primary) 58%, transparent) 100%
+    );
+    /* O anel: pinta a caixa toda, desconta o miolo, sobra a moldura. */
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    mask-composite: exclude;
+  }
+
+  .dark .borda-led {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--synse-primary) 16%, transparent),
+      0 0 26px -10px color-mix(in srgb, var(--synse-primary) 85%, transparent);
+  }
+
   /* Scrollbar leve */
   .synse-scroll {
     scrollbar-width: thin;

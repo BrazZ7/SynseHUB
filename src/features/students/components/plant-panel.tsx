@@ -200,7 +200,7 @@ export function PainelPlanta({
        * luz, e luz sobre branco desaparece. Este painel é uma vitrine escura
        * nos dois temas, do mesmo jeito que a capa lá em cima.
        */
-      className="group relative w-full overflow-hidden rounded-2xl border border-synse-border bg-[#04100e]"
+      className="borda-led group relative w-full overflow-hidden rounded-2xl border border-synse-border bg-[#04100e]"
     >
       {/*
        * O brilho da terra. Sai do pé da planta, não do centro do painel: é ele

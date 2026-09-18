@@ -16,7 +16,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
     <div className="min-h-svh bg-synse-bg">
       <div className="mx-auto w-full max-w-lg px-5 pb-24 pt-6">
         {/* Nada para conta comum. Ver `ContextBar`. */}
-        <div className="mb-4 flex justify-end empty:hidden">
+        <div className="mb-6 flex justify-end empty:hidden">
           <ContextBar session={session} />
         </div>
         {children}

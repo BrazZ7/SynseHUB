@@ -23,11 +23,12 @@ import { cn } from '@/lib/utils'
 
 // ── A arte da marca ──────────────────────────────────────────────────────────
 /**
- * A capa do perfil — e o cartão inteiro por dentro dela.
+ * A capa do perfil — e a identidade inteira por dentro dela.
  *
  * Era uma faixa no topo com o conteúdo abaixo, sobre a superfície do tema.
- * Agora a arte é o fundo de tudo: nome, nível, e-mail e Synse ID ficam por
- * cima dela.
+ * Depois virou um cartão com a arte de fundo. Agora não é mais cartão: sangra
+ * até as bordas da tela, sem moldura nem cantos, e derrete no fundo da página
+ * lá embaixo. Nome, nível, e-mail e Synse ID ficam por cima da arte.
  *
  * ── O logotipo saiu do arquivo ──────────────────────────────────────────────
  *
@@ -56,42 +57,81 @@ import { cn } from '@/lib/utils'
  * `dark`, as variáveis do tema escuro valem só aqui dentro — e todo componente
  * que já usa os tokens continua legível, sem precisar de uma variante nova.
  */
-export function CapaPerfil({ children }: { children: React.ReactNode }) {
+export function CapaPerfil({
+  children,
+  acao,
+}: {
+  children: React.ReactNode
+  acao?: React.ReactNode
+}) {
   return (
-    <section className="dark relative overflow-hidden rounded-2xl border border-synse-border shadow-synse-sm">
-      <Image
-        src="/synse-capa-topo.webp"
-        alt=""
-        aria-hidden
-        width={912}
-        height={584}
-        /* Primeira coisa acima da dobra do perfil: carregada preguiçosamente,
-           ela apareceria depois e daria um pulo no cartão. */
-        priority
-        sizes="(max-width: 512px) 100vw, 512px"
-        /* Ancorada em cima: a árvore e a montanha ficam no topo do cartão, e
-           o que se perde quando ele cresce — nome comprido, e-mail longo — é o
-           escuro de baixo. */
-        className="absolute inset-0 size-full object-cover object-top"
-      />
+    /*
+     * ── Sem moldura ───────────────────────────────────────────────────────
+     *
+     * As margens negativas desfazem o `px-5` e o `pt-6` da casca do app, então
+     * a arte encosta nas bordas da tela e começa no topo da rolagem. Era um
+     * cartão com borda e cantos arredondados no meio da página; agora é a
+     * primeira coisa que aparece ao abrir o perfil, sem nada delimitando.
+     */
+    <div className="relative -mx-5 -mt-6">
+      <section className="dark relative overflow-hidden">
+        <Image
+          src="/synse-capa-topo.webp"
+          alt=""
+          aria-hidden
+          width={912}
+          height={584}
+          /* Primeira coisa acima da dobra: carregada preguiçosamente, ela
+             apareceria depois e daria um pulo na tela inteira. */
+          priority
+          sizes="(max-width: 512px) 100vw, 512px"
+          /* Ancorada em cima: a árvore e a montanha ficam no topo, e o que se
+             perde quando o bloco cresce é o escuro de baixo. */
+          className="absolute inset-0 size-full object-cover object-top"
+        />
+
+        {/*
+         * O véu corre da esquerda para a direita porque o texto fica à
+         * esquerda e a árvore à direita: assim ele protege a leitura sem
+         * apagar a arte.
+         */}
+        <div
+          aria-hidden
+          className="from-synse-bg/88 absolute inset-0 bg-gradient-to-r via-synse-bg/45 to-transparent"
+        />
+        <div
+          aria-hidden
+          className="absolute inset-0 bg-gradient-to-b from-transparent to-synse-bg/45"
+        />
+
+        {/* O botão ganha uma pastilha: solto sobre a copa da árvore ele some. */}
+        {acao && (
+          <div className="absolute right-3 top-3 rounded-full bg-synse-bg/55 backdrop-blur-[2px]">
+            {acao}
+          </div>
+        )}
+
+        {/*
+         * O conteúdo se apoia embaixo e o `pb-16` guarda a faixa onde a arte
+         * derrete no fundo da página — sem essa folga o nome cairia dentro do
+         * degradê e desbotaria junto.
+         */}
+        <div className="relative flex min-h-[16rem] flex-col justify-end gap-4 px-5 pb-12 pt-14">
+          {children}
+        </div>
+      </section>
 
       {/*
-       * O véu corre da esquerda para a direita porque o texto fica à esquerda
-       * e a árvore à direita: assim ele protege a leitura sem apagar a arte.
+       * O degradê que costura a arte ao fundo da página fica **fora** do
+       * `.dark`. Dentro dele, `synse-bg` seria sempre o escuro do tema escuro,
+       * e no tema claro a arte terminaria numa faixa preta em vez de derreter
+       * no branco da página.
        */}
       <div
         aria-hidden
-        className="absolute inset-0 bg-gradient-to-r from-synse-bg/92 via-synse-bg/50 to-transparent"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-b from-transparent via-synse-bg/55 to-synse-bg"
       />
-      <div
-        aria-hidden
-        className="absolute inset-0 bg-gradient-to-t from-synse-bg/35 to-transparent"
-      />
-
-      <div className="relative flex min-h-[15.5rem] flex-col justify-center gap-4 p-5">
-        {children}
-      </div>
-    </section>
+    </div>
   )
 }
 

@@ -56,16 +56,21 @@ export default async function StudentProfilePage() {
 
   return (
     <div className="animate-fade-in-up space-y-5">
-      {/* ── Identidade ───────────────────────────────────────────────────── */}
-      <header className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold text-synse-text">Perfil</h1>
-          <p className="text-sm text-synse-muted">Constância hoje, resultados amanhã.</p>
-        </div>
-        <ThemeToggle />
-      </header>
+      <CapaPerfil acao={<ThemeToggle />}>
+        {/*
+         * O título "Perfil" saiu da tela: a barra de baixo já diz em qual aba
+         * a pessoa está, e repetir isso custava a primeira dobra inteira. Ele
+         * continua aqui para leitor de tela e para a estrutura de cabeçalhos,
+         * que não pode começar sem um `h1`.
+         *
+         * Dentro da capa, e não antes dela: como primeiro filho do
+         * `space-y-5`, ele fazia a capa virar o segundo — e aí o `space-y`
+         * ganha do `-mt-6` por especificidade e devolve os 20px que a margem
+         * negativa tinha tirado. A capa descolava do topo por causa de um
+         * elemento invisível.
+         */}
+        <h1 className="sr-only">Perfil</h1>
 
-      <CapaPerfil>
         <AvatarPicker nome={session.name} fotoAtual={fotoAssinada} />
 
         <div className="min-w-0 border-t border-synse-border pt-4">

@@ -193,6 +193,22 @@ const config: Config = {
           '100%': { rotate: 'calc(var(--brisa, 1) * -0.9deg)' },
         },
         /*
+         * As folhas e gotas paradas no ar, no painel do jardim. Bóiam de leve,
+         * num ciclo mais longo que o do caule: em fase com ele, voltariam a
+         * parecer presas na planta em vez de suspensas ao lado dela.
+         */
+        boiar: {
+          '0%, 100%': { transform: 'translate3d(0, 0, 0) rotate(-0.6deg)' },
+          '34%': {
+            transform:
+              'translate3d(calc(var(--boia, 1) * 5px), calc(var(--boia, 1) * -6px), 0) rotate(1deg)',
+          },
+          '67%': {
+            transform:
+              'translate3d(calc(var(--boia, 1) * -4px), calc(var(--boia, 1) * -2px), 0) rotate(0.2deg)',
+          },
+        },
+        /*
          * A folha que o vento leva. Sobe e vai para a direita girando, some no
          * escuro. Só `transform` e `opacity`, que a GPU compõe sem refazer
          * layout nem pintura enquanto a página rola.
@@ -226,6 +242,7 @@ const config: Config = {
         /* A duração real vem de cada fagulha, para elas não subirem em bloco. */
         faisca: 'faisca 5s ease-out infinite',
         brisa: 'brisa 7s ease-in-out infinite',
+        boiar: 'boiar 11s ease-in-out infinite',
         /* A duração real vem de cada folha, para elas não cruzarem juntas. */
         voar: 'voar 12s linear infinite',
       },

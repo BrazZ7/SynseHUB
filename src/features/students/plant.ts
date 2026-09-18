@@ -28,15 +28,31 @@ import type { NivelSynse } from '@/features/students/level'
 export type ChaveDoEstagio = 'SEMENTE' | 'BROTO' | 'MUDA' | 'ARBUSTO' | 'ARVORE'
 
 /**
- * A arte de um estágio.
+ * A arte de um estágio, em camadas.
  *
- * Toda arte aqui tem transparência de verdade. Não há modo de mesclagem nem
- * filtro compensando fundo colado: a imagem compõe sobre o painel como
- * qualquer PNG recortado, e é isso que faz ela se comportar igual em todo
- * navegador.
+ * ── Por que camadas, e não um arquivo ───────────────────────────────────────
+ *
+ * Com a arte inteira num `img` só, o balanço girava a cena toda: a terra
+ * inclinava junto com a planta, e as folhas suspensas e o arco de luz giravam
+ * como um adesivo. Terra não balança, e foi exatamente isso que o dono do
+ * produto apontou.
+ *
+ * Agora são três, recortadas do mesmo arquivo:
+ *
+ * - **caule** — o talo, as folhas e o arco de luz preso a ele. Balança, com o
+ *   eixo no `pivo`, onde a planta encontra o chão.
+ * - **flutuantes** — as folhas e gotas soltas no ar. Bóiam num ritmo próprio,
+ *   fora de fase com o balanço, para não parecerem grudadas na planta.
+ * - **terra** — o monte. Fica por cima e nunca se mexe: além de ser o certo,
+ *   é ela que esconde a emenda onde o caule gira.
+ *
+ * A separação não foi por limiar de cor. A terra saiu por um corte horizontal
+ * com degradê — a única coisa que muda ao longo do eixo vertical é onde o
+ * chão começa, e o perfil de brilho por linha mostra isso sem ambiguidade. O
+ * caule saiu por preenchimento a partir da base: o que encosta nele vai
+ * junto, o que está solto no ar fica para trás.
  */
 export type ArteDaPlanta = {
-  src: string
   largura: number
   altura: number
   /**
@@ -47,28 +63,36 @@ export type ArteDaPlanta = {
    * do arbusto é uma planta centrada e alta — cortar ali só come folha.
    */
   sangra: string
+  /** O eixo do balanço, em porcentagem da tela da arte. */
+  pivo: string
+  caule: string
+  /** Nem toda arte tem folhas soltas no ar. */
+  flutuantes: string | null
+  terra: string
 }
 
 /**
  * O broto, para os três primeiros estágios.
  *
- * Arte transparente de verdade, enviada pelo dono do produto. Substituiu a
- * versão que eu havia recortado do fundo preto: aquela era um quadrado quase
- * quadrado, e esta é uma composição larga, com a terra correndo na base — que
- * é o formato do painel.
+ * Arte transparente enviada pelo dono do produto. Substituiu a versão que eu
+ * havia recortado do fundo preto: aquela era quase quadrada, e esta é uma cena
+ * larga com a terra correndo na base — que é o formato do painel.
  *
  * ── O que aprendemos com a anterior ─────────────────────────────────────────
  *
  * Por um tempo o fundo preto foi escondido com `mix-blend-screen`. Funcionava
  * no Chromium e **não** funcionava no iPhone: lá o retângulo preto aparecia
  * atrás da planta. Mesclagem depende de como cada navegador monta as camadas.
- * Arte que chega já transparente não tem esse risco em navegador nenhum.
+ * Arte que chega já transparente não corre esse risco em navegador nenhum.
  */
 const ARTE_BROTO: ArteDaPlanta = {
-  src: '/synse-broto.webp',
   largura: 900,
   altura: 446,
   sangra: '-6%',
+  pivo: '48% 79%',
+  caule: '/synse-broto-caule.webp',
+  flutuantes: '/synse-broto-flutua.webp',
+  terra: '/synse-broto-terra.webp',
 }
 
 /**
@@ -77,12 +101,16 @@ const ARTE_BROTO: ArteDaPlanta = {
  * As folhas que voavam soltas em volta não estavam encostadas no corpo — eram
  * ilhas próprias no canal alfa. Foram separadas por preenchimento a partir do
  * caule, e cada uma virou um arquivo que o vento carrega por conta própria.
+ * Por isso esta arte não tem camada de flutuantes: elas já saíram daqui.
  */
 const ARTE_ARBUSTO: ArteDaPlanta = {
-  src: '/synse-arbusto.webp',
   largura: 488,
   altura: 540,
   sangra: '0%',
+  pivo: '50% 82%',
+  caule: '/synse-arbusto-caule.webp',
+  flutuantes: null,
+  terra: '/synse-arbusto-terra.webp',
 }
 
 export type EstagioDaPlanta = {

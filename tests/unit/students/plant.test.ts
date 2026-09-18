@@ -45,10 +45,14 @@ describe('os estágios', () => {
    * quebra build nem tipo: a tela carrega e a planta simplesmente não aparece,
    * e isso só se descobre olhando o aparelho. Aqui descobre-se em 2ms.
    */
-  it('toda arte declarada existe em public/', () => {
+  it('toda camada declarada existe em public/', () => {
     for (const estagio of ESTAGIOS) {
-      const caminho = join(process.cwd(), 'public', estagio.arte.src)
-      expect(existsSync(caminho), `${estagio.chave} aponta para ${estagio.arte.src}`).toBe(true)
+      const camadas = [estagio.arte.caule, estagio.arte.terra, estagio.arte.flutuantes]
+      for (const camada of camadas) {
+        if (camada === null) continue
+        const caminho = join(process.cwd(), 'public', camada)
+        expect(existsSync(caminho), `${estagio.chave} aponta para ${camada}`).toBe(true)
+      }
     }
   })
 

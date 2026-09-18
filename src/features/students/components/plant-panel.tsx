@@ -187,39 +187,86 @@ export function PainelPlanta({ planta }: { planta: Planta }) {
       />
 
       {/*
-       * ── Um elemento só, e não uma pilha de divs ───────────────────────────
+       * ── A arte, em três camadas ───────────────────────────────────────────
        *
-       * A rajada anima a propriedade `rotate` e a inclinação vive no
-       * `transform`: propriedades separadas no mesmo elemento, que o navegador
-       * compõe sem uma apagar a outra. Separar em dois `div` parece mais
-       * organizado e cria um contexto de empilhamento a cada `transform`.
+       * O contêiner carrega o tamanho e a sangria; dentro dele cada camada tem
+       * o seu próprio movimento. Antes era um `img` só, e o balanço girava a
+       * cena inteira — a terra inclinava junto com a planta, e as folhas
+       * suspensas giravam como adesivo.
        *
-       * Sem `duration-*` do Tailwind: o plugin `tailwindcss-animate` faz essas
-       * classes valerem também para `animation-duration`, e elas atropelavam a
-       * rajada — conferido, a animação rodava em 0,3s. A transição vai no
-       * `style`, onde não encosta na animação.
+       * A ordem importa: a terra vem por último, por cima, e é ela que esconde
+       * a emenda onde o caule gira.
        */}
-      <Image
-        ref={caule}
-        src={arte.src}
-        alt=""
+      <div
         aria-hidden
-        width={arte.largura}
-        height={arte.altura}
-        sizes="(max-width: 640px) 100vw, 512px"
-        className="pointer-events-none absolute bottom-0 h-full w-auto max-w-none origin-bottom-left animate-brisa group-hover:[--brisa:2.6] group-hover:[animation-duration:3s] motion-reduce:animate-none"
+        className="pointer-events-none absolute bottom-0 h-full origin-bottom-left"
         style={{
           left: arte.sangra,
-          // `--inclinacao` é escrita direto no nó a cada movimento do dedo.
-          ['--inclinacao' as string]: '0deg',
-          transform: `rotate(var(--inclinacao)) scale(${escala.toFixed(3)})`,
+          aspectRatio: `${arte.largura} / ${arte.altura}`,
+          transform: `scale(${escala.toFixed(3)})`,
           transitionProperty: 'transform',
           transitionDuration: '300ms',
           transitionTimingFunction: 'cubic-bezier(0, 0, 0.2, 1)',
           // O brilho nunca desce de 1: pequena, sim; apagada, não.
           filter: `brightness(${(0.96 + 0.14 * vigor).toFixed(3)})`,
         }}
-      />
+      >
+        {arte.flutuantes && (
+          /*
+           * Folhas e gotas paradas no ar. Ritmo próprio e mais lento que o do
+           * caule: em fase, elas voltariam a parecer presas na planta.
+           */
+          <Image
+            src={arte.flutuantes}
+            alt=""
+            width={arte.largura}
+            height={arte.altura}
+            sizes="(max-width: 640px) 100vw, 512px"
+            className="absolute inset-0 size-full animate-boiar group-hover:[--boia:2.4] group-hover:[animation-duration:4.5s] motion-reduce:animate-none"
+          />
+        )}
+
+        {/*
+         * O caule balança em volta do ponto onde encontra o chão, e é o mesmo
+         * elemento que recebe a inclinação do dedo.
+         *
+         * A rajada anima a propriedade `rotate` e a inclinação vive no
+         * `transform`: propriedades separadas que o navegador compõe sem uma
+         * apagar a outra.
+         *
+         * Sem `duration-*` do Tailwind aqui: o plugin `tailwindcss-animate`
+         * faz essas classes valerem também para `animation-duration`, e elas
+         * atropelavam a rajada — conferido, a animação rodava em 0,3s.
+         */}
+        <Image
+          ref={caule}
+          src={arte.caule}
+          alt=""
+          width={arte.largura}
+          height={arte.altura}
+          sizes="(max-width: 640px) 100vw, 512px"
+          className="absolute inset-0 size-full animate-brisa group-hover:[--brisa:2.6] group-hover:[animation-duration:3s] motion-reduce:animate-none"
+          style={{
+            transformOrigin: arte.pivo,
+            // `--inclinacao` é escrita direto no nó a cada movimento do dedo.
+            ['--inclinacao' as string]: '0deg',
+            transform: 'rotate(var(--inclinacao))',
+            transitionProperty: 'transform',
+            transitionDuration: '300ms',
+            transitionTimingFunction: 'cubic-bezier(0, 0, 0.2, 1)',
+          }}
+        />
+
+        {/* A terra não balança. Fica por cima, parada. */}
+        <Image
+          src={arte.terra}
+          alt=""
+          width={arte.largura}
+          height={arte.altura}
+          sizes="(max-width: 640px) 100vw, 512px"
+          className="absolute inset-0 size-full"
+        />
+      </div>
 
       {folhas.map((folha) => (
         <Image

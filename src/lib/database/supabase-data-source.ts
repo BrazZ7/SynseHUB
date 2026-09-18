@@ -2369,6 +2369,83 @@ export class SupabaseDataSource implements DataSource {
     return String(data)
   }
 
+  // ── Foto de perfil ─────────────────────────────────────────────────────────
+  private static readonly AVATAR_BUCKET = 'avatars'
+  /*
+   * Uma hora. Curto o bastante para uma URL vazada não valer muito, longo o
+   * bastante para a pessoa navegar pelo app sem a foto sumir no meio.
+   */
+  private static readonly AVATAR_TTL_SEGUNDOS = 3600
+
+  async uploadAvatar(file: { bytes: ArrayBuffer; contentType: string }): Promise<string> {
+    const { data: usuario } = await this.client.auth.getUser()
+    const authId = usuario.user?.id
+    if (!authId) this.fail('uploadAvatar', new Error('sessão não identificada'))
+
+    /*
+     * A pasta é o `auth.uid()` porque é nela que a política do balde se apoia.
+     * O nome tem um sufixo aleatório para a troca de foto não esbarrar no
+     * cache do navegador nem do CDN, que guardariam a anterior.
+     */
+    const caminho = `${authId}/${crypto.randomUUID()}.webp`
+
+    const { error: erroUpload } = await this.client.storage
+      .from(SupabaseDataSource.AVATAR_BUCKET)
+      .upload(caminho, file.bytes, { contentType: file.contentType, upsert: false })
+    if (erroUpload) this.fail('uploadAvatar', erroUpload)
+
+    // A foto anterior sai do balde: guardar histórico de rosto que ninguém pede
+    // é acumular dado pessoal sem finalidade.
+    await this.apagarAvataresAntigos(authId, caminho)
+
+    const { error } = await this.client.rpc('set_profile_avatar', { p_caminho: caminho })
+    if (error) this.fail('uploadAvatar:registro', error)
+
+    return caminho
+  }
+
+  private async apagarAvataresAntigos(authId: string, manter: string) {
+    const { data } = await this.client.storage.from(SupabaseDataSource.AVATAR_BUCKET).list(authId)
+    const antigos = (data ?? [])
+      .map((item) => `${authId}/${item.name}`)
+      .filter((caminho) => caminho !== manter)
+
+    if (antigos.length) {
+      await this.client.storage.from(SupabaseDataSource.AVATAR_BUCKET).remove(antigos)
+    }
+  }
+
+  async removeAvatar(): Promise<void> {
+    const { data: usuario } = await this.client.auth.getUser()
+    const authId = usuario.user?.id
+    if (!authId) return
+
+    const { data } = await this.client.storage.from(SupabaseDataSource.AVATAR_BUCKET).list(authId)
+    const todos = (data ?? []).map((item) => `${authId}/${item.name}`)
+    if (todos.length) {
+      await this.client.storage.from(SupabaseDataSource.AVATAR_BUCKET).remove(todos)
+    }
+
+    const { error } = await this.client.rpc('set_profile_avatar', { p_caminho: null })
+    if (error) this.fail('removeAvatar', error)
+  }
+
+  async getAvatarUrl(path: string | null): Promise<string | null> {
+    if (!path) return null
+
+    const { data, error } = await this.client.storage
+      .from(SupabaseDataSource.AVATAR_BUCKET)
+      .createSignedUrl(path, SupabaseDataSource.AVATAR_TTL_SEGUNDOS)
+
+    /*
+     * Sem foto a tela mostra as iniciais, que é um estado legítimo. Derrubar a
+     * página inteira porque a assinatura falhou seria trocar um avatar por uma
+     * tela de erro.
+     */
+    if (error) return null
+    return data?.signedUrl ?? null
+  }
+
   // ── Synse Body ─────────────────────────────────────────────────────────────
   private static readonly BODY_SELECT = `
     id, client_id, measured_at, source, device_id, weight_kg, bmi,

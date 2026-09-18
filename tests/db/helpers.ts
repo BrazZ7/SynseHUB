@@ -75,6 +75,39 @@ const SUPABASE_SHIM = `
   grant usage on schema auth to anon, authenticated, service_role;
   grant execute on function auth.uid() to anon, authenticated, service_role;
   grant select on auth.users to authenticated, service_role;
+
+  /*
+   * O Storage, no mínimo que as migrations tocam.
+   *
+   * Sem isto, a 0033 — que cria o balde de fotos e as políticas dele — não
+   * aplicaria localmente, e a suíte inteira de banco pararia. O formato segue
+   * o do Supabase nas colunas que o projeto usa; o resto do Storage não é
+   * responsabilidade deste shim.
+   */
+  create schema if not exists storage;
+  create table if not exists storage.buckets (
+    id text primary key,
+    name text not null,
+    public boolean not null default false,
+    file_size_limit bigint,
+    allowed_mime_types text[]
+  );
+  create table if not exists storage.objects (
+    id uuid primary key default gen_random_uuid(),
+    bucket_id text references storage.buckets(id),
+    name text not null,
+    owner uuid,
+    created_at timestamptz not null default now(),
+    -- Como no Supabase: um caminho, um objeto. Subir de novo substitui.
+    unique (bucket_id, name)
+  );
+  alter table storage.objects enable row level security;
+  grant usage on schema storage to anon, authenticated, service_role;
+  grant select, insert, update, delete on storage.objects to authenticated, service_role;
+  -- O anônimo tem o grant, como no Supabase: quem nega é a RLS, não a falta
+  -- de privilégio. Sem isto o teste do anônimo passaria pelo motivo errado.
+  grant select on storage.objects to anon;
+  grant select on storage.buckets to authenticated, service_role;
 `
 
 /**
@@ -98,6 +131,13 @@ const SUPABASE_GRANTS = `
 export async function applyMigrations(client: Client) {
   await client.query('drop schema if exists public cascade; create schema public;')
   await client.query('drop schema if exists auth cascade;')
+  /*
+   * `storage` também. Sem isto o shim recriava a tabela com
+   * `create table if not exists` sobre a que já existia, e os objetos de uma
+   * execução vazavam para a seguinte — um teste de "a pessoa vê a própria
+   * foto" passava a encontrar três.
+   */
+  await client.query('drop schema if exists storage cascade;')
   await client.query(SUPABASE_SHIM)
   await client.query(SUPABASE_GRANTS)
 

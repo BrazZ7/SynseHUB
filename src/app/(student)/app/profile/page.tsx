@@ -1,17 +1,20 @@
 import type { Metadata } from 'next'
 import { BadgeCheck, LogOut } from 'lucide-react'
 
-import { StudentAvatar } from '@/components/synse/student-avatar'
 import { ThemeToggle } from '@/components/synse/theme-toggle'
 import { Button } from '@/components/ui/button'
+import { AvatarPicker } from '@/features/account/avatar-picker'
 import { LinkGymCard } from '@/features/account/link-gym-card'
 import { ProfessionalCard } from '@/features/account/professional-card'
 import { CloseAccountCard } from '@/features/account/close-account-card'
+import { MedalShelf } from '@/features/challenges/medal-shelf'
 import { ConsentList } from '@/features/consents/consent-list'
 import { signOut } from '@/lib/auth/actions'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
+import { isPendingMigration } from '@/lib/database/pending-migration'
 import { formatDate, formatPhone } from '@/lib/utils'
+import type { ChallengeMedal } from '@/types/domain'
 
 export const metadata: Metadata = { title: 'Perfil' }
 
@@ -19,7 +22,7 @@ export default async function StudentProfilePage() {
   const session = await requireStudentSession()
   const dataSource = await getDataSource()
 
-  const [student, organization, consents] = await Promise.all([
+  const [student, organization, consents, medals] = await Promise.all([
     dataSource.getStudent(session.organizationId, session.studentId),
     dataSource.getOrganization(session.organizationId),
     /*
@@ -28,7 +31,23 @@ export default async function StudentProfilePage() {
      * publicar e migrar são dois atos separados neste projeto.
      */
     dataSource.listConsents(session.userProfileId).catch(() => []),
+    dataSource.listChallengeMedals(session.userProfileId).catch((): ChallengeMedal[] => []),
   ])
+
+  /*
+   * A URL da foto é assinada e expira: o balde é privado. Pedir aqui, e não no
+   * componente, é o que mantém a assinatura no servidor — o cliente nunca vê o
+   * caminho no balde, só um endereço temporário.
+   *
+   * Depende da 0033. Sem ela a tela mostra as iniciais, que é o estado de quem
+   * ainda não pôs foto — e não uma tela de erro.
+   */
+  let fotoAssinada: string | null = null
+  try {
+    fotoAssinada = await dataSource.getAvatarUrl(student?.avatarUrl ?? null)
+  } catch (erro) {
+    if (!isPendingMigration(erro)) throw erro
+  }
 
   return (
     <div className="animate-fade-in-up space-y-5">
@@ -37,14 +56,16 @@ export default async function StudentProfilePage() {
         <ThemeToggle />
       </header>
 
-      <section className="flex items-center gap-4 rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
-        <StudentAvatar name={session.name} size="xl" />
-        <div className="min-w-0">
+      <section className="space-y-4 rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
+        <AvatarPicker nome={session.name} fotoAtual={fotoAssinada} />
+        <div className="min-w-0 border-t border-synse-border pt-4">
           <p className="truncate text-lg font-semibold text-synse-text">{session.name}</p>
           <p className="truncate text-sm text-synse-muted">{session.email}</p>
           <p className="mt-1 font-mono text-xs tracking-wide text-synse-muted">{session.synseId}</p>
         </div>
       </section>
+
+      <MedalShelf medals={medals} />
 
       <section className="rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
         <h2 className="mb-3 text-sm font-semibold text-synse-text">Sua conta Synse</h2>

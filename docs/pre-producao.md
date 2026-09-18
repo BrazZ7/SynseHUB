@@ -127,6 +127,21 @@ existem, não para conferir se subiram.
   revogados: quem grava é `record_body_measurement`, que resolve a pessoa pelo
   `auth.uid()` e confere se o aparelho é dela — numa balança de família, gravar
   a pesagem de um no histórico do outro é o erro mais fácil de cometer.
+- **0033 (`0033_foto_de_perfil.sql`)** — foto de perfil. A coluna `avatar_url`
+  existia desde a 0001 e nunca teve quem a preenchesse: faltava onde guardar o
+  arquivo. O balde é **privado**, e não público como é padrão para avatar — é o
+  rosto de alguém, fica ao lado de dado de saúde, e uma URL pública continuaria
+  funcionando para sempre, em captura de tela, log de proxy e histórico do
+  navegador. O custo é uma URL assinada a cada exibição, e ele é pequeno perto
+  de explicar por que a foto de um aluno seguiu acessível meses depois de ele
+  encerrar a conta.
+
+  Escrita só na própria pasta (`<auth.uid()>/<arquivo>`); leitura pela pessoa e
+  pela equipe da academia dela — aluno não vê foto de aluno. O primeiro
+  rascunho da política de leitura tinha um defeito que só o teste pegou: dentro
+  do `exists`, o `name` do objeto colidia com a coluna `name` de
+  `user_profiles`, e o Postgres mandava o *nome da pessoa* para um cast de
+  uuid.
 
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona

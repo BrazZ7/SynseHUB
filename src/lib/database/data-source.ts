@@ -638,6 +638,18 @@ export interface DataSource {
   /** Só quem consentiu aparece — a tranca é da consulta, não da permissão. */
   getGymChallengeRanking(challengeId: string): Promise<GymChallengeRankRow[]>
 
+  // ── Foto de perfil ─────────────────────────────────────────────────────────
+  /**
+   * Sobe a foto e registra o caminho no perfil. Devolve o caminho gravado.
+   *
+   * O balde é privado: o que fica guardado é o caminho, não uma URL. Quem
+   * exibe pede uma URL assinada, que expira.
+   */
+  uploadAvatar(file: { bytes: ArrayBuffer; contentType: string }): Promise<string>
+  removeAvatar(): Promise<void>
+  /** URL temporária para exibir a foto. Nulo quando não há foto ou acesso. */
+  getAvatarUrl(path: string | null): Promise<string | null>
+
   // ── Synse Body ─────────────────────────────────────────────────────────────
   /*
    * Tudo aqui é da pessoa autenticada, e nenhum método recebe

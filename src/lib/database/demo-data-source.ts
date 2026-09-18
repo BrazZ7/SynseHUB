@@ -2437,8 +2437,55 @@ export class DemoDataSource implements DataSource {
     return this.challengeEntries
   }
 
+  /**
+   * Medalhas plausíveis para a demonstração.
+   *
+   * Voltavam vazias, e a estante de medalhas no perfil ficava com o texto de
+   * "nenhuma ainda" — quem abre o link para ver o produto não via o recurso
+   * existir. Três ciclos, com um de participação no meio: é o que mostra que
+   * o mês em que a meta não fechou também vira registro.
+   */
   async listChallengeMedals(): Promise<ChallengeMedal[]> {
-    return []
+    const ciclo = (mesesAtras: number) => {
+      const d = new Date()
+      d.setMonth(d.getMonth() - mesesAtras)
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    }
+    const premiadaEm = (mesesAtras: number) => {
+      const d = new Date()
+      d.setMonth(d.getMonth() - mesesAtras)
+      return d.toISOString()
+    }
+
+    return [
+      {
+        id: 'medal_demo_1',
+        challengeCode: 'CONSTANCIA_12',
+        cycle: ciclo(1),
+        level: 'OURO',
+        progressValue: 14,
+        targetValue: 12,
+        awardedAt: premiadaEm(1),
+      },
+      {
+        id: 'medal_demo_2',
+        challengeCode: 'CORRIDA_20KM',
+        cycle: ciclo(2),
+        level: 'PARTICIPACAO',
+        progressValue: 11,
+        targetValue: 20,
+        awardedAt: premiadaEm(2),
+      },
+      {
+        id: 'medal_demo_3',
+        challengeCode: 'CARGA_PROGRESSIVA',
+        cycle: ciclo(3),
+        level: 'PRATA',
+        progressValue: 8,
+        targetValue: 10,
+        awardedAt: premiadaEm(3),
+      },
+    ]
   }
 
   async chooseBaselineChallenge(code: string): Promise<void> {
@@ -2481,6 +2528,28 @@ export class DemoDataSource implements DataSource {
   private static readonly corridas = new Map<string, Activity>()
   private static readonly rotas = new Map<string, ActivityRoutePoint[]>()
   private static readonly parciais = new Map<string, ActivitySplit[]>()
+
+  // ── Foto de perfil ─────────────────────────────────────────────────────────
+  /*
+   * Na demonstração a foto vive em memória, como data URL. Não há balde para
+   * onde subir, e inventar um endereço externo faria a tela mostrar uma foto
+   * que não é de ninguém.
+   */
+  private static fotoDemo: string | null = null
+
+  async uploadAvatar(file: { bytes: ArrayBuffer; contentType: string }): Promise<string> {
+    const base64 = Buffer.from(file.bytes).toString('base64')
+    DemoDataSource.fotoDemo = `data:${file.contentType};base64,${base64}`
+    return 'demo/avatar'
+  }
+
+  async removeAvatar(): Promise<void> {
+    DemoDataSource.fotoDemo = null
+  }
+
+  async getAvatarUrl(path: string | null): Promise<string | null> {
+    return path ? DemoDataSource.fotoDemo : null
+  }
 
   // ── Synse Body ─────────────────────────────────────────────────────────────
   /*

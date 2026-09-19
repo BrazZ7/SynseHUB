@@ -105,8 +105,18 @@ export function CapaPerfil({
         />
 
         {/* O botão ganha uma pastilha: solto sobre a copa da árvore ele some. */}
+        {/*
+         * O `z-10` não é enfeite: sem ele o botão de tema não recebia clique
+         * nenhum.
+         *
+         * Este bloco e o do conteúdo, logo abaixo, são os dois posicionados e
+         * ambos sem `z-index`. Entre irmãos posicionados quem vem depois no
+         * HTML pinta por cima — e o conteúdo, que ocupa o cartão inteiro por
+         * causa do `pt-14`, cobria o botão. Ele aparecia na tela, respondia ao
+         * teclado, e o dedo batia no `div` de trás.
+         */}
         {acao && (
-          <div className="absolute right-3 top-3 rounded-full bg-synse-bg/55 backdrop-blur-[2px]">
+          <div className="absolute right-3 top-3 z-10 rounded-full bg-synse-bg/55 backdrop-blur-[2px]">
             {acao}
           </div>
         )}

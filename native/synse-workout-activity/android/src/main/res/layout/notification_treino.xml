@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  A notificação recolhida.
+
+  Uma linha de conteúdo e o cronômetro à direita, porque o Android dá pouca
+  altura aqui. O importante é o número: quem olha a tela bloqueada de relance
+  quer saber quanto falta, não ler.
+
+  Só views que o `RemoteViews` aceita — LinearLayout, TextView, Chronometer,
+  ProgressBar, ImageView. Qualquer outra estoura em tempo de execução, e o
+  sintoma é a notificação simplesmente não aparecer.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/fundo_cartao"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingStart="14dp"
+    android:paddingEnd="14dp"
+    android:paddingTop="12dp"
+    android:paddingBottom="12dp">
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/titulo"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textColor="@color/synse_text"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            />
+
+        <TextView
+            android:id="@+id/subtitulo"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textColor="@color/synse_muted"
+            android:textSize="13sp" />
+    </LinearLayout>
+
+    <!--
+      O cronômetro do sistema. Ele conta sozinho, segundo a segundo, sem o app
+      acordar — era exatamente isto que faltava: antes o número aparecia no
+      canto do cabeçalho como "agora" e só mudava quando o descanso acabava.
+    -->
+    <Chronometer
+        android:id="@+id/cronometro"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:textColor="@color/synse_primary"
+        android:textSize="26sp"
+        android:textStyle="bold"
+        android:includeFontPadding="false" />
+
+    <TextView
+        android:id="@+id/carga"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:textColor="@color/synse_primary"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:includeFontPadding="false"
+        android:visibility="gone" />
+</LinearLayout>

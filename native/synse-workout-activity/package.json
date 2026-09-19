@@ -1,0 +1,27 @@
+{
+  "name": "@synse/workout-activity",
+  "version": "0.1.0",
+  "description": "Live Activity (iOS) e ongoing notification (Android) para o Treino Ativo do Synse",
+  "main": "dist/plugin.cjs.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
+  "private": true,
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    },
+    "android": {
+      "src": "android"
+    }
+  },
+  "peerDependencies": {
+    "@capacitor/core": ">=6.0.0"
+  },
+  "files": [
+    "dist/",
+    "ios/",
+    "android/",
+    "Package.swift",
+    "SynseWorkoutActivity.podspec"
+  ]
+}

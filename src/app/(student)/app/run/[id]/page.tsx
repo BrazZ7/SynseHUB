@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Metric } from '@/features/synse-run/components/metric'
 import { PaceChart } from '@/features/synse-run/components/pace-chart'
 import { RouteMap } from '@/features/synse-run/components/route-map'
+import { CompartilharCorrida } from '@/features/synse-run/components/share-run'
 import {
   formatDistance,
   formatDuration,
@@ -81,6 +82,15 @@ export default async function ActivityDetailPage({ params }: { params: Promise<{
       </section>
 
       {rota.length > 1 && <RouteMap points={rota} className="h-64" />}
+
+      <CompartilharCorrida
+        titulo={atividade.title ?? tituloPorHorario(quando, atividade.sport)}
+        quando={quando}
+        distanciaMetros={atividade.distanceMeters}
+        movimentoSegundos={atividade.movingSeconds}
+        paceMedio={atividade.averagePace}
+        rota={rota}
+      />
 
       <section className="grid grid-cols-2 gap-3">
         {[

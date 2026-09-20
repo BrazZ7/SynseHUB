@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { getDataSource } from '@/lib/database'
+import { SEMANAS_DE_BASE, metaDaSemana } from '@/features/synse-run/goal'
 import { isPendingMigration } from '@/lib/database/pending-migration'
 import { logger } from '@/lib/logger'
 import type { SessionContext } from '@/lib/auth/session'
@@ -12,6 +13,8 @@ export type RunDashboard = {
   byDay: Array<{ label: string; distanceMeters: number }>
   recent: Activity[]
   records: PersonalRecord[]
+  /** Metros. `null` enquanto não houver semana fechada de onde tirar a média. */
+  goalMeters: number | null
 }
 
 const VAZIO: RunDashboard = {
@@ -20,6 +23,7 @@ const VAZIO: RunDashboard = {
   byDay: [],
   recent: [],
   records: [],
+  goalMeters: null,
 }
 
 /** Segunda-feira desta semana, à meia-noite. A semana brasileira começa nela. */
@@ -30,13 +34,22 @@ function inicioDaSemana(agora = new Date()): Date {
   return segunda
 }
 
+/** A segunda-feira de `semanas` semanas atrás. */
+function recuarSemanas(segunda: Date, semanas: number): Date {
+  const antes = new Date(segunda)
+  antes.setDate(segunda.getDate() - semanas * 7)
+  return antes
+}
+
 export async function getRunDashboard(session: SessionContext): Promise<RunDashboard> {
   const inicio = inicioDaSemana()
 
   try {
     const dataSource = await getDataSource()
 
-    const [week, recent, records, daSemana] = await Promise.all([
+    const base = recuarSemanas(inicio, SEMANAS_DE_BASE)
+
+    const [week, recent, records, daSemana, desdeABase] = await Promise.all([
       dataSource.summarizeActivities(session.userProfileId, inicio.toISOString()),
       dataSource.listActivities(session.userProfileId, { limit: 5 }),
       dataSource.listPersonalRecords(session.userProfileId),
@@ -44,7 +57,16 @@ export async function getRunDashboard(session: SessionContext): Promise<RunDashb
         since: inicio.toISOString(),
         limit: 100,
       }),
+      dataSource.summarizeActivities(session.userProfileId, base.toISOString()),
     ])
+
+    /*
+     * A média sai das quatro semanas **fechadas**, então a semana corrente
+     * sai da conta. Deixá-la dentro faria a meta encolher toda segunda-feira,
+     * quando o acumulado ainda é zero, e a barra começaria cheia.
+     */
+    const fechadas = Math.max(0, desdeABase.distanceMeters - week.distanceMeters)
+    const goalMeters = metaDaSemana(fechadas / SEMANAS_DE_BASE)
 
     /*
      * Sete colunas sempre, inclusive as vazias: o gráfico da semana precisa
@@ -68,7 +90,7 @@ export async function getRunDashboard(session: SessionContext): Promise<RunDashb
       return { label, distanceMeters }
     })
 
-    return { available: true, week, byDay, recent, records }
+    return { available: true, week, byDay, recent, records, goalMeters }
   } catch (error) {
     if (isPendingMigration(error)) {
       logger.warn('synse-run:schema_pendente', { detalhe: 'Migration 0016 pendente.' })

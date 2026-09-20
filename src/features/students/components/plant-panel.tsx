@@ -325,8 +325,14 @@ export function PainelPlanta({
            * linha ganha da folha de estilos, e o `group-hover` não conseguiria
            * acelerar nada. Com a variável, o hover só multiplica, e cada folha
            * mantém o ritmo próprio em vez de todas cruzarem juntas.
+           *
+           * O `fill-mode: backwards` conserta um defeito que só aparecia
+           * cronometrando: sem ele, as três folhas com atraso ficavam paradas
+           * e opacas sobre a arte até o próprio atraso vencer — a de 7,3 s
+           * passava sete segundos como adesivo antes de sumir e levantar voo.
+           * Com ele, elas já entram no quadro de 0%, que é invisível.
            */
-          className="pointer-events-none absolute w-auto animate-voar [animation-duration:calc(var(--dur)*var(--pressa,1))] group-hover:[--pressa:0.4] motion-reduce:hidden"
+          className="pointer-events-none absolute w-auto animate-voar [animation-duration:calc(var(--dur)*var(--pressa,1))] [animation-fill-mode:backwards] group-hover:[--pressa:0.4] motion-reduce:hidden"
           style={{
             left: folha.x,
             bottom: folha.y,

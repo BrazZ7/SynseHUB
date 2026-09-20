@@ -7,6 +7,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Metric } from '@/features/synse-run/components/metric'
 import { PendingSync } from '@/features/synse-run/components/pending-sync'
+import { RunHero } from '@/features/synse-run/components/run-hero'
+import { WeekChart } from '@/features/synse-run/components/week-chart'
 import {
   formatDistance,
   formatDuration,
@@ -24,21 +26,45 @@ export default async function SynseRunPage() {
   const session = await requireStudentSession()
   const painel = await getRunDashboard(session)
 
-  const maiorDoDia = Math.max(1, ...painel.byDay.map((dia) => dia.distanceMeters))
-
   return (
     <div className="animate-fade-in-up space-y-5">
+      {/*
+       * A saudação por extenso e, logo abaixo, a capa com o nome da aba. O
+       * `h1` mora dentro da capa: um título repetido em cima dela seria a
+       * terceira vez que a tela diz "SynseRun" antes de o aluno tocar em nada.
+       */}
       <header>
         <BackLink href="/app" label="Hoje" />
-        <p className="mt-1 text-sm text-synse-muted">
+        <p className="mt-1 text-lg font-semibold text-synse-text">
           {greeting()}, {firstName(session.name)}
         </p>
-        <h1 className="text-2xl font-semibold text-synse-text">SynseRun</h1>
-        <p className="text-sm text-synse-muted">Pronto para se movimentar?</p>
       </header>
 
+      <RunHero chamada="Movimento é evolução" />
+
+      <div className="grid grid-cols-2 gap-2">
+        <Button asChild variant="outline">
+          <Link href="/app/run/start?esporte=WALK">
+            <Footprints className="size-4" />
+            {SPORT_LABELS.WALK}
+          </Link>
+        </Button>
+        <Button asChild variant="outline">
+          <Link href="/app/run/start?esporte=RIDE">
+            <Bike className="size-4" />
+            {SPORT_LABELS.RIDE}
+          </Link>
+        </Button>
+      </div>
+
+      <WeekChart
+        byDay={painel.byDay}
+        distanceMeters={painel.week.distanceMeters}
+        goalMeters={painel.goalMeters}
+      />
+
       {/* Resumo da semana */}
-      <section className="rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
+      <section className="vidro-led rounded-2xl border border-synse-border p-5">
         <h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-synse-muted">
           Resumo semanal
         </h2>
@@ -52,60 +78,6 @@ export default async function SynseRunPage() {
           <Metric label="Tempo" value={formatDuration(painel.week.movingSeconds)} />
           <Metric label="Atividades" value={String(painel.week.activities)} />
           <Metric label="Calorias" value={String(painel.week.calories)} unit="kcal" />
-        </div>
-      </section>
-
-      {/* Gráfico da semana */}
-      <section className="rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
-        <h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-synse-muted">
-          Sua semana
-        </h2>
-
-        <ul className="mt-4 flex items-end justify-between gap-2" aria-label="Distância por dia">
-          {painel.byDay.map((dia) => {
-            const altura = Math.round((dia.distanceMeters / maiorDoDia) * 100)
-            const descanso = dia.distanceMeters === 0
-
-            return (
-              <li key={dia.label} className="flex flex-1 flex-col items-center gap-2">
-                <span className="text-[10px] tabular-nums text-synse-muted">
-                  {descanso ? '—' : formatDistance(dia.distanceMeters, 1)}
-                </span>
-                <span
-                  className="flex h-24 w-full items-end rounded-lg bg-synse-surface-2"
-                  aria-hidden
-                >
-                  <span
-                    className="w-full rounded-lg bg-synse-gradient transition-all"
-                    style={{ height: `${descanso ? 4 : Math.max(altura, 8)}%` }}
-                  />
-                </span>
-                <span className="text-[10px] font-medium text-synse-muted">{dia.label}</span>
-              </li>
-            )
-          })}
-        </ul>
-      </section>
-
-      {/* Começar */}
-      <section className="space-y-2">
-        <Button asChild size="lg" variant="gradient" className="h-14 w-full text-base">
-          <Link href="/app/run/start?esporte=RUN">INICIAR CORRIDA</Link>
-        </Button>
-
-        <div className="grid grid-cols-2 gap-2">
-          <Button asChild variant="outline">
-            <Link href="/app/run/start?esporte=WALK">
-              <Footprints className="size-4" />
-              {SPORT_LABELS.WALK}
-            </Link>
-          </Button>
-          <Button asChild variant="outline">
-            <Link href="/app/run/start?esporte=RIDE">
-              <Bike className="size-4" />
-              {SPORT_LABELS.RIDE}
-            </Link>
-          </Button>
         </div>
       </section>
 
@@ -132,9 +104,9 @@ export default async function SynseRunPage() {
             <Link
               key={atividade.id}
               href={`/app/run/${atividade.id}`}
-              className="flex items-center gap-3 rounded-2xl border border-synse-border bg-synse-surface p-4 transition-colors hover:border-synse-primary"
+              className="vidro-led flex items-center gap-3 rounded-2xl border border-synse-border p-4 transition-colors hover:border-synse-primary"
             >
-              <span className="bg-synse-primary/10 grid size-10 shrink-0 place-items-center rounded-xl text-synse-primary">
+              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-synse-primary/10 text-synse-primary">
                 <Timer className="size-4.5" aria-hidden />
               </span>
               <span className="min-w-0 flex-1">
@@ -158,7 +130,7 @@ export default async function SynseRunPage() {
 
       {/* Recordes */}
       {painel.records.length > 0 && (
-        <section className="rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
+        <section className="vidro-led rounded-2xl border border-synse-border p-5">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-synse-text">
             <Trophy className="size-4 text-synse-primary" aria-hidden />
             Seus recordes

@@ -17,15 +17,23 @@ import { initialAccountState } from '@/features/account/state'
  * academia da pessoa pode entrar no Synse meses depois, ou ela pode trocar de
  * academia. Sem isto, a única saída seria criar outra conta.
  */
-export function LinkGymCard() {
+export function LinkGymCard({ semMoldura = false }: { semMoldura?: boolean } = {}) {
   const [state, formAction] = useActionState(linkGymAction, initialAccountState)
 
   return (
-    <section className="vidro-led rounded-2xl border border-synse-border bg-synse-surface p-5">
-      <h2 className="flex items-center gap-2 text-sm font-semibold text-synse-text">
-        <Building2 className="size-4 text-synse-muted" aria-hidden />
-        Vincular a uma academia
-      </h2>
+    <section
+      className={
+        semMoldura
+          ? undefined
+          : 'vidro-led rounded-2xl border border-synse-border bg-synse-surface p-5'
+      }
+    >
+      {!semMoldura && (
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-synse-text">
+          <Building2 className="size-4 text-synse-muted" aria-hidden />
+          Vincular a uma academia
+        </h2>
+      )}
       <p className="mt-1 text-sm text-synse-muted">
         Se a sua academia usa o Synse, informe o código que ela te passou. Seu histórico continua o
         mesmo — o Synse ID é vitalício.

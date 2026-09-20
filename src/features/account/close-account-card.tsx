@@ -23,16 +23,24 @@ import { CLOSE_ACCOUNT_INITIAL } from '@/features/account/state'
  * encerra é se a academia continuará com a cobrança em aberto, e se o
  * consentimento que ela deu some junto.
  */
-export function CloseAccountCard() {
+export function CloseAccountCard({ semMoldura = false }: { semMoldura?: boolean } = {}) {
   const [state, formAction] = useActionState(closeAccountAction, CLOSE_ACCOUNT_INITIAL)
   const [aberto, setAberto] = useState(false)
 
   return (
-    <section className="rounded-2xl border border-synse-danger/30 bg-synse-surface p-5 shadow-synse-sm">
-      <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-synse-text">
-        <TriangleAlert className="size-4 text-synse-danger" aria-hidden />
-        Encerrar minha conta
-      </h2>
+    <section
+      className={
+        semMoldura
+          ? undefined
+          : 'rounded-2xl border border-synse-danger/30 bg-synse-surface p-5 shadow-synse-sm'
+      }
+    >
+      {!semMoldura && (
+        <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-synse-text">
+          <TriangleAlert className="size-4 text-synse-danger" aria-hidden />
+          Encerrar minha conta
+        </h2>
+      )}
       <p className="text-xs text-synse-muted">
         Apaga sua conta pessoal e tudo que é só seu. Não dá para desfazer.
       </p>

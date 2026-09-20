@@ -1,5 +1,16 @@
 import type { Metadata } from 'next'
-import { BarChart3, Flame, LogOut, Star, Trophy, Zap } from 'lucide-react'
+import {
+  BarChart3,
+  Briefcase,
+  Building2,
+  Flame,
+  LogOut,
+  ShieldCheck,
+  Star,
+  TriangleAlert,
+  Trophy,
+  Zap,
+} from 'lucide-react'
 
 import { ThemeToggle } from '@/components/synse/theme-toggle'
 import { Button } from '@/components/ui/button'
@@ -8,6 +19,7 @@ import { LinkGymCard } from '@/features/account/link-gym-card'
 import { ProfessionalCard } from '@/features/account/professional-card'
 import { CloseAccountCard } from '@/features/account/close-account-card'
 import { MenuDaConta } from '@/features/account/account-drawer'
+import { SecaoRecolhivel } from '@/features/account/collapsible-section'
 import { MedalShelf } from '@/features/challenges/medal-shelf'
 import { ConsentList } from '@/features/consents/consent-list'
 import {
@@ -72,10 +84,27 @@ export default async function StudentProfilePage({
           <MenuDaConta
             resumo={`${session.isSoloStudent ? 'Sem vínculo' : (organization?.name ?? 'Academia')} · ${student?.planName ?? 'Sem plano'} · ${student?.trainerName ?? 'Professor a definir'}`}
           >
-            {session.isSoloStudent && <LinkGymCard />}
-            <ProfessionalCard ativo={session.professionalPlan} defaultName={session.name} />
-            <ConsentList consents={consents} />
-            <CloseAccountCard />
+            {session.isSoloStudent && (
+              <SecaoRecolhivel titulo="Vincular a uma academia" icone={Building2}>
+                <LinkGymCard semMoldura />
+              </SecaoRecolhivel>
+            )}
+
+            <SecaoRecolhivel titulo="Perfil profissional" icone={Briefcase}>
+              <ProfessionalCard
+                ativo={session.professionalPlan}
+                defaultName={session.name}
+                semMoldura
+              />
+            </SecaoRecolhivel>
+
+            <SecaoRecolhivel titulo="Privacidade" icone={ShieldCheck}>
+              <ConsentList consents={consents} semMoldura />
+            </SecaoRecolhivel>
+
+            <SecaoRecolhivel titulo="Encerrar minha conta" icone={TriangleAlert} perigo>
+              <CloseAccountCard semMoldura />
+            </SecaoRecolhivel>
 
             <div className="flex items-center justify-between gap-3 border-t border-synse-border pt-4">
               <span className="text-xs text-synse-muted">Tema do aplicativo</span>

@@ -20,17 +20,32 @@ import type { ConsentState } from '@/types/domain'
  * com versão e data. Nada disso existia — e afirmar controle que não existe é
  * pior do que não oferecer controle nenhum, porque a pessoa deixa de procurar.
  */
-export function ConsentList({ consents }: { consents: readonly ConsentState[] }) {
+export function ConsentList({
+  consents,
+  semMoldura = false,
+}: {
+  consents: readonly ConsentState[]
+  /** Dentro da gaveta a moldura e o título vêm da seção recolhível. */
+  semMoldura?: boolean
+}) {
   const [state, formAction] = useActionState(recordConsentAction, CONSENT_INITIAL_STATE)
 
   const semRegistro = consents.filter((item) => item.required && !item.accepted)
 
   return (
-    <section className="vidro-led rounded-2xl border border-synse-border bg-synse-surface p-5">
-      <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-synse-text">
-        <ShieldCheck className="size-4 text-synse-muted" aria-hidden />
-        Privacidade
-      </h2>
+    <section
+      className={
+        semMoldura
+          ? undefined
+          : 'vidro-led rounded-2xl border border-synse-border bg-synse-surface p-5'
+      }
+    >
+      {!semMoldura && (
+        <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-synse-text">
+          <ShieldCheck className="size-4 text-synse-muted" aria-hidden />
+          Privacidade
+        </h2>
+      )}
       <p className="mb-4 text-xs text-synse-muted">
         Cada resposta abaixo é gravada com a versão do documento e a data. Você pode mudar de ideia
         a qualquer momento.

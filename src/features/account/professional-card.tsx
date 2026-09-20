@@ -26,13 +26,30 @@ const ACESSOS = [
  * distinguem depois de usar. Como acesso, a pergunta só aparece para quem já
  * está dentro e sabe que precisa dele.
  */
-export function ProfessionalCard({ ativo, defaultName }: { ativo: boolean; defaultName: string }) {
+export function ProfessionalCard({
+  ativo,
+  defaultName,
+  semMoldura = false,
+}: {
+  ativo: boolean
+  defaultName: string
+  /** Dentro da gaveta a moldura e o título vêm da seção recolhível. */
+  semMoldura?: boolean
+}) {
   const [state, formAction] = useActionState(openProfessionalSpaceAction, initialAccountState)
 
   return (
-    <section className="vidro-led rounded-2xl border border-synse-border bg-synse-surface p-5">
+    <section
+      className={
+        semMoldura
+          ? undefined
+          : 'vidro-led rounded-2xl border border-synse-border bg-synse-surface p-5'
+      }
+    >
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-synse-text">Perfil profissional</h2>
+        {!semMoldura && (
+          <h2 className="text-sm font-semibold text-synse-text">Perfil profissional</h2>
+        )}
         <Badge variant={ativo ? 'success' : 'outline'}>{ativo ? 'Plano ativo' : 'Synse Pro'}</Badge>
       </div>
 

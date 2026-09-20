@@ -33,8 +33,16 @@ export async function novaTela() {
   return { tela, c }
 }
 
+/**
+ * A fonte do cartão.
+ *
+ * Manrope, a mesma do aplicativo — a primeira versão pedia `Inter`, que o
+ * projeto não usa em lugar nenhum, então o cartão saía com a fonte de sistema
+ * de cada celular achando que estava certo. Agora ela é servida deste domínio,
+ * o que também significa que está disponível quando o `canvas` desenha.
+ */
 export function fonte(peso: number, tamanho: number) {
-  return `${peso} ${tamanho}px Inter, system-ui, sans-serif`
+  return `${peso} ${tamanho}px Manrope, system-ui, sans-serif`
 }
 
 /** O fundo: a mesma noite da capa do perfil. */

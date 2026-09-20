@@ -7,6 +7,53 @@
    Natureza + tecnologia + saúde + confiança + inovação.
    ========================================================================== */
 
+/*
+ * ── A Manrope, hospedada aqui ────────────────────────────────────────────────
+ *
+ * Antes vinha do Google Fonts por uma tag `link`. Três motivos para trazer:
+ *
+ * 1. **Um pedido a menos, a um terceiro.** Toda visita abria conexão com
+ *    `fonts.googleapis.com` e `fonts.gstatic.com` antes de desenhar texto. Num
+ *    produto que promete privacidade na própria política, o endereço IP de
+ *    cada aluno ia para o Google só para buscar letra.
+ * 2. **O cartão de compartilhar depende dela.** O desenho no `canvas` pede a
+ *    fonte pelo nome; se ela ainda não chegou, a imagem sai com a tipografia
+ *    do celular de cada um. Servida do mesmo domínio, chega junto com o resto.
+ * 3. **Uma dependência externa a menos** entre o app e a primeira pintura.
+ *
+ * Arquivo variável: um por subconjunto cobre de 400 a 700, então são dois
+ * arquivos no total, 40 KB somados. O `unicode-range` é o que faz o navegador
+ * buscar o `latin-ext` só quando aparece um caractere que o `latin` não tem —
+ * é o mesmo recorte que o Google servia. Sem ele, ou todo mundo baixa peso a
+ * mais, ou um nome com "ł" deixa de ser desenhado.
+ *
+ * Manrope está sob a SIL Open Font License 1.1. O texto da licença vai junto,
+ * em `public/fonts/Manrope-OFL.txt` — é o que a licença exige de quem
+ * redistribui.
+ */
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/manrope-latin.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/manrope-latin-ext.woff2') format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
 @layer base {
   :root {
     /* Superfícies */

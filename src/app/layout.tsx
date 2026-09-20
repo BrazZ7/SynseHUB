@@ -51,22 +51,22 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="pt-BR" suppressHydrationWarning>
       <head>
         {/*
-          A fonte é carregada em runtime (e não no build) para que o projeto
-          compile em ambientes sem acesso à rede. Sem ela, a pilha de sistema
-          assume sem quebrar o layout.
+          A Manrope é servida deste domínio, de `public/fonts`, declarada em
+          `globals.css`. O `preload` só do subconjunto latino: é o que toda
+          tela em português usa, e é o que precisa estar pronto antes da
+          primeira pintura. O `latin-ext` fica para quando um caractere pedir.
         */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        {/* Regra do Pages Router; no App Router a folha vale para todas as rotas. */}
-        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
         <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap"
+          rel="preload"
+          as="font"
+          type="font/woff2"
+          href="/fonts/manrope-latin.woff2"
+          crossOrigin="anonymous"
         />
         <style
           // HTML literal e fixo, sem entrada de usuário: não há superfície de injeção.
           dangerouslySetInnerHTML={{
-            __html: `:root{--font-sans:'Manrope','Inter',system-ui,-apple-system,'Segoe UI',sans-serif}`,
+            __html: `:root{--font-sans:'Manrope',system-ui,-apple-system,'Segoe UI',sans-serif}`,
           }}
         />
         <ThemeScript />

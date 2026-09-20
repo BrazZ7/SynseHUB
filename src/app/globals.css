@@ -259,6 +259,45 @@
       /* o cartão descolado do fundo */ 0 12px 32px -22px rgb(0 0 0 / 0.9);
   }
 
+  /*
+   * ── A costura entre a arte e a página ─────────────────────────────────────
+   *
+   * As capas sangram até a borda da tela e precisam terminar em algum lugar.
+   * A primeira versão era um degradê linear de 64px do transparente até a cor
+   * da página — e no tema escuro funciona, porque a arte é escura e o fundo
+   * também: a passagem é curta e ninguém percebe.
+   *
+   * No tema claro o mesmo degradê vira uma **tarja cinza**. Não tem como
+   * escurecer uma arte quase preta até um fundo quase branco sem atravessar o
+   * cinza; isso é aritmética de cor, não erro de ajuste. O que dá para mudar é
+   * o formato da travessia: uma rampa curta e linear tem começo e fim
+   * visíveis, e o olho lê um retângulo colado por cima da foto.
+   *
+   * Então a rampa fica longa e com a curva suavizada nas duas pontas. Começa
+   * quase sem tocar na imagem, acelera no meio e chega exata na cor da página
+   * na última linha. Não há aresta em cima nem embaixo, e o que sobra o olho
+   * lê como a foto se apagando — que é um jeito normal de uma imagem acabar.
+   *
+   * As paradas usam `color-mix` sobre `--synse-bg` de propósito: assim a
+   * costura acompanha o tema sem precisar de duas regras. Quem usar esta
+   * classe põe ela **fora** de qualquer `.dark` que envolva a arte, senão
+   * `--synse-bg` resolve para o escuro e o tema claro termina numa faixa
+   * preta.
+   */
+  .costura-com-a-pagina {
+    background-image: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--synse-bg) 0%, transparent) 0%,
+      color-mix(in srgb, var(--synse-bg) 6%, transparent) 18%,
+      color-mix(in srgb, var(--synse-bg) 20%, transparent) 36%,
+      color-mix(in srgb, var(--synse-bg) 45%, transparent) 55%,
+      color-mix(in srgb, var(--synse-bg) 72%, transparent) 72%,
+      color-mix(in srgb, var(--synse-bg) 91%, transparent) 86%,
+      color-mix(in srgb, var(--synse-bg) 99%, transparent) 96%,
+      var(--synse-bg) 100%
+    );
+  }
+
   /* Scrollbar leve */
   .synse-scroll {
     scrollbar-width: thin;

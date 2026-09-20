@@ -2,7 +2,6 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Bike, ChevronRight, Footprints, Timer, Trophy } from 'lucide-react'
 
-import { BackLink } from '@/components/synse/back-link'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Metric } from '@/features/synse-run/components/metric'
@@ -29,18 +28,20 @@ export default async function SynseRunPage() {
   return (
     <div className="animate-fade-in-up space-y-5">
       {/*
-       * A saudação por extenso e, logo abaixo, a capa com o nome da aba. O
-       * `h1` mora dentro da capa: um título repetido em cima dela seria a
-       * terceira vez que a tela diz "SynseRun" antes de o aluno tocar em nada.
+       * A capa é o primeiro filho, e tem de ser: ela sangra para fora com
+       * `-mt-6`, e o `space-y-5` deste contêiner aplica `margin-top` a partir
+       * do segundo filho com especificidade maior — bastaria um cabeçalho
+       * acima dela para a arte descer e deixar uma faixa da cor da página no
+       * topo.
+       *
+       * A saudação e o `h1` moram dentro dela. O elo de voltar saiu: a barra
+       * de baixo já leva ao Hoje, e uma seta sobre a arte reabriria a moldura
+       * que a capa sem borda veio justamente desfazer.
        */}
-      <header>
-        <BackLink href="/app" label="Hoje" />
-        <p className="mt-1 text-lg font-semibold text-synse-text">
-          {greeting()}, {firstName(session.name)}
-        </p>
-      </header>
-
-      <RunHero chamada="Movimento é evolução" />
+      <RunHero
+        saudacao={`${greeting()}, ${firstName(session.name)}`}
+        chamada="Movimento é evolução"
+      />
 
       <div className="grid grid-cols-2 gap-2">
         <Button asChild variant="outline">

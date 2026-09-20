@@ -126,7 +126,7 @@ export function CapaPerfil({
          * derrete no fundo da página — sem essa folga o nome cairia dentro do
          * degradê e desbotaria junto.
          */}
-        <div className="relative flex min-h-[16rem] flex-col justify-end gap-4 px-5 pb-12 pt-14">
+        <div className="relative flex min-h-[16rem] flex-col justify-end gap-4 px-5 pb-16 pt-14">
           {children}
         </div>
       </section>
@@ -136,10 +136,16 @@ export function CapaPerfil({
        * `.dark`. Dentro dele, `synse-bg` seria sempre o escuro do tema escuro,
        * e no tema claro a arte terminaria numa faixa preta em vez de derreter
        * no branco da página.
+       *
+       * A rampa em si mora em `globals.css`, como `.costura-com-a-pagina`. Ela
+       * era um degradê linear curto, que no tema escuro passava despercebido e
+       * no claro virava uma tarja cinza atravessada na tela — dá para ver
+       * comparando os dois temas lado a lado. Agora é uma rampa longa e com a
+       * curva suavizada nas pontas, sem aresta em cima nem embaixo.
        */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-b from-transparent via-synse-bg/55 to-synse-bg"
+        className="costura-com-a-pagina pointer-events-none absolute inset-x-0 bottom-0 h-28"
       />
     </div>
   )

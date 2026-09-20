@@ -1,4 +1,6 @@
 import type { Metadata } from 'next'
+
+import { BotaoCompartilhar } from '@/features/share/share-button'
 import Link from 'next/link'
 import { Activity, ChevronRight, Dumbbell, Flame, Scale, TrendingUp, Trophy } from 'lucide-react'
 
@@ -30,11 +32,7 @@ export default async function StudentProgressPage() {
      * houver histórico antigo — quem treinava antes da 0026 não perde a linha.
      */
     dataSource.getPersonalRecords(session.studentId),
-    dataSource.getWorkoutTotals(
-      session.studentId,
-      noventaDias.toISOString(),
-      agora.toISOString(),
-    ),
+    dataSource.getWorkoutTotals(session.studentId, noventaDias.toISOString(), agora.toISOString()),
   ])
 
   const loadSeries = logs
@@ -138,6 +136,17 @@ export default async function StudentProgressPage() {
                     × {recorde.reps}
                   </span>
                 </span>
+                <BotaoCompartilhar
+                  formato="icone"
+                  rotulo={`Compartilhar o recorde de ${recorde.exerciseName}`}
+                  cartao={{
+                    tipo: 'recorde',
+                    exercicio: recorde.exerciseName,
+                    quando: new Date(recorde.achievedAt),
+                    peso: recorde.maxWeight,
+                    repeticoes: recorde.reps,
+                  }}
+                />
               </li>
             ))}
           </ul>

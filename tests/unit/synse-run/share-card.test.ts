@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { percentualDaMeta } from '@/features/share/cards'
 import { afinarRota, projetarRota } from '@/features/synse-run/share-card'
 
 /**
@@ -103,5 +104,35 @@ describe('a amostragem', () => {
       250,
     )
     expect(afinada.every((v) => typeof v === 'number')).toBe(true)
+  })
+})
+
+// ── O cartão da medalha ──────────────────────────────────────────────────────
+describe('o percentual da meta', () => {
+  it('meta batida na mosca é 100%', () => {
+    expect(percentualDaMeta(12, 12)).toBe(100)
+  })
+
+  /*
+   * O defeito que motivou a extração: o desenho limitava em 100% para o anel
+   * caber na volta e usava o mesmo valor no texto. Quem superou a meta via um
+   * número menor do que conquistou, num cartão feito para se gabar.
+   */
+  it('quem passa da meta vê o número de verdade', () => {
+    expect(percentualDaMeta(17, 12)).toBe(142)
+  })
+
+  it('meta pela metade é 50%', () => {
+    expect(percentualDaMeta(6, 12)).toBe(50)
+  })
+
+  it('alvo zero ou inválido não vira infinito nem NaN', () => {
+    expect(percentualDaMeta(5, 0)).toBe(0)
+    expect(percentualDaMeta(5, Number.NaN)).toBe(0)
+    expect(percentualDaMeta(Number.POSITIVE_INFINITY, 12)).toBe(0)
+  })
+
+  it('valor negativo não desenha percentual negativo', () => {
+    expect(percentualDaMeta(-3, 12)).toBe(0)
   })
 })

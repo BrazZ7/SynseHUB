@@ -2,6 +2,7 @@ import { Trophy } from 'lucide-react'
 
 import { EmptyState } from '@/components/synse/empty-state'
 import { MEDAL_LABELS, MedalBadge } from '@/features/challenges/medal-badge'
+import { BotaoCompartilhar } from '@/features/share/share-button'
 import { BASELINE_CHALLENGES } from '@/lib/baseline/challenges'
 import type { ChallengeMedal, MedalLevel } from '@/types/domain'
 
@@ -21,6 +22,10 @@ const ORDEM_DO_PODIO: MedalLevel[] = ['OURO', 'PRATA', 'BRONZE', 'PARTICIPACAO']
 
 function tituloDoDesafio(code: string): string {
   return BASELINE_CHALLENGES.find((item) => item.code === code)?.title ?? code
+}
+
+function unidadeDoDesafio(code: string): string {
+  return BASELINE_CHALLENGES.find((item) => item.code === code)?.unit ?? ''
 }
 
 /** "2026-09" vira "setembro de 2026" — o ciclo é como a pessoa conta o tempo. */
@@ -91,6 +96,19 @@ export function MedalShelf({ medals }: { medals: ChallengeMedal[] }) {
                   {medalha.progressValue} / {medalha.targetValue}
                 </span>
                 <MedalBadge level={medalha.level} size="sm" />
+                <BotaoCompartilhar
+                  formato="icone"
+                  rotulo={`Compartilhar a medalha de ${tituloDoDesafio(medalha.challengeCode)}`}
+                  cartao={{
+                    tipo: 'medalha',
+                    desafio: tituloDoDesafio(medalha.challengeCode),
+                    nivel: MEDAL_LABELS[medalha.level],
+                    quando: new Date(medalha.awardedAt),
+                    valor: medalha.progressValue,
+                    alvo: medalha.targetValue,
+                    unidade: unidadeDoDesafio(medalha.challengeCode),
+                  }}
+                />
               </li>
             ))}
           </ul>

@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Metric } from '@/features/synse-run/components/metric'
 import { PaceChart } from '@/features/synse-run/components/pace-chart'
 import { RouteMap } from '@/features/synse-run/components/route-map'
-import { CompartilharCorrida } from '@/features/synse-run/components/share-run'
+import { BotaoCompartilhar } from '@/features/share/share-button'
 import {
   formatDistance,
   formatDuration,
@@ -83,13 +83,18 @@ export default async function ActivityDetailPage({ params }: { params: Promise<{
 
       {rota.length > 1 && <RouteMap points={rota} className="h-64" />}
 
-      <CompartilharCorrida
-        titulo={atividade.title ?? tituloPorHorario(quando, atividade.sport)}
-        quando={quando}
-        distanciaMetros={atividade.distanceMeters}
-        movimentoSegundos={atividade.movingSeconds}
-        paceMedio={atividade.averagePace}
-        rota={rota}
+      <BotaoCompartilhar
+        rotulo="Compartilhar corrida"
+        nota="A imagem leva só o traçado, sem mapa por baixo — o percurso aparece, o endereço não."
+        cartao={{
+          tipo: 'corrida',
+          titulo: atividade.title ?? tituloPorHorario(quando, atividade.sport),
+          quando,
+          distanciaMetros: atividade.distanceMeters,
+          movimentoSegundos: atividade.movingSeconds,
+          paceMedio: atividade.averagePace,
+          rota,
+        }}
       />
 
       <section className="grid grid-cols-2 gap-3">

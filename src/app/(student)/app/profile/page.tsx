@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { BarChart3, Flame, LogOut, Star, Trophy, UserRound, Zap } from 'lucide-react'
+import { BarChart3, Flame, LogOut, Star, Trophy, Zap } from 'lucide-react'
 
 import { ThemeToggle } from '@/components/synse/theme-toggle'
 import { Button } from '@/components/ui/button'
@@ -7,6 +7,7 @@ import { AvatarPicker } from '@/features/account/avatar-picker'
 import { LinkGymCard } from '@/features/account/link-gym-card'
 import { ProfessionalCard } from '@/features/account/professional-card'
 import { CloseAccountCard } from '@/features/account/close-account-card'
+import { MenuDaConta } from '@/features/account/account-drawer'
 import { MedalShelf } from '@/features/challenges/medal-shelf'
 import { ConsentList } from '@/features/consents/consent-list'
 import {
@@ -66,7 +67,30 @@ export default async function StudentProfilePage({
 
   return (
     <div className="animate-fade-in-up space-y-5">
-      <CapaPerfil acao={<ThemeToggle />}>
+      <CapaPerfil
+        acao={
+          <MenuDaConta
+            resumo={`${session.isSoloStudent ? 'Sem vínculo' : (organization?.name ?? 'Academia')} · ${student?.planName ?? 'Sem plano'} · ${student?.trainerName ?? 'Professor a definir'}`}
+          >
+            {session.isSoloStudent && <LinkGymCard />}
+            <ProfessionalCard ativo={session.professionalPlan} defaultName={session.name} />
+            <ConsentList consents={consents} />
+            <CloseAccountCard />
+
+            <div className="flex items-center justify-between gap-3 border-t border-synse-border pt-4">
+              <span className="text-xs text-synse-muted">Tema do aplicativo</span>
+              <ThemeToggle />
+            </div>
+
+            <form action={signOut}>
+              <Button type="submit" variant="outline" className="w-full">
+                <LogOut className="size-4" />
+                Sair
+              </Button>
+            </form>
+          </MenuDaConta>
+        }
+      >
         {/*
          * O título "Perfil" saiu da tela: a barra de baixo já diz em qual aba
          * a pessoa está, e repetir isso custava a primeira dobra inteira. Ele
@@ -226,35 +250,6 @@ export default async function StudentProfilePage({
           Synse · mais que resultados
         </p>
       </section>
-
-      {/*
-        ── A conta ────────────────────────────────────────────────────────
-        Cabeçalho das seções abaixo, e não um link: tudo o que ele resume —
-        academia, plano, privacidade, encerrar conta — está nesta mesma
-        página. Uma seta aqui prometeria uma tela que não existe.
-      */}
-      <section className="vidro-led flex items-center gap-3 rounded-2xl border border-synse-border bg-synse-surface p-5">
-        <UserRound className="size-5 shrink-0 text-synse-primary" aria-hidden />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-synse-text">Minha conta Synse</p>
-          <p className="truncate text-xs text-synse-muted">
-            {session.isSoloStudent ? 'Sem vínculo' : (organization?.name ?? 'Academia')} ·{' '}
-            {student?.planName ?? 'Sem plano'} · {student?.trainerName ?? 'Professor a definir'}
-          </p>
-        </div>
-      </section>
-
-      {session.isSoloStudent && <LinkGymCard />}
-      <ProfessionalCard ativo={session.professionalPlan} defaultName={session.name} />
-      <ConsentList consents={consents} />
-      <CloseAccountCard />
-
-      <form action={signOut}>
-        <Button type="submit" variant="outline" className="w-full">
-          <LogOut className="size-4" />
-          Sair
-        </Button>
-      </form>
     </div>
   )
 }

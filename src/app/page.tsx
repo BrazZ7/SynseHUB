@@ -115,7 +115,7 @@ export default function LandingPage() {
         <section className="relative overflow-hidden">
           <div
             aria-hidden
-            className="bg-synse-primary/12 pointer-events-none absolute -right-40 -top-40 size-[32rem] rounded-full blur-3xl"
+            className="bg-synse-primary/15 pointer-events-none absolute -right-40 -top-40 size-[32rem] rounded-full blur-3xl"
           />
           <div
             aria-hidden

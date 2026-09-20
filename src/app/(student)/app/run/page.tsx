@@ -1,9 +1,8 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { Bike, ChevronRight, Footprints, Timer, Trophy } from 'lucide-react'
+import { ChevronRight, Timer, Trophy } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Metric } from '@/features/synse-run/components/metric'
 import { PendingSync } from '@/features/synse-run/components/pending-sync'
 import { RunHero } from '@/features/synse-run/components/run-hero'
@@ -34,29 +33,14 @@ export default async function SynseRunPage() {
        * acima dela para a arte descer e deixar uma faixa da cor da página no
        * topo.
        *
-       * A saudação e o `h1` moram dentro dela. O elo de voltar saiu: a barra
-       * de baixo já leva ao Hoje, e uma seta sobre a arte reabriria a moldura
-       * que a capa sem borda veio justamente desfazer.
+       * A saudação, o `h1` e os três esportes moram dentro dela. O elo de
+       * voltar saiu: a barra de baixo já leva ao Hoje, e uma seta sobre a arte
+       * reabriria a moldura que a capa sem borda veio justamente desfazer.
        */}
       <RunHero
         saudacao={`${greeting()}, ${firstName(session.name)}`}
         chamada="Movimento é evolução"
       />
-
-      <div className="grid grid-cols-2 gap-2">
-        <Button asChild variant="outline">
-          <Link href="/app/run/start?esporte=WALK">
-            <Footprints className="size-4" />
-            {SPORT_LABELS.WALK}
-          </Link>
-        </Button>
-        <Button asChild variant="outline">
-          <Link href="/app/run/start?esporte=RIDE">
-            <Bike className="size-4" />
-            {SPORT_LABELS.RIDE}
-          </Link>
-        </Button>
-      </div>
 
       <WeekChart
         byDay={painel.byDay}

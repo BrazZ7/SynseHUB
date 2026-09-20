@@ -93,7 +93,7 @@ export default async function SynsePayPage() {
       {simulated && (
         <div
           role="status"
-          className="border-synse-warning/30 bg-synse-warning/8 flex flex-wrap items-start gap-3 rounded-xl border p-4"
+          className="border-synse-warning/30 bg-synse-warning/10 flex flex-wrap items-start gap-3 rounded-xl border p-4"
         >
           <TriangleAlert className="mt-0.5 size-4 shrink-0 text-synse-warning" aria-hidden />
           <div className="min-w-0 text-sm">

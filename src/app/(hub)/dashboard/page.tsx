@@ -102,7 +102,7 @@ export default async function DashboardPage() {
       {canEnroll && pendentes > 0 && (
         <Link
           href="/students?status=PENDING"
-          className="focus-visible:ring-synse-primary/25 border-synse-primary/30 bg-synse-primary/8 flex items-center gap-3 rounded-xl border p-4 transition hover:border-synse-primary focus-visible:outline-none focus-visible:ring-2"
+          className="focus-visible:ring-synse-primary/25 border-synse-primary/30 bg-synse-primary/10 flex items-center gap-3 rounded-xl border p-4 transition hover:border-synse-primary focus-visible:outline-none focus-visible:ring-2"
         >
           <UserPlus className="size-4 shrink-0 text-synse-primary" aria-hidden />
           <span className="min-w-0 flex-1 text-sm text-synse-text">
@@ -480,8 +480,8 @@ function SummaryFigure({
 }
 
 const ALERT_TONES = {
-  danger: { icon: CircleAlert, className: 'bg-synse-danger/12 text-synse-danger' },
-  warning: { icon: TriangleAlert, className: 'bg-synse-warning/14 text-synse-warning' },
+  danger: { icon: CircleAlert, className: 'bg-synse-danger/15 text-synse-danger' },
+  warning: { icon: TriangleAlert, className: 'bg-synse-warning/15 text-synse-warning' },
   info: { icon: Info, className: 'bg-synse-mint/50 text-synse-primary' },
 } as const
 

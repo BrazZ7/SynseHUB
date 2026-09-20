@@ -14,7 +14,7 @@ export function AppCheckInButton({ alreadyCheckedIn }: { alreadyCheckedIn: boole
 
   if (done) {
     return (
-      <div className="flex items-center justify-center gap-2 rounded-xl bg-synse-success/12 py-3.5 text-sm font-medium text-synse-success animate-fade-in">
+      <div className="flex items-center justify-center gap-2 rounded-xl bg-synse-success/15 py-3.5 text-sm font-medium text-synse-success animate-fade-in">
         <CircleCheck className="size-4" aria-hidden />
         Presença registrada hoje
       </div>

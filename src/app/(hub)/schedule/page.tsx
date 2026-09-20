@@ -131,7 +131,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Sea
                     className={cn(
                       'sticky top-0 rounded-lg px-2 py-1.5 text-xs font-semibold uppercase tracking-wide',
                       hoje
-                        ? 'bg-synse-primary/12 text-synse-primary'
+                        ? 'bg-synse-primary/15 text-synse-primary'
                         : 'text-synse-muted',
                     )}
                   >

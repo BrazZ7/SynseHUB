@@ -97,7 +97,7 @@ export function CapaPerfil({
          */}
         <div
           aria-hidden
-          className="from-synse-bg/88 absolute inset-0 bg-gradient-to-r via-synse-bg/45 to-transparent"
+          className="from-synse-bg/90 absolute inset-0 bg-gradient-to-r via-synse-bg/45 to-transparent"
         />
         <div
           aria-hidden

@@ -229,7 +229,7 @@ function SidebarLink({
         base,
         active
           ? 'bg-white/15 font-medium text-white shadow-synse-sm'
-          : 'text-white/60 hover:bg-white/8 hover:text-white',
+          : 'text-white/60 hover:bg-white/10 hover:text-white',
       )}
     >
       {content}

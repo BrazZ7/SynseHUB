@@ -10,9 +10,9 @@ const badgeVariants = cva(
       variant: {
         default: 'bg-synse-surface-2 text-synse-muted',
         primary: 'bg-synse-mint/60 text-synse-dark',
-        success: 'bg-synse-success/12 text-synse-success',
-        warning: 'bg-synse-warning/14 text-synse-warning',
-        danger: 'bg-synse-danger/12 text-synse-danger',
+        success: 'bg-synse-success/15 text-synse-success',
+        warning: 'bg-synse-warning/15 text-synse-warning',
+        danger: 'bg-synse-danger/15 text-synse-danger',
         outline: 'border border-synse-border text-synse-muted',
       },
     },

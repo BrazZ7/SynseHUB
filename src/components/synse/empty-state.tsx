@@ -35,7 +35,7 @@ export function EmptyState({
         <span
           className={cn(
             'flex size-12 items-center justify-center rounded-2xl',
-            tone === 'positive' ? 'bg-synse-success/12 text-synse-success' : 'bg-synse-surface-2 text-synse-muted',
+            tone === 'positive' ? 'bg-synse-success/15 text-synse-success' : 'bg-synse-surface-2 text-synse-muted',
           )}
           aria-hidden
         >

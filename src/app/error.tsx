@@ -75,7 +75,7 @@ export default function GlobalError({
   return (
     <div className="flex min-h-svh flex-col items-center justify-center gap-5 bg-synse-bg px-6 text-center">
       <span
-        className="bg-synse-warning/14 flex size-14 items-center justify-center rounded-2xl text-synse-warning"
+        className="bg-synse-warning/15 flex size-14 items-center justify-center rounded-2xl text-synse-warning"
         aria-hidden
       >
         {semRede ? <WifiOff className="size-6" /> : <TriangleAlert className="size-6" />}

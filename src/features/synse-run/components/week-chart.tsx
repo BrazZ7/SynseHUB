@@ -139,10 +139,7 @@ export function WeekChart({
           />
 
           {/* Sem o véu, os números caem em cima das cristas iluminadas. */}
-          <div
-            aria-hidden
-            className="absolute inset-0 bg-gradient-to-r from-[#02100f]/90 via-[#02100f]/55 to-transparent"
-          />
+          <div aria-hidden className="veu-da-trilha absolute inset-0" />
 
           <div className="relative p-5">
             <p className="text-xs text-white/65">Meta da semana</p>

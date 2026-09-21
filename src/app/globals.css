@@ -298,6 +298,36 @@
     );
   }
 
+  /*
+   * ── O véu da trilha ───────────────────────────────────────────────────────
+   *
+   * A arte da trilha tem um rastro aceso que atravessa o quadro na diagonal, e
+   * texto branco em cima dele some. Um degradê de três paradas não resolve:
+   * o ponto do meio cai em 50%, e a coluna de texto vai até 64% — justo a
+   * faixa onde o rastro está mais claro.
+   *
+   * Então as paradas são explícitas, e a queda é brusca. O véu fica quase
+   * opaco até onde a coluna de texto termina, por volta de 62%, e aí despenca:
+   * aos 86% já quase não existe, e o alfinete no alto da trilha aparece com a
+   * luz que tem. Uma queda suave espalharia o escurecimento pelo lado direito
+   * e apagaria justamente a parte da arte que vale a pena mostrar. Foi medido na tela: com o véu fraco, a frase de
+   * três linhas do desafio do mês passava por cima do rastro e desaparecia.
+   *
+   * A cor é fixa, e não uma ficha do tema, porque a arte é noturna nos dois
+   * temas — no claro o cartão é uma ilha escura de propósito.
+   */
+  .veu-da-trilha {
+    background-image: linear-gradient(
+      to right,
+      color-mix(in srgb, #02100f 96%, transparent) 0%,
+      color-mix(in srgb, #02100f 92%, transparent) 50%,
+      color-mix(in srgb, #02100f 86%, transparent) 62%,
+      color-mix(in srgb, #02100f 42%, transparent) 73%,
+      color-mix(in srgb, #02100f 14%, transparent) 86%,
+      color-mix(in srgb, #02100f 6%, transparent) 100%
+    );
+  }
+
   /* Scrollbar leve */
   .synse-scroll {
     scrollbar-width: thin;

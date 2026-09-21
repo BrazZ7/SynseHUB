@@ -20,13 +20,32 @@ import { describe, expect, it } from 'vitest'
  *
  * Este teste é o alarme. Quem quiser um valor fora da escala escreve
  * `bg-white/[0.12]`, que é a forma arbitrária e gera CSS de verdade.
+ *
+ * ── A segunda pegada ────────────────────────────────────────────────────────
+ *
+ * A primeira versão só olhava cores nomeadas, e por isso deixou passar
+ * `from-[#02100f]/92` — cor arbitrária entre colchetes com opacidade fora da
+ * escala. O efeito foi o mesmo de sempre e igualmente invisível: o primeiro
+ * ponto do degradê nunca foi gerado, o véu do cartão de desafio do mês
+ * arrancava do transparente, e o texto branco caía em cima da trilha acesa.
+ * Foi preciso medir a luminância do fundo pixel a pixel para enxergar — o
+ * contraste no pior ponto dava 1,1:1 contra o mínimo de 4,5:1.
+ *
+ * Por isso a parte da cor aceita as duas formas.
  */
 
 const UTILITARIAS =
   'bg|text|border|ring|from|via|to|fill|stroke|divide|outline|decoration|accent|caret|placeholder'
 
-/** `bg-white/12` → captura o `12`. A forma arbitrária `/[0.12]` não casa. */
-const COM_OPACIDADE = new RegExp(`\\b(?:${UTILITARIAS})-[a-z0-9-]+/(\\d{1,3})\\b`, 'g')
+/**
+ * `bg-white/12` e `from-[#02100f]/92` → captura o número.
+ *
+ * A forma arbitrária da opacidade, `/[0.12]`, não casa de propósito: ela gera
+ * CSS e é justamente a saída recomendada para quem precisa de um valor fora
+ * da escala.
+ */
+const COR = '(?:[a-z0-9-]+|\\[[^\\]\\s]+\\])'
+const COM_OPACIDADE = new RegExp(`\\b(?:${UTILITARIAS})-${COR}/(\\d{1,3})\\b`, 'g')
 
 describe('modificadores de opacidade', () => {
   it('usam apenas passos que o Tailwind gera', async () => {

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Image from 'next/image'
 import Link from 'next/link'
 import {
   ArrowRight,
@@ -101,7 +102,7 @@ export default async function StudentHomePage() {
       <section className="relative overflow-hidden rounded-2xl bg-synse-gradient-deep p-6 text-white shadow-synse-lg">
         <div
           aria-hidden
-          className="bg-synse-primary/25 pointer-events-none absolute -right-16 -top-16 size-52 rounded-full blur-3xl"
+          className="pointer-events-none absolute -right-16 -top-16 size-52 rounded-full bg-synse-primary/25 blur-3xl"
         />
 
         <div className="relative">
@@ -256,41 +257,74 @@ export default async function StudentHomePage() {
 
       {/* Desafio do mês — some enquanto a migration 0014 não estiver aplicada */}
       {challenges.available && (
-        <section className="rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
-          <div className="flex items-center justify-between gap-3">
-            <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-synse-primary">
-              <Trophy className="size-3.5" aria-hidden />
-              Desafio do mês
-            </p>
-            {desafio && (
-              <Badge variant="primary" className="tabular-nums">
-                {desafio.percentage}%
-              </Badge>
+        /*
+         * ── A trilha ──────────────────────────────────────────────────────
+         *
+         * A mesma arte do widget de meta semanal da aba Correr: a trilha
+         * subindo a serra com o alfinete no ponto mais alto. O desafio do mês
+         * nem sempre é de corrida — pode ser check-ins, carga, o que a
+         * academia propuser —, mas a leitura da imagem é de percurso até um
+         * ponto, que é o que qualquer meta mensal é.
+         *
+         * Um arquivo só, servindo os dois lugares: o navegador baixa uma vez
+         * e o vínculo entre as duas telas fica de graça.
+         *
+         * Os tons são brancos com transparência, e não fichas do tema, porque
+         * a arte é noturna nos dois temas. A pista da barra vem de
+         * `synse-surface-2`, que sobre esta imagem desapareceria no tema
+         * escuro — daí o `className` sobrescrevendo.
+         */
+        <section className="relative overflow-hidden rounded-2xl">
+          <Image
+            src="/synse-run-meta.webp"
+            alt=""
+            aria-hidden
+            width={960}
+            height={369}
+            sizes="(max-width: 512px) 100vw, 512px"
+            className="absolute inset-0 size-full object-cover"
+          />
+
+          {/* O véu mora em `globals.css`; ver `.veu-da-trilha`. */}
+          <div aria-hidden className="veu-da-trilha absolute inset-0" />
+
+          <div className="relative p-5">
+            <div className="flex items-center justify-between gap-3">
+              <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-synse-primary-light">
+                <Trophy className="size-3.5" aria-hidden />
+                Desafio do mês
+              </p>
+              {desafio && (
+                <span className="rounded-full border border-white/20 bg-white/15 px-2.5 py-0.5 text-xs font-medium tabular-nums text-white backdrop-blur-md">
+                  {desafio.percentage}%
+                </span>
+              )}
+            </div>
+
+            {desafio ? (
+              <>
+                <p className="mt-1.5 max-w-[64%] text-lg font-semibold text-white">
+                  {desafio.challenge.title}
+                </p>
+                <p className="max-w-[64%] text-sm text-white/70">
+                  {desafio.progressValue.toLocaleString('pt-BR')} de{' '}
+                  {desafio.targetValue.toLocaleString('pt-BR')} {desafio.challenge.unit}
+                </p>
+                <Progress value={desafio.percentage} className="mt-3 bg-white/20" />
+              </>
+            ) : (
+              <p className="mt-1.5 max-w-[64%] text-sm text-white/70">
+                Escolha um objetivo para este mês. No fim, você recebe a análise e a medalha.
+              </p>
             )}
-          </div>
 
-          {desafio ? (
-            <>
-              <p className="mt-1.5 text-lg font-semibold text-synse-text">
-                {desafio.challenge.title}
-              </p>
-              <p className="text-sm text-synse-muted">
-                {desafio.progressValue.toLocaleString('pt-BR')} de{' '}
-                {desafio.targetValue.toLocaleString('pt-BR')} {desafio.challenge.unit}
-              </p>
-              <Progress value={desafio.percentage} className="mt-3" />
-            </>
-          ) : (
-            <p className="mt-1.5 text-sm text-synse-muted">
-              Escolha um objetivo para este mês. No fim, você recebe a análise e a medalha.
-            </p>
-          )}
-
-          <Button variant="outline" asChild className="mt-4 w-full">
-            <Link href="/app/challenges">
+            <Link
+              href="/app/challenges"
+              className="mt-4 inline-flex h-10 w-full items-center justify-center rounded-lg border border-white/20 bg-white/15 text-sm font-medium text-white backdrop-blur-md transition-colors hover:bg-white/25"
+            >
               {desafio ? 'Registrar progresso' : 'Escolher meu desafio'}
             </Link>
-          </Button>
+          </div>
         </section>
       )}
 
@@ -300,7 +334,7 @@ export default async function StudentHomePage() {
         className="group flex items-center gap-4 rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm transition-colors hover:border-synse-primary"
       >
         <span
-          className="bg-synse-mint/50 flex size-11 shrink-0 items-center justify-center rounded-xl text-synse-primary"
+          className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-synse-mint/50 text-synse-primary"
           aria-hidden
         >
           <Salad className="size-5" />

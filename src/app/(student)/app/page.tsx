@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { AppCheckInButton } from '@/features/checkin/app-checkin-button'
 import { getChallengeBoard } from '@/features/challenges/service'
+import { MarcadorNaTrilha } from '@/features/challenges/trail-marker'
 import { NotificationsBell } from '@/features/notifications/notifications-bell'
 import { getStudentHome } from '@/features/students/app-service'
 import { horaLocal } from '@/features/schedule/week'
@@ -276,7 +277,7 @@ export default async function StudentHomePage() {
          */
         <section className="relative overflow-hidden rounded-2xl">
           <Image
-            src="/synse-run-meta.webp"
+            src="/synse-run-trilha.webp"
             alt=""
             aria-hidden
             width={960}
@@ -287,6 +288,14 @@ export default async function StudentHomePage() {
 
           {/* O véu mora em `globals.css`; ver `.veu-da-trilha`. */}
           <div aria-hidden className="veu-da-trilha absolute inset-0" />
+
+          {/*
+           * O marcador vem **depois** do véu, de propósito. Por baixo dele o
+           * alfinete saía lavado, um vulto pálido em vez de um ponto. Ele não
+           * atrapalha a leitura porque mora na faixa direita da arte, a partir
+           * de uns 80% da largura, e a coluna de texto para em 64%.
+           */}
+          <MarcadorNaTrilha fracao={(desafio?.percentage ?? 0) / 100} />
 
           <div className="relative p-5">
             <div className="flex items-center justify-between gap-3">

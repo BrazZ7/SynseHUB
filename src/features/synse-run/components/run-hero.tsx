@@ -168,13 +168,13 @@ export function RunHero({ saudacao, chamada }: { saudacao: string; chamada: stri
           className="absolute inset-0 bg-gradient-to-t from-[#02100f] via-[#02100f]/45 to-transparent"
         />
 
-        <div className="relative flex min-h-[22rem] flex-col justify-end">
+        <div className="relative">
           {/*
            * Tocar em qualquer ponto daqui abre a tela de preparo, que procura o
            * GPS e espera o toque em começar. Nada é gravado por engano — o que
            * é o que permite a área inteira ser tocável sem virar armadilha.
            */}
-          <Link href="/app/run/start?esporte=RUN" className="block px-5 pt-12">
+          <Link href="/app/run/start?esporte=RUN" className="block px-5 pt-16">
             <p className="text-sm text-white/65">{saudacao}</p>
             <h1 className="mt-0.5 text-4xl font-semibold tracking-tight text-white">SynseRun</h1>
             <p className="mt-1 text-sm text-white/70">{chamada}</p>
@@ -207,17 +207,30 @@ export function RunHero({ saudacao, chamada }: { saudacao: string; chamada: stri
            * desfoque a cada quadro. Aqui são dois elementos sobre uma imagem
            * parada, e o custo não se repete.
            *
+           * ── Por que `mt-32`, e não o espaçamento natural ───────────────
+           *
+           * Os botões ficam onde sempre estiveram: a uns 345px do topo da
+           * tela. O que mudou foi a arte, que cresceu para baixo até passar
+           * por trás deles — antes ela acabava aos 322px e eles caíam já no
+           * fundo da página.
+           *
+           * O `mt-32` é a medida daquele intervalo antigo: os 112px de arte
+           * que derretiam mais os 20px de respiro da página. Sem ele os
+           * botões encostariam na pílula de iniciar, que foi a primeira
+           * tentativa e estava errada — subir o botão não é a mesma coisa que
+           * descer a imagem.
+           *
            * O `pb-24` casa exatamente com a altura da costura logo abaixo: os
            * botões param onde a arte começa a derreter no fundo da página. Sem
            * essa folga eles cairiam dentro do degradê e, no tema claro, o
            * texto branco deles sumiria no clareado.
            */}
-          <div className="mt-6 grid grid-cols-2 gap-3 px-5 pb-24">
+          <div className="mt-32 grid grid-cols-2 gap-2 px-5 pb-24">
             {OUTROS_ESPORTES.map(({ esporte, icone: Icone }) => (
               <Link
                 key={esporte}
                 href={`/app/run/start?esporte=${esporte}`}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/15 text-sm font-medium text-white backdrop-blur-md transition-colors hover:bg-white/20"
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-white/20 bg-white/15 text-sm font-medium text-white backdrop-blur-md transition-colors hover:bg-white/20"
               >
                 <Icone className="size-4" aria-hidden />
                 {SPORT_LABELS[esporte]}

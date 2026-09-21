@@ -1,5 +1,5 @@
+import Image from 'next/image'
 import Link from 'next/link'
-import { Target } from 'lucide-react'
 
 import { progressoDaMeta } from '@/features/synse-run/goal'
 import { formatDistance } from '@/features/synse-run/format'
@@ -110,50 +110,65 @@ export function WeekChart({
 
       {meta && goalMeters !== null && (
         /*
-         * A meta divide o mesmo cartão que o gráfico, separada só por um fio.
-         * São a mesma pergunta — como foi a semana — e dois cartões seguidos
-         * com sete colunas e uma barra dizem isso duas vezes.
+         * ── O widget da meta ──────────────────────────────────────────────
+         *
+         * A meta divide o mesmo cartão que o gráfico. São a mesma pergunta —
+         * como foi a semana — e dois cartões seguidos com sete colunas e uma
+         * barra diriam isso duas vezes.
+         *
+         * A arte é uma trilha subindo a serra com o alfinete de GPS no ponto
+         * mais alto: a meta é o lugar aonde se chega, e o rastro aceso é o
+         * mesmo traço que o cartão de compartilhar desenha com o GPS de quem
+         * correu. Por causa do alfinete o ícone de alvo saiu — era dizer a
+         * mesma coisa duas vezes, uma delas com um símbolo genérico.
+         *
+         * Os tons são brancos com transparência, e não fichas do tema: a arte
+         * é noturna nos dois temas, e `synse-surface-2`, que seria a pista da
+         * barra, some no escuro quando o tema é escuro e destoa quando é
+         * claro.
          */
-        <div className="mt-5 border-t border-synse-border pt-4">
-          <div className="flex items-center gap-3">
-            <span
-              className="grid size-10 shrink-0 place-items-center rounded-xl bg-synse-primary/10 text-synse-primary"
-              aria-hidden
-            >
-              <Target className="size-5" />
-            </span>
+        <div className="relative mt-5 overflow-hidden rounded-xl">
+          <Image
+            src="/synse-run-meta.webp"
+            alt=""
+            aria-hidden
+            width={960}
+            height={369}
+            sizes="(max-width: 512px) 100vw, 512px"
+            className="absolute inset-0 size-full object-cover"
+          />
 
-            <div className="min-w-0 flex-1">
-              <p className="text-xs text-synse-muted">Meta da semana</p>
-              <p className="flex items-baseline gap-1">
-                <span className="text-2xl font-semibold tabular-nums leading-none text-synse-text">
-                  {formatDistance(distanceMeters, 0)}
-                </span>
-                <span className="text-sm text-synse-muted">
-                  / {formatDistance(goalMeters, 0)} km
-                </span>
-              </p>
+          {/* Sem o véu, os números caem em cima das cristas iluminadas. */}
+          <div
+            aria-hidden
+            className="absolute inset-0 bg-gradient-to-r from-[#02100f]/90 via-[#02100f]/55 to-transparent"
+          />
+
+          <div className="relative p-5">
+            <p className="text-xs text-white/65">Meta da semana</p>
+            <p className="mt-0.5 flex items-baseline gap-1">
+              <span className="text-2xl font-semibold tabular-nums leading-none text-white">
+                {formatDistance(distanceMeters, 0)}
+              </span>
+              <span className="text-sm text-white/70">/ {formatDistance(goalMeters, 0)} km</span>
+            </p>
+
+            <div className="mt-4 flex items-center gap-3">
+              <span className="h-2 flex-1 overflow-hidden rounded-full bg-white/20" aria-hidden>
+                <span
+                  className="block h-full rounded-full bg-synse-gradient transition-all"
+                  style={{ width: `${meta.fracao * 100}%` }}
+                />
+              </span>
+              {/*
+               * O número não é limitado a 100, e a barra é. Quem passou da
+               * meta lê que passou — foi o defeito do cartão de medalha, onde
+               * 17 check-ins numa meta de 12 apareciam como "100%".
+               */}
+              <span className="shrink-0 text-sm font-semibold tabular-nums text-white">
+                {meta.percentual}%
+              </span>
             </div>
-          </div>
-
-          <div className="mt-3 flex items-center gap-3">
-            <span
-              className="h-2 flex-1 overflow-hidden rounded-full bg-synse-surface-2"
-              aria-hidden
-            >
-              <span
-                className="block h-full rounded-full bg-synse-gradient transition-all"
-                style={{ width: `${meta.fracao * 100}%` }}
-              />
-            </span>
-            {/*
-             * O número não é limitado a 100, e a barra é. Quem passou da meta
-             * lê que passou — foi o defeito do cartão de medalha, onde 17 numa
-             * meta de 12 aparecia como "100%".
-             */}
-            <span className="shrink-0 text-sm font-semibold tabular-nums text-synse-text">
-              {meta.percentual}%
-            </span>
           </div>
 
           <p className="sr-only">

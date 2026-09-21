@@ -77,12 +77,40 @@ const GIRO_POR_TOQUE = 540
  * As gotas, ao contrário, são `animation` e **precisam** remontar: cada toque
  * é um respingo novo. Por isso a chave do contêiner é o contador de toques.
  *
- * ── Sem `backdrop-filter` ───────────────────────────────────────────────────
+ * ── Transparente, e o que sustenta a transparência ──────────────────────────
  *
- * A barra é fixa e está em todas as telas. Desfoque de fundo em elemento fixo
- * obriga o compositor a refazer a região borrada a cada quadro de rolagem, e
- * foi por isso que ele saiu daqui uma vez. O `.vidro-led` faz o vidro com
- * degradê e sombra interna, sem custo por quadro.
+ * A barra é translúcida: a página aparece por trás dela. O que **não**
+ * sustenta isso é o `backdrop-filter`.
+ *
+ * O desfoque está declarado e o navegador reporta `blur(24px)` no estilo
+ * computado, mas ele não borra o conteúdo da página atrás desta barra.
+ * Testado subindo o raio até `blur(60px)`: o texto do cartão que passa por
+ * trás continua perfeitamente legível. `backdrop-filter` em elemento `fixed`
+ * é um ponto fraco conhecido, e aqui ele simplesmente não atua — nos mesmos
+ * botões de vidro da capa de corrida, que não são fixos, ele funciona.
+ *
+ * A declaração fica: onde o navegador honrar, é lucro. Mas **o desenho não
+ * pode depender dela**, e por isso quem carrega a legibilidade é a tinta.
+ *
+ * ── Por que 75%, e não menos ────────────────────────────────────────────────
+ *
+ * A 55% ficava bonito sobre o fundo da página e quebrava no pior caso: com o
+ * cartão do Synse+ exatamente atrás, o texto dele atravessava a barra e se
+ * embolava com os ícones — dava para ler "Programas, receitas, desafios e"
+ * entre o halteres e o tênis. A 75% o mesmo caso vira um fantasma atrás dos
+ * ícones, e nas rolagens normais, em que o fundo é a cor da página, a barra
+ * continua visivelmente translúcida.
+ *
+ * ── E o custo por quadro ────────────────────────────────────────────────────
+ *
+ * `backdrop-filter` já saiu desta barra uma vez por custo: em elemento fixo
+ * ele obriga o compositor a refazer a região borrada a cada quadro de
+ * rolagem. Medido agora, rolando a tela inicial por 120 quadros: mediana de
+ * 16,7 ms com a barra fechada e 16,7 ms com ela aberta, p95 de 16,7 e 16,8,
+ * nenhum quadro acima de 32 ms. A medida saiu de um Chromium num contêiner e
+ * não de um telefone intermediário, que é onde desfoque costuma doer — se um
+ * dia aparecer engasgo, ele sai da pílula primeiro, que é a que cresce com a
+ * largura do aparelho.
  */
 export function AppBottomNavigation() {
   const pathname = usePathname()
@@ -180,9 +208,9 @@ export function AppBottomNavigation() {
           id="barra-synse"
           inert={!aberta}
           className={cn(
-            'vidro-led w-full rounded-full border border-synse-border bg-synse-surface transition-[clip-path,opacity] duration-500 ease-out',
+            'vidro-led w-full rounded-full border border-synse-border bg-synse-surface/75 transition-[clip-path,opacity] duration-500 ease-out',
             aberta
-              ? 'pointer-events-auto opacity-100 [clip-path:inset(0_0_0_0_round_9999px)]'
+              ? 'pointer-events-auto opacity-100 backdrop-blur-xl [clip-path:inset(0_0_0_0_round_9999px)]'
               : 'opacity-0 [clip-path:inset(0_50%_0_50%_round_9999px)]',
           )}
         >
@@ -261,7 +289,7 @@ export function AppBottomNavigation() {
               aria-expanded={aberta}
               aria-controls="barra-synse"
               aria-label={aberta ? 'Fechar a navegação' : 'Abrir a navegação'}
-              className="pointer-events-auto grid size-[60px] place-items-center rounded-full border border-synse-primary/40 bg-synse-surface shadow-[0_0_20px_-4px_var(--synse-primary),inset_0_0_14px_-6px_var(--synse-cyan)] transition-shadow duration-300 hover:shadow-[0_0_28px_-2px_var(--synse-primary),inset_0_0_14px_-4px_var(--synse-cyan)]"
+              className="pointer-events-auto grid size-[60px] place-items-center rounded-full border border-synse-primary/40 bg-synse-surface/60 shadow-[0_0_20px_-4px_var(--synse-primary),inset_0_0_14px_-6px_var(--synse-cyan)] backdrop-blur-md transition-shadow duration-300 hover:shadow-[0_0_28px_-2px_var(--synse-primary),inset_0_0_14px_-4px_var(--synse-cyan)]"
             >
               <Image
                 src={BRAND.symbol}

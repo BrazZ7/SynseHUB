@@ -258,6 +258,37 @@ const config: Config = {
          * escuro. Só `transform` e `opacity`, que a GPU compõe sem refazer
          * layout nem pintura enquanto a página rola.
          */
+        /*
+         * ── O respingo do disco ─────────────────────────────────────────────
+         *
+         * Um pião girando na água joga a gota para fora, em linha reta a
+         * partir da borda, e ela se estica no caminho. É isso que o quadro
+         * descreve: `rotate(--a)` aponta a gota para o ângulo dela,
+         * `translateY` negativo a empurra para fora, e o `scale` separado
+         * afina e alonga — gota em voo é uma elipse, não um círculo.
+         *
+         * `scale` fica fora do `transform` de propósito: as duas são
+         * propriedades independentes e se compõem, então dá para animar a
+         * trajetória e a forma sem uma sobrescrever a outra.
+         *
+         * `--r` é onde a gota nasce, a borda do disco. `--d` é o quanto ela
+         * voa. Sem o `--r`, todas brotariam do centro e a fonte do respingo
+         * pareceria o miolo do disco em vez da beirada molhada.
+         */
+        respingo: {
+          '0%': {
+            opacity: '0',
+            transform: 'rotate(var(--a)) translateY(calc(var(--r) * -1))',
+            scale: '0.35 0.35',
+          },
+          '14%': { opacity: '0.95' },
+          '62%': { opacity: '0.75' },
+          '100%': {
+            opacity: '0',
+            transform: 'rotate(var(--a)) translateY(calc((var(--r) + var(--d)) * -1))',
+            scale: '0.45 1.6',
+          },
+        },
         voar: {
           '0%': { opacity: '0', transform: 'translate3d(0, 0, 0) rotate(0deg) scale(0.85)' },
           '12%': { opacity: '0.95' },
@@ -292,6 +323,8 @@ const config: Config = {
         boiar: 'boiar 11s ease-in-out infinite',
         /* A duração real vem de cada folha, para elas não cruzarem juntas. */
         voar: 'voar 12s linear infinite',
+        /* Cada gota tem a própria duração e o próprio atraso. */
+        respingo: 'respingo 900ms cubic-bezier(0.12, 0.7, 0.3, 1) both',
       },
     },
   },

@@ -16,12 +16,12 @@ import {
 
 import { ProgressRing } from '@/components/synse/progress-ring'
 import { SynseLogo } from '@/components/synse/synse-logo'
+import { PoeiraDaTrilha } from '@/components/synse/trail-dust'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { AppCheckInButton } from '@/features/checkin/app-checkin-button'
 import { getChallengeBoard } from '@/features/challenges/service'
-import { MarcadorNaTrilha } from '@/features/challenges/trail-marker'
 import { NotificationsBell } from '@/features/notifications/notifications-bell'
 import { getStudentHome } from '@/features/students/app-service'
 import { horaLocal } from '@/features/schedule/week'
@@ -277,7 +277,7 @@ export default async function StudentHomePage() {
          */
         <section className="relative overflow-hidden rounded-2xl">
           <Image
-            src="/synse-run-trilha.webp"
+            src="/synse-run-meta.webp"
             alt=""
             aria-hidden
             width={960}
@@ -290,12 +290,11 @@ export default async function StudentHomePage() {
           <div aria-hidden className="veu-da-trilha absolute inset-0" />
 
           {/*
-           * O marcador vem **depois** do véu, de propósito. Por baixo dele o
-           * alfinete saía lavado, um vulto pálido em vez de um ponto. Ele não
-           * atrapalha a leitura porque mora na faixa direita da arte, a partir
-           * de uns 80% da largura, e a coluna de texto para em 64%.
+           * A poeira vem **depois** do véu: por baixo dele as pedrinhas saem
+           * lavadas. Elas nascem só no terço direito, onde o véu é fraco e
+           * onde está o chão iluminado da trilha.
            */}
-          <MarcadorNaTrilha fracao={(desafio?.percentage ?? 0) / 100} />
+          <PoeiraDaTrilha />
 
           <div className="relative p-5">
             <div className="flex items-center justify-between gap-3">

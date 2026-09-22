@@ -1,7 +1,8 @@
 import Image from 'next/image'
 import Link from 'next/link'
 
-import { MarcadorNaTrilha } from '@/features/challenges/trail-marker'
+import { PoeiraDaTrilha } from '@/components/synse/trail-dust'
+
 import { progressoDaMeta } from '@/features/synse-run/goal'
 import { formatDistance } from '@/features/synse-run/format'
 import { cn } from '@/lib/utils'
@@ -119,10 +120,9 @@ export function WeekChart({
          *
          * A arte é uma trilha subindo a serra, e o rastro aceso é o mesmo
          * traço que o cartão de compartilhar desenha com o GPS de quem correu.
-         * O alfinete não está mais pintado nela: quem o desenha é
-         * `MarcadorNaTrilha`, no ponto do progresso. Por causa dele o ícone de
-         * alvo saiu — era dizer a mesma coisa duas vezes, uma delas com um
-         * símbolo genérico.
+         * O alfinete de GPS está pintado na arte, no alto do caminho: a meta
+         * é o lugar aonde se chega. Por causa dele o ícone de alvo saiu — era
+         * dizer a mesma coisa duas vezes, uma delas com um símbolo genérico.
          *
          * Os tons são brancos com transparência, e não fichas do tema: a arte
          * é noturna nos dois temas, e `synse-surface-2`, que seria a pista da
@@ -131,7 +131,7 @@ export function WeekChart({
          */
         <div className="relative mt-5 overflow-hidden rounded-xl">
           <Image
-            src="/synse-run-trilha.webp"
+            src="/synse-run-meta.webp"
             alt=""
             aria-hidden
             width={960}
@@ -143,11 +143,8 @@ export function WeekChart({
           {/* Sem o véu, os números caem em cima das cristas iluminadas. */}
           <div aria-hidden className="veu-da-trilha absolute inset-0" />
 
-          {/*
-           * A mesma trilha do desafio do mês, com a fração da semana, e depois
-           * do véu pelo mesmo motivo: por baixo dele o alfinete sai lavado.
-           */}
-          <MarcadorNaTrilha fracao={meta.fracao} />
+          {/* A mesma poeira do desafio do mês; ver `PoeiraDaTrilha`. */}
+          <PoeiraDaTrilha />
 
           <div className="relative p-5">
             <p className="text-xs text-white/65">Meta da semana</p>

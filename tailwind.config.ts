@@ -259,6 +259,33 @@ const config: Config = {
          * layout nem pintura enquanto a página rola.
          */
         /*
+         * ── A poeira que sobe da trilha ──────────────────────────────────────
+         *
+         * Pedrinha soltando do chão e se desfazendo no ar. Sobe devagar,
+         * deriva para o lado e **encolhe** no caminho: partícula que só sobe e
+         * some parece fagulha; encolhendo, parece virar pó.
+         *
+         * O giro é separado do deslocamento porque `rotate` e `translate` são
+         * propriedades independentes e se compõem. Assim a pedrinha gira em
+         * torno de si mesma enquanto sobe, em vez de descrever um arco.
+         *
+         * O quadro anima só `translate`, `scale`, `rotate` e `opacity`, que
+         * são o que o compositor resolve sem repintar. A pedrinha leva uma
+         * sombra fixa para pegar a luz da trilha, mas ela não muda no
+         * caminho — sombra animada obrigaria a repintar a cada quadro.
+         */
+        evaporar: {
+          '0%': { opacity: '0', translate: '0 0', scale: '1', rotate: '0deg' },
+          '18%': { opacity: 'var(--pico, 0.8)' },
+          '70%': { opacity: 'calc(var(--pico, 0.8) * 0.5)' },
+          '100%': {
+            opacity: '0',
+            translate: 'var(--dx, 6px) var(--dy, -38px)',
+            scale: '0.25',
+            rotate: 'var(--giro, 140deg)',
+          },
+        },
+        /*
          * ── O respingo do disco ─────────────────────────────────────────────
          *
          * Um pião girando na água joga a gota para fora, em linha reta a
@@ -325,6 +352,8 @@ const config: Config = {
         voar: 'voar 12s linear infinite',
         /* Cada gota tem a própria duração e o próprio atraso. */
         respingo: 'respingo 900ms cubic-bezier(0.12, 0.7, 0.3, 1) both',
+        /* A duração real vem de cada pedrinha, para elas não subirem em bloco. */
+        evaporar: 'evaporar 7s linear infinite',
       },
     },
   },

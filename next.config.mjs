@@ -9,6 +9,29 @@ const nextConfig = {
    */
   output: process.env.BUILD_STANDALONE === '1' ? 'standalone' : undefined,
   poweredByHeader: false,
+  /*
+   * ── O cache de rota do cliente ────────────────────────────────────────────
+   *
+   * Por padrão o Next 15 guarda uma tela dinâmica por **zero** segundo: voltar
+   * da ficha do aluno para a lista refaz a lista inteira no servidor, com a
+   * sessão sendo resolvida de novo contra o Supabase. Numa academia isso é o
+   * gesto mais repetido do dia — abre o aluno, volta, abre o próximo.
+   *
+   * Trinta segundos é o compromisso. Dado de academia não muda a cada segundo,
+   * e o que muda por ação nossa não fica velho: toda escrita chama
+   * `revalidatePath`, que limpa a rota afetada na hora. O que sobra de risco é
+   * ver por até meio minuto uma lista sem a alteração que **outra pessoa**
+   * fez na mesma academia — e isso a tela já tinha, porque ninguém recarrega
+   * sozinho.
+   *
+   * O `static` é mais folgado porque tela sem dado de sessão pode esperar.
+   */
+  experimental: {
+    staleTimes: {
+      dynamic: 30,
+      static: 180,
+    },
+  },
   images: {
     remotePatterns: [{ protocol: 'https', hostname: '**.supabase.co' }],
   },

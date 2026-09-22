@@ -11,6 +11,7 @@ import { requireHubSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 import { can } from '@/lib/permissions/permissions'
 import { formatDate, formatNumber } from '@/lib/utils'
+import { ListLink } from '@/components/synse/list-link'
 
 export const metadata: Metadata = { title: 'Treinos' }
 
@@ -104,11 +105,13 @@ export default async function WorkoutsPage() {
                 */}
                 <div className={canWrite ? 'grid grid-cols-2 gap-2' : ''}>
                   <Button variant="outline" size="sm" asChild className={canWrite ? '' : 'w-full'}>
-                    <Link href={`/workouts/${plan.id}`}>{canWrite ? 'Ver' : 'Ver exercícios'}</Link>
+                    <ListLink href={`/workouts/${plan.id}`}>
+                      {canWrite ? 'Ver' : 'Ver exercícios'}
+                    </ListLink>
                   </Button>
                   {canWrite && (
                     <Button variant="outline" size="sm" asChild>
-                      <Link href={`/workouts/${plan.id}/edit`}>Editar</Link>
+                      <ListLink href={`/workouts/${plan.id}/edit`}>Editar</ListLink>
                     </Button>
                   )}
                 </div>

@@ -18,6 +18,7 @@ import { can } from '@/lib/permissions/permissions'
 import type { StudentListItem, StudentFilters } from '@/lib/database/data-source'
 import { daysBetween, formatCurrency, formatDate, formatPhone } from '@/lib/utils'
 import type { StudentStatus } from '@/types/domain'
+import { ListLink } from '@/components/synse/list-link'
 
 export const metadata: Metadata = { title: 'Alunos' }
 
@@ -75,7 +76,7 @@ export default async function StudentsPage({ searchParams }: { searchParams: Sea
       key: 'name',
       header: 'Aluno',
       render: (student) => (
-        <Link
+        <ListLink
           href={`/students/${student.id}`}
           className="flex items-center gap-3 rounded-md transition-opacity hover:opacity-80"
         >
@@ -86,7 +87,7 @@ export default async function StudentsPage({ searchParams }: { searchParams: Sea
             </span>
             <span className="block truncate text-xs text-synse-muted">{student.synseId}</span>
           </span>
-        </Link>
+        </ListLink>
       ),
     },
     {
@@ -156,7 +157,7 @@ export default async function StudentsPage({ searchParams }: { searchParams: Sea
       align: 'right',
       render: (student) => (
         <Button variant="ghost" size="sm" asChild>
-          <Link href={`/students/${student.id}`}>Abrir</Link>
+          <ListLink href={`/students/${student.id}`}>Abrir</ListLink>
         </Button>
       ),
     },

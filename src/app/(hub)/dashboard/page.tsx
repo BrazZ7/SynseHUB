@@ -30,6 +30,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { requireHubSession } from '@/lib/auth/require-session'
 import { can } from '@/lib/permissions/permissions'
 import { getDashboardData } from '@/features/dashboard/service'
+import { ListLink } from '@/components/synse/list-link'
 import {
   cn,
   daysOverdue,
@@ -102,7 +103,7 @@ export default async function DashboardPage() {
       {canEnroll && pendentes > 0 && (
         <Link
           href="/students?status=PENDING"
-          className="focus-visible:ring-synse-primary/25 border-synse-primary/30 bg-synse-primary/10 flex items-center gap-3 rounded-xl border p-4 transition hover:border-synse-primary focus-visible:outline-none focus-visible:ring-2"
+          className="flex items-center gap-3 rounded-xl border border-synse-primary/30 bg-synse-primary/10 p-4 transition hover:border-synse-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-synse-primary/25"
         >
           <UserPlus className="size-4 shrink-0 text-synse-primary" aria-hidden />
           <span className="min-w-0 flex-1 text-sm text-synse-text">
@@ -306,7 +307,7 @@ export default async function DashboardPage() {
                 <EmptyState title="Nenhum pagamento registrado" className="py-8" />
               ) : (
                 data.latestPayments.map((charge) => (
-                  <Link
+                  <ListLink
                     key={charge.id}
                     href={`/students/${charge.studentId}`}
                     className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-synse-surface-2"
@@ -321,7 +322,7 @@ export default async function DashboardPage() {
                     <span className="text-sm font-semibold tabular-nums text-synse-success">
                       {formatCurrency(charge.amount)}
                     </span>
-                  </Link>
+                  </ListLink>
                 ))
               )}
             </CardContent>
@@ -345,7 +346,7 @@ export default async function DashboardPage() {
                 />
               ) : (
                 data.overdueCharges.map((charge) => (
-                  <Link
+                  <ListLink
                     key={charge.id}
                     href={`/students/${charge.studentId}`}
                     className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-synse-surface-2"
@@ -362,7 +363,7 @@ export default async function DashboardPage() {
                     <span className="text-sm font-semibold tabular-nums text-synse-text">
                       {formatCurrency(charge.amount)}
                     </span>
-                  </Link>
+                  </ListLink>
                 ))
               )}
             </CardContent>
@@ -383,7 +384,7 @@ export default async function DashboardPage() {
               data.recentCheckIns.map((checkIn) => (
                 <div key={checkIn.id} className="flex items-center gap-3 px-0 py-2">
                   <span
-                    className="bg-synse-mint/50 flex size-8 shrink-0 items-center justify-center rounded-full text-synse-primary"
+                    className="flex size-8 shrink-0 items-center justify-center rounded-full bg-synse-mint/50 text-synse-primary"
                     aria-hidden
                   >
                     <QrCode className="size-3.5" />
@@ -498,7 +499,7 @@ function AlertRow({
   const Icon = config.icon
 
   return (
-    <div className="bg-synse-surface-2/60 flex gap-3 rounded-lg p-3">
+    <div className="flex gap-3 rounded-lg bg-synse-surface-2/60 p-3">
       <span
         className={cn(
           'flex size-8 shrink-0 items-center justify-center rounded-lg',

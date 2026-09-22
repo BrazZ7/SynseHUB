@@ -33,11 +33,14 @@ type Zona = { x0: number; x1: number; y0: number; y1: number }
 
 /**
  * Cartão do desafio do mês: a trilha sobe numa coluna estreita à direita.
- * Amostrado ponto a ponto: o núcleo aceso é x 0,80–0,88 entre y 0,28 e 0,56.
- * Uma faixa um pouco mais larga, 0,78–0,91, já deixava quatro das nove pedras
- * com menos de 1,6:1 de contraste.
+ * Amostrado ponto a ponto: o núcleo aceso é x 0,73–0,81 entre y 0,18 e 0,46.
+ *
+ * Estes números dependem da **altura** do cartão, não só da arte. Quando o
+ * botão "Registrar progresso" saiu, o cartão encolheu de 178 para 146 pixels,
+ * o `object-cover` passou a cortar por cima e por baixo em vez de pelos lados,
+ * e a coluna acesa andou de 0,80–0,88 para cá. Mexeu no layout, remede.
  */
-export const FAIXA_DESAFIO: Zona[] = [{ x0: 0.8, x1: 0.88, y0: 0.28, y1: 0.46 }]
+export const FAIXA_DESAFIO: Zona[] = [{ x0: 0.73, x1: 0.81, y0: 0.18, y1: 0.46 }]
 
 /**
  * Widget da meta semanal: a arte aparece quase inteira e deitada, então a

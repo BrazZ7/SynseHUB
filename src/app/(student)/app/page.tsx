@@ -291,23 +291,27 @@ export default async function StudentHomePage() {
 
           {/*
            * A poeira vem **depois** do véu: por baixo dele as pedrinhas saem
-           * lavadas. Elas nascem só no terço direito, onde o véu é fraco e
-           * onde está o chão iluminado da trilha.
+           * lavadas. Elas nascem só onde a trilha ilumina — ver a faixa
+           * medida em `trail-dust`.
            */}
           <PoeiraDaTrilha />
 
-          <div className="relative p-5">
-            <div className="flex items-center justify-between gap-3">
-              <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-synse-primary-light">
-                <Trophy className="size-3.5" aria-hidden />
-                Desafio do mês
-              </p>
-              {desafio && (
-                <span className="rounded-full border border-white/20 bg-white/15 px-2.5 py-0.5 text-xs font-medium tabular-nums text-white backdrop-blur-md">
-                  {desafio.percentage}%
-                </span>
-              )}
-            </div>
+          {/*
+           * ── O cartão inteiro é o botão ────────────────────────────────────
+           *
+           * Com um desafio escolhido ele leva para a aba Correr. Sem desafio,
+           * leva para a tela de desafios — mandar para a corrida quem ainda
+           * não escolheu objetivo seria um beco sem saída, porque é lá que se
+           * escolhe.
+           */}
+          <Link
+            href={desafio ? '/app/run' : '/app/challenges'}
+            className="relative block px-5 pb-6 pt-5 transition-transform duration-300 active:scale-[0.995]"
+          >
+            <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-synse-primary-light">
+              <Trophy className="size-3.5" aria-hidden />
+              Desafio do mês
+            </p>
 
             {desafio ? (
               <>
@@ -318,21 +322,42 @@ export default async function StudentHomePage() {
                   {desafio.progressValue.toLocaleString('pt-BR')} de{' '}
                   {desafio.targetValue.toLocaleString('pt-BR')} {desafio.challenge.unit}
                 </p>
-                <Progress value={desafio.percentage} className="mt-3 bg-white/20" />
+                {/* A barra desceu: sem o botão embaixo, ela sobrava colada no texto. */}
+                <Progress value={desafio.percentage} className="mt-6 bg-white/20" />
               </>
             ) : (
               <p className="mt-1.5 max-w-[64%] text-sm text-white/70">
                 Escolha um objetivo para este mês. No fim, você recebe a análise e a medalha.
               </p>
             )}
+          </Link>
 
+          {/*
+           * ── A porta para a tela de desafios ───────────────────────────────
+           *
+           * O botão "Registrar progresso" saiu daqui, e ele era o **único**
+           * caminho do app inteiro para `/app/challenges` — onde ficam o
+           * formulário de progresso, a troca de desafio e a estante de
+           * medalhas. Sem alguma entrada, essas três coisas ficariam
+           * inalcançáveis com um desafio em andamento.
+           *
+           * Então o selo de porcentagem virou essa entrada. Ele já estava ali,
+           * tocar num número para ver o detalhe é gesto conhecido, e assim a
+           * tela não ganha um segundo botão.
+           *
+           * Fica **fora** do elo do cartão, e não dentro: elo dentro de elo não
+           * é HTML válido e o navegador desmonta a marcação. O `z-10` é o que
+           * garante que o toque chegue nele em vez de atravessar para o cartão.
+           */}
+          {desafio && (
             <Link
               href="/app/challenges"
-              className="mt-4 inline-flex h-10 w-full items-center justify-center rounded-lg border border-white/20 bg-white/15 text-sm font-medium text-white backdrop-blur-md transition-colors hover:bg-white/25"
+              aria-label={`Progresso do desafio: ${desafio.percentage}%. Abrir a tela de desafios.`}
+              className="absolute right-5 top-5 z-10 rounded-full border border-white/20 bg-white/15 px-2.5 py-0.5 text-xs font-medium tabular-nums text-white backdrop-blur-md transition-colors hover:bg-white/25"
             >
-              {desafio ? 'Registrar progresso' : 'Escolher meu desafio'}
+              {desafio.percentage}%
             </Link>
-          </div>
+          )}
         </section>
       )}
 

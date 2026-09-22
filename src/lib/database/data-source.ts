@@ -501,6 +501,35 @@ export interface DataSource {
   }): Promise<WorkoutPlan>
 
   /**
+   * Edição de treino.
+   *
+   * Regrava a lista de exercícios inteira em vez de casar linha a linha: a
+   * tela manda o treino completo, e reconciliar por id exigiria carregar o que
+   * está lá, comparar e decidir o que é inserção, alteração e remoção — mais
+   * código e mais jeitos de errar a ordem do que apagar e reinserir.
+   *
+   * O `organizationId` não é enfeite: ele é o que impede um id de treino de
+   * outra academia, colado no formulário, de ser regravado. A RLS barraria de
+   * qualquer jeito, mas o erro chegaria como falha genérica em vez de "esse
+   * treino não é seu".
+   */
+  updateWorkoutPlan(input: {
+    organizationId: string
+    planId: string
+    name: string
+    goal: string | null
+    splitLabel: string
+    exercises: Array<{
+      exerciseId: string
+      sets: number
+      reps: string
+      restSeconds: number
+      suggestedLoad: number | null
+      notes: string | null
+    }>
+  }): Promise<WorkoutPlan>
+
+  /**
    * Atribui um treino a um aluno. É esta escrita que dispara o aviso de "novo
    * treino disponível" no sino — o gatilho está na 0012, e até agora nada no
    * produto chegava a acioná-lo.
@@ -514,7 +543,10 @@ export interface DataSource {
 
   listAssignmentsForStudent(organizationId: string, studentId: string): Promise<WorkoutAssignment[]>
   /** Quem já recebeu um treino. Uma consulta, em vez de uma por aluno. */
-  listAssignmentsForPlan(organizationId: string, workoutPlanId: string): Promise<WorkoutAssignment[]>
+  listAssignmentsForPlan(
+    organizationId: string,
+    workoutPlanId: string,
+  ): Promise<WorkoutAssignment[]>
   countAssignments(organizationId: string): Promise<Record<string, number>>
   listWorkoutLogs(organizationId: string, studentId: string): Promise<WorkoutLog[]>
 
@@ -613,11 +645,7 @@ export interface DataSource {
   ): Promise<ExerciseProgressPoint[]>
   getPersonalRecords(studentId: string): Promise<ExercisePersonalRecord[]>
   getWorkoutTotals(studentId: string, from: string, to: string): Promise<WorkoutTotals>
-  getGymTrainingReport(
-    organizationId: string,
-    from: string,
-    to: string,
-  ): Promise<GymTrainingReport>
+  getGymTrainingReport(organizationId: string, from: string, to: string): Promise<GymTrainingReport>
   listStudentsAtRisk(organizationId: string, dias: number): Promise<StudentAtRisk[]>
   getClassOccupancyReport(
     organizationId: string,
@@ -685,14 +713,8 @@ export interface DataSource {
 
   // Nutrição
   listNutritionPlans(organizationId: string): Promise<NutritionPlan[]>
-  listNutritionPlansForStudent(
-    organizationId: string,
-    studentId: string,
-  ): Promise<NutritionPlan[]>
-  getNutritionPlan(
-    organizationId: string,
-    planId: string,
-  ): Promise<NutritionPlanWithMeals | null>
+  listNutritionPlansForStudent(organizationId: string, studentId: string): Promise<NutritionPlan[]>
+  getNutritionPlan(organizationId: string, planId: string): Promise<NutritionPlanWithMeals | null>
   /** O que o aluno segue hoje. Nulo enquanto não houver plano publicado. */
   getPublishedNutritionPlan(
     organizationId: string,

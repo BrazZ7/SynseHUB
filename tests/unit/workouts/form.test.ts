@@ -85,12 +85,44 @@ describe('validação do treino', () => {
     }
   })
 
-  it('exercício que não é da biblioteca é recusado', () => {
-    const parsed = createWorkoutSchema.safeParse({
+  /*
+   * Este teste afirmava que `'supino'` era recusado — o schema exigia UUID.
+   *
+   * A exigência caiu, e por um motivo concreto: no modo de demonstração os
+   * identificadores são legíveis (`exr_0018`), e o formulário recusava a
+   * montagem inteira com "Escolha um exercício da biblioteca" logo depois de a
+   * pessoa escolher um. A criação de treino nunca funcionou ali.
+   *
+   * O nome antigo também prometia demais. Um UUID bem formado e inexistente
+   * passava por essa validação do mesmo jeito: quem garante que o exercício é
+   * da biblioteca é a chave estrangeira, e quem garante que é desta academia é
+   * a RLS. O que sobra para o schema é o que ele pode mesmo saber — que veio
+   * alguma coisa, e que ela tem tamanho de identificador.
+   */
+  it('aceita o identificador da biblioteca, no formato que o banco usar', () => {
+    for (const exerciseId of [UM, 'exr_0018']) {
+      const parsed = createWorkoutSchema.safeParse({
+        ...base,
+        exercises: [{ exerciseId, sets: '3', reps: '12', restSeconds: '60', notes: '' }],
+      })
+      expect(parsed.success).toBe(true)
+    }
+  })
+
+  it('recusa exercício em branco e identificador absurdo', () => {
+    const embranco = createWorkoutSchema.safeParse({
       ...base,
-      exercises: [{ exerciseId: 'supino', sets: '3', reps: '12', restSeconds: '60', notes: '' }],
+      exercises: [{ exerciseId: '   ', sets: '3', reps: '12', restSeconds: '60', notes: '' }],
     })
-    expect(parsed.success).toBe(false)
+    expect(embranco.success).toBe(false)
+
+    const enorme = createWorkoutSchema.safeParse({
+      ...base,
+      exercises: [
+        { exerciseId: 'x'.repeat(200), sets: '3', reps: '12', restSeconds: '60', notes: '' },
+      ],
+    })
+    expect(enorme.success).toBe(false)
   })
 
   it('zero séries é recusado; o descanso pode ser zero', () => {

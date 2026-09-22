@@ -116,6 +116,22 @@ export type DemoMutation =
       at: string
     }
   | {
+      /**
+       * Treino editado na demonstração.
+       *
+       * Substitui o conteúdo inteiro, e não um campo por vez: a tela de editar
+       * manda o treino completo, e guardar diferenças exigiria reconstruir a
+       * ordem dos exercícios a partir de remendos — mais caro em cookie e mais
+       * fácil de sair errado do que regravar.
+       */
+      t: 'wedit'
+      id: string
+      name: string
+      goal: string | null
+      split: string
+      ex: Array<[exerciseId: string, sets: number, reps: string, rest: number]>
+    }
+  | {
       /** Treino atribuído a um aluno. */
       t: 'wassign'
       id: string
@@ -152,19 +168,52 @@ function encode(journal: DemoMutation[]): string {
   return Buffer.from(JSON.stringify(journal), 'utf8').toString('base64url')
 }
 
+/**
+ * ── Os tipos que o diário aceita de volta ────────────────────────────────────
+ *
+ * O cookie vem do cliente, então a leitura confere o `t` antes de aceitar.
+ *
+ * Isto era uma lista escrita à mão, e ela parou no tempo: enquanto a união
+ * acima crescia — treino montado, treino atribuído, aluno editado, situação de
+ * matrícula, consentimento —, a lista continuava com os sete tipos originais.
+ * O efeito era silencioso e feio: a gravação funcionava, o cookie engordava, e
+ * na leitura seguinte a alteração era descartada. Na demonstração, montar um
+ * treino dava certo, mostrava a mensagem de sucesso, e o treino não aparecia
+ * em lugar nenhum.
+ *
+ * Agora é um `Record` sobre a própria união. Acrescentar um tipo lá em cima
+ * sem lembrar daqui deixa de compilar — o alarme dispara antes de o defeito
+ * existir, em vez de meses depois, na tela de alguém.
+ */
+const TIPOS_ACEITOS: Record<DemoMutation['t'], true> = {
+  student: true,
+  plan: true,
+  paid: true,
+  checkin: true,
+  notifread: true,
+  chal: true,
+  chalprog: true,
+  sstatus: true,
+  sedit: true,
+  wplan: true,
+  wedit: true,
+  wassign: true,
+  consent: true,
+}
+
 function decode(raw: string): DemoMutation[] {
   const parsed: unknown = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8'))
   if (!Array.isArray(parsed)) return []
-  // Entrada sem `t` conhecido é descartada: o cookie vem do cliente.
-  return parsed.filter(
-    (item): item is DemoMutation =>
-      typeof item === 'object' &&
-      item !== null &&
-      ['student', 'plan', 'paid', 'checkin', 'notifread', 'chal', 'chalprog'].includes(
-        (item as { t?: unknown }).t as string,
-      ),
-  )
+
+  return parsed.filter((item): item is DemoMutation => {
+    if (typeof item !== 'object' || item === null) return false
+    const tipo = (item as { t?: unknown }).t
+    return typeof tipo === 'string' && Object.hasOwn(TIPOS_ACEITOS, tipo)
+  })
 }
+
+/** Exportado para o teste que confere a cobertura da união. */
+export const TIPOS_DE_MUTACAO = Object.keys(TIPOS_ACEITOS) as Array<DemoMutation['t']>
 
 /** Lê o diário do visitante. Cookie ausente ou corrompido devolve vazio. */
 export async function readDemoJournal(): Promise<DemoMutation[]> {

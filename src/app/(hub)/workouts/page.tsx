@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { Dumbbell, Plus, Users } from 'lucide-react'
+import { CalendarRange, Dumbbell, Plus, Users } from 'lucide-react'
 
 import { EmptyState } from '@/components/synse/empty-state'
 import { PageHeader } from '@/components/synse/page-header'
@@ -27,18 +27,28 @@ export default async function WorkoutsPage() {
   const canWrite = can(session.role, 'workouts:write')
 
   return (
-    <div className="space-y-5 animate-fade-in-up">
+    <div className="animate-fade-in-up space-y-5">
       <PageHeader
         title="Treinos"
         description={`Planos de treino da academia e biblioteca com ${formatNumber(exercises.length)} exercícios.`}
         actions={
           canWrite && (
-            <Button asChild>
-              <Link href="/workouts/new">
-                <Plus className="size-4" />
-                Novo treino
-              </Link>
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              {/* A semana vem primeiro: montar cinco dias de uma vez é o caso
+                  comum de quem abre esta tela no começo do mês. */}
+              <Button asChild>
+                <Link href="/workouts/new-week">
+                  <CalendarRange className="size-4" />
+                  Montar a semana
+                </Link>
+              </Button>
+              <Button variant="outline" asChild>
+                <Link href="/workouts/new">
+                  <Plus className="size-4" />
+                  Treino avulso
+                </Link>
+              </Button>
+            </div>
           )
         }
       />
@@ -50,12 +60,20 @@ export default async function WorkoutsPage() {
           description="Monte o primeiro plano de treino para atribuir aos alunos."
           action={
             canWrite && (
-              <Button asChild>
-                <Link href="/workouts/new">
-                  <Plus className="size-4" />
-                  Montar o primeiro treino
-                </Link>
-              </Button>
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button asChild>
+                  <Link href="/workouts/new-week">
+                    <CalendarRange className="size-4" />
+                    Montar a semana
+                  </Link>
+                </Button>
+                <Button variant="outline" asChild>
+                  <Link href="/workouts/new">
+                    <Plus className="size-4" />
+                    Treino avulso
+                  </Link>
+                </Button>
+              </div>
             )
           }
         />
@@ -78,9 +96,22 @@ export default async function WorkoutsPage() {
                   </span>
                   <span className="text-xs">Criado em {formatDate(plan.createdAt)}</span>
                 </div>
-                <Button variant="outline" size="sm" asChild className="w-full">
-                  <Link href={`/workouts/${plan.id}`}>Ver exercícios</Link>
-                </Button>
+                {/*
+                  Editar só para quem pode escrever. A tela de edição recusa
+                  por conta própria — `requireHubSession('workouts:write')` —,
+                  mas oferecer um botão que leva a uma recusa é pior que não
+                  oferecer.
+                */}
+                <div className={canWrite ? 'grid grid-cols-2 gap-2' : ''}>
+                  <Button variant="outline" size="sm" asChild className={canWrite ? '' : 'w-full'}>
+                    <Link href={`/workouts/${plan.id}`}>{canWrite ? 'Ver' : 'Ver exercícios'}</Link>
+                  </Button>
+                  {canWrite && (
+                    <Button variant="outline" size="sm" asChild>
+                      <Link href={`/workouts/${plan.id}/edit`}>Editar</Link>
+                    </Button>
+                  )}
+                </div>
               </CardContent>
             </Card>
           ))}

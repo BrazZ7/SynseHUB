@@ -1,11 +1,13 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { Timer } from 'lucide-react'
+import { Pencil, Timer } from 'lucide-react'
 
 import { EmptyState } from '@/components/synse/empty-state'
 import { BackLink } from '@/components/synse/back-link'
 import { PageHeader } from '@/components/synse/page-header'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { AssignWorkoutCard } from '@/features/workouts/assign-workout-card'
 import { MUSCLE_GROUP_LABELS } from '@/features/workouts/labels'
@@ -51,13 +53,23 @@ export default async function WorkoutDetailPage({ params }: { params: Params }) 
   )
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5 animate-fade-in-up">
+    <div className="mx-auto max-w-4xl animate-fade-in-up space-y-5">
       <BackLink href="/workouts" label="Treinos" />
 
       <PageHeader
         eyebrow={`Divisão ${plan.splitLabel}`}
         title={plan.name}
         description={plan.goal ?? undefined}
+        actions={
+          podeAtribuir && (
+            <Button variant="outline" asChild>
+              <Link href={`/workouts/${plan.id}/edit`}>
+                <Pencil className="size-4" />
+                Editar
+              </Link>
+            </Button>
+          )
+        }
       />
 
       {exercises.length === 0 ? (

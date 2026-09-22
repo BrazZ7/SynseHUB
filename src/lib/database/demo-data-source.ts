@@ -134,6 +134,23 @@ export class DemoDataSource implements DataSource {
   /** Campos de cobrança alterados, sem tocar no objeto base. */
   private readonly chargePatches = new Map<string, Partial<Charge>>()
   private readonly studentStatusPatches = new Map<string, Student['status']>()
+  /**
+   * Treinos editados na demonstração.
+   *
+   * Um mapa de sobreposição, e não uma alteração no arranjo original: o treino
+   * pode ser tanto um dos semeados quanto um criado na própria demonstração, e
+   * só a sobreposição atende aos dois sem duplicar a lista.
+   */
+  private readonly workoutEdits = new Map<
+    string,
+    {
+      name: string
+      goal: string | null
+      split: string
+      ex: Array<[string, number, string, number]>
+    }
+  >()
+
   private readonly studentEdits = new Map<
     string,
     { name: string; phone: string | null; goal: string | null; trainerId: string | null }
@@ -304,6 +321,15 @@ export class DemoDataSource implements DataSource {
       }
       case 'sedit': {
         this.studentEdits.set(mutation.id, mutation)
+        break
+      }
+      case 'wedit': {
+        this.workoutEdits.set(mutation.id, {
+          name: mutation.name,
+          goal: mutation.goal,
+          split: mutation.split,
+          ex: mutation.ex,
+        })
         break
       }
       case 'wplan': {
@@ -872,18 +898,47 @@ export class DemoDataSource implements DataSource {
     return [...this.db.workoutPlans, ...this.addedWorkoutPlans]
   }
 
+  /** Aplica a edição, se houver, sobre o plano vindo da semente ou do diário. */
+  private comEdicao(plano: WorkoutPlan): WorkoutPlan {
+    const edicao = this.workoutEdits.get(plano.id)
+    if (!edicao) return plano
+    return { ...plano, name: edicao.name, goal: edicao.goal, splitLabel: edicao.split }
+  }
+
   async listWorkoutPlans(organizationId: string): Promise<WorkoutPlan[]> {
-    return this.scoped(this.workoutPlans(), organizationId)
+    return this.scoped(this.workoutPlans(), organizationId).map((p) => this.comEdicao(p))
   }
 
   async getWorkoutPlan(organizationId: string, planId: string): Promise<WorkoutPlan | null> {
-    return this.scoped(this.workoutPlans(), organizationId).find((p) => p.id === planId) ?? null
+    const plano = this.scoped(this.workoutPlans(), organizationId).find((p) => p.id === planId)
+    return plano ? this.comEdicao(plano) : null
   }
 
   async listWorkoutExercises(workoutPlanId: string) {
     const exerciseById = new Map(this.db.exercises.map((e) => [e.id, e]))
-    return [...this.db.workoutExercises, ...this.addedWorkoutExercises]
-      .filter((we) => we.workoutPlanId === workoutPlanId)
+
+    /*
+     * Treino editado troca a lista inteira. Misturar a lista nova com a antiga
+     * deixaria na tela os exercícios que o professor acabou de tirar.
+     */
+    const edicao = this.workoutEdits.get(workoutPlanId)
+    const linhas = edicao
+      ? edicao.ex.map(([exerciseId, sets, reps, restSeconds], indice) => ({
+          id: `${workoutPlanId}_ed${indice}`,
+          workoutPlanId,
+          exerciseId,
+          order: indice + 1,
+          sets,
+          reps,
+          restSeconds,
+          suggestedLoad: null,
+          notes: null,
+        }))
+      : [...this.db.workoutExercises, ...this.addedWorkoutExercises].filter(
+          (we) => we.workoutPlanId === workoutPlanId,
+        )
+
+    return linhas
       .sort((a, b) => a.order - b.order)
       .map((we) => ({ ...we, exercise: exerciseById.get(we.exerciseId)! }))
       .filter((we) => Boolean(we.exercise))
@@ -947,6 +1002,36 @@ export class DemoDataSource implements DataSource {
       status: 'PUBLISHED',
       createdAt: at,
     }
+  }
+
+  async updateWorkoutPlan(input: {
+    organizationId: string
+    planId: string
+    name: string
+    goal: string | null
+    splitLabel: string
+    exercises: Array<{
+      exerciseId: string
+      sets: number
+      reps: string
+      restSeconds: number
+      suggestedLoad: number | null
+      notes: string | null
+    }>
+  }): Promise<WorkoutPlan> {
+    const atual = await this.getWorkoutPlan(input.organizationId, input.planId)
+    if (!atual) throw new Error('Treino não encontrado nesta academia.')
+
+    await appendDemoMutation({
+      t: 'wedit',
+      id: input.planId,
+      name: input.name,
+      goal: input.goal,
+      split: input.splitLabel,
+      ex: input.exercises.map((e) => [e.exerciseId, e.sets, e.reps, e.restSeconds]),
+    })
+
+    return { ...atual, name: input.name, goal: input.goal, splitLabel: input.splitLabel }
   }
 
   async assignWorkoutPlan(input: {
@@ -1043,9 +1128,7 @@ export class DemoDataSource implements DataSource {
       height: input.height,
       bmi: imc(input.weight, input.height),
       bodyFatPercentage:
-        input.protocol === 'MANUAL'
-          ? input.bodyFatPercentage
-          : percentualDeGordura(densidade),
+        input.protocol === 'MANUAL' ? input.bodyFatPercentage : percentualDeGordura(densidade),
       chest: input.chest,
       arm: input.arm,
       waist: input.waist,
@@ -1091,12 +1174,12 @@ export class DemoDataSource implements DataSource {
       (membro) => membro.role === 'TRAINER' || membro.role === 'PROFESSIONAL',
     )
     const grade: Array<[string, number, string, number, number, string]> = [
-      ['Spinning',        1, '06:00', 45, 18, 'Sala de bike'],
-      ['Funcional',       1, '19:00', 50, 16, 'Área funcional'],
+      ['Spinning', 1, '06:00', 45, 18, 'Sala de bike'],
+      ['Funcional', 1, '19:00', 50, 16, 'Área funcional'],
       ['Musculação guiada', 2, '07:00', 60, 12, 'Sala principal'],
-      ['Spinning',        3, '19:00', 45, 18, 'Sala de bike'],
-      ['Alongamento',     4, '08:00', 30, 20, 'Sala 2'],
-      ['Funcional',       5, '18:30', 50, 16, 'Área funcional'],
+      ['Spinning', 3, '19:00', 45, 18, 'Sala de bike'],
+      ['Alongamento', 4, '08:00', 30, 20, 'Sala 2'],
+      ['Funcional', 5, '18:30', 50, 16, 'Área funcional'],
       ['Treino livre assistido', 6, '09:00', 90, 25, 'Sala principal'],
     ]
 
@@ -1172,11 +1255,14 @@ export class DemoDataSource implements DataSource {
     this.demoSessions.forEach((sessao, indice) => {
       // Uma das aulas nasce lotada com espera; as outras, parcialmente cheias.
       const lotada = indice % 5 === 2
-      const quantos = lotada ? sessao.capacity + 2 : Math.floor(sessao.capacity * 0.45) + (indice % 3)
+      const quantos = lotada
+        ? sessao.capacity + 2
+        : Math.floor(sessao.capacity * 0.45) + (indice % 3)
 
       for (let i = 0; i < quantos && i < alunos.length; i += 1) {
         const aluno = alunos[(indice * 3 + i) % alunos.length]
-        if (this.demoBookings.some((r) => r.sessionId === sessao.id && r.studentId === aluno.id)) continue
+        if (this.demoBookings.some((r) => r.sessionId === sessao.id && r.studentId === aluno.id))
+          continue
         this.demoBookings.push({
           id: `book_${sessao.id}_${i}`,
           organizationId: DEMO_ORG_ID,
@@ -1506,7 +1592,10 @@ export class DemoDataSource implements DataSource {
    */
   async getExerciseProgress(studentId: string, exerciseId: string, weeks: number) {
     const logs = this.db.workoutLogs
-      .filter((log) => log.studentId === studentId && this.exercicioDoLog(log.workoutExerciseId) === exerciseId)
+      .filter(
+        (log) =>
+          log.studentId === studentId && this.exercicioDoLog(log.workoutExerciseId) === exerciseId,
+      )
       .slice(-weeks)
 
     return logs.map((log, indice) => ({
@@ -1581,7 +1670,6 @@ export class DemoDataSource implements DataSource {
 
   async listStudentsAtRisk(organizationId: string, dias: number): Promise<StudentAtRisk[]> {
     const limite = Date.now() - dias * 86_400_000
-    
 
     return this.db.students
       .filter((aluno) => aluno.status === 'ACTIVE' || aluno.status === 'OVERDUE')
@@ -1830,17 +1918,14 @@ export class DemoDataSource implements DataSource {
 
   async listNutritionPlansForStudent(organizationId: string, studentId: string) {
     const planos = await this.listNutritionPlans(organizationId)
-    return planos
-      .filter((p) => p.studentId === studentId)
-      .sort((a, b) => b.version - a.version)
+    return planos.filter((p) => p.studentId === studentId).sort((a, b) => b.version - a.version)
   }
 
   async getNutritionPlan(organizationId: string, planId: string) {
     this.montarNutricao()
     return (
-      this.demoNutritionPlans.find(
-        (p) => p.organizationId === organizationId && p.id === planId,
-      ) ?? null
+      this.demoNutritionPlans.find((p) => p.organizationId === organizationId && p.id === planId) ??
+      null
     )
   }
 
@@ -1858,9 +1943,7 @@ export class DemoDataSource implements DataSource {
 
   async saveNutritionPlan(input: SaveNutritionPlanInput): Promise<NutritionPlan> {
     this.montarNutricao()
-    const existente = input.id
-      ? this.demoNutritionPlans.find((p) => p.id === input.id)
-      : undefined
+    const existente = input.id ? this.demoNutritionPlans.find((p) => p.id === input.id) : undefined
 
     const id = input.id ?? `nplan_${this.demoNutritionPlans.length + 1}`
     const plano: NutritionPlanWithMeals = {
@@ -1923,7 +2006,11 @@ export class DemoDataSource implements DataSource {
 
     // Só um publicado por aluno, como o índice parcial garante no banco.
     for (const outro of this.demoNutritionPlans) {
-      if (outro.studentId === plano.studentId && outro.status === 'PUBLISHED' && outro.id !== planId) {
+      if (
+        outro.studentId === plano.studentId &&
+        outro.status === 'PUBLISHED' &&
+        outro.id !== planId
+      ) {
         outro.status = 'ARCHIVED'
       }
     }
@@ -1974,8 +2061,7 @@ export class DemoDataSource implements DataSource {
     this.desafiosProntos = true
 
     const hoje = new Date()
-    const dia = (n: number) =>
-      new Date(hoje.getTime() + n * 86_400_000).toISOString().slice(0, 10)
+    const dia = (n: number) => new Date(hoje.getTime() + n * 86_400_000).toISOString().slice(0, 10)
 
     this.demoGymChallenges.push(
       {
@@ -2179,9 +2265,7 @@ export class DemoDataSource implements DataSource {
     const lead = await this.getLead(organizationId, leadId)
     if (!lead || lead.stage === stage) return
 
-    this.demoLeadEvents.push(
-      this.evento(leadId, 'STAGE_CHANGE', lead.stage, stage, lostReason),
-    )
+    this.demoLeadEvents.push(this.evento(leadId, 'STAGE_CHANGE', lead.stage, stage, lostReason))
     this.leadEdits.set(leadId, {
       ...lead,
       stage,
@@ -2190,12 +2274,7 @@ export class DemoDataSource implements DataSource {
     })
   }
 
-  async addLeadEvent(
-    _organizationId: string,
-    leadId: string,
-    kind: LeadEventKind,
-    body: string,
-  ) {
+  async addLeadEvent(_organizationId: string, leadId: string, kind: LeadEventKind, body: string) {
     this.demoLeadEvents.push(this.evento(leadId, kind, null, null, body))
   }
 

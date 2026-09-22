@@ -349,7 +349,11 @@ export class SupabaseDataSource implements DataSource {
 
     const { error: erroAluno } = await this.client
       .from('students')
-      .update({ goal: input.goal, trainer_id: input.trainerId, updated_at: new Date().toISOString() })
+      .update({
+        goal: input.goal,
+        trainer_id: input.trainerId,
+        updated_at: new Date().toISOString(),
+      })
       .eq('organization_id', input.organizationId)
       .eq('id', input.studentId)
     if (erroAluno) this.fail('updateStudent:student', erroAluno)
@@ -1196,6 +1200,73 @@ export class SupabaseDataSource implements DataSource {
     return plan
   }
 
+  async updateWorkoutPlan(input: {
+    organizationId: string
+    planId: string
+    name: string
+    goal: string | null
+    splitLabel: string
+    exercises: Array<{
+      exerciseId: string
+      sets: number
+      reps: string
+      restSeconds: number
+      suggestedLoad: number | null
+      notes: string | null
+    }>
+  }): Promise<WorkoutPlan> {
+    /*
+     * O `eq('organization_id')` no update é a trava de inquilino desta camada.
+     * A RLS barra de qualquer jeito, mas sem ele um id de outra academia
+     * voltaria como "nenhuma linha atingida" — e o `single()` transformaria
+     * isso num erro de banco em vez de uma recusa que a tela sabe explicar.
+     */
+    const row = await this.select<Row>(
+      'updateWorkoutPlan',
+      this.client
+        .from('workout_plans')
+        .update({ name: input.name, goal: input.goal, split_label: input.splitLabel })
+        .eq('id', input.planId)
+        .eq('organization_id', input.organizationId)
+        .select('*')
+        .single(),
+    )
+    const plan = this.mapWorkoutPlan(row!)
+
+    /*
+     * Apaga e reinsere, nesta ordem, sem transação — o PostgREST não oferece
+     * uma. A janela entre as duas escritas existe: se a inserção falhar, o
+     * treino fica sem exercícios.
+     *
+     * É pior do que na criação, onde dava para remover o plano órfão, porque
+     * aqui não há o que desfazer: a lista antiga já se foi. O que sobra é
+     * avisar com clareza — o erro sobe, a tela diz que a edição falhou, e o
+     * professor reabre o treino e vê o que restou. Transação de verdade só
+     * vindo por uma função no banco, que é a saída quando isso incomodar.
+     */
+    const { error: erroApagar } = await this.client
+      .from('workout_exercises')
+      .delete()
+      .eq('workout_plan_id', plan.id)
+    if (erroApagar) this.fail('updateWorkoutPlan:limpar', erroApagar)
+
+    const { error } = await this.client.from('workout_exercises').insert(
+      input.exercises.map((exercicio, indice) => ({
+        workout_plan_id: plan.id,
+        exercise_id: exercicio.exerciseId,
+        position: indice + 1,
+        sets: exercicio.sets,
+        reps: exercicio.reps,
+        rest_seconds: exercicio.restSeconds,
+        suggested_load: exercicio.suggestedLoad,
+        notes: exercicio.notes,
+      })),
+    )
+    if (error) this.fail('updateWorkoutPlan:exercicios', error)
+
+    return plan
+  }
+
   async assignWorkoutPlan(input: {
     organizationId: string
     workoutPlanId: string
@@ -1502,8 +1573,7 @@ export class SupabaseDataSource implements DataSource {
   }
 
   /** O professor vem por join aninhado: staff → user_profiles → name. */
-  private static readonly SESSAO_SELECT =
-    '*, staff:staff_id(user_profiles:user_profile_id(name))'
+  private static readonly SESSAO_SELECT = '*, staff:staff_id(user_profiles:user_profile_id(name))'
 
   async listClassSchedules(organizationId: string): Promise<ClassSchedule[]> {
     const rows =
@@ -1634,7 +1704,11 @@ export class SupabaseDataSource implements DataSource {
      */
     const { error } = await this.client
       .from('class_sessions')
-      .update({ status: 'CANCELLED', cancellation_reason: reason, updated_at: new Date().toISOString() })
+      .update({
+        status: 'CANCELLED',
+        cancellation_reason: reason,
+        updated_at: new Date().toISOString(),
+      })
       .eq('organization_id', organizationId)
       .eq('id', sessionId)
     if (error) this.fail('cancelClassSession', error)
@@ -2619,7 +2693,9 @@ export class SupabaseDataSource implements DataSource {
         'listBodyShares',
         this.client
           .from('body_measurement_shares')
-          .select('id, user_profile_id, shared_with_profile_id, organization_id, granted_at, revoked_at, shared_with:user_profiles!body_measurement_shares_shared_with_profile_id_fkey(name)')
+          .select(
+            'id, user_profile_id, shared_with_profile_id, organization_id, granted_at, revoked_at, shared_with:user_profiles!body_measurement_shares_shared_with_profile_id_fkey(name)',
+          )
           .is('revoked_at', null)
           .order('granted_at', { ascending: false }),
       )) ?? []
@@ -2767,10 +2843,7 @@ export class SupabaseDataSource implements DataSource {
       this.listGymChallenges(organizationId),
       this.select<Row[]>(
         'listGymChallengesForStudent:participations',
-        this.client
-          .from('challenge_participants')
-          .select('*')
-          .eq('user_profile_id', userProfileId),
+        this.client.from('challenge_participants').select('*').eq('user_profile_id', userProfileId),
       ),
     ])
 
@@ -2837,7 +2910,8 @@ export class SupabaseDataSource implements DataSource {
     }
   }
 
-  private static readonly LEAD_SELECT = '*, staff:owner_staff_id(user_profiles:user_profile_id(name))'
+  private static readonly LEAD_SELECT =
+    '*, staff:owner_staff_id(user_profiles:user_profile_id(name))'
 
   async listLeads(organizationId: string) {
     const rows =

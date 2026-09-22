@@ -1,7 +1,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 
-import { PoeiraDaTrilha } from '@/components/synse/trail-dust'
+import { FAIXA_SEMANA, PoeiraDaTrilha } from '@/components/synse/trail-dust'
 
 import { progressoDaMeta } from '@/features/synse-run/goal'
 import { formatDistance } from '@/features/synse-run/format'
@@ -143,8 +143,12 @@ export function WeekChart({
           {/* Sem o véu, os números caem em cima das cristas iluminadas. */}
           <div aria-hidden className="veu-da-trilha absolute inset-0" />
 
-          {/* A mesma poeira do desafio do mês; ver `PoeiraDaTrilha`. */}
-          <PoeiraDaTrilha />
+          {/*
+           * A mesma poeira do desafio do mês, com a faixa deste recorte: aqui
+           * a arte aparece quase inteira e deitada, e a parte iluminada da
+           * trilha cai em outro lugar da caixa.
+           */}
+          <PoeiraDaTrilha faixa={FAIXA_SEMANA} quantas={7} />
 
           <div className="relative p-5">
             <p className="text-xs text-white/65">Meta da semana</p>

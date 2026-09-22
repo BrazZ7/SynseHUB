@@ -6,147 +6,124 @@
  * um traço marcando a rota, foi reprovada justamente por isso: cobria a arte
  * em vez de animá-la.
  *
- * ── Onde elas nascem ────────────────────────────────────────────────────────
+ * ── Pedra é preta, e por isso ela precisa de luz atrás ──────────────────────
  *
- * Só no terço direito. A metade esquerda do cartão fica sob o véu quase opaco
- * que protege a leitura do texto, e partícula ali não aparece — seria custo
- * sem efeito. E é à direita que está o chão iluminado da trilha, que é de onde
- * poeira levantando faz sentido.
+ * A primeira versão pintou as pedrinhas de verde-claro com brilho. Ficava
+ * bonito e não era pedra: era vaga-lume. Pedra de verdade é escura, e escura
+ * sobre fundo escuro não aparece.
  *
- * As posições são fixas, e não sorteadas: `Math.random` no servidor e no
- * navegador dá valores diferentes, e o React reclamaria da hidratação a cada
- * carregamento. É a mesma razão das folhas do painel da planta.
+ * Medido no navegador, com as partículas escondidas e a luminância do fundo
+ * amostrada ponto a ponto: das dez posições que eu tinha escolhido, **sete
+ * tinham contraste de 1,0:1** para uma pedra preta — invisíveis. A arte é
+ * quase toda noite; o que ilumina é a trilha, e ela ocupa uma faixa estreita.
+ *
+ * Então a poeira nasce só onde há luz por trás. Isso também é o certo
+ * fisicamente: poeira levanta do caminho iluminado, não do breu.
+ *
+ * ── Por que cada cartão tem a própria faixa ─────────────────────────────────
+ *
+ * Os dois cartões que usam esta arte a recortam diferente — o do desafio é
+ * mais alto, o da semana é quase a imagem inteira —, então a trilha cai em
+ * lugares diferentes da caixa. Uma faixa só em porcentagem não serve aos dois:
+ * as posições de cada preset foram medidas no cartão correspondente.
  */
 
-/*
- * `pico` é a opacidade máxima de cada pedrinha, e varia de propósito: um
- * punhado de partículas com o mesmo brilho lê como enfeite, com brilhos
- * diferentes lê como profundidade.
- *
- * Elas nascem entre 30% e 60% da altura, e não rente ao pé do cartão. Medido
- * na tela: o botão ocupa o terço de baixo, e as pedrinhas que começavam ali
- * subiam atrás dele — a primeira versão tinha dez partículas e dava para ver
- * uma.
- */
-const PEDRAS = [
-  {
-    x: '66%',
-    y: '34%',
-    t: 4,
-    dx: '7px',
-    dy: '-34px',
-    giro: '160deg',
-    dur: '7.5s',
-    atraso: '0s',
-    pico: 0.9,
-  },
-  {
-    x: '74%',
-    y: '30%',
-    t: 3,
-    dx: '-5px',
-    dy: '-28px',
-    giro: '-120deg',
-    dur: '6.2s',
-    atraso: '1.4s',
-    pico: 0.7,
-  },
-  {
-    x: '81%',
-    y: '40%',
-    t: 5,
-    dx: '9px',
-    dy: '-44px',
-    giro: '200deg',
-    dur: '8.4s',
-    atraso: '2.9s',
-    pico: 1,
-  },
-  {
-    x: '88%',
-    y: '32%',
-    t: 3,
-    dx: '-4px',
-    dy: '-26px',
-    giro: '-90deg',
-    dur: '5.6s',
-    atraso: '0.7s',
-    pico: 0.65,
-  },
-  {
-    x: '70%',
-    y: '48%',
-    t: 4,
-    dx: '11px',
-    dy: '-40px',
-    giro: '130deg',
-    dur: '9.1s',
-    atraso: '3.8s',
-    pico: 0.85,
-  },
-  {
-    x: '93%',
-    y: '44%',
-    t: 4,
-    dx: '-8px',
-    dy: '-36px',
-    giro: '-170deg',
-    dur: '7.8s',
-    atraso: '2.1s',
-    pico: 0.8,
-  },
-  {
-    x: '77%',
-    y: '56%',
-    t: 3,
-    dx: '6px',
-    dy: '-30px',
-    giro: '110deg',
-    dur: '6.8s',
-    atraso: '4.6s',
-    pico: 0.7,
-  },
-  {
-    x: '85%',
-    y: '52%',
-    t: 5,
-    dx: '-10px',
-    dy: '-48px',
-    giro: '-210deg',
-    dur: '9.6s',
-    atraso: '1.9s',
-    pico: 0.95,
-  },
-  {
-    x: '62%',
-    y: '42%',
-    t: 3,
-    dx: '8px',
-    dy: '-32px',
-    giro: '150deg',
-    dur: '8.9s',
-    atraso: '5.4s',
-    pico: 0.6,
-  },
-  {
-    x: '90%',
-    y: '60%',
-    t: 3,
-    dx: '-6px',
-    dy: '-34px',
-    giro: '-140deg',
-    dur: '7.1s',
-    atraso: '3.2s',
-    pico: 0.75,
-  },
-] as const
+/** Um retângulo, em fração da caixa, onde há luz para a pedra aparecer. */
+type Zona = { x0: number; x1: number; y0: number; y1: number }
 
-export function PoeiraDaTrilha() {
+/**
+ * Cartão do desafio do mês: a trilha sobe numa coluna estreita à direita.
+ * Amostrado ponto a ponto: o núcleo aceso é x 0,80–0,88 entre y 0,28 e 0,56.
+ * Uma faixa um pouco mais larga, 0,78–0,91, já deixava quatro das nove pedras
+ * com menos de 1,6:1 de contraste.
+ */
+export const FAIXA_DESAFIO: Zona[] = [{ x0: 0.8, x1: 0.88, y0: 0.28, y1: 0.46 }]
+
+/**
+ * Widget da meta semanal: a arte aparece quase inteira e deitada, então a
+ * parte clara é uma faixa atravessada embaixo, mais uma coluna no meio.
+ */
+export const FAIXA_SEMANA: Zona[] = [
+  { x0: 0.58, x1: 0.9, y0: 0.16, y1: 0.3 },
+  { x0: 0.71, x1: 0.8, y0: 0.3, y1: 0.52 },
+]
+
+/**
+ * Sorteio determinístico.
+ *
+ * `Math.random` daria valores diferentes no servidor e no navegador, e o React
+ * reclamaria da hidratação a cada carregamento — é a mesma armadilha das
+ * folhas do painel da planta, que por isso têm posições escritas à mão. Aqui,
+ * com duas faixas diferentes para servir, um gerador com semente fixa rende
+ * mais do que duas listas na unha: mesma semente, mesma saída, nos dois lados.
+ */
+function sorteioFixo(semente: number) {
+  let estado = semente >>> 0
+  return () => {
+    estado = (estado * 1664525 + 1013904223) >>> 0
+    return estado / 4294967296
+  }
+}
+
+type Pedra = {
+  x: string
+  y: string
+  largura: number
+  altura: number
+  dx: string
+  dy: string
+  giro: string
+  dur: string
+  atraso: string
+  pico: number
+}
+
+function semear(zonas: Zona[], quantas: number, semente: number): Pedra[] {
+  const proximo = sorteioFixo(semente)
+
+  return Array.from({ length: quantas }, (_, i) => {
+    const zona = zonas[i % zonas.length]
+    const lado = 3 + Math.round(proximo() * 2)
+
+    return {
+      x: `${(zona.x0 + proximo() * (zona.x1 - zona.x0)) * 100}%`,
+      y: `${(zona.y0 + proximo() * (zona.y1 - zona.y0)) * 100}%`,
+      largura: lado,
+      /* Nunca quadrada: seixo é achatado, e um quadradinho perfeito lê como pixel. */
+      altura: Math.max(2, lado - 1 - Math.round(proximo())),
+      dx: `${(proximo() * 2 - 1) * 9}px`,
+      /*
+       * Voo curto, de 16 a 32 pixels. Com o dobro disso a pedra saía da faixa
+       * iluminada antes de terminar de desaparecer, e o fim do voo acontecia
+       * no escuro, onde ninguém via.
+       */
+      dy: `${-(16 + proximo() * 16)}px`,
+      giro: `${(proximo() * 2 - 1) * 220}deg`,
+      dur: `${(5.5 + proximo() * 4.5).toFixed(1)}s`,
+      atraso: `${(proximo() * 6).toFixed(1)}s`,
+      /*
+       * A opacidade máxima varia: um punhado de partículas com o mesmo peso lê
+       * como enfeite; com pesos diferentes lê como profundidade.
+       */
+      pico: 0.55 + proximo() * 0.4,
+    }
+  })
+}
+
+export function PoeiraDaTrilha({
+  faixa = FAIXA_DESAFIO,
+  quantas = 9,
+}: {
+  faixa?: Zona[]
+  quantas?: number
+}) {
+  const pedras = semear(faixa, quantas, 20260922)
+
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-      {PEDRAS.map((pedra) => (
+      {pedras.map((pedra, i) => (
         <span
-          key={`${pedra.x}-${pedra.y}`}
+          key={i}
           /*
            * `animate-evaporar`, e não o nome da animação no `style`: o Tailwind
            * só emite o `@keyframes` quando enxerga a utilitária no código.
@@ -158,12 +135,12 @@ export function PoeiraDaTrilha() {
            * na posição inicial até o atraso vencer. Sem ele, metade delas
            * seria um pontinho grudado na arte nos primeiros segundos.
            */
-          className="absolute animate-evaporar rounded-[1px] bg-[#e2f3ec] shadow-[0_0_5px_-1px_#9fe9d5] [animation-duration:var(--dur)] [animation-fill-mode:backwards] motion-reduce:hidden"
+          className="absolute animate-evaporar rounded-[1px] bg-[#0b0d0c] [animation-duration:var(--dur)] [animation-fill-mode:backwards] motion-reduce:hidden"
           style={{
             left: pedra.x,
             bottom: pedra.y,
-            width: `${pedra.t}px`,
-            height: `${Math.max(1, pedra.t - 1)}px`,
+            width: `${pedra.largura}px`,
+            height: `${pedra.altura}px`,
             animationDelay: pedra.atraso,
             ['--dur' as string]: pedra.dur,
             ['--dx' as string]: pedra.dx,

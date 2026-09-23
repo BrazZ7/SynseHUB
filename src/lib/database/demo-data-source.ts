@@ -2980,11 +2980,24 @@ export class DemoDataSource implements DataSource {
     return id
   }
 
+  /**
+   * As atividades da pessoa: as da semente mais as gravadas na visita.
+   *
+   * A semente só corre para o perfil da persona de aluno. Antes disto, a aba
+   * SynseRun abria vazia para quem estava avaliando o produto — o recurso
+   * existia e a vitrine mostrava tela em branco.
+   *
+   * Corrida gravada na demonstração entra na frente da semente, e não no
+   * lugar dela: quem grava quer ver a própria, e o histórico continua ali
+   * para a meta da semana ter de onde sair.
+   */
   async listActivities(
     userProfileId: string,
     filters: { sport?: SportType; since?: string; limit?: number } = {},
   ): Promise<Activity[]> {
-    return [...DemoDataSource.corridas.values()]
+    const daSemente = userProfileId === this.db.runnerProfileId ? this.db.activities : []
+
+    return [...DemoDataSource.corridas.values(), ...daSemente]
       .filter((atividade) => atividade.userProfileId === userProfileId)
       .filter((atividade) => !filters.sport || atividade.sport === filters.sport)
       .filter((atividade) => !filters.since || atividade.startedAt >= filters.since)
@@ -2993,20 +3006,37 @@ export class DemoDataSource implements DataSource {
   }
 
   async getActivity(activityId: string): Promise<Activity | null> {
-    return DemoDataSource.corridas.get(activityId) ?? null
+    return (
+      DemoDataSource.corridas.get(activityId) ??
+      this.db.activities.find((atividade) => atividade.id === activityId) ??
+      null
+    )
   }
 
   async getActivityRoute(activityId: string): Promise<ActivityRoutePoint[]> {
-    return DemoDataSource.rotas.get(activityId) ?? []
+    /*
+     * A semente traça rota só das mais recentes. Abrir uma corrida antiga
+     * devolve lista vazia, e a tela já trata isso — desenhar um traçado
+     * inventado para trinta atividades encheria a memória sem ninguém abrir.
+     */
+    return DemoDataSource.rotas.get(activityId) ?? this.db.activityRoutes.get(activityId) ?? []
   }
 
   async getActivitySplits(activityId: string): Promise<ActivitySplit[]> {
-    return DemoDataSource.parciais.get(activityId) ?? []
+    return (
+      DemoDataSource.parciais.get(activityId) ?? this.db.activitySplits.get(activityId) ?? []
+    )
   }
 
-  async listPersonalRecords(): Promise<PersonalRecord[]> {
-    // Recorde nasce da comparação com um histórico que a demonstração não tem.
-    return []
+  /**
+   * Os recordes da semente.
+   *
+   * Antes isto devolvia lista vazia, porque recorde nasce da comparação com um
+   * histórico — e o histórico é justamente o que faltava. Com ele, os recordes
+   * saem das mesmas marcas que a 0016 usa no banco.
+   */
+  async listPersonalRecords(userProfileId: string): Promise<PersonalRecord[]> {
+    return userProfileId === this.db.runnerProfileId ? this.db.personalRecords : []
   }
 
   async summarizeActivities(userProfileId: string, since: string): Promise<ActivitySummary> {

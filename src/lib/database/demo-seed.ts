@@ -10,6 +10,9 @@
  */
 
 import type {
+  Activity,
+  ActivityRoutePoint,
+  ActivitySplit,
   Assessment,
   Charge,
   CheckIn,
@@ -20,9 +23,11 @@ import type {
   MembershipPlan,
   Organization,
   OrganizationBillingSettings,
+  PersonalRecord,
   OrganizationMember,
   PaymentAccount,
   PaymentSplit,
+  SportType,
   Student,
   UserProfile,
   WorkoutAssignment,
@@ -1103,6 +1108,211 @@ function buildDemoDataset() {
     },
   ]
 
+
+  // ── SynseRun ────────────────────────────────────────────────────────────────
+  /*
+   * O histórico de corrida da demonstração.
+   *
+   * Sem isto a aba SynseRun abria vazia para quem está avaliando o produto: o
+   * recurso existe, e a vitrine mostrava uma tela em branco. É a mesma família
+   * do defeito dos apelidos de exercício — o dado nunca chegou à demonstração.
+   *
+   * O ritmo melhora ao longo das semanas, e não é constante nem aleatório: uma
+   * linha reta parece dado falso, e ruído puro não conta história nenhuma. A
+   * meta da semana sai da média das quatro semanas fechadas (`metaDaSemana`),
+   * então o histórico precisa ter pelo menos essas quatro para a barra da tela
+   * inicial mostrar um alvo em vez de nada.
+   */
+  const CORREDOR = 'prof_0001'
+  const SEMANAS_DE_CORRIDA = 12
+  /** Ritmo em segundos por quilômetro, do começo ao fim do histórico. */
+  const RITMO_INICIAL = 400
+  const RITMO_FINAL = 352
+  /** Aproximação boa o bastante: ~70 kcal por quilômetro corrido. */
+  const KCAL_POR_KM = 70
+
+  const demoActivities: Activity[] = []
+  const demoActivitySplits = new Map<string, ActivitySplit[]>()
+  const demoActivityRoutes = new Map<string, ActivityRoutePoint[]>()
+
+  const segundaDesta = (() => {
+    const hoje = dayStart(DEMO_NOW)
+    const diaDaSemana = hoje.getDay()
+    return addDays(hoje, diaDaSemana === 0 ? -6 : 1 - diaDaSemana)
+  })()
+
+  let numeroDaCorrida = 0
+
+  for (let semana = SEMANAS_DE_CORRIDA - 1; semana >= 0; semana -= 1) {
+    const inicioDaSemana = addDays(segundaDesta, -semana * 7)
+    const progresso = (SEMANAS_DE_CORRIDA - 1 - semana) / (SEMANAS_DE_CORRIDA - 1)
+    const ritmoBase = RITMO_INICIAL + (RITMO_FINAL - RITMO_INICIAL) * progresso
+
+    /*
+     * A semana corrente entra pela metade: a barra de meta da tela inicial
+     * precisa mostrar progresso, não uma semana já fechada. Semana cheia ali
+     * esconderia justamente o que o widget existe para mostrar.
+     */
+    const corrida = semana === 0 ? 1 : intBetween(2, 3)
+    const caminhada = semana === 0 ? 0 : 1
+    const pedalada = semana > 0 && semana % 4 === 0 ? 1 : 0
+
+    const dias = [1, 3, 5, 6]
+    let proximoDia = 0
+
+    const registrar = (sport: SportType, metros: number, ritmoPorKm: number) => {
+      numeroDaCorrida += 1
+      const activityId = id('act', numeroDaCorrida)
+      const diaDoTreino = dias[proximoDia % dias.length]
+      proximoDia += 1
+
+      const comeco = new Date(addDays(inicioDaSemana, diaDoTreino))
+      comeco.setHours(intBetween(6, 8), intBetween(0, 59), 0, 0)
+
+      const km = metros / 1000
+      const movingSeconds = Math.round(km * ritmoPorKm)
+      // Parado no semáforo, gole de água: o relógio corrido é sempre maior.
+      const elapsedSeconds = Math.round(movingSeconds * between(1.03, 1.1))
+      const fim = new Date(comeco.getTime() + elapsedSeconds * 1000)
+      const ganho = Math.round(between(8, 70))
+
+      demoActivities.push({
+        id: activityId,
+        userProfileId: CORREDOR,
+        organizationId: DEMO_ORG_ID,
+        sport,
+        status: 'COMPLETED',
+        title: null,
+        startedAt: comeco.toISOString(),
+        endedAt: fim.toISOString(),
+        elapsedSeconds,
+        movingSeconds,
+        distanceMeters: metros,
+        averagePace: ritmoPorKm,
+        bestPace: Math.round(ritmoPorKm * between(0.9, 0.95)),
+        averageSpeed: metros / movingSeconds,
+        maxSpeed: (metros / movingSeconds) * between(1.15, 1.3),
+        elevationGain: ganho,
+        elevationLoss: ganho + Math.round(between(-6, 6)),
+        minAltitude: 720,
+        maxAltitude: 720 + ganho,
+        calories: Math.round(km * KCAL_POR_KM * (sport === 'RIDE' ? 0.5 : 1)),
+        startLatitude: -23.5613 + between(-0.01, 0.01),
+        startLongitude: -46.6565 + between(-0.01, 0.01),
+        /*
+         * Privado por padrão, como a tela oferece. Duas ficam visíveis para a
+         * academia, para a demonstração mostrar que a escolha existe.
+         */
+        privacy: numeroDaCorrida % 7 === 0 ? 'GYM' : 'PRIVATE',
+        privacyZoneMeters: 200,
+        createdAt: fim.toISOString(),
+      })
+
+      // Parciais por quilômetro. O último trecho é parcial e fica de fora.
+      const parciais: ActivitySplit[] = []
+      for (let k = 1; k <= Math.floor(km); k += 1) {
+        const segundos = Math.round(ritmoPorKm * between(0.94, 1.07))
+        parciais.push({
+          kilometer: k,
+          splitSeconds: segundos,
+          paceSeconds: segundos,
+          elevationGain: Math.round(between(0, 12)),
+        })
+      }
+      demoActivitySplits.set(activityId, parciais)
+
+      return { activityId, comeco, metros, movingSeconds }
+    }
+
+    for (let i = 0; i < corrida; i += 1) {
+      registrar('RUN', intBetween(4, 11) * 1000, Math.round(ritmoBase * between(0.96, 1.05)))
+    }
+    for (let i = 0; i < caminhada; i += 1) {
+      registrar('WALK', intBetween(2, 5) * 1000, Math.round(between(660, 780)))
+    }
+    for (let i = 0; i < pedalada; i += 1) {
+      registrar('RIDE', intBetween(15, 30) * 1000, Math.round(between(150, 190)))
+    }
+  }
+
+  demoActivities.sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+
+  /*
+   * Rota só das mais recentes. O traçado serve para a tela de detalhe não
+   * abrir sem mapa; gerar ponto a ponto para as trinta e poucas atividades
+   * encheria o dataset de memória sem ninguém abrir.
+   */
+  const PASSO_DA_ROTA = 100
+  for (const atividade of demoActivities.slice(0, 5)) {
+    const pontos: ActivityRoutePoint[] = []
+    const passos = Math.floor(atividade.distanceMeters / PASSO_DA_ROTA)
+    const comeco = Date.parse(atividade.startedAt)
+
+    for (let i = 0; i <= passos; i += 1) {
+      const fracao = passos === 0 ? 0 : i / passos
+      // Uma volta fechada: quem corre no parque volta ao ponto de partida.
+      const angulo = fracao * Math.PI * 2
+      pontos.push({
+        latitude: (atividade.startLatitude ?? 0) + Math.sin(angulo) * 0.012,
+        longitude: (atividade.startLongitude ?? 0) + (Math.cos(angulo) - 1) * 0.012,
+        altitude: 720 + Math.sin(angulo * 3) * atividade.elevationGain * 0.5,
+        speed: atividade.averageSpeed,
+        recordedAt: new Date(comeco + fracao * atividade.movingSeconds * 1000).toISOString(),
+        totalDistance: i * PASSO_DA_ROTA,
+      })
+    }
+    demoActivityRoutes.set(atividade.id, pontos)
+  }
+
+  /*
+   * Recordes, derivados do próprio histórico.
+   *
+   * São as mesmas marcas da 0016. No banco o tempo sai interpolado entre dois
+   * pontos da rota; aqui sai da atividade inteira, o que evita exigir rota
+   * para toda corrida.
+   *
+   * ── Por que Riegel, e não regra de três ─────────────────────────────────────
+   *
+   * Dividir o tempo proporcionalmente daria o mesmo ritmo para 400 m e para
+   * 10 km — e foi o que apareceu na tela: cinco recordes, todos a 05:42/km.
+   * Quem corre percebe na hora que é dado inventado, porque ninguém sustenta
+   * no dez mil o ritmo que faz no quilômetro.
+   *
+   * A fórmula de Riegel (`T₂ = T₁ × (D₂/D₁)^1.06`) é a aproximação clássica
+   * entre distâncias, e o expoente acima de 1 é exatamente o que faz a marca
+   * curta sair mais rápida que a longa.
+   */
+  const EXPOENTE_DE_RIEGEL = 1.06
+  const MARCAS_DE_RECORDE = [400, 1000, 1609, 5000, 10000, 15000, 21097] as const
+  const melhorPorMarca = new Map<number, PersonalRecord>()
+
+  for (const atividade of demoActivities) {
+    if (atividade.sport !== 'RUN') continue
+    for (const marca of MARCAS_DE_RECORDE) {
+      if (atividade.distanceMeters < marca) continue
+      const segundos = Math.round(
+        atividade.movingSeconds * (marca / atividade.distanceMeters) ** EXPOENTE_DE_RIEGEL,
+      )
+      const atual = melhorPorMarca.get(marca)
+      // Só substitui quando é melhor — a regra que a 0016 escreve em SQL.
+      if (atual && atual.seconds <= segundos) continue
+
+      melhorPorMarca.set(marca, {
+        id: id('prec', marca),
+        sport: 'RUN',
+        distanceMeters: marca,
+        seconds: segundos,
+        paceSeconds: Math.round(segundos / (marca / 1000)),
+        activityId: atividade.id,
+        achievedAt: atividade.startedAt,
+      })
+    }
+  }
+
+  const demoPersonalRecords = [...melhorPorMarca.values()].sort(
+    (a, b) => a.distanceMeters - b.distanceMeters,
+  )
+
   return {
     now: DEMO_NOW,
     organization: demoOrganization,
@@ -1126,6 +1336,12 @@ function buildDemoDataset() {
     assessments: demoAssessments,
     leads: demoLeads,
     collectionRules: demoCollectionRules,
+    activities: demoActivities,
+    activitySplits: demoActivitySplits,
+    activityRoutes: demoActivityRoutes,
+    personalRecords: demoPersonalRecords,
+    /** Quem corre na demonstração — o mesmo perfil da persona de aluno. */
+    runnerProfileId: CORREDOR,
     /** Aluno usado como sessão padrão do Synse App em modo demo. */
     studentIdForApp: demoStudents[0].id,
   }

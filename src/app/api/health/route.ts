@@ -175,6 +175,7 @@ const MIGRATIONS_ESPERADAS = [
   '0033_foto_de_perfil.sql',
   '0034_super_admin.sql',
   '0035_aderencia.sql',
+  '0036_assinatura_plus.sql',
 ]
 
 async function schemaReadiness() {
@@ -343,6 +344,7 @@ async function schemaReadiness() {
     '0033_foto_de_perfil.sql',
     '0034_super_admin.sql',
     '0035_aderencia.sql',
+    '0036_assinatura_plus.sql',
   )
 
   return {

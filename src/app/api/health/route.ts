@@ -191,6 +191,8 @@ async function schemaReadiness() {
     synseBody,
     escritaDoCorpo,
     aderencia,
+    assinaturaPlus,
+    escritaDaAssinatura,
   ] = await Promise.all([
     schemaCheck('user_profiles?select=tier&limit=1'),
     schemaCheck('baseline_challenges?select=code&limit=1'),
@@ -260,6 +262,22 @@ async function schemaReadiness() {
       },
       { executa: true },
     ),
+    /*
+     * Assinatura Synse+ (0036). Duas sondas, como no Synse Body: a coluna sem
+     * a função seria pior do que nenhuma das duas — o app leria o estado da
+     * assinatura e nada teria como escrevê-lo, então toda conta ficaria FREE
+     * para sempre, em silêncio.
+     */
+    schemaCheck('user_profiles?select=plus_status&limit=1'),
+    /*
+     * `set_plus_subscription` é negada ao anônimo por `revoke`, então 401/403
+     * é "existe" e 404 é "não existe" — e o POST não chega a executar, que é
+     * o que torna seguro sondar uma função que muda plano pago.
+     */
+    rpcCheck('set_plus_subscription', {
+      p_profile_id: '00000000-0000-0000-0000-000000000000',
+      p_status: 'NONE',
+    }),
   ])
 
   const registradas = await migracoesRegistradas()
@@ -298,6 +316,12 @@ async function schemaReadiness() {
     if (aderencia.present === false && !faltando.includes('0035_aderencia.sql')) {
       faltando.push('0035_aderencia.sql')
     }
+    if (
+      (assinaturaPlus.present === false || escritaDaAssinatura.present === false) &&
+      !faltando.includes('0036_assinatura_plus.sql')
+    ) {
+      faltando.push('0036_assinatura_plus.sql')
+    }
     return {
       synseRun: corridas,
       entradaSemVinculo,
@@ -310,6 +334,8 @@ async function schemaReadiness() {
       synseBody,
       escritaDoCorpo,
       aderencia,
+      assinaturaPlus,
+      escritaDaAssinatura,
       appliedMigrations: registradas.length,
       pendingMigrations: faltando,
     }
@@ -359,6 +385,8 @@ async function schemaReadiness() {
     synseBody,
     escritaDoCorpo,
     aderencia,
+    assinaturaPlus,
+    escritaDaAssinatura,
     pendingMigrations: pendentes,
   }
 }

@@ -186,3 +186,33 @@ describe.skipIf(!temBanco)('expire_plus_subscriptions', () => {
     await expect(asUser(client, AUTH, `select expire_plus_subscriptions()`)).rejects.toThrow()
   })
 })
+
+describe.skipIf(!temBanco)('a premissa da sonda de saúde', () => {
+  /*
+   * `/api/health?deep=1` sonda `set_plus_subscription` com um POST anônimo e
+   * lê 401/403 como "a função existe". Isso só é verdade — e só é seguro —
+   * enquanto ela for negada ao anônimo: se um dia alguém conceder execução, a
+   * sonda passaria a **executar** uma função que muda plano pago a cada visita
+   * ao endereço.
+   */
+  it('set_plus_subscription é negada ao anônimo', async () => {
+    await expect(
+      asUser(client, null, `select set_plus_subscription($1, 'ACTIVE', now())`, [perfil]),
+    ).rejects.toThrow()
+  })
+
+  it('expire_plus_subscriptions é negada ao anônimo', async () => {
+    await expect(asUser(client, null, `select expire_plus_subscriptions()`)).rejects.toThrow()
+  })
+
+  it('a coluna que a sonda lê existe e é legível pelo dono', async () => {
+    // A outra metade da sonda: `user_profiles?select=plus_status`.
+    const minha = await asUser<{ plus_status: string }>(
+      client,
+      AUTH,
+      `select plus_status from user_profiles where id = $1`,
+      [perfil],
+    )
+    expect(minha[0].plus_status).toBeTruthy()
+  })
+})

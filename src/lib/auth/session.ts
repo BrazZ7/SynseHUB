@@ -11,6 +11,8 @@ import { DEMO_ORG_ID, getDemoDataset } from '@/lib/database/demo-seed'
 import { logger } from '@/lib/logger'
 import { isSoloOrganization, SOLO_ORGANIZATION_LABEL } from '@/lib/organizations/solo'
 import type { UserTier } from '@/lib/plans/tiers'
+import { lerAssinatura, SEM_ASSINATURA, type PlusSubscription } from '@/lib/plans/subscription'
+import { PLUS_PRICE } from '@/lib/plans/tiers'
 import type { UserRole } from '@/types/domain'
 
 export const DEMO_SESSION_COOKIE = 'synse_demo_session'
@@ -44,6 +46,14 @@ export type SessionContext = {
   isSoloStudent: boolean
   /** Plano da conta da pessoa (Synse ou Synse+), não o plano da academia. */
   tier: UserTier
+  /**
+   * A assinatura por trás do `tier`.
+   *
+   * O `tier` diz o que vale agora; isto diz **até quando** e em que estado —
+   * teste grátis, ativa, cancelada esperando o fim do período pago. É o que
+   * permite a tela dizer "faltam 12 dias" em vez de só "você é Synse+".
+   */
+  plus: PlusSubscription
   /** Assinatura que libera abrir o próprio espaço como profissional. */
   professionalPlan: boolean
   isDemo: boolean
@@ -126,6 +136,30 @@ export function findDemoPersona(key: string | undefined | null): DemoPersona | n
   return getDemoPersonas().find((persona) => persona.key === key) ?? null
 }
 
+/**
+ * O teste grátis da demonstração.
+ *
+ * A persona de aluno entra **no meio** do primeiro ciclo, não no começo nem no
+ * fim: é o estado em que a tela tem mais o que dizer — o Synse+ liberado, e um
+ * aviso de quando a primeira cobrança acontece. Começar no dia 1 esconderia a
+ * contagem; terminar no dia 30 mostraria a tela de expiração, que não é o que
+ * quem está avaliando o produto precisa ver.
+ *
+ * Isto é um estado, não uma chave fixa: passa pelo mesmo `PlusSubscription`
+ * que a conta real usa, então a demonstração exercita o caminho de verdade. A
+ * alternativa — um `tier: 'PRO'` cravado — seria a quarta vez nesta sessão em
+ * que a vitrine mostra algo que o produto não faz assim.
+ */
+const DIAS_JA_CORRIDOS_NA_DEMO = 12
+
+function assinaturaDaDemo(persona: DemoPersona, agora: Date): PlusSubscription {
+  if (persona.role !== 'STUDENT') return SEM_ASSINATURA
+
+  const fim = new Date(agora)
+  fim.setDate(fim.getDate() + (PLUS_PRICE.trialDays - DIAS_JA_CORRIDOS_NA_DEMO))
+  return { status: 'TRIAL', until: fim.toISOString() }
+}
+
 function demoSessionFor(persona: DemoPersona): SessionContext {
   const demo = getDemoDataset()
   const profile = demo.userProfiles.find((item) => item.id === persona.userProfileId)
@@ -134,6 +168,7 @@ function demoSessionFor(persona: DemoPersona): SessionContext {
       ? (demo.students.find((item) => item.userProfileId === persona.userProfileId) ??
         demo.students[0])
       : null
+  const assinatura = assinaturaDaDemo(persona, new Date())
 
   return {
     userProfileId: persona.userProfileId,
@@ -146,7 +181,8 @@ function demoSessionFor(persona: DemoPersona): SessionContext {
     organizationName: demo.organization.name,
     studentId: student?.id ?? null,
     isSoloStudent: false,
-    tier: 'FREE',
+    tier: assinatura.status === 'TRIAL' ? 'PRO' : 'FREE',
+    plus: assinatura,
     professionalPlan: false,
     isDemo: true,
     isPlatformAccount: false,
@@ -182,6 +218,9 @@ type ProfileRow = {
   avatar_url: string | null
   tier?: string | null
   professional_plan?: boolean | null
+  /* A 0036 pode não ter subido ainda — vide `readProfile`, que pede `*`. */
+  plus_status?: string | null
+  plus_until?: string | null
 }
 
 /**
@@ -230,7 +269,10 @@ async function readProfile(
 
   if (error) {
     logger.error('session:profile_read_failed', { code: error.code, error: error.message })
-    return { row: null, error: { step: 'profile', code: error.code ?? null, message: error.message } }
+    return {
+      row: null,
+      error: { step: 'profile', code: error.code ?? null, message: error.message },
+    }
   }
 
   return { row: data as ProfileRow | null, error: null }
@@ -356,6 +398,7 @@ async function resolverSessao(): Promise<SessionResolution> {
             studentId: matricula?.id ?? null,
             isSoloStudent: false,
             tier: (profile.tier ?? 'FREE') as UserTier,
+            plus: lerAssinatura(profile),
             professionalPlan: profile.professional_plan === true,
             isDemo: false,
             isPlatformAccount: true,
@@ -406,6 +449,7 @@ async function resolverSessao(): Promise<SessionResolution> {
             studentId: matricula.id,
             isSoloStudent: solo,
             tier: (profile.tier ?? 'FREE') as UserTier,
+            plus: lerAssinatura(profile),
             professionalPlan: profile.professional_plan === true,
             isDemo: false,
             isPlatformAccount: true,
@@ -505,6 +549,7 @@ async function resolverSessao(): Promise<SessionResolution> {
         studentId: enrolment.id,
         isSoloStudent: solo,
         tier: (profile.tier ?? 'FREE') as UserTier,
+        plus: lerAssinatura(profile),
         professionalPlan: profile.professional_plan === true,
         isDemo: false,
         isPlatformAccount: plataforma,
@@ -535,6 +580,7 @@ async function resolverSessao(): Promise<SessionResolution> {
       studentId: student?.id ?? null,
       isSoloStudent: false,
       tier: (profile.tier ?? 'FREE') as UserTier,
+      plus: lerAssinatura(profile),
       professionalPlan: profile.professional_plan === true,
       isDemo: false,
       isPlatformAccount: plataforma,

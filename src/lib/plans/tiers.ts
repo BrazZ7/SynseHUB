@@ -12,6 +12,26 @@
  */
 export type UserTier = 'FREE' | 'PRO'
 
+/**
+ * O preço do Synse+, num lugar só.
+ *
+ * Mora aqui e não espalhado nas telas porque ele **ainda não está decidido** —
+ * o dono do produto falou em R$ 23 e a tela dizia R$ 29. Trocar tem que ser
+ * uma linha, não uma caçada.
+ *
+ * O primeiro ciclo custa zero: é uma assinatura só, com o primeiro mês
+ * cobrado R$ 0,00 e renovação automática pelo valor cheio. Não é "assinatura
+ * grátis que muda de preço" — essa distinção importa porque Asaas, App Store e
+ * Google Play modelam teste grátis nativamente, e "trocar o preço na
+ * renovação" seria construir na mão o que eles já fazem.
+ */
+export const PLUS_PRICE = {
+  /** Valor mensal cheio, em reais. */
+  monthly: 29,
+  /** Dias do primeiro ciclo, cobrado R$ 0,00. */
+  trialDays: 30,
+} as const
+
 export const TIER_LABELS: Record<UserTier, string> = {
   FREE: 'Synse',
   PRO: 'Synse+',

@@ -15,9 +15,9 @@ export type UserTier = 'FREE' | 'PRO'
 /**
  * O preço do Synse+, num lugar só.
  *
- * Mora aqui e não espalhado nas telas porque ele **ainda não está decidido** —
- * o dono do produto falou em R$ 23 e a tela dizia R$ 29. Trocar tem que ser
- * uma linha, não uma caçada.
+ * R$ 29,00/mês, decidido pelo dono do produto. Mora aqui e não espalhado pelas
+ * telas porque preço muda, e mudar não pode virar caçada — a tela do Synse+, a
+ * do teste grátis e o aviso de renovação leem todos daqui.
  *
  * O primeiro ciclo custa zero: é uma assinatura só, com o primeiro mês
  * cobrado R$ 0,00 e renovação automática pelo valor cheio. Não é "assinatura

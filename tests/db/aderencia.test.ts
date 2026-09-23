@@ -202,6 +202,35 @@ describe.skipIf(!temBanco)('workout_adherence', () => {
     expect(daBeta[0].total).toBe(0)
   })
 
+  /*
+   * A premissa da sonda de saúde (`rpcCheck(..., { executa: true })`): a função
+   * não é revogada, então o anônimo **executa** e a RLS devolve vazio. É isso
+   * que faz 200 significar "a função está no banco".
+   *
+   * Se alguém revogar a execução um dia, este teste falha e a sonda precisa
+   * voltar a ler 401 como confirmação — o endereço passaria a dizer
+   * `present: null`, que é o mesmo que não ter sonda.
+   */
+  it('o anônimo executa e não lê nada — é o que a sonda de saúde conta', async () => {
+    const doAnonimo = await asUser<{ total: number }>(
+      client,
+      null,
+      `select count(*)::int as total from workout_adherence($1, $2, $3)`,
+      ['00000000-0000-0000-0000-000000000000', DESDE, ATE],
+    )
+    expect(doAnonimo[0].total).toBe(0)
+  })
+
+  it('o anônimo tampouco lê a aderência de um aluno que existe', async () => {
+    const doAnonimo = await asUser<{ total: number }>(
+      client,
+      null,
+      `select count(*)::int as total from workout_adherence($1, $2, $3)`,
+      [alunoAlpha, DESDE, ATE],
+    )
+    expect(doAnonimo[0].total).toBe(0)
+  })
+
   it('a RLS deixa o aluno ler a própria aderência', async () => {
     const minha = await asUser<{ total: number }>(
       client,

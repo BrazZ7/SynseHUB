@@ -4,6 +4,11 @@ import { APP, LEGAL } from '@/config/app'
 import { SUPABASE_ANON_KEY, SUPABASE_URL, isDemoMode } from '@/lib/database/env'
 import { getPaymentProvider } from '@/lib/payments'
 import { env } from '@/lib/env'
+import {
+  vereditoDeFuncao,
+  vereditoDeRecurso,
+  type SchemaProbe,
+} from '@/lib/health/probe-verdict'
 
 export const dynamic = 'force-dynamic'
 
@@ -66,8 +71,6 @@ async function databaseReachable(): Promise<{ ok: boolean; status: number | null
  * com lista vazia; o que interessa não é o conteúdo, é o schema aceitar a
  * pergunta. Fica atrás de `?deep=1`, junto das outras chamadas de rede.
  */
-type SchemaProbe = { present: boolean | null; status: number | null }
-
 async function schemaCheck(recurso: string): Promise<SchemaProbe> {
   try {
     const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${recurso}`, {
@@ -75,17 +78,10 @@ async function schemaCheck(recurso: string): Promise<SchemaProbe> {
       signal: AbortSignal.timeout(5000),
       cache: 'no-store',
     })
-
-    // 400 com 42703 (coluna) e 404 com PGRST205 (tabela) são "ainda não existe".
-    // 200 com lista vazia é a RLS negando linha, o que só acontece se o schema
-    // aceitou a pergunta. O resto — 401, 403, 5xx — fala de credencial ou de
-    // indisponibilidade, e o status vai junto para não virar adivinhação.
-    if (resposta.ok) return { present: true, status: resposta.status }
-    if (resposta.status === 400 || resposta.status === 404) {
-      return { present: false, status: resposta.status }
-    }
-    return { present: null, status: resposta.status }
+    return vereditoDeRecurso(resposta.status)
   } catch {
+    // Rede caída não é schema faltando, e dizer que falta mandaria alguém
+    // colar SQL que já está no banco.
     return { present: null, status: null }
   }
 }
@@ -100,8 +96,15 @@ async function schemaCheck(recurso: string): Promise<SchemaProbe> {
  * O POST não executa nada: a função é negada ao anônimo por `revoke`, então a
  * resposta é 401 ou 403 quando ela existe, e 404 (PGRST202) quando não existe.
  * É a diferença entre "sem permissão" e "não encontrada" que responde.
+ *
+ * O veredito — inclusive a opção `executa`, para a função que o anônimo pode
+ * chamar — mora em `lib/health/probe-verdict`, que é onde ele é testado.
  */
-async function rpcCheck(nome: string, corpo: Record<string, unknown>): Promise<SchemaProbe> {
+async function rpcCheck(
+  nome: string,
+  corpo: Record<string, unknown>,
+  opcoes: { executa?: boolean } = {},
+): Promise<SchemaProbe> {
   try {
     const resposta = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${nome}`, {
       method: 'POST',
@@ -115,11 +118,7 @@ async function rpcCheck(nome: string, corpo: Record<string, unknown>): Promise<S
       cache: 'no-store',
     })
 
-    if (resposta.status === 404) return { present: false, status: 404 }
-    if (resposta.status === 401 || resposta.status === 403) {
-      return { present: true, status: resposta.status }
-    }
-    return { present: null, status: resposta.status }
+    return vereditoDeFuncao(resposta.status, opcoes)
   } catch {
     return { present: null, status: null }
   }
@@ -190,6 +189,7 @@ async function schemaReadiness() {
     agendaAutossuficiente,
     synseBody,
     escritaDoCorpo,
+    aderencia,
   ] = await Promise.all([
     schemaCheck('user_profiles?select=tier&limit=1'),
     schemaCheck('baseline_challenges?select=code&limit=1'),
@@ -240,6 +240,25 @@ async function schemaReadiness() {
       p_measured_at: '2000-01-01T00:00:00Z',
       p_source: 'MANUAL',
     }),
+    /*
+     * Aderência (0035). A coluna `reps_planned` existe desde a 0026 e a função
+     * que a lê é nova — o registro de migrations diria que a 0035 rodou, e esta
+     * sonda responde a outra pergunta: a função continua lá.
+     *
+     * Ao contrário das duas acima, esta não é revogada: é `security invoker` e
+     * `stable`, então o anônimo executa e a RLS devolve lista vazia. Por isso
+     * `executa: true` — aqui 200 é a confirmação. O aluno inexistente no
+     * parâmetro é cinto e suspensório: mesmo sem RLS não haveria linha.
+     */
+    rpcCheck(
+      'workout_adherence',
+      {
+        p_student_id: '00000000-0000-0000-0000-000000000000',
+        p_from: '2000-01-01T00:00:00Z',
+        p_to: '2000-01-02T00:00:00Z',
+      },
+      { executa: true },
+    ),
   ])
 
   const registradas = await migracoesRegistradas()
@@ -275,6 +294,9 @@ async function schemaReadiness() {
     ) {
       faltando.push('0032_synse_body.sql')
     }
+    if (aderencia.present === false && !faltando.includes('0035_aderencia.sql')) {
+      faltando.push('0035_aderencia.sql')
+    }
     return {
       synseRun: corridas,
       entradaSemVinculo,
@@ -286,6 +308,7 @@ async function schemaReadiness() {
       agendaAutossuficiente,
       synseBody,
       escritaDoCorpo,
+      aderencia,
       appliedMigrations: registradas.length,
       pendingMigrations: faltando,
     }
@@ -319,7 +342,7 @@ async function schemaReadiness() {
     '0032_synse_body.sql',
     '0033_foto_de_perfil.sql',
     '0034_super_admin.sql',
-  '0035_aderencia.sql',
+    '0035_aderencia.sql',
   )
 
   return {
@@ -333,6 +356,7 @@ async function schemaReadiness() {
     agendaAutossuficiente,
     synseBody,
     escritaDoCorpo,
+    aderencia,
     pendingMigrations: pendentes,
   }
 }

@@ -194,6 +194,8 @@ async function schemaReadiness() {
     aderencia,
     assinaturaPlus,
     escritaDaAssinatura,
+    amigos,
+    rankingDeAmigos,
   ] = await Promise.all([
     schemaCheck('user_profiles?select=tier&limit=1'),
     schemaCheck('baseline_challenges?select=code&limit=1'),
@@ -279,6 +281,27 @@ async function schemaReadiness() {
       p_profile_id: '00000000-0000-0000-0000-000000000000',
       p_status: 'NONE',
     }),
+    /*
+     * Amigos (0037). `friendships` só tem política de select, e ela compara
+     * com `auth_profile_id()` — que é nulo no anônimo, então a resposta é 200
+     * com lista vazia. Como nas outras, o que a sonda lê é o schema ter
+     * aceitado a pergunta.
+     */
+    schemaCheck('friendships?select=id&limit=1'),
+    /*
+     * A tabela sem o ranking abriria a tela de amigos com a lista funcionando
+     * e o ranking vazio para sempre — o pior dos dois mundos, porque parece
+     * "ninguém autorizou" em vez de "faltou migration".
+     *
+     * `friends_ranking` é `security definer` e revogada do anônimo, então
+     * 401/403 é "existe" e 404 é "não existe". Sem `executa`, de propósito:
+     * aqui um 200 não seria confirmação, seria a notícia de que o anônimo
+     * consegue somar treino dos outros.
+     */
+    rpcCheck('friends_ranking', {
+      p_from: '2000-01-01T00:00:00Z',
+      p_to: '2000-01-02T00:00:00Z',
+    }),
   ])
 
   const registradas = await migracoesRegistradas()
@@ -337,6 +360,8 @@ async function schemaReadiness() {
       aderencia,
       assinaturaPlus,
       escritaDaAssinatura,
+      amigos,
+      rankingDeAmigos,
       appliedMigrations: registradas.length,
       pendingMigrations: faltando,
     }
@@ -389,6 +414,8 @@ async function schemaReadiness() {
     aderencia,
     assinaturaPlus,
     escritaDaAssinatura,
+    amigos,
+    rankingDeAmigos,
     pendingMigrations: pendentes,
   }
 }

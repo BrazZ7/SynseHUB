@@ -1559,9 +1559,60 @@ export class DemoDataSource implements DataSource {
     )
   }
 
+  /**
+   * As sessões do aluno, com o histórico da semente junto.
+   *
+   * `demoWorkoutSessions` só ganha linha depois de alguém treinar pelo Treino
+   * Ativo — e a semente não produz nenhuma. Devolver só elas fazia a análise
+   * mostrar "5 treinos" e "0 treinos por semana" lado a lado, porque
+   * `getWorkoutTotals` lê o histórico achatado (`workout_logs`) e a constância
+   * lia daqui. Dois números da mesma tela discordando é pior que qualquer um
+   * dos dois sozinho.
+   *
+   * Em produção as duas leituras saem de `workout_sessions` e já concordam;
+   * isto é remendo de demonstração, e por isso mora só aqui.
+   */
   async listWorkoutSessions(studentId: string, limite: number): Promise<WorkoutSessionSummary[]> {
-    return this.demoWorkoutSessions
-      .filter((s) => s.studentId === studentId && s.status === 'COMPLETED')
+    const reais = this.demoWorkoutSessions.filter(
+      (s) => s.studentId === studentId && s.status === 'COMPLETED',
+    )
+    const diasJaCobertos = new Set(reais.map((s) => s.startedAt.slice(0, 10)))
+
+    const doHistorico = new Map<string, WorkoutSessionSummary>()
+    for (const log of this.db.workoutLogs) {
+      if (log.studentId !== studentId) continue
+      const dia = log.performedAt.slice(0, 10)
+      // O dia em que a pessoa treinou de verdade na demonstração manda: uma
+      // sessão sintética por cima duplicaria o treino dela.
+      if (diasJaCobertos.has(dia)) continue
+
+      const series = log.sets ?? 0
+      const atual = doHistorico.get(dia)
+      if (atual) {
+        atual.totalSets += series
+        atual.totalReps += series * (log.reps ?? 0)
+        atual.volumeKg += Math.round(series * (log.reps ?? 0) * (log.load ?? 0))
+        continue
+      }
+
+      doHistorico.set(dia, {
+        id: `demo-sessao-${dia}`,
+        organizationId: log.organizationId,
+        studentId,
+        workoutPlanId: log.workoutPlanId,
+        planName: null,
+        clientId: `demo-sessao-${dia}`,
+        status: 'COMPLETED',
+        startedAt: log.performedAt,
+        completedAt: log.performedAt,
+        durationSeconds: 3600,
+        totalSets: series,
+        totalReps: series * (log.reps ?? 0),
+        volumeKg: Math.round(series * (log.reps ?? 0) * (log.load ?? 0)),
+      })
+    }
+
+    return [...reais, ...doHistorico.values()]
       .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
       .slice(0, limite)
   }

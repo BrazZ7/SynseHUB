@@ -2,7 +2,16 @@ import type { Metadata } from 'next'
 
 import { BotaoCompartilhar } from '@/features/share/share-button'
 import Link from 'next/link'
-import { Activity, ChevronRight, Dumbbell, Flame, Scale, TrendingUp, Trophy } from 'lucide-react'
+import {
+  Activity,
+  ChevronRight,
+  Dumbbell,
+  Flame,
+  LineChart,
+  Scale,
+  TrendingUp,
+  Trophy,
+} from 'lucide-react'
 
 import { ProgressLineChart } from '@/components/synse/charts/progress-line-chart'
 import { ChartCard } from '@/components/synse/chart-card'
@@ -56,6 +65,25 @@ export default async function StudentProgressPage() {
           O que mudou desde que você começou — carga, frequência e medidas.
         </p>
       </header>
+
+      {/*
+        A porta da análise. Vem antes do Synse Body porque fala do que esta
+        própria página mostra — é o aprofundamento dos números logo abaixo, e
+        não um aparelho à parte.
+      */}
+      <Link
+        href="/app/progress/analise"
+        className="flex items-center gap-4 rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm transition-colors hover:bg-synse-surface-2"
+      >
+        <LineChart className="size-5 shrink-0 text-synse-primary" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-synse-text">Sua análise</p>
+          <p className="text-xs text-synse-muted">
+            Os últimos 30 dias contra os 30 anteriores: constância, aderência e força.
+          </p>
+        </div>
+        <ChevronRight className="size-4 shrink-0 text-synse-muted" aria-hidden />
+      </Link>
 
       {/*
         A porta do Synse Body. Fica no Progresso e não na navegação de baixo

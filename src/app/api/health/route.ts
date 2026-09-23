@@ -282,16 +282,22 @@ async function schemaReadiness() {
       p_status: 'NONE',
     }),
     /*
-     * Amigos (0037). `friendships` só tem política de select, e ela compara
-     * com `auth_profile_id()` — que é nulo no anônimo, então a resposta é 200
-     * com lista vazia. Como nas outras, o que a sonda lê é o schema ter
-     * aceitado a pergunta.
+     * Amigos (0037). Aqui a sonda **não** é de tabela, e o motivo vale o
+     * comentário: ler `friendships` com a chave pública responde 401
+     * "permission denied for function is_friendship_party" — a política de
+     * select chama esse ajudante, e a 0037 o revoga do anônimo. Não é falta de
+     * grant na tabela: o Supabase concede, e quem barra é a função.
+     *
+     * Dá para fazer a sonda ler 200 concedendo o ajudante ao anônimo. Seria
+     * afrouxar o schema para agradar o termômetro, e a escolha é a outra:
+     * sondar `list_friends`, que é revogada por projeto — 401/403 é "existe",
+     * 404 é "não existe".
      */
-    schemaCheck('friendships?select=id&limit=1'),
+    rpcCheck('list_friends', {}),
     /*
-     * A tabela sem o ranking abriria a tela de amigos com a lista funcionando
-     * e o ranking vazio para sempre — o pior dos dois mundos, porque parece
-     * "ninguém autorizou" em vez de "faltou migration".
+     * São duas porque a lista sem o ranking abriria a tela de amigos
+     * funcionando pela metade, com o ranking vazio para sempre — e vazio ali
+     * parece "ninguém autorizou" em vez de "faltou migration".
      *
      * `friends_ranking` é `security definer` e revogada do anônimo, então
      * 401/403 é "existe" e 404 é "não existe". Sem `executa`, de propósito:

@@ -11,6 +11,7 @@
 
 import type {
   Activity,
+  Friend,
   ActivityRoutePoint,
   ActivitySplit,
   Assessment,
@@ -942,8 +943,22 @@ function buildDemoDataset() {
     // 12 semanas de progressão de carga no supino reto.
     const bench = demoWorkoutExercises.find((we) => we.workoutPlanId === plans[0].id)
     let load = 30 + studentIndex * 1.5
+
+    /*
+     * Nem todo mundo treina toda semana, e antes desta linha todo aluno tinha
+     * exatamente um registro por semana — as mesmas doze, na mesma cadência.
+     * O efeito aparecia no ranking entre amigos: três pessoas empatadas em
+     * cinco treinos, e a lista parecia sorteio.
+     *
+     * A falta é por aluno, e não por semana solta: quem falha, falha mais —
+     * é assim que frequência se distribui de verdade, e é o que faz a tela de
+     * alunos em risco ter alguém para mostrar.
+     */
+    const faltaDoAluno = between(0, 0.35)
+
     for (let week = 11; week >= 0; week -= 1) {
       load = roundMoney(load + between(0.5, 2.5))
+      if (rand() < faltaDoAluno) continue
       logSeq += 1
       demoWorkoutLogs.push({
         id: id('wkl', logSeq),
@@ -1102,6 +1117,64 @@ function buildDemoDataset() {
       channels: ['EMAIL'],
       template: 'Sua matrícula pode ser suspensa.',
       enabled: false,
+    },
+  ]
+
+  // ── Amigos ──────────────────────────────────────────────────────────────────
+  /*
+   * As duas personas de aluno são amigas, e cada uma tem mais alguns.
+   *
+   * Sem isto a tela de amigos abria vazia para quem avalia o produto — e o
+   * ranking, que é o recurso que a página do Synse+ promete, não teria o que
+   * mostrar. É a mesma família do defeito das corridas e dos apelidos.
+   *
+   * Uma das amizades entra **sem consentimento de ranking** de propósito. É o
+   * estado mais interessante de mostrar: a pessoa é amiga, aparece na lista, e
+   * não sai no ranking — porque ser amigo não é autorizar a publicação do
+   * próprio número.
+   */
+  const demoFriends: Friend[] = [
+    {
+      friendshipId: 'frd_0001',
+      profileId: 'prof_0002',
+      name: demoUserProfiles.find((p) => p.id === 'prof_0002')?.name ?? 'Amiga',
+      synseId: demoUserProfiles.find((p) => p.id === 'prof_0002')?.synseId ?? 'SYN-DEMO0002',
+      status: 'ACCEPTED',
+      souQuemPediu: true,
+      noRanking: true,
+      since: addDays(DEMO_NOW, -40).toISOString(),
+    },
+    {
+      friendshipId: 'frd_0002',
+      profileId: 'prof_0003',
+      name: demoUserProfiles.find((p) => p.id === 'prof_0003')?.name ?? 'Amigo',
+      synseId: demoUserProfiles.find((p) => p.id === 'prof_0003')?.synseId ?? 'SYN-DEMO0003',
+      status: 'ACCEPTED',
+      souQuemPediu: false,
+      noRanking: true,
+      since: addDays(DEMO_NOW, -22).toISOString(),
+    },
+    {
+      /* Amiga sem consentimento: aparece na lista, não sai no ranking. */
+      friendshipId: 'frd_0003',
+      profileId: 'prof_0004',
+      name: demoUserProfiles.find((p) => p.id === 'prof_0004')?.name ?? 'Amiga',
+      synseId: demoUserProfiles.find((p) => p.id === 'prof_0004')?.synseId ?? 'SYN-DEMO0004',
+      status: 'ACCEPTED',
+      souQuemPediu: true,
+      noRanking: false,
+      since: addDays(DEMO_NOW, -9).toISOString(),
+    },
+    {
+      /* Pedido recebido e ainda não respondido: a tela precisa do botão. */
+      friendshipId: 'frd_0004',
+      profileId: 'prof_0005',
+      name: demoUserProfiles.find((p) => p.id === 'prof_0005')?.name ?? 'Convidado',
+      synseId: demoUserProfiles.find((p) => p.id === 'prof_0005')?.synseId ?? 'SYN-DEMO0005',
+      status: 'PENDING',
+      souQuemPediu: false,
+      noRanking: true,
+      since: addDays(DEMO_NOW, -2).toISOString(),
     },
   ]
 
@@ -1362,6 +1435,7 @@ function buildDemoDataset() {
     assessments: demoAssessments,
     leads: demoLeads,
     collectionRules: demoCollectionRules,
+    friends: demoFriends,
     activities: demoActivities,
     activitySplits: demoActivitySplits,
     activityRoutes: demoActivityRoutes,

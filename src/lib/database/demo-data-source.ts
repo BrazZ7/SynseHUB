@@ -71,6 +71,8 @@ import type {
   StudentAtRisk,
   WorkoutPreferences,
   WorkoutSessionSummary,
+  Friend,
+  FriendRankRow,
   WorkoutAdherenceRow,
   WorkoutTotals,
   PersonalRecord,
@@ -166,6 +168,14 @@ export class DemoDataSource implements DataSource {
   private readonly demoSessions: ClassSession[] = []
   private readonly demoBookings: ClassBooking[] = []
   private agendaPronta = false
+  /**
+   * As amizades da visita, por cima das que a semente traz.
+   *
+   * `null` como valor significa desfeita: sobrescrever a semente exige poder
+   * dizer "esta não existe mais", e remover da tabela não bastaria porque a
+   * semente volta a valer na leitura seguinte.
+   */
+  private readonly friendEdits = new Map<string, Friend | null>()
   private readonly demoWorkoutSessions: WorkoutSessionSummary[] = []
   private readonly demoSetLogs = new Map<string, { reps: number; weight: number | null }[]>()
   private demoWorkoutPrefs: WorkoutPreferences = { ...DEFAULT_WORKOUT_PREFERENCES }
@@ -372,6 +382,33 @@ export class DemoDataSource implements DataSource {
       }
       case 'consent': {
         this.consentAnswers.set(mutation.code, { accepted: mutation.ok, at: mutation.at })
+        break
+      }
+      case 'friend': {
+        if (mutation.action === 'remove') {
+          this.friendEdits.set(mutation.id, null)
+          break
+        }
+
+        const base =
+          this.friendEdits.get(mutation.id) ??
+          this.db.friends.find((amigo) => amigo.friendshipId === mutation.id)
+
+        const outro = this.db.userProfiles.find((perfil) => perfil.id === mutation.profileId)
+        if (!base && !outro) break
+
+        this.friendEdits.set(mutation.id, {
+          friendshipId: mutation.id,
+          profileId: mutation.profileId,
+          name: base?.name ?? outro?.name ?? 'Convidado',
+          synseId: base?.synseId ?? outro?.synseId ?? '',
+          // Recusar some da lista, como no banco: a linha vira "não existe".
+          status: mutation.action === 'accept' ? 'ACCEPTED' : 'PENDING',
+          souQuemPediu: mutation.action === 'request' ? true : (base?.souQuemPediu ?? false),
+          noRanking: base?.noRanking ?? false,
+          since: base?.since ?? mutation.at,
+        })
+        if (mutation.action === 'decline') this.friendEdits.set(mutation.id, null)
         break
       }
       case 'checkin': {
@@ -1156,6 +1193,123 @@ export class DemoDataSource implements DataSource {
     else this.addedAssessments.push(avaliacao)
 
     return avaliacao
+  }
+
+  // ── Amigos (0037) ──────────────────────────────────────────────────────────
+
+  /**
+   * A semente, com as alterações da visita por cima.
+   *
+   * O aluno da demonstração é quem tem amigos: as personas de equipe não caem
+   * nesta tela, e inventar amizade para elas seria dado que nenhuma tela mostra.
+   */
+  async listFriends(): Promise<Friend[]> {
+    const daSemente = this.db.friends.filter((amigo) => !this.friendEdits.has(amigo.friendshipId))
+    const daVisita = [...this.friendEdits.values()].filter((amigo): amigo is Friend => amigo !== null)
+
+    return [...daSemente, ...daVisita].sort(
+      (a, b) => a.status.localeCompare(b.status) || a.name.localeCompare(b.name, 'pt-BR'),
+    )
+  }
+
+  async requestFriendship(synseId: string): Promise<string> {
+    const alvo = this.db.userProfiles.find(
+      (perfil) => perfil.synseId.toUpperCase() === synseId.trim().toUpperCase(),
+    )
+    // As mesmas recusas do banco, com as mesmas mensagens: a demonstração tem
+    // de errar igual, senão ela ensina um comportamento que não existe.
+    if (!alvo) throw new Error('Não encontramos ninguém com esse Synse ID.')
+    if (alvo.id === 'prof_0001') throw new Error('Esse Synse ID é o seu.')
+
+    const jaExiste = (await this.listFriends()).find((amigo) => amigo.profileId === alvo.id)
+    if (jaExiste) return jaExiste.friendshipId
+
+    const id = `frd_${String(this.db.friends.length + this.friendEdits.size + 1).padStart(4, '0')}`
+    this.friendEdits.set(id, {
+      friendshipId: id,
+      profileId: alvo.id,
+      name: alvo.name,
+      synseId: alvo.synseId,
+      status: 'PENDING',
+      souQuemPediu: true,
+      noRanking: false,
+      since: new Date().toISOString(),
+    })
+    await appendDemoMutation({ t: 'friend', id, profileId: alvo.id, action: 'request', at: new Date().toISOString() })
+    return id
+  }
+
+  async respondFriendship(friendshipId: string, accept: boolean): Promise<void> {
+    const atual =
+      this.friendEdits.get(friendshipId) ??
+      this.db.friends.find((amigo) => amigo.friendshipId === friendshipId)
+    if (!atual) throw new Error('Pedido não encontrado, já respondido, ou não é seu.')
+    if (atual.status !== 'PENDING' || atual.souQuemPediu) {
+      throw new Error('Pedido não encontrado, já respondido, ou não é seu.')
+    }
+
+    this.friendEdits.set(friendshipId, accept ? { ...atual, status: 'ACCEPTED' } : null)
+    await appendDemoMutation({
+      t: 'friend',
+      id: friendshipId,
+      profileId: atual.profileId,
+      action: accept ? 'accept' : 'decline',
+      at: new Date().toISOString(),
+    })
+  }
+
+  async removeFriendship(friendshipId: string): Promise<void> {
+    const existe =
+      this.friendEdits.get(friendshipId) ??
+      this.db.friends.find((amigo) => amigo.friendshipId === friendshipId)
+    if (!existe) throw new Error('Amizade não encontrada, ou não é sua.')
+
+    this.friendEdits.set(friendshipId, null)
+    await appendDemoMutation({
+      t: 'friend',
+      id: friendshipId,
+      profileId: existe.profileId,
+      action: 'remove',
+      at: new Date().toISOString(),
+    })
+  }
+
+  /**
+   * O ranking, com as duas trancas do banco reproduzidas.
+   *
+   * Amizade aceita **e** consentimento da outra pessoa. A demonstração tem de
+   * esconder quem não autorizou pelo mesmo motivo que o banco esconde — senão
+   * ela ensina que o consentimento é decorativo.
+   */
+  async getFriendsRanking(from: string, to: string): Promise<FriendRankRow[]> {
+    const amigos = (await this.listFriends()).filter(
+      (amigo) => amigo.status === 'ACCEPTED' && amigo.noRanking,
+    )
+
+    const linhas = await Promise.all(
+      [{ profileId: 'prof_0001', name: 'Você', souEu: true }, ...amigos.map((a) => ({ profileId: a.profileId, name: a.name, souEu: false }))].map(
+        async (pessoa) => {
+          const aluno = this.db.students.find((s) => s.userProfileId === pessoa.profileId)
+          const totais = aluno
+            ? await this.getWorkoutTotals(aluno.id, from, to)
+            : { workouts: 0, volumeKg: 0 }
+          return { ...pessoa, workouts: totais.workouts, volumeKg: totais.volumeKg }
+        },
+      ),
+    )
+
+    return linhas
+      .sort((a, b) => b.workouts - a.workouts || b.volumeKg - a.volumeKg)
+      .map((linha, indice) => ({
+        position: indice + 1,
+        profileId: linha.profileId,
+        name: linha.souEu
+          ? (this.db.userProfiles.find((p) => p.id === 'prof_0001')?.name ?? 'Você')
+          : linha.name,
+        souEu: linha.souEu,
+        workouts: linha.workouts,
+        volumeKg: linha.volumeKg,
+      }))
   }
 
   // ── CRM ────────────────────────────────────────────────────────────────────

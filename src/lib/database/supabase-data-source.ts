@@ -67,6 +67,8 @@ import type {
   StudentAtRisk,
   WorkoutPreferences,
   WorkoutSessionSummary,
+  Friend,
+  FriendRankRow,
   WorkoutAdherenceRow,
   WorkoutTotals,
   Exercise,
@@ -2908,6 +2910,72 @@ export class SupabaseDataSource implements DataSource {
       progressValue: Number(row.progresso),
       completedAt: row.concluido_em ?? null,
     }))
+  }
+
+  // ── Amigos (0037) ──────────────────────────────────────────────────────────
+
+  async listFriends(): Promise<Friend[]> {
+    const { data, error } = await this.client.rpc('list_friends')
+    if (error) {
+      logger.warn('listFriends', { erro: String((error as Error).message) })
+      return []
+    }
+    return ((data as Row[]) ?? []).map((row) => ({
+      friendshipId: String(row.amizade_id),
+      profileId: String(row.perfil_id),
+      name: String(row.nome),
+      synseId: String(row.synse_id),
+      status: row.situacao as Friend['status'],
+      souQuemPediu: row.sou_quem_pediu === true,
+      noRanking: row.no_ranking === true,
+      since: String(row.desde),
+    })) satisfies Friend[]
+  }
+
+  async requestFriendship(synseId: string): Promise<string> {
+    const { data, error } = await this.client.rpc('request_friendship', { p_synse_id: synseId })
+    /*
+     * Aqui o erro sobe, e não vira lista vazia como nos relatórios: pedir
+     * amizade é escrita, e "não encontramos ninguém com esse Synse ID" é a
+     * resposta que a pessoa precisa ler. Engolir viraria um botão que não faz
+     * nada.
+     */
+    if (error) throw error
+    return String(data)
+  }
+
+  async respondFriendship(friendshipId: string, accept: boolean): Promise<void> {
+    const { error } = await this.client.rpc('respond_friendship', {
+      p_friendship_id: friendshipId,
+      p_accept: accept,
+    })
+    if (error) throw error
+  }
+
+  async removeFriendship(friendshipId: string): Promise<void> {
+    const { error } = await this.client.rpc('remove_friendship', {
+      p_friendship_id: friendshipId,
+    })
+    if (error) throw error
+  }
+
+  async getFriendsRanking(from: string, to: string): Promise<FriendRankRow[]> {
+    const { data, error } = await this.client.rpc('friends_ranking', {
+      p_from: from,
+      p_to: to,
+    })
+    if (error) {
+      logger.warn('friendsRanking', { erro: String((error as Error).message) })
+      return []
+    }
+    return ((data as Row[]) ?? []).map((row) => ({
+      position: Number(row.posicao),
+      profileId: String(row.perfil_id),
+      name: String(row.nome),
+      souEu: row.sou_eu === true,
+      workouts: Number(row.treinos),
+      volumeKg: Number(row.volume_kg),
+    })) satisfies FriendRankRow[]
   }
 
   // ── CRM ────────────────────────────────────────────────────────────────────

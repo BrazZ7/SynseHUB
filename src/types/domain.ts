@@ -849,6 +849,37 @@ export type StaffInvite = {
   createdAt: string
 }
 
+/**
+ * Uma amizade, do ponto de vista de quem olha.
+ *
+ * `souQuemPediu` existe porque a tela precisa da diferença: pedido recebido tem
+ * botão de aceitar, pedido enviado tem "aguardando".
+ *
+ * `noRanking` é o consentimento **da outra pessoa**. Vai junto para a tela
+ * poder dizer "ainda não autorizou aparecer" em vez de simplesmente sumir com
+ * ela e deixar quem olha achando que é defeito.
+ */
+export type Friend = {
+  friendshipId: string
+  profileId: string
+  name: string
+  synseId: string
+  status: 'PENDING' | 'ACCEPTED'
+  souQuemPediu: boolean
+  noRanking: boolean
+  since: string
+}
+
+/** Uma linha do ranking entre amigos. */
+export type FriendRankRow = {
+  position: number
+  profileId: string
+  name: string
+  souEu: boolean
+  workouts: number
+  volumeKg: number
+}
+
 export type ConsentType =
   | 'TERMS_OF_USE'
   | 'PRIVACY_POLICY'

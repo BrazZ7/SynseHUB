@@ -39,6 +39,8 @@ import type {
   WorkoutTotals,
   CollectionRule,
   ConsentState,
+  Friend,
+  FriendRankRow,
   ContentItem,
   ContentType,
   StaffInvite,
@@ -813,6 +815,21 @@ export interface DataSource {
    * autorizações junto, e quem não tem nenhuma continua sendo titular dos
    * próprios dados.
    */
+  // ── Amigos (0037) ──────────────────────────────────────────────────────────
+  /*
+   * Amizade atravessa academia: o Synse+ é assinatura de consumidor, e nenhum
+   * destes métodos recebe `organizationId`. Não é esquecimento — a tranca aqui
+   * é a própria linha de amizade, e um parâmetro de academia nesta assinatura
+   * convidaria alguém a montar uma listagem por academia mais tarde.
+   */
+  listFriends(): Promise<Friend[]>
+  /** Pede pelo Synse ID. Devolve o id da amizade; nada do perfil alheio. */
+  requestFriendship(synseId: string): Promise<string>
+  respondFriendship(friendshipId: string, accept: boolean): Promise<void>
+  removeFriendship(friendshipId: string): Promise<void>
+  /** Você e os amigos que autorizaram. Sem consentimento, a pessoa não sai. */
+  getFriendsRanking(from: string, to: string): Promise<FriendRankRow[]>
+
   listConsents(userProfileId: string): Promise<ConsentState[]>
   /**
    * Registra aceite ou revogação. A versão do documento é resolvida no banco —

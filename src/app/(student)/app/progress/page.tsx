@@ -11,6 +11,7 @@ import {
   Scale,
   TrendingUp,
   Trophy,
+  Users,
 } from 'lucide-react'
 
 import { ProgressLineChart } from '@/components/synse/charts/progress-line-chart'
@@ -65,6 +66,25 @@ export default async function StudentProgressPage() {
           O que mudou desde que você começou — carga, frequência e medidas.
         </p>
       </header>
+
+      {/*
+        A porta dos amigos. Fica no Progresso, junto da análise e do Synse
+        Body, porque é a mesma família: acompanhar o que mudou. Ranking não é
+        atividade diária, e a barra de cinco itens já está cheia.
+      */}
+      <Link
+        href="/app/friends"
+        className="flex items-center gap-4 rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm transition-colors hover:bg-synse-surface-2"
+      >
+        <Users className="size-5 shrink-0 text-synse-primary" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-synse-text">Amigos</p>
+          <p className="text-xs text-synse-muted">
+            Adicione pelo Synse ID e comparem os treinos do mês.
+          </p>
+        </div>
+        <ChevronRight className="size-4 shrink-0 text-synse-muted" aria-hidden />
+      </Link>
 
       {/*
         A porta da análise. Vem antes do Synse Body porque fala do que esta

@@ -42,6 +42,20 @@ export type DemoMutation =
       at: string
     }
   | {
+      /**
+       * Amizade: pedir, responder ou desfazer.
+       *
+       * Um tipo só, com a ação dentro, e não quatro. O diário vive num cookie,
+       * e cada tipo novo custa bytes num orçamento que já é apertado — quatro
+       * chaves para a mesma entidade seriam desperdício.
+       */
+      t: 'friend'
+      id: string
+      profileId: string
+      action: 'request' | 'accept' | 'decline' | 'remove'
+      at: string
+    }
+  | {
       /** Baixa de cobrança. */
       t: 'paid'
       chargeId: string
@@ -199,6 +213,7 @@ const TIPOS_ACEITOS: Record<DemoMutation['t'], true> = {
   wedit: true,
   wassign: true,
   consent: true,
+  friend: true,
 }
 
 function decode(raw: string): DemoMutation[] {

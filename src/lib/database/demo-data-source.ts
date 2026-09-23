@@ -71,6 +71,7 @@ import type {
   StudentAtRisk,
   WorkoutPreferences,
   WorkoutSessionSummary,
+  WorkoutAdherenceRow,
   WorkoutTotals,
   PersonalRecord,
   SportType,
@@ -1649,6 +1650,64 @@ export class DemoDataSource implements DataSource {
       averageRestSeconds: series > 0 ? 75 : null,
       distinctExercises: new Set(logs.map((log) => log.workoutExerciseId)).size,
     }
+  }
+
+  /**
+   * Aderência na demonstração.
+   *
+   * Segue a convenção já usada aqui: os números saem do histórico achatado
+   * (`workout_logs`), porque as séries do Treino Ativo só existem depois de
+   * alguém treinar de verdade, e uma tela vazia esconderia o recurso de quem
+   * está avaliando o produto.
+   *
+   * O "planejado" não é inventado: vem do próprio plano (`workout_exercises`),
+   * que é de onde `reps_planned` sai no banco de verdade. Log sem plano
+   * atrelado fica de fora, como a série sem previsão fica no SQL da 0035.
+   */
+  async getWorkoutAdherence(
+    studentId: string,
+    from: string,
+    to: string,
+  ): Promise<WorkoutAdherenceRow[]> {
+    const doPlano = new Map(
+      [...this.db.workoutExercises, ...this.addedWorkoutExercises].map((item) => [
+        item.id,
+        item,
+      ]),
+    )
+
+    const porDia = new Map<string, WorkoutAdherenceRow>()
+
+    for (const log of this.db.workoutLogs) {
+      if (log.studentId !== studentId) continue
+      if (log.performedAt < from || log.performedAt >= to) continue
+
+      const previsto = log.workoutExerciseId ? doPlano.get(log.workoutExerciseId) : undefined
+      // `reps` do plano é texto e aceita faixa ("8-12"): vale o piso, que é o
+      // que a pessoa se comprometeu a fazer.
+      const repsPrevistas = Number.parseInt(String(previsto?.reps ?? ''), 10)
+      if (!previsto || !Number.isFinite(repsPrevistas) || repsPrevistas <= 0) continue
+
+      const dia = log.performedAt.slice(0, 10)
+      const series = log.sets ?? previsto.sets
+      const linha = porDia.get(dia) ?? {
+        sessionId: `demo-aderencia-${dia}`,
+        startedAt: log.performedAt,
+        plannedSets: 0,
+        plannedReps: 0,
+        completedReps: 0,
+        setsBelowPlan: 0,
+      }
+
+      linha.plannedSets += series
+      linha.plannedReps += series * repsPrevistas
+      linha.completedReps += series * (log.reps ?? 0)
+      if ((log.reps ?? 0) < repsPrevistas) linha.setsBelowPlan += series
+
+      porDia.set(dia, linha)
+    }
+
+    return [...porDia.values()].sort((a, b) => a.startedAt.localeCompare(b.startedAt))
   }
 
   async getGymTrainingReport(organizationId: string, from: string, to: string) {

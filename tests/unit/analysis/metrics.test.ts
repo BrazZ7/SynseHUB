@@ -1,17 +1,20 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  aderencia,
   cargaMaximaEstimada,
   compararTotais,
   constancia,
   evolucaoDaForca,
   recordesNoPeriodo,
   REPS_MAXIMAS_CONFIAVEIS,
+  SESSOES_RECENTES,
   variacao,
 } from '@/features/analysis/metrics'
 import type {
   ExercisePersonalRecord,
   ExerciseProgressPoint,
+  WorkoutAdherenceRow,
   WorkoutTotals,
 } from '@/types/domain'
 
@@ -263,5 +266,83 @@ describe('recordesNoPeriodo', () => {
     )
 
     expect(resultado.map((linha) => linha.exerciseId)).toEqual(['b', 'c', 'a'])
+  })
+})
+
+describe('aderencia', () => {
+  /** Uma sessão com `feitas` de `previstas` repetições. */
+  function sessao(dia: string, previstas: number, feitas: number, abaixo = 0): WorkoutAdherenceRow {
+    return {
+      sessionId: dia,
+      startedAt: `2026-09-${dia}T10:00:00Z`,
+      plannedSets: 3,
+      plannedReps: previstas,
+      completedReps: feitas,
+      setsBelowPlan: abaixo,
+    }
+  }
+
+  it('soma o planejado e o feito do período', () => {
+    const resultado = aderencia([sessao('01', 30, 30), sessao('03', 30, 21, 2)])
+
+    expect(resultado).toMatchObject({ sessoes: 2, planejadas: 60, feitas: 51, seriesAbaixo: 2 })
+    expect(resultado?.fracao).toBeCloseTo(0.85, 3)
+  })
+
+  it('não limita a fração em 1 para quem fez além do combinado', () => {
+    // O defeito do cartão de medalha: 17 check-ins numa meta de 12 viravam
+    // "100%", e o feito sumia.
+    expect(aderencia([sessao('01', 30, 36)])?.fracao).toBeCloseTo(1.2, 3)
+  })
+
+  it('compara as últimas sessões com o que veio antes delas, não com a média', () => {
+    const linhas = [
+      sessao('01', 30, 30),
+      sessao('03', 30, 30),
+      sessao('05', 30, 30),
+      sessao('20', 30, 21),
+      sessao('22', 30, 21),
+      sessao('24', 30, 24),
+    ]
+
+    const resultado = aderencia(linhas)
+
+    expect(resultado?.anterior).toBeCloseTo(1, 3)
+    expect(resultado?.recente).toBeCloseTo(0.733, 2)
+    // A média do período inteiro amorteceria a queda para 0,86 — que é
+    // exatamente o número que esconderia a notícia.
+    expect(resultado?.fracao).toBeCloseTo(0.867, 2)
+  })
+
+  it('não compara sem o dobro do recorte de sessões', () => {
+    const quase = Array.from({ length: SESSOES_RECENTES * 2 - 1 }, (_, i) =>
+      sessao(String(i + 10), 30, 30),
+    )
+    expect(aderencia(quase)?.recente).toBeNull()
+    expect(aderencia(quase)?.anterior).toBeNull()
+
+    const suficiente = [...quase, sessao('28', 30, 30)]
+    expect(aderencia(suficiente)?.recente).not.toBeNull()
+  })
+
+  it('ordena por data, sem confiar na ordem da consulta', () => {
+    const resultado = aderencia([
+      sessao('24', 30, 15),
+      sessao('01', 30, 30),
+      sessao('22', 30, 15),
+      sessao('03', 30, 30),
+      sessao('20', 30, 15),
+      sessao('05', 30, 30),
+    ])
+
+    expect(resultado?.anterior).toBeCloseTo(1, 3)
+    expect(resultado?.recente).toBeCloseTo(0.5, 3)
+  })
+
+  it('não mede aderência de quem só treinou livre', () => {
+    expect(aderencia([])).toBeNull()
+    // Linha com zero previsto não deveria vir do SQL, mas se vier não vira
+    // divisão por zero.
+    expect(aderencia([sessao('01', 0, 12)])).toBeNull()
   })
 })

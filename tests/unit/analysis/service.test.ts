@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   ExercisePersonalRecord,
   ExerciseProgressPoint,
+  WorkoutAdherenceRow,
   WorkoutSessionSummary,
   WorkoutTotals,
 } from '@/types/domain'
@@ -36,6 +37,7 @@ let porJanela: (de: string) => WorkoutTotals
 let recordes: ExercisePersonalRecord[]
 let sessoes: WorkoutSessionSummary[]
 let progresso: Record<string, ExerciseProgressPoint[]>
+let linhasDeAderencia: WorkoutAdherenceRow[]
 let erro: unknown = null
 
 const dataSource = {
@@ -51,6 +53,10 @@ const dataSource = {
   async listWorkoutSessions() {
     if (erro) throw erro
     return sessoes
+  },
+  async getWorkoutAdherence() {
+    if (erro) throw erro
+    return linhasDeAderencia
   },
   async getExerciseProgress(_studentId: string, exerciseId: string) {
     if (erro) throw erro
@@ -101,6 +107,7 @@ beforeEach(() => {
   recordes = []
   sessoes = []
   progresso = {}
+  linhasDeAderencia = []
   porJanela = () => totais({})
 })
 
@@ -198,6 +205,40 @@ describe('getAnaliseMensal', () => {
 
     expect(analise.recordes.map((linha) => linha.exerciseId)).toEqual(['supino'])
     expect(analise.recordes[0].cargaMaximaEstimada).toBe(93.5)
+  })
+
+  it('mede aderência sobre as linhas do período', async () => {
+    linhasDeAderencia = [
+      {
+        sessionId: 's1',
+        startedAt: '2026-09-10T10:00:00Z',
+        plannedSets: 3,
+        plannedReps: 30,
+        completedReps: 30,
+        setsBelowPlan: 0,
+      },
+      {
+        sessionId: 's2',
+        startedAt: '2026-09-20T10:00:00Z',
+        plannedSets: 3,
+        plannedReps: 30,
+        completedReps: 21,
+        setsBelowPlan: 2,
+      },
+    ]
+
+    const analise = await getAnaliseMensal('aluno', { ate: ATE })
+
+    expect(analise.aderencia).toMatchObject({ sessoes: 2, planejadas: 60, feitas: 51 })
+    expect(analise.aderencia?.fracao).toBeCloseTo(0.85, 3)
+    // Duas sessões não dão tendência: sem base, não compara.
+    expect(analise.aderencia?.recente).toBeNull()
+  })
+
+  it('não mede aderência de quem só treinou livre', async () => {
+    linhasDeAderencia = []
+    const analise = await getAnaliseMensal('aluno', { ate: ATE })
+    expect(analise.aderencia).toBeNull()
   })
 
   it('devolve vazio, e não erro, quando a migration ainda não subiu', async () => {

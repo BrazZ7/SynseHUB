@@ -34,6 +34,7 @@ import type {
   ExercisePersonalRecord,
   StudentAtRisk,
   WorkoutPreferences,
+  WorkoutAdherenceRow,
   WorkoutSessionSummary,
   WorkoutTotals,
   CollectionRule,
@@ -645,6 +646,18 @@ export interface DataSource {
   ): Promise<ExerciseProgressPoint[]>
   getPersonalRecords(studentId: string): Promise<ExercisePersonalRecord[]>
   getWorkoutTotals(studentId: string, from: string, to: string): Promise<WorkoutTotals>
+  /**
+   * Aderência ao planejado, uma linha por sessão (0035).
+   *
+   * Uma linha por sessão, e não um número só: a pergunta útil não é "quantos
+   * por cento no mês", é a comparação entre as últimas sessões e a média — e
+   * a mesma porcentagem serviria para as duas.
+   */
+  getWorkoutAdherence(
+    studentId: string,
+    from: string,
+    to: string,
+  ): Promise<WorkoutAdherenceRow[]>
   getGymTrainingReport(organizationId: string, from: string, to: string): Promise<GymTrainingReport>
   listStudentsAtRisk(organizationId: string, dias: number): Promise<StudentAtRisk[]>
   getClassOccupancyReport(

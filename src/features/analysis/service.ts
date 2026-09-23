@@ -1,10 +1,12 @@
 import 'server-only'
 
 import {
+  aderencia,
   compararTotais,
   constancia,
   evolucaoDaForca,
   recordesNoPeriodo,
+  type Aderencia,
   type ComparacaoDeTotais,
   type Constancia,
   type EvolucaoDaForca,
@@ -77,6 +79,8 @@ export type AnaliseMensal = {
   /** `null` quando não há janela anterior com treino — nada a comparar. */
   comparacao: ComparacaoDeTotais | null
   constancia: Constancia | null
+  /** `null` sem nenhuma série prevista no período — nada a aderir. */
+  aderencia: Aderencia | null
   /** Só os recordes que caíram dentro da janela. */
   recordes: RecordeDoPeriodo[]
   /** Vazio para quem ainda não tem duas semanas de carga no mesmo exercício. */
@@ -104,6 +108,7 @@ function vazia(janela: { de: Date; ate: Date }, available: boolean): AnaliseMens
     totais: TOTAIS_VAZIOS,
     comparacao: null,
     constancia: null,
+    aderencia: null,
     recordes: [],
     forca: [],
   }
@@ -132,16 +137,19 @@ export async function getAnaliseMensal(
   try {
     const dataSource = await getDataSource()
 
-    const [totais, totaisAnteriores, recordesTodos, sessoes] = await Promise.all([
-      dataSource.getWorkoutTotals(studentId, de.toISOString(), ate.toISOString()),
-      dataSource.getWorkoutTotals(
-        studentId,
-        anterior.de.toISOString(),
-        anterior.ate.toISOString(),
-      ),
-      dataSource.getPersonalRecords(studentId),
-      dataSource.listWorkoutSessions(studentId, SESSOES_BUSCADAS),
-    ])
+    const [totais, totaisAnteriores, recordesTodos, sessoes, linhasDeAderencia] = await Promise.all(
+      [
+        dataSource.getWorkoutTotals(studentId, de.toISOString(), ate.toISOString()),
+        dataSource.getWorkoutTotals(
+          studentId,
+          anterior.de.toISOString(),
+          anterior.ate.toISOString(),
+        ),
+        dataSource.getPersonalRecords(studentId),
+        dataSource.listWorkoutSessions(studentId, SESSOES_BUSCADAS),
+        dataSource.getWorkoutAdherence(studentId, de.toISOString(), ate.toISOString()),
+      ],
+    )
 
     /*
      * Os exercícios da curva saem dos recordes mais recentes, e não dos mais
@@ -188,6 +196,7 @@ export async function getAnaliseMensal(
         sessoes.map((sessao) => sessao.completedAt ?? sessao.startedAt),
         janela,
       ),
+      aderencia: aderencia(linhasDeAderencia),
       recordes: recordesNoPeriodo(recordesTodos, janela),
       forca,
     }

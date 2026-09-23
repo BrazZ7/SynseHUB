@@ -22,6 +22,7 @@
 import type {
   ExercisePersonalRecord,
   ExerciseProgressPoint,
+  WorkoutAdherenceRow,
   WorkoutTotals,
 } from '@/types/domain'
 
@@ -257,4 +258,83 @@ export function recordesNoPeriodo(
       cargaMaximaEstimada: cargaMaximaEstimada(recorde.maxWeight, recorde.reps),
     }))
     .sort((a, b) => Date.parse(b.achievedAt) - Date.parse(a.achievedAt))
+}
+
+/**
+ * Quantas sessões contam como "as últimas".
+ *
+ * Três é curto o bastante para pegar uma virada de humor — semana ruim, sono
+ * curto, carga subida cedo demais — e longo o bastante para uma sessão isolada
+ * não virar tendência.
+ */
+export const SESSOES_RECENTES = 3
+
+/**
+ * Aderência ao planejado: quanto do combinado foi cumprido.
+ *
+ * ── Por que `recente` e `anterior`, e não "recente contra a média" ───────────
+ *
+ * A tentação é comparar as últimas três sessões com a média do período. Mas as
+ * três estão **dentro** da média, então elas se comparam consigo mesmas e a
+ * diferença sai amortecida — quanto menos sessões, mais amortecida. Aqui a
+ * comparação é contra o que veio antes delas, que é a única leitura honesta.
+ *
+ * Os dois são `null` quando não há sessão suficiente dos dois lados: com
+ * quatro sessões no total, "as últimas três contra a primeira" não é
+ * tendência, é ruído com cara de tendência.
+ *
+ * A fração **não** é limitada a 1. Quem fez mais repetições do que o previsto
+ * passou de 100%, e é isso que o número deve dizer — limitar aqui repetiria o
+ * defeito do cartão de medalha, que engolia o feito de quem superou a meta.
+ */
+export type Aderencia = {
+  sessoes: number
+  planejadas: number
+  feitas: number
+  /** `feitas / planejadas`. Passa de 1 para quem fez além do combinado. */
+  fracao: number
+  /** Séries em que se parou antes do previsto, somadas no período. */
+  seriesAbaixo: number
+  /** As últimas sessões. `null` sem base para comparar. */
+  recente: number | null
+  /** Tudo o que veio antes delas. `null` sem base para comparar. */
+  anterior: number | null
+}
+
+function fracaoDe(linhas: readonly WorkoutAdherenceRow[]): number | null {
+  const planejadas = linhas.reduce((soma, linha) => soma + linha.plannedReps, 0)
+  if (planejadas <= 0) return null
+  const feitas = linhas.reduce((soma, linha) => soma + linha.completedReps, 0)
+  return Math.round((feitas / planejadas) * 1000) / 1000
+}
+
+export function aderencia(linhas: readonly WorkoutAdherenceRow[]): Aderencia | null {
+  const ordenadas = linhas
+    .slice()
+    .sort((a, b) => a.startedAt.localeCompare(b.startedAt))
+
+  const planejadas = ordenadas.reduce((soma, linha) => soma + linha.plannedReps, 0)
+  // Sem nenhuma série prevista no período não há aderência a medir: quem
+  // treinou livre o mês inteiro não aderiu nem deixou de aderir.
+  if (planejadas <= 0) return null
+
+  const feitas = ordenadas.reduce((soma, linha) => soma + linha.completedReps, 0)
+
+  /*
+   * Só compara quando há o dobro do recorte: três sessões recentes precisam de
+   * pelo menos três anteriores para a diferença significar alguma coisa.
+   */
+  const daParaComparar = ordenadas.length >= SESSOES_RECENTES * 2
+  const recentes = ordenadas.slice(-SESSOES_RECENTES)
+  const anteriores = ordenadas.slice(0, -SESSOES_RECENTES)
+
+  return {
+    sessoes: ordenadas.length,
+    planejadas,
+    feitas,
+    fracao: Math.round((feitas / planejadas) * 1000) / 1000,
+    seriesAbaixo: ordenadas.reduce((soma, linha) => soma + linha.setsBelowPlan, 0),
+    recente: daParaComparar ? fracaoDe(recentes) : null,
+    anterior: daParaComparar ? fracaoDe(anteriores) : null,
+  }
 }

@@ -158,6 +158,23 @@ existem, não para conferir se subiram.
   quando". `platform_access_log` é lida só por conta de plataforma e não aceita
   update nem delete de ninguém — trilha que o auditado apaga não é trilha.
 
+- **0035 (`0035_aderencia.sql`)** — `workout_adherence`, o planejado contra o
+  feito por sessão. A 0026 grava `reps_planned` ao lado de `reps_completed`
+  desde sempre e **nenhuma consulta lia a coluna**; a 0027 trouxe carga, volume
+  e recorde, e deixou aderência de fora. Sem ela a análise do Synse+ não tem o
+  número que o professor olha primeiro: a série em que a pessoa parou antes do
+  previsto, que é sinal de fadiga ou de carga alta demais.
+
+  Devolve uma linha por sessão, e não um número só, porque a pergunta útil é a
+  comparação — 78% nas últimas três sessões contra 96% antes delas — e a mesma
+  porcentagem do mês serviria para essa leitura e para a oposta. Série sem
+  `reps_planned` (treino livre, série extra) fica fora dos dois lados: contá-la
+  como falha puniria quem fez além do combinado.
+
+  `SECURITY INVOKER`, como toda a 0027 — a RLS filtra sozinha, e
+  `tests/db/aderencia.test.ts` confere que o aluno de uma academia não lê a
+  aderência do aluno de outra.
+
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona
 enquanto toda migration cria algo visível pela API. A 0018 não cria: ela troca

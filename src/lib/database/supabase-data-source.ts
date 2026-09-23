@@ -67,6 +67,7 @@ import type {
   StudentAtRisk,
   WorkoutPreferences,
   WorkoutSessionSummary,
+  WorkoutAdherenceRow,
   WorkoutTotals,
   Exercise,
   Lead,
@@ -2015,6 +2016,26 @@ export class SupabaseDataSource implements DataSource {
       [],
     )
     return mapTotals(rows[0])
+  }
+
+  async getWorkoutAdherence(
+    studentId: string,
+    from: string,
+    to: string,
+  ): Promise<WorkoutAdherenceRow[]> {
+    const rows = await this.rpc<Row[]>(
+      'workout_adherence',
+      { p_student_id: studentId, p_from: from, p_to: to },
+      [],
+    )
+    return rows.map((row) => ({
+      sessionId: String(row.sessao_id),
+      startedAt: String(row.iniciado_em),
+      plannedSets: Number(row.series_planejadas),
+      plannedReps: Number(row.reps_planejadas),
+      completedReps: Number(row.reps_feitas),
+      setsBelowPlan: Number(row.series_abaixo),
+    })) satisfies WorkoutAdherenceRow[]
   }
 
   async getGymTrainingReport(organizationId: string, from: string, to: string) {

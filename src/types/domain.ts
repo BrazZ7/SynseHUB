@@ -574,6 +574,22 @@ export type WorkoutTotals = {
   distinctExercises: number
 }
 
+/**
+ * Planejado contra feito, numa sessão.
+ *
+ * Só as séries que tinham previsão entram: `plannedSets` diz sobre quantas o
+ * resto da linha fala. Série livre não vira acerto nem falha.
+ */
+export type WorkoutAdherenceRow = {
+  sessionId: string
+  startedAt: string
+  plannedSets: number
+  plannedReps: number
+  completedReps: number
+  /** Séries em que se parou antes do previsto — fadiga ou carga alta demais. */
+  setsBelowPlan: number
+}
+
 export type GymTrainingReport = {
   workouts: number
   studentsTraining: number

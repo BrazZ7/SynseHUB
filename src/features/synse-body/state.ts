@@ -15,13 +15,20 @@ export type DeviceResult = { status: 'success'; deviceId?: string } | { status: 
 
 export type ShareResult = { status: 'success' } | { status: 'error'; message: string }
 
+/**
+ * As janelas do histórico, com quanto cada uma pede em dias.
+ *
+ * O número existe para o limite de plano conseguir comparar: "3 meses" e "1
+ * ano" são rótulos, e o corte precisa de grandeza. `0` é "tudo" — sem teto, e
+ * por isso o caso que mais importa recortar no gratuito.
+ */
 export const PERIODOS = [
-  { valor: '7d', rotulo: '7 dias' },
-  { valor: '30d', rotulo: '30 dias' },
-  { valor: '3m', rotulo: '3 meses' },
-  { valor: '6m', rotulo: '6 meses' },
-  { valor: '1a', rotulo: '1 ano' },
-  { valor: 'tudo', rotulo: 'Tudo' },
+  { valor: '7d', rotulo: '7 dias', dias: 7 },
+  { valor: '30d', rotulo: '30 dias', dias: 30 },
+  { valor: '3m', rotulo: '3 meses', dias: 90 },
+  { valor: '6m', rotulo: '6 meses', dias: 180 },
+  { valor: '1a', rotulo: '1 ano', dias: 365 },
+  { valor: 'tudo', rotulo: 'Tudo', dias: 0 },
 ] as const
 
 /** O nome que a tela dá a cada campo, e a unidade. */

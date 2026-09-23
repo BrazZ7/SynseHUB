@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { Bluetooth, Pencil, Scale, Trash2 } from 'lucide-react'
+import { Bluetooth, Lock, Pencil, Scale, Trash2 } from 'lucide-react'
 
 import { BackLink } from '@/components/synse/back-link'
 import { ChartCard } from '@/components/synse/chart-card'
@@ -10,12 +10,18 @@ import { Button } from '@/components/ui/button'
 import { MeasurementField } from '@/features/synse-body/components/measurement-field'
 import { PendingBodySync } from '@/features/synse-body/components/pending-body-sync'
 import { PeriodSelector } from '@/features/synse-body/components/period-selector'
+import { PERIODOS } from '@/features/synse-body/state'
+import { janelaBloqueada } from '@/lib/plans/history'
+import { HISTORY_MONTHS } from '@/lib/plans/tiers'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 import { isPendingMigration } from '@/lib/database/pending-migration'
 import { bodyPeriodSchema } from '@/lib/validations/body'
 import { formatDate } from '@/lib/utils'
 import type { BodyMeasurement, BodyPeriod } from '@/types/domain'
+
+/** A maior janela que o plano gratuito cobre. */
+const PERIODO_DO_GRATUITO: BodyPeriod = '3m'
 
 export const metadata: Metadata = { title: 'Synse Body' }
 
@@ -26,9 +32,20 @@ export default async function SynseBodyPage({
 }: {
   searchParams: Promise<{ periodo?: string }>
 }) {
-  await requireStudentSession()
+  const session = await requireStudentSession()
   const { periodo } = await searchParams
-  const janela: BodyPeriod = bodyPeriodSchema.safeParse(periodo).data ?? '30d'
+  const pedida: BodyPeriod = bodyPeriodSchema.safeParse(periodo).data ?? '30d'
+
+  /*
+   * O recorte é aqui, no servidor, e não no seletor.
+   *
+   * O seletor esconde a opção que o plano não cobre; forjar `?periodo=tudo` na
+   * barra de endereços passaria por cima dele. A regra da casa é que o
+   * front-end usa o plano só para esconder UI — quem recusa é a leitura.
+   */
+  const diasPedidos = PERIODOS.find((opcao) => opcao.valor === pedida)?.dias ?? 30
+  const recortado = janelaBloqueada(session.tier, diasPedidos)
+  const janela: BodyPeriod = recortado ? PERIODO_DO_GRATUITO : pedida
 
   const dataSource = await getDataSource()
 
@@ -98,7 +115,20 @@ export default async function SynseBodyPage({
       */}
       <PendingBodySync />
 
-      <PeriodSelector atual={janela} />
+      <PeriodSelector atual={janela} tier={session.tier} />
+
+      {recortado && (
+        <Link
+          href="/app/synse"
+          className="flex items-start gap-2.5 rounded-xl border border-synse-border bg-synse-surface p-4 text-sm text-synse-text transition-colors hover:border-synse-primary"
+        >
+          <Lock className="mt-0.5 size-4 shrink-0 text-synse-primary" aria-hidden />
+          <span>
+            No plano gratuito o histórico volta {HISTORY_MONTHS.FREE} meses. O Synse+ abre{' '}
+            {HISTORY_MONTHS.PRO / 12} anos — e nada é apagado: suas medições continuam aqui.
+          </span>
+        </Link>
+      )}
 
       {indisponivel ? (
         <EmptyState

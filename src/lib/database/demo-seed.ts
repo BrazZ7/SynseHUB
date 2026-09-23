@@ -1126,7 +1126,18 @@ function buildDemoDataset() {
    * metade da demonstração.
    */
   const CORREDORES = ['prof_0001', 'prof_0002'] as const
-  const SEMANAS_DE_CORRIDA = 12
+  /*
+   * Vinte semanas, e não doze.
+   *
+   * Doze semanas dão 84 dias, que cabem inteiras dentro dos 3 meses do plano
+   * gratuito — o limite de histórico existia e **nunca mordia na
+   * demonstração**. Quem avalia o produto veria a mesma lista nos dois planos e
+   * concluiria que a diferença é só um rótulo.
+   *
+   * Vinte semanas passam dos 140 dias, então o recorte do gratuito corta de
+   * verdade e a diferença entre os planos fica visível na tela.
+   */
+  const SEMANAS_DE_CORRIDA = 20
   /** Ritmo em segundos por quilômetro, do começo ao fim do histórico. */
   const RITMO_INICIAL = 400
   const RITMO_FINAL = 352

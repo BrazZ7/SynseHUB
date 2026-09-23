@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { ChevronRight, Timer } from 'lucide-react'
+import { ChevronRight, Lock, Timer } from 'lucide-react'
 
 import { BackLink } from '@/components/synse/back-link'
 import { EmptyState } from '@/components/synse/empty-state'
@@ -15,16 +15,30 @@ import {
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 import { isPendingMigration } from '@/lib/database/pending-migration'
+import { janelaBloqueada, recortarDias } from '@/lib/plans/history'
+import { HISTORY_MONTHS } from '@/lib/plans/tiers'
 import type { Activity } from '@/types/domain'
 
 export const metadata: Metadata = { title: 'Minhas atividades' }
 
+/**
+ * "3 meses" entrou junto com o limite de plano.
+ *
+ * Sem ela, o gratuito pedia "Tudo", o servidor recortava para noventa dias, e
+ * nenhum filtro ficava marcado — a tela mostrava um recorte que ela mesma não
+ * sabia nomear. O teto do plano precisa existir como opção para poder ser o
+ * estado em vigor.
+ */
 const PERIODOS = {
   semana: { label: 'Semana', dias: 7 },
   mes: { label: 'Mês', dias: 30 },
+  trimestre: { label: '3 meses', dias: 90 },
   ano: { label: 'Ano', dias: 365 },
   tudo: { label: 'Tudo', dias: 0 },
 } as const
+
+/** A maior janela que o plano gratuito cobre. */
+const PERIODO_DO_GRATUITO = 'trimestre' as const
 
 type Periodo = keyof typeof PERIODOS
 
@@ -44,7 +58,19 @@ export default async function RunHistoryPage({
       ? filtros.esporte
       : undefined
 
-  const dias = PERIODOS[periodo].dias
+  /*
+   * O recorte do plano acontece aqui, no servidor. O filtro acima esconde a
+   * janela que o plano não cobre; forjar `?periodo=tudo` passa por cima dele, e
+   * não passa por aqui — a regra da casa é que o front-end só esconde UI.
+   */
+  const recortado = janelaBloqueada(session.tier, PERIODOS[periodo].dias)
+  /*
+   * O período **em vigor**, que não é sempre o pedido. Marcar o pedido deixaria
+   * um filtro trancado aceso; não marcar nada deixaria a tela sem dizer o que
+   * está mostrando. Marca-se o que de fato foi aplicado.
+   */
+  const emVigor: Periodo = recortado ? PERIODO_DO_GRATUITO : periodo
+  const dias = recortarDias(session.tier, PERIODOS[emVigor].dias)
   const desde = dias > 0 ? new Date(Date.now() - dias * 86_400_000).toISOString() : undefined
 
   let atividades: Activity[] = []
@@ -77,18 +103,43 @@ export default async function RunHistoryPage({
         <h1 className="text-2xl font-semibold text-synse-text">Minhas atividades</h1>
       </header>
 
+      {recortado && (
+        <Link
+          href="/app/synse"
+          className="flex items-start gap-2.5 rounded-xl border border-synse-border bg-synse-surface p-4 text-sm text-synse-text transition-colors hover:border-synse-primary"
+        >
+          <Lock className="mt-0.5 size-4 shrink-0 text-synse-primary" aria-hidden />
+          <span>
+            No plano gratuito o histórico volta {HISTORY_MONTHS.FREE} meses. O Synse+ abre{' '}
+            {HISTORY_MONTHS.PRO / 12} anos — e nada é apagado: suas atividades continuam aqui.
+          </span>
+        </Link>
+      )}
+
       {/* Filtros: link, não botão — o estado vive na URL e sobrevive ao recarregar */}
       <nav className="flex flex-wrap gap-2" aria-label="Filtrar atividades">
-        {Object.entries(PERIODOS).map(([chave, { label }]) => (
-          <Link
-            key={chave}
-            href={`/app/run/history?periodo=${chave}${esporte ? `&esporte=${esporte}` : ''}`}
-            className="rounded-full px-1"
-            aria-current={chave === periodo ? 'page' : undefined}
-          >
-            <Badge variant={chave === periodo ? 'primary' : 'outline'}>{label}</Badge>
-          </Link>
-        ))}
+        {Object.entries(PERIODOS).map(([chave, { label, dias: diasDaOpcao }]) => {
+          const trancada = janelaBloqueada(session.tier, diasDaOpcao)
+
+          return (
+            <Link
+              key={chave}
+              href={
+                trancada
+                  ? '/app/synse'
+                  : `/app/run/history?periodo=${chave}${esporte ? `&esporte=${esporte}` : ''}`
+              }
+              className="rounded-full px-1"
+              aria-current={chave === emVigor ? 'page' : undefined}
+              aria-label={trancada ? `${label} — disponível no Synse+` : undefined}
+            >
+              <Badge variant={chave === emVigor ? 'primary' : 'outline'}>
+                {trancada && <Lock className="mr-1 size-3" aria-hidden />}
+                {label}
+              </Badge>
+            </Link>
+          )
+        })}
 
         {(['RUN', 'WALK', 'RIDE'] as const).map((tipo) => (
           <Link

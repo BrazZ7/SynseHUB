@@ -1045,10 +1045,7 @@ function buildDemoDataset() {
        * a coluna "atrasados" da demonstração ter o que mostrar — funil sem
        * contato vencido não parece um funil de verdade.
        */
-      nextFollowUpAt:
-        index % 3 === 0
-          ? null
-          : addDays(DEMO_NOW, intBetween(-6, 10)).toISOString(),
+      nextFollowUpAt: index % 3 === 0 ? null : addDays(DEMO_NOW, intBetween(-6, 10)).toISOString(),
       convertedStudentId: null,
       lostReason: null,
       createdAt: addDays(DEMO_NOW, -intBetween(0, 45)).toISOString(),
@@ -1108,7 +1105,6 @@ function buildDemoDataset() {
     },
   ]
 
-
   // ── SynseRun ────────────────────────────────────────────────────────────────
   /*
    * O histórico de corrida da demonstração.
@@ -1123,7 +1119,13 @@ function buildDemoDataset() {
    * então o histórico precisa ter pelo menos essas quatro para a barra da tela
    * inicial mostrar um alvo em vez de nada.
    */
-  const CORREDOR = 'prof_0001'
+  /*
+   * As duas personas de aluno correm. A de teste grátis e a sem assinatura
+   * caem na mesma tela de SynseRun, e deixar uma delas sem histórico repetiria
+   * o defeito que a semente de corrida existe para consertar — só que agora em
+   * metade da demonstração.
+   */
+  const CORREDORES = ['prof_0001', 'prof_0002'] as const
   const SEMANAS_DE_CORRIDA = 12
   /** Ritmo em segundos por quilômetro, do começo ao fim do histórico. */
   const RITMO_INICIAL = 400
@@ -1143,95 +1145,97 @@ function buildDemoDataset() {
 
   let numeroDaCorrida = 0
 
-  for (let semana = SEMANAS_DE_CORRIDA - 1; semana >= 0; semana -= 1) {
-    const inicioDaSemana = addDays(segundaDesta, -semana * 7)
-    const progresso = (SEMANAS_DE_CORRIDA - 1 - semana) / (SEMANAS_DE_CORRIDA - 1)
-    const ritmoBase = RITMO_INICIAL + (RITMO_FINAL - RITMO_INICIAL) * progresso
+  for (const CORREDOR of CORREDORES) {
+    for (let semana = SEMANAS_DE_CORRIDA - 1; semana >= 0; semana -= 1) {
+      const inicioDaSemana = addDays(segundaDesta, -semana * 7)
+      const progresso = (SEMANAS_DE_CORRIDA - 1 - semana) / (SEMANAS_DE_CORRIDA - 1)
+      const ritmoBase = RITMO_INICIAL + (RITMO_FINAL - RITMO_INICIAL) * progresso
 
-    /*
-     * A semana corrente entra pela metade: a barra de meta da tela inicial
-     * precisa mostrar progresso, não uma semana já fechada. Semana cheia ali
-     * esconderia justamente o que o widget existe para mostrar.
-     */
-    const corrida = semana === 0 ? 1 : intBetween(2, 3)
-    const caminhada = semana === 0 ? 0 : 1
-    const pedalada = semana > 0 && semana % 4 === 0 ? 1 : 0
+      /*
+       * A semana corrente entra pela metade: a barra de meta da tela inicial
+       * precisa mostrar progresso, não uma semana já fechada. Semana cheia ali
+       * esconderia justamente o que o widget existe para mostrar.
+       */
+      const corrida = semana === 0 ? 1 : intBetween(2, 3)
+      const caminhada = semana === 0 ? 0 : 1
+      const pedalada = semana > 0 && semana % 4 === 0 ? 1 : 0
 
-    const dias = [1, 3, 5, 6]
-    let proximoDia = 0
+      const dias = [1, 3, 5, 6]
+      let proximoDia = 0
 
-    const registrar = (sport: SportType, metros: number, ritmoPorKm: number) => {
-      numeroDaCorrida += 1
-      const activityId = id('act', numeroDaCorrida)
-      const diaDoTreino = dias[proximoDia % dias.length]
-      proximoDia += 1
+      const registrar = (sport: SportType, metros: number, ritmoPorKm: number) => {
+        numeroDaCorrida += 1
+        const activityId = id('act', numeroDaCorrida)
+        const diaDoTreino = dias[proximoDia % dias.length]
+        proximoDia += 1
 
-      const comeco = new Date(addDays(inicioDaSemana, diaDoTreino))
-      comeco.setHours(intBetween(6, 8), intBetween(0, 59), 0, 0)
+        const comeco = new Date(addDays(inicioDaSemana, diaDoTreino))
+        comeco.setHours(intBetween(6, 8), intBetween(0, 59), 0, 0)
 
-      const km = metros / 1000
-      const movingSeconds = Math.round(km * ritmoPorKm)
-      // Parado no semáforo, gole de água: o relógio corrido é sempre maior.
-      const elapsedSeconds = Math.round(movingSeconds * between(1.03, 1.1))
-      const fim = new Date(comeco.getTime() + elapsedSeconds * 1000)
-      const ganho = Math.round(between(8, 70))
+        const km = metros / 1000
+        const movingSeconds = Math.round(km * ritmoPorKm)
+        // Parado no semáforo, gole de água: o relógio corrido é sempre maior.
+        const elapsedSeconds = Math.round(movingSeconds * between(1.03, 1.1))
+        const fim = new Date(comeco.getTime() + elapsedSeconds * 1000)
+        const ganho = Math.round(between(8, 70))
 
-      demoActivities.push({
-        id: activityId,
-        userProfileId: CORREDOR,
-        organizationId: DEMO_ORG_ID,
-        sport,
-        status: 'COMPLETED',
-        title: null,
-        startedAt: comeco.toISOString(),
-        endedAt: fim.toISOString(),
-        elapsedSeconds,
-        movingSeconds,
-        distanceMeters: metros,
-        averagePace: ritmoPorKm,
-        bestPace: Math.round(ritmoPorKm * between(0.9, 0.95)),
-        averageSpeed: metros / movingSeconds,
-        maxSpeed: (metros / movingSeconds) * between(1.15, 1.3),
-        elevationGain: ganho,
-        elevationLoss: ganho + Math.round(between(-6, 6)),
-        minAltitude: 720,
-        maxAltitude: 720 + ganho,
-        calories: Math.round(km * KCAL_POR_KM * (sport === 'RIDE' ? 0.5 : 1)),
-        startLatitude: -23.5613 + between(-0.01, 0.01),
-        startLongitude: -46.6565 + between(-0.01, 0.01),
-        /*
-         * Privado por padrão, como a tela oferece. Duas ficam visíveis para a
-         * academia, para a demonstração mostrar que a escolha existe.
-         */
-        privacy: numeroDaCorrida % 7 === 0 ? 'GYM' : 'PRIVATE',
-        privacyZoneMeters: 200,
-        createdAt: fim.toISOString(),
-      })
-
-      // Parciais por quilômetro. O último trecho é parcial e fica de fora.
-      const parciais: ActivitySplit[] = []
-      for (let k = 1; k <= Math.floor(km); k += 1) {
-        const segundos = Math.round(ritmoPorKm * between(0.94, 1.07))
-        parciais.push({
-          kilometer: k,
-          splitSeconds: segundos,
-          paceSeconds: segundos,
-          elevationGain: Math.round(between(0, 12)),
+        demoActivities.push({
+          id: activityId,
+          userProfileId: CORREDOR,
+          organizationId: DEMO_ORG_ID,
+          sport,
+          status: 'COMPLETED',
+          title: null,
+          startedAt: comeco.toISOString(),
+          endedAt: fim.toISOString(),
+          elapsedSeconds,
+          movingSeconds,
+          distanceMeters: metros,
+          averagePace: ritmoPorKm,
+          bestPace: Math.round(ritmoPorKm * between(0.9, 0.95)),
+          averageSpeed: metros / movingSeconds,
+          maxSpeed: (metros / movingSeconds) * between(1.15, 1.3),
+          elevationGain: ganho,
+          elevationLoss: ganho + Math.round(between(-6, 6)),
+          minAltitude: 720,
+          maxAltitude: 720 + ganho,
+          calories: Math.round(km * KCAL_POR_KM * (sport === 'RIDE' ? 0.5 : 1)),
+          startLatitude: -23.5613 + between(-0.01, 0.01),
+          startLongitude: -46.6565 + between(-0.01, 0.01),
+          /*
+           * Privado por padrão, como a tela oferece. Duas ficam visíveis para a
+           * academia, para a demonstração mostrar que a escolha existe.
+           */
+          privacy: numeroDaCorrida % 7 === 0 ? 'GYM' : 'PRIVATE',
+          privacyZoneMeters: 200,
+          createdAt: fim.toISOString(),
         })
+
+        // Parciais por quilômetro. O último trecho é parcial e fica de fora.
+        const parciais: ActivitySplit[] = []
+        for (let k = 1; k <= Math.floor(km); k += 1) {
+          const segundos = Math.round(ritmoPorKm * between(0.94, 1.07))
+          parciais.push({
+            kilometer: k,
+            splitSeconds: segundos,
+            paceSeconds: segundos,
+            elevationGain: Math.round(between(0, 12)),
+          })
+        }
+        demoActivitySplits.set(activityId, parciais)
+
+        return { activityId, comeco, metros, movingSeconds }
       }
-      demoActivitySplits.set(activityId, parciais)
 
-      return { activityId, comeco, metros, movingSeconds }
-    }
-
-    for (let i = 0; i < corrida; i += 1) {
-      registrar('RUN', intBetween(4, 11) * 1000, Math.round(ritmoBase * between(0.96, 1.05)))
-    }
-    for (let i = 0; i < caminhada; i += 1) {
-      registrar('WALK', intBetween(2, 5) * 1000, Math.round(between(660, 780)))
-    }
-    for (let i = 0; i < pedalada; i += 1) {
-      registrar('RIDE', intBetween(15, 30) * 1000, Math.round(between(150, 190)))
+      for (let i = 0; i < corrida; i += 1) {
+        registrar('RUN', intBetween(4, 11) * 1000, Math.round(ritmoBase * between(0.96, 1.05)))
+      }
+      for (let i = 0; i < caminhada; i += 1) {
+        registrar('WALK', intBetween(2, 5) * 1000, Math.round(between(660, 780)))
+      }
+      for (let i = 0; i < pedalada; i += 1) {
+        registrar('RIDE', intBetween(15, 30) * 1000, Math.round(between(150, 190)))
+      }
     }
   }
 
@@ -1284,34 +1288,45 @@ function buildDemoDataset() {
    */
   const EXPOENTE_DE_RIEGEL = 1.06
   const MARCAS_DE_RECORDE = [400, 1000, 1609, 5000, 10000, 15000, 21097] as const
-  const melhorPorMarca = new Map<number, PersonalRecord>()
 
-  for (const atividade of demoActivities) {
-    if (atividade.sport !== 'RUN') continue
-    for (const marca of MARCAS_DE_RECORDE) {
-      if (atividade.distanceMeters < marca) continue
-      const segundos = Math.round(
-        atividade.movingSeconds * (marca / atividade.distanceMeters) ** EXPOENTE_DE_RIEGEL,
-      )
-      const atual = melhorPorMarca.get(marca)
-      // Só substitui quando é melhor — a regra que a 0016 escreve em SQL.
-      if (atual && atual.seconds <= segundos) continue
+  /*
+   * Um conjunto por corredor. Uma tabela só misturaria os dois e mostraria a
+   * uma pessoa o recorde da outra — que no banco é impossível, porque a RLS
+   * filtra por perfil, e aqui seria um vazamento inventado pela semente.
+   */
+  const demoPersonalRecords = new Map<string, PersonalRecord[]>()
 
-      melhorPorMarca.set(marca, {
-        id: id('prec', marca),
-        sport: 'RUN',
-        distanceMeters: marca,
-        seconds: segundos,
-        paceSeconds: Math.round(segundos / (marca / 1000)),
-        activityId: atividade.id,
-        achievedAt: atividade.startedAt,
-      })
+  for (const corredor of CORREDORES) {
+    const melhorPorMarca = new Map<number, PersonalRecord>()
+
+    for (const atividade of demoActivities) {
+      if (atividade.sport !== 'RUN' || atividade.userProfileId !== corredor) continue
+      for (const marca of MARCAS_DE_RECORDE) {
+        if (atividade.distanceMeters < marca) continue
+        const segundos = Math.round(
+          atividade.movingSeconds * (marca / atividade.distanceMeters) ** EXPOENTE_DE_RIEGEL,
+        )
+        const atual = melhorPorMarca.get(marca)
+        // Só substitui quando é melhor — a regra que a 0016 escreve em SQL.
+        if (atual && atual.seconds <= segundos) continue
+
+        melhorPorMarca.set(marca, {
+          id: `prec_${corredor}_${marca}`,
+          sport: 'RUN',
+          distanceMeters: marca,
+          seconds: segundos,
+          paceSeconds: Math.round(segundos / (marca / 1000)),
+          activityId: atividade.id,
+          achievedAt: atividade.startedAt,
+        })
+      }
     }
-  }
 
-  const demoPersonalRecords = [...melhorPorMarca.values()].sort(
-    (a, b) => a.distanceMeters - b.distanceMeters,
-  )
+    demoPersonalRecords.set(
+      corredor,
+      [...melhorPorMarca.values()].sort((a, b) => a.distanceMeters - b.distanceMeters),
+    )
+  }
 
   return {
     now: DEMO_NOW,
@@ -1340,8 +1355,8 @@ function buildDemoDataset() {
     activitySplits: demoActivitySplits,
     activityRoutes: demoActivityRoutes,
     personalRecords: demoPersonalRecords,
-    /** Quem corre na demonstração — o mesmo perfil da persona de aluno. */
-    runnerProfileId: CORREDOR,
+    /** Quem corre na demonstração — as duas personas de aluno. */
+    runnerProfileIds: CORREDORES as readonly string[],
     /** Aluno usado como sessão padrão do Synse App em modo demo. */
     studentIdForApp: demoStudents[0].id,
   }

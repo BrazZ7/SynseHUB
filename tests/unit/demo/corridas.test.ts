@@ -129,3 +129,47 @@ describe('os recordes da demonstração', () => {
     expect(await fonte.listPersonalRecords('prof_staff_0006')).toEqual([])
   })
 })
+
+/**
+ * As duas personas de aluno — a do teste grátis e a do plano grátis — caem na
+ * mesma tela de SynseRun. Deixar uma sem histórico repetiria, em metade da
+ * demonstração, o defeito que esta semente existe para consertar.
+ */
+describe('a segunda persona de aluno também corre', () => {
+  const OUTRA = 'prof_0002'
+
+  it('tem corridas próprias', async () => {
+    const dela = await fonte.listActivities(OUTRA, { limit: 500 })
+    expect(dela.length).toBeGreaterThan(20)
+    expect(dela.every((a) => a.userProfileId === OUTRA)).toBe(true)
+  })
+
+  it('a lista de uma não traz atividade da outra', async () => {
+    const daSofia = await fonte.listActivities(CORREDOR, { limit: 500 })
+    const daOutra = await fonte.listActivities(OUTRA, { limit: 500 })
+    const ids = new Set(daOutra.map((a) => a.id))
+
+    expect(daSofia.some((a) => ids.has(a.id))).toBe(false)
+  })
+
+  it('os recordes não vazam entre as duas', async () => {
+    /*
+     * No banco isso é impossível: a RLS filtra por perfil. Aqui o vazamento
+     * seria inventado pela semente — uma tabela de recordes só, compartilhada,
+     * mostraria a uma pessoa a marca da outra.
+     */
+    const dela = await fonte.listPersonalRecords(OUTRA)
+    expect(dela.length).toBeGreaterThan(2)
+
+    const atividadesDela = new Set(
+      (await fonte.listActivities(OUTRA, { limit: 500 })).map((a) => a.id),
+    )
+    for (const recorde of dela) {
+      expect(atividadesDela.has(recorde.activityId), recorde.id).toBe(true)
+    }
+
+    const daSofia = await fonte.listPersonalRecords(CORREDOR)
+    const idsDaSofia = new Set(daSofia.map((r) => r.id))
+    expect(dela.some((r) => idsDaSofia.has(r.id))).toBe(false)
+  })
+})

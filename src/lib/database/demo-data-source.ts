@@ -2995,7 +2995,9 @@ export class DemoDataSource implements DataSource {
     userProfileId: string,
     filters: { sport?: SportType; since?: string; limit?: number } = {},
   ): Promise<Activity[]> {
-    const daSemente = userProfileId === this.db.runnerProfileId ? this.db.activities : []
+    const daSemente = this.db.runnerProfileIds.includes(userProfileId)
+      ? this.db.activities.filter((atividade) => atividade.userProfileId === userProfileId)
+      : []
 
     return [...DemoDataSource.corridas.values(), ...daSemente]
       .filter((atividade) => atividade.userProfileId === userProfileId)
@@ -3036,7 +3038,7 @@ export class DemoDataSource implements DataSource {
    * saem das mesmas marcas que a 0016 usa no banco.
    */
   async listPersonalRecords(userProfileId: string): Promise<PersonalRecord[]> {
-    return userProfileId === this.db.runnerProfileId ? this.db.personalRecords : []
+    return this.db.personalRecords.get(userProfileId) ?? []
   }
 
   async summarizeActivities(userProfileId: string, since: string): Promise<ActivitySummary> {

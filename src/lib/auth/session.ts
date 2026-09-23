@@ -116,10 +116,26 @@ export function getDemoPersonas(): DemoPersona[] {
     {
       key: 'student',
       label: 'Aluno Synse App',
-      description: 'Experiência do aluno no Synse App',
+      description: 'Experiência do aluno — no teste grátis do Synse+',
       role: 'STUDENT',
       userProfileId: 'prof_0001',
       studentId: demo.studentIdForApp,
+    },
+    /*
+     * A mesma tela, sem assinatura.
+     *
+     * Existe porque a persona acima entra em teste grátis, e com ela sozinha a
+     * demonstração deixou de mostrar a **oferta** — "primeiro mês R$ 0,00,
+     * depois o valor cheio" —, que é o que um aluno de verdade vê primeiro.
+     * Uma tela invisível tinha sido trocada por outra.
+     */
+    {
+      key: 'student-free',
+      label: 'Aluno no plano grátis',
+      description: 'Experiência do aluno — sem Synse+, vendo a oferta',
+      role: 'STUDENT',
+      userProfileId: 'prof_0002',
+      studentId: demo.students[1]?.id ?? demo.studentIdForApp,
     },
     {
       key: 'super-admin',
@@ -153,7 +169,9 @@ export function findDemoPersona(key: string | undefined | null): DemoPersona | n
 const DIAS_JA_CORRIDOS_NA_DEMO = 12
 
 function assinaturaDaDemo(persona: DemoPersona, agora: Date): PlusSubscription {
-  if (persona.role !== 'STUDENT') return SEM_ASSINATURA
+  // Só a persona do teste. A do plano grátis existe justamente para mostrar a
+  // tela de quem ainda não assinou.
+  if (persona.key !== 'student') return SEM_ASSINATURA
 
   const fim = new Date(agora)
   fim.setDate(fim.getDate() + (PLUS_PRICE.trialDays - DIAS_JA_CORRIDOS_NA_DEMO))

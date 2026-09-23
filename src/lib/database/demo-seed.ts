@@ -57,7 +57,8 @@ export type DemoStaff = {
 /** Alunos com histórico completo (treinos, cargas, avaliações). */
 export const DETAILED_STUDENT_COUNT = 20
 
-type ExerciseSeed = [string, Exercise['muscleGroup'], string]
+/** Nome, grupo, aparelho e os apelidos pelos quais o exercício é procurado. */
+type ExerciseSeed = [string, Exercise['muscleGroup'], string, string[]?]
 
 export type DemoDataset = ReturnType<typeof buildDemoDataset>
 
@@ -768,64 +769,68 @@ function buildDemoDataset() {
 
   // ── Biblioteca de exercícios ─────────────────────────────────────────────────
   const EXERCISE_SEEDS: ExerciseSeed[] = [
-    ['Supino reto com barra', 'CHEST', 'Barra'],
-    ['Supino inclinado com halteres', 'CHEST', 'Halteres'],
-    ['Crucifixo na máquina', 'CHEST', 'Máquina'],
-    ['Crossover', 'CHEST', 'Polia'],
-    ['Puxada frente', 'BACK', 'Polia'],
-    ['Remada curvada', 'BACK', 'Barra'],
-    ['Remada unilateral', 'BACK', 'Halteres'],
-    ['Pulldown', 'BACK', 'Polia'],
-    ['Agachamento livre', 'LEGS', 'Barra'],
-    ['Leg press 45°', 'LEGS', 'Máquina'],
-    ['Cadeira extensora', 'LEGS', 'Máquina'],
-    ['Mesa flexora', 'LEGS', 'Máquina'],
-    ['Panturrilha em pé', 'LEGS', 'Máquina'],
-    ['Desenvolvimento militar', 'SHOULDERS', 'Barra'],
-    ['Elevação lateral', 'SHOULDERS', 'Halteres'],
-    ['Elevação frontal', 'SHOULDERS', 'Halteres'],
-    ['Rosca direta', 'ARMS', 'Barra'],
-    ['Rosca alternada', 'ARMS', 'Halteres'],
-    ['Tríceps corda', 'ARMS', 'Polia'],
-    ['Tríceps testa', 'ARMS', 'Barra'],
-    ['Prancha isométrica', 'CORE', 'Peso corporal'],
-    ['Abdominal supra', 'CORE', 'Peso corporal'],
-    ['Elevação de pernas', 'CORE', 'Peso corporal'],
-    ['Hip thrust', 'GLUTES', 'Barra'],
-    ['Cadeira abdutora', 'GLUTES', 'Máquina'],
-    ['Esteira — corrida contínua', 'CARDIO', 'Esteira'],
-    ['Bike ergométrica', 'CARDIO', 'Bicicleta'],
-    ['Remo ergômetro', 'CARDIO', 'Remo'],
-    ['Burpee', 'FULL_BODY', 'Peso corporal'],
-    ['Levantamento terra', 'FULL_BODY', 'Barra'],
+    ['Supino reto com barra', 'CHEST', 'Barra', ['supino reto', 'bench press']],
+    ['Supino inclinado com halteres', 'CHEST', 'Halteres', ['inclinado', 'incline press']],
+    ['Crucifixo na máquina', 'CHEST', 'Máquina', ['voador', 'peck deck']],
+    ['Crossover', 'CHEST', 'Polia', ['cross over', 'polia alta']],
+    ['Puxada frente', 'BACK', 'Polia', ['pulley frente', 'puxada frontal', 'lat pulldown']],
+    ['Remada curvada', 'BACK', 'Barra', ['remada livre', 'barbell row']],
+    ['Remada unilateral', 'BACK', 'Halteres', ['serrote']],
+    ['Pulldown', 'BACK', 'Polia', ['pull down', 'puxada']],
+    ['Agachamento livre', 'LEGS', 'Barra', ['squat', 'agacho']],
+    ['Leg press 45°', 'LEGS', 'Máquina', ['leg press', 'leg 45']],
+    ['Cadeira extensora', 'LEGS', 'Máquina', ['extensora', 'leg extension']],
+    ['Mesa flexora', 'LEGS', 'Máquina', ['flexora', 'leg curl']],
+    ['Panturrilha em pé', 'LEGS', 'Máquina', ['gêmeos', 'calf raise']],
+    ['Desenvolvimento militar', 'SHOULDERS', 'Barra', ['desenvolvimento', 'military press']],
+    ['Elevação lateral', 'SHOULDERS', 'Halteres', ['lateral', 'lateral raise']],
+    ['Elevação frontal', 'SHOULDERS', 'Halteres', ['frontal', 'front raise']],
+    ['Rosca direta', 'ARMS', 'Barra', ['bíceps', 'curl']],
+    ['Rosca alternada', 'ARMS', 'Halteres', ['alternada', 'rosca martelo']],
+    ['Tríceps corda', 'ARMS', 'Polia', ['corda', 'tríceps pulley']],
+    ['Tríceps testa', 'ARMS', 'Barra', ['testa', 'skull crusher']],
+    ['Prancha isométrica', 'CORE', 'Peso corporal', ['prancha', 'plank']],
+    ['Abdominal supra', 'CORE', 'Peso corporal', ['abdominal', 'crunch']],
+    ['Elevação de pernas', 'CORE', 'Peso corporal', ['abdominal infra']],
+    ['Hip thrust', 'GLUTES', 'Barra', ['elevação de quadril', 'glúteo']],
+    ['Cadeira abdutora', 'GLUTES', 'Máquina', ['abdutora', 'abdução']],
+    ['Esteira — corrida contínua', 'CARDIO', 'Esteira', ['esteira', 'corrida']],
+    ['Bike ergométrica', 'CARDIO', 'Bicicleta', ['bicicleta', 'bike']],
+    ['Remo ergômetro', 'CARDIO', 'Remo', ['remo', 'rowing']],
+    ['Burpee', 'FULL_BODY', 'Peso corporal', ['burpees']],
+    ['Levantamento terra', 'FULL_BODY', 'Barra', ['terra', 'deadlift']],
   ]
 
-  const demoExercises: Exercise[] = EXERCISE_SEEDS.map(([name, muscleGroup, equipment], index) => ({
-    id: id('exr', index + 1),
-    organizationId: null,
-    name,
-    muscleGroup,
-    equipment,
-    description: null,
-    videoUrl: null,
-    imageUrl: null,
-    /*
-     * A demonstração fica sem a classificação de propósito: ela existe para
-     * mostrar o produto funcionando, e o catálogo de verdade — com músculo
-     * alvo, padrão de movimento e apelidos — vive no banco, a partir da 0021.
-     */
-    slug: null,
-    primaryMuscle: null,
-    secondaryMuscles: [],
-    region: null,
-    pattern: null,
-    mechanics: null,
-    utility: null,
-    equipmentType: null,
-    unilateral: false,
-    level: null,
-    aliases: [],
-  }))
+  const demoExercises: Exercise[] = EXERCISE_SEEDS.map(
+    ([name, muscleGroup, equipment, aliases], index) => ({
+      id: id('exr', index + 1),
+      organizationId: null,
+      name,
+      muscleGroup,
+      equipment,
+      description: null,
+      videoUrl: null,
+      imageUrl: null,
+      /*
+       * A demonstração fica sem a classificação fina de propósito — músculo
+       * alvo, padrão de movimento, mecânica —, que vive no banco a partir da
+       * 0021. Os **apelidos** são a exceção: sem eles a busca por "extensora"
+       * volta vazia na demonstração, e quem está avaliando o produto conclui
+       * que a busca não funciona. Foi medido, aconteceu.
+       */
+      slug: null,
+      primaryMuscle: null,
+      secondaryMuscles: [],
+      region: null,
+      pattern: null,
+      mechanics: null,
+      utility: null,
+      equipmentType: null,
+      unilateral: false,
+      level: null,
+      aliases: aliases ?? [],
+    }),
+  )
 
   const byGroup = (group: Exercise['muscleGroup']) =>
     demoExercises.filter((e) => e.muscleGroup === group)

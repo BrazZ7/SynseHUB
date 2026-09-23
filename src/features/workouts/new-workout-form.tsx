@@ -2,13 +2,13 @@
 
 import Link from 'next/link'
 import { Plus, Trash2 } from 'lucide-react'
-import { useActionState, useMemo, useState } from 'react'
+import { useActionState, useState } from 'react'
 import { useFormStatus } from 'react-dom'
 
-import { Field, Feedback, SELECT_CLASS } from '@/components/synse/form-field'
+import { Field, Feedback } from '@/components/synse/form-field'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { exerciseOptionLabel, groupExercisesForSelect } from '@/features/workouts/group-exercises'
+import { ExercisePicker } from '@/features/workouts/exercise-picker'
 import { createWorkoutAction, updateWorkoutAction } from '@/features/workouts/actions'
 import { initialWorkoutState } from '@/features/workouts/state'
 import type { Exercise } from '@/types/domain'
@@ -54,12 +54,6 @@ export function NewWorkoutForm({
     editando ? updateWorkoutAction : createWorkoutAction,
     initialWorkoutState,
   )
-
-  /*
-   * O agrupamento é estável enquanto a biblioteca não muda, e a lista tem
-   * 132 itens: refazer isso a cada linha adicionada custaria sem motivo.
-   */
-  const grupos = useMemo(() => groupExercisesForSelect(exercises), [exercises])
 
   /*
    * Só as chaves das linhas moram no estado; os valores ficam no DOM, onde o
@@ -168,23 +162,14 @@ export function NewWorkoutForm({
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-[2fr_70px_90px_90px]">
-                  <select
-                    name="exerciseId"
-                    defaultValue={atual?.exerciseId ?? ''}
-                    aria-label={`Exercício ${indice + 1}`}
-                    className={`${SELECT_CLASS} col-span-2 sm:col-span-1`}
-                  >
-                    <option value="">Escolher exercício…</option>
-                    {grupos.map((grupo) => (
-                      <optgroup key={grupo.label} label={grupo.label}>
-                        {grupo.exercises.map((exercicio) => (
-                          <option key={exercicio.id} value={exercicio.id}>
-                            {exerciseOptionLabel(exercicio)}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
+                  <div className="col-span-2 sm:col-span-1">
+                    <ExercisePicker
+                      name="exerciseId"
+                      exercicios={exercises}
+                      defaultValue={atual?.exerciseId ?? ''}
+                      rotulo={`Exercício ${indice + 1}`}
+                    />
+                  </div>
 
                   <Input
                     name="sets"

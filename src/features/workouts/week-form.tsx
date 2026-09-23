@@ -2,13 +2,13 @@
 
 import Link from 'next/link'
 import { Plus, Trash2 } from 'lucide-react'
-import { useActionState, useMemo, useState } from 'react'
+import { useActionState, useState } from 'react'
 import { useFormStatus } from 'react-dom'
 
-import { Field, Feedback, SELECT_CLASS } from '@/components/synse/form-field'
+import { Field, Feedback } from '@/components/synse/form-field'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { exerciseOptionLabel, groupExercisesForSelect } from '@/features/workouts/group-exercises'
+import { ExercisePicker } from '@/features/workouts/exercise-picker'
 import { createWeekAction } from '@/features/workouts/actions'
 import { initialWorkoutState } from '@/features/workouts/state'
 import type { Exercise } from '@/types/domain'
@@ -51,7 +51,6 @@ export function WeekForm({ exercises }: { exercises: Exercise[] }) {
   const [state, formAction] = useActionState(createWeekAction, initialWorkoutState)
 
   /* A biblioteca tem mais de cem itens e não muda enquanto a tela está aberta. */
-  const grupos = useMemo(() => groupExercisesForSelect(exercises), [exercises])
 
   const [dias, setDias] = useState<Dia[]>([diaNovo(0), diaNovo(1), diaNovo(2)])
   const [proximoDia, setProximoDia] = useState(3)
@@ -158,23 +157,13 @@ export function WeekForm({ exercises }: { exercises: Exercise[] }) {
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-[2fr_70px_90px_90px]">
-                  <select
-                    name="exerciseId"
-                    defaultValue=""
-                    aria-label={`Exercício ${posicao + 1} do dia ${LETRAS[indice] ?? indice + 1}`}
-                    className={`${SELECT_CLASS} col-span-2 sm:col-span-1`}
-                  >
-                    <option value="">Escolher exercício…</option>
-                    {grupos.map((grupo) => (
-                      <optgroup key={grupo.label} label={grupo.label}>
-                        {grupo.exercises.map((exercicio) => (
-                          <option key={exercicio.id} value={exercicio.id}>
-                            {exerciseOptionLabel(exercicio)}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
+                  <div className="col-span-2 sm:col-span-1">
+                    <ExercisePicker
+                      name="exerciseId"
+                      exercicios={exercises}
+                      rotulo={`Exercício ${posicao + 1} do dia ${LETRAS[indice] ?? indice + 1}`}
+                    />
+                  </div>
 
                   <Input
                     name="sets"

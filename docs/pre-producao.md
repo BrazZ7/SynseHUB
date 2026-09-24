@@ -33,7 +33,7 @@ npm run env:check
 
 ## Migrations
 
-**Estado em 24/09/2026: 0001 a 0037 aplicadas em produção**, confirmado por
+**Estado em 24/09/2026: 0001 a 0037 aplicadas em produção** (a 0038 aguarda colagem), confirmado por
 `/api/health?deep=1` (`appliedMigrations: 31`, `pendingMigrations: []`).
 
 Esta linha envelhece a cada migration e por isso não é a fonte da verdade: a
@@ -228,6 +228,40 @@ existem, não para conferir se subiram.
   `is_friendship_party`, que é revogada do anônimo. Não é grant faltando na
   tabela — quem barra é a função —, e por isso a sonda da 0037 pergunta por
   `list_friends`, não pela tabela.
+
+- **0038 (`0038_cadeado_do_plus.sql`)** — o cadeado do Synse+ passa a conferir a
+  porta certa, e as receitas e programas guiados param de ficar abertos.
+
+  Duas políticas liberavam conteúdo `SYNSE_PLUS` consultando
+  `consumer_subscriptions` — tabela da 0002 em que **nada nunca escreveu**. A
+  assinatura mora em `user_profiles.plus_status` e `plus_until` desde a 0036.
+  O cadeado não estava frouxo: estava trancado para todo mundo, e o sintoma
+  teria aparecido só no dia do primeiro e-book, como "o app não mostra o que eu
+  paguei" — com o pagamento em dia e a RLS fazendo o que estava escrito.
+
+  O segundo furo abria para o outro lado: `recipes`, `programs` e
+  `program_steps` nasceram na 0003 com coluna `visibility` — `programs` com
+  padrão `SYNSE_PLUS` — e receberam na 0004 políticas `for select using (true)`.
+  A coluna estava lá e a RLS a ignorava. Como as três estão vazias e nada no
+  app as lê, apertar agora não muda comportamento nenhum; apertar depois seria
+  mexer numa trava sob uso.
+
+  `tem_synse_plus()` é a fonte única, e repete a regra de `resumoDaAssinatura`:
+  **a data manda, não o rótulo** — `plus_status` envelhece, e um ciclo vencido
+  continua `ACTIVE` até a rotina de expiração rodar. `CANCELED` conta como
+  vigente enquanto o período pago não acabou, porque cancelar interrompe a
+  renovação seguinte e não o que já foi pago, que é o que os Termos prometem.
+
+  Concedida ao anônimo de propósito: devolve `false` para ele, e revogar
+  transformaria "nenhuma linha" em `permission denied for function` na leitura
+  de conteúdo público — a mesma pegadinha que a sonda da 0037 encontrou com
+  `is_friendship_party`.
+
+  `tests/db/cadeado-do-plus.test.ts`: 13 testes, conferidos por mutação.
+  Restaurar a tabela morta derruba 5; tirar a data derruba 1; tirar o
+  `CANCELED` derruba 1; reabrir os passos do programa derruba 1.
+
+  `consumer_subscriptions` fica no schema, sem uso e sem nada conferindo-a.
 
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona

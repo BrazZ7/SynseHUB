@@ -177,6 +177,7 @@ const MIGRATIONS_ESPERADAS = [
   '0035_aderencia.sql',
   '0036_assinatura_plus.sql',
   '0037_amigos.sql',
+  '0038_cadeado_do_plus.sql',
 ]
 
 async function schemaReadiness() {
@@ -196,6 +197,7 @@ async function schemaReadiness() {
     escritaDaAssinatura,
     amigos,
     rankingDeAmigos,
+    cadeadoDoPlus,
   ] = await Promise.all([
     schemaCheck('user_profiles?select=tier&limit=1'),
     schemaCheck('baseline_challenges?select=code&limit=1'),
@@ -308,6 +310,17 @@ async function schemaReadiness() {
       p_from: '2000-01-01T00:00:00Z',
       p_to: '2000-01-02T00:00:00Z',
     }),
+    /*
+     * O cadeado do Synse+ (0038). Sem ele, as políticas de conteúdo continuam
+     * conferindo `consumer_subscriptions` — a tabela em que nada escreve — e
+     * assinante em dia não vê o que pagou. A sonda existe porque esse sintoma
+     * só apareceria no dia do primeiro e-book, e chegaria como reclamação.
+     *
+     * `executa: true` porque `tem_synse_plus` é `stable`, só lê, e é concedida
+     * ao anônimo de propósito: para ele devolve `false`. Aqui 200 é a
+     * confirmação.
+     */
+    rpcCheck('tem_synse_plus', {}, { executa: true }),
   ])
 
   const registradas = await migracoesRegistradas()
@@ -368,6 +381,7 @@ async function schemaReadiness() {
       escritaDaAssinatura,
       amigos,
       rankingDeAmigos,
+      cadeadoDoPlus,
       appliedMigrations: registradas.length,
       pendingMigrations: faltando,
     }
@@ -404,6 +418,7 @@ async function schemaReadiness() {
     '0035_aderencia.sql',
     '0036_assinatura_plus.sql',
     '0037_amigos.sql',
+    '0038_cadeado_do_plus.sql',
   )
 
   return {
@@ -422,6 +437,7 @@ async function schemaReadiness() {
     escritaDaAssinatura,
     amigos,
     rankingDeAmigos,
+    cadeadoDoPlus,
     pendingMigrations: pendentes,
   }
 }

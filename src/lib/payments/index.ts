@@ -2,6 +2,7 @@ import 'server-only'
 
 import { MockPaymentProvider } from '@/lib/payments/providers/mock'
 import type { PaymentProvider } from '@/lib/payments/provider'
+import { isDemoMode } from '@/lib/database/env'
 import { env } from '@/lib/env'
 
 /**
@@ -60,6 +61,30 @@ export function provedorDesconhecido(): string | null {
 /** `true` quando nenhum dinheiro real se move — a UI sinaliza isso. */
 export function isSimulatedProvider(): boolean {
   return getPaymentProvider().id === 'mock'
+}
+
+/**
+ * ── Dá para cobrar de verdade? ──────────────────────────────────────────────
+ *
+ * Esta pergunta não é a mesma que "o provedor aceita PIX", e confundir as duas
+ * já produziu o pior defeito que o app teve para o usuário: o simulado **aceita
+ * PIX**, então a tela do aluno mostrava "PAGAR AGORA", gerava um BR Code
+ * terminado em `6304MOCK` e mandava a pessoa colar no banco. Botão desativado
+ * é ruim; botão que parece ter funcionado e entrega um código que o banco
+ * recusa é pior — a pessoa culpa o próprio banco antes de culpar o app.
+ *
+ * ── Por que a demonstração continua cobrando ────────────────────────────────
+ *
+ * Porque lá o dinheiro falso é o ponto: sem banco conectado, tudo na tela é
+ * demonstração e o app diz isso. Travar o PIX ali tiraria da demonstração
+ * justamente a parte que uma dona de academia quer ver antes de assinar.
+ *
+ * A separação é essa: **simulado dentro da demonstração é honesto; simulado em
+ * cima de um banco real é mentira.**
+ */
+export function cobrancaIndisponivel(): 'sem-provedor' | null {
+  if (isDemoMode()) return null
+  return isSimulatedProvider() ? 'sem-provedor' : null
 }
 
 export type { PaymentProvider } from '@/lib/payments/provider'

@@ -4,10 +4,10 @@ import { Receipt, Wallet } from 'lucide-react'
 import { BackLink } from '@/components/synse/back-link'
 import { EmptyState } from '@/components/synse/empty-state'
 import { PaymentStatus } from '@/components/synse/status-badge'
-import { StudentPixPanel } from '@/features/payments/student-pix-panel'
+import { StudentPixPanel, type Impedimento } from '@/features/payments/student-pix-panel'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
-import { getPaymentProvider } from '@/lib/payments'
+import { cobrancaIndisponivel, getPaymentProvider } from '@/lib/payments'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
 export const metadata: Metadata = { title: 'Financeiro' }
@@ -27,8 +27,17 @@ export default async function StudentFinancePage() {
       .sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0] ?? null
 
   const history = charges.filter((charge) => charge.status === 'PAID').slice(0, 12)
-  const provider = getPaymentProvider()
-  const pixSupported = provider.supportedMethods.includes('PIX')
+  /*
+   * Dois impedimentos diferentes, e a ordem importa: "o Synse está sem
+   * provedor" vem antes de "o provedor da academia não faz PIX", porque sem
+   * provedor a segunda frase mandaria a pessoa reclamar na recepção de algo
+   * que a academia não pode resolver.
+   */
+  const impedimento: Impedimento = cobrancaIndisponivel()
+    ? 'sem-provedor'
+    : getPaymentProvider().supportedMethods.includes('PIX')
+      ? null
+      : 'sem-pix'
 
   return (
     <div className="animate-fade-in-up space-y-5">
@@ -59,7 +68,7 @@ export default async function StudentFinancePage() {
           dueDate={openCharge.dueDate}
           description={openCharge.description}
           status={openCharge.status}
-          pixSupported={pixSupported}
+          impedimento={impedimento}
         />
       ) : (
         <EmptyState

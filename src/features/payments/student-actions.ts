@@ -4,7 +4,7 @@ import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 import { AppError, notFound, toUserMessage } from '@/lib/errors'
 import { logger } from '@/lib/logger'
-import { getPaymentProvider } from '@/lib/payments'
+import { cobrancaIndisponivel, getPaymentProvider } from '@/lib/payments'
 import { rateLimit } from '@/lib/rate-limit'
 import { createPixSchema } from '@/lib/validations/payment'
 import type { PaymentActionState } from '@/features/payments/state'
@@ -22,6 +22,19 @@ export async function createStudentPixAction(
   const session = await requireStudentSession()
 
   try {
+    /*
+     * A trava do servidor, e não só do botão. O painel desabilita a ação, mas
+     * desabilitar é UI: quem chamar a server action direto tem de receber a
+     * mesma recusa, senão a pessoa sai daqui com um BR Code que o banco nega.
+     */
+    if (cobrancaIndisponivel()) {
+      return {
+        status: 'error',
+        message:
+          'A cobrança por PIX está desligada enquanto conectamos o novo provedor de pagamento. Procure a recepção da sua academia.',
+      }
+    }
+
     const parsed = createPixSchema.safeParse({ chargeId: formData.get('chargeId') })
     if (!parsed.success) return { status: 'error', message: 'Cobrança inválida.' }
 

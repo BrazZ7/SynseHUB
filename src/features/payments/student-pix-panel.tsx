@@ -10,13 +10,23 @@ import { initialPaymentState } from '@/features/payments/state'
 import { daysOverdue, formatCurrency, formatDate } from '@/lib/utils'
 import type { ChargeStatus } from '@/types/domain'
 
+export type Impedimento = 'sem-pix' | 'sem-provedor' | null
+
+const MOTIVO: Record<NonNullable<Impedimento>, string> = {
+  'sem-pix':
+    'O provedor configurado pela sua academia não oferece PIX. Procure a recepção para as formas de pagamento disponíveis.',
+  'sem-provedor':
+    'O pagamento pelo app está desligado enquanto conectamos o novo provedor. Sua mensalidade continua valendo — combine com a recepção da sua academia como pagar.',
+}
+
 type Props = {
   chargeId: string
   amount: number
   dueDate: string
   description: string
   status: ChargeStatus
-  pixSupported: boolean
+  /** Por que não dá para pagar agora. `null` quando dá. */
+  impedimento: Impedimento
 }
 
 /**
@@ -24,6 +34,18 @@ type Props = {
  *
  * O app apenas *solicita* o PIX. A confirmação nunca vem do navegador: o
  * status só muda quando o provedor notifica o webhook.
+ *
+ * ── Dois impedimentos, e não um ─────────────────────────────────────────────
+ *
+ * Antes havia só `pixSupported`, e ele respondia à pergunta errada. O provedor
+ * simulado **aceita PIX**, então o botão aparecia ativo, gerava um BR Code
+ * terminado em `6304MOCK` e mandava a pessoa colar no banco. A pessoa culpa o
+ * próprio banco antes de culpar o app.
+ *
+ * `sem-pix` é "a academia usa um provedor que não faz PIX" — a pessoa procura
+ * a recepção e paga de outro jeito. `sem-provedor` é "o Synse está trocando de
+ * provedor de pagamento" — não é problema da academia, e dizer que é mandaria
+ * a pessoa reclamar com quem não pode resolver.
  */
 export function StudentPixPanel({
   chargeId,
@@ -31,7 +53,7 @@ export function StudentPixPanel({
   dueDate,
   description,
   status,
-  pixSupported,
+  impedimento,
 }: Props) {
   const [state, formAction, pending] = useActionState(createStudentPixAction, initialPaymentState)
   const [copied, setCopied] = useState(false)
@@ -74,19 +96,16 @@ export function StudentPixPanel({
               variant="gradient"
               size="lg"
               className="w-full"
-              disabled={pending || !pixSupported}
+              disabled={pending || impedimento !== null}
             >
               <QrCode className="size-4" />
-              {pending ? 'Gerando PIX…' : pixSupported ? 'PAGAR AGORA' : 'PIX indisponível'}
+              {pending ? 'Gerando PIX…' : impedimento === null ? 'PAGAR AGORA' : 'PIX indisponível'}
             </Button>
           </form>
         )}
 
-        {!pixSupported && (
-          <p className="text-xs text-synse-muted">
-            O provedor configurado pela sua academia não oferece PIX. Procure a recepção para as
-            formas de pagamento disponíveis.
-          </p>
+        {impedimento && (
+          <p className="text-xs text-synse-muted">{MOTIVO[impedimento]}</p>
         )}
 
         {state.status === 'error' && (

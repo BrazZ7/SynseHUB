@@ -92,3 +92,117 @@ describe('provedor de uma academia', () => {
     })
   })
 })
+
+/**
+ * ── O PIX de mentira ─────────────────────────────────────────────────────────
+ *
+ * O pior defeito que o app teve para o usuário, e ele passou despercebido
+ * porque a pergunta que a tela fazia era plausível: "o provedor aceita PIX?".
+ * O simulado aceita. Então a tela do aluno mostrava "PAGAR AGORA", gerava um
+ * BR Code terminado em `6304MOCK`, e a pessoa colava no banco — que recusava.
+ * Botão desativado é ruim; botão que parece ter funcionado é pior, porque a
+ * pessoa culpa o próprio banco antes de culpar o app.
+ *
+ * A pergunta certa é outra, e é a que estes testes prendem.
+ */
+describe('cobrança real disponível', () => {
+  afterEach(() => vi.unstubAllEnvs())
+
+  async function comBanco(configurado: boolean) {
+    vi.resetModules()
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', configurado ? 'https://x.supabase.co' : '')
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', configurado ? 'sb_publishable_x' : '')
+    return import('@/lib/payments')
+  }
+
+  it('em cima de um banco real, o simulado não cobra', async () => {
+    const { cobrancaIndisponivel } = await comBanco(true)
+    expect(cobrancaIndisponivel()).toBe('sem-provedor')
+  })
+
+  it('na demonstração, cobra — o dinheiro falso ali é o ponto', async () => {
+    /*
+     * Sem banco conectado tudo na tela é demonstração e o app diz isso.
+     * Travar o PIX ali tiraria da demonstração justamente a parte que uma dona
+     * de academia quer ver antes de assinar.
+     */
+    const { cobrancaIndisponivel } = await comBanco(false)
+    expect(cobrancaIndisponivel()).toBeNull()
+  })
+
+  it('não é a mesma pergunta que "o provedor aceita PIX"', async () => {
+    // É esta confusão que produziu o defeito: o simulado aceita PIX.
+    const { getPaymentProvider, cobrancaIndisponivel } = await comBanco(true)
+
+    expect(getPaymentProvider().supportedMethods).toContain('PIX')
+    expect(cobrancaIndisponivel()).toBe('sem-provedor')
+  })
+})
+
+describe('a ação do aluno recusa no servidor', () => {
+  const COBRANCA = {
+    id: '11111111-1111-1111-1111-111111111111',
+    amount: 84.9,
+    dueDate: '2026-10-08',
+    description: 'Mensalidade',
+  }
+
+  async function chamar() {
+    const criarPix = vi.fn(async () => ({
+      pix: { payload: 'nao-deveria-chegar-aqui', expiresAt: '2026-10-08T00:00:00Z' },
+    }))
+
+    vi.doMock('@/lib/auth/require-session', () => ({
+      requireStudentSession: async () => ({ organizationId: 'org-1', studentId: 'stu-1' }),
+    }))
+    vi.doMock('@/lib/database', () => ({
+      getDataSource: async () => ({ getChargesForStudent: async () => [COBRANCA] }),
+    }))
+    vi.doMock('@/lib/payments', async () => {
+      const real = await vi.importActual<typeof import('@/lib/payments')>('@/lib/payments')
+      return { ...real, getPaymentProvider: () => ({ createPix: criarPix }) }
+    })
+
+    const { createStudentPixAction } = await import('@/features/payments/student-actions')
+    const form = new FormData()
+    form.set('chargeId', COBRANCA.id)
+    return { estado: await createStudentPixAction({ status: 'idle' }, form), criarPix }
+  }
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.doUnmock('@/lib/auth/require-session')
+    vi.doUnmock('@/lib/database')
+    vi.doUnmock('@/lib/payments')
+  })
+
+  /*
+   * O caminho feliz vem primeiro, e não é enfeite: sem ele o teste de baixo
+   * passaria com a trava removida, porque a ação quebraria antes de chegar ao
+   * provedor por qualquer outro motivo. Foi o que aconteceu na primeira versão
+   * deste arquivo — a mutação que apagava a trava deixou tudo verde.
+   */
+  it('controle: com o banco desconectado, a demonstração gera o PIX', async () => {
+    vi.resetModules()
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', '')
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', '')
+
+    const { estado, criarPix } = await chamar()
+
+    expect(criarPix).toHaveBeenCalledOnce()
+    expect(estado.status).toBe('success')
+  })
+
+  it('com banco real e sem provedor, recusa sem chamar o provedor', async () => {
+    vi.resetModules()
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://x.supabase.co')
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'sb_publishable_x')
+
+    const { estado, criarPix } = await chamar()
+
+    expect(estado.status).toBe('error')
+    // O que mais importa: nada foi gerado. Uma recusa que ainda chamasse o
+    // provedor teria entregue o código falso junto com a mensagem.
+    expect(criarPix).not.toHaveBeenCalled()
+  })
+})

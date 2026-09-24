@@ -7,6 +7,7 @@ import { getDataSource } from '@/lib/database'
 import { AppError, notFound, toUserMessage } from '@/lib/errors'
 import { logger } from '@/lib/logger'
 import type { PaymentProvider } from '@/lib/payments/provider'
+import { cobrancaIndisponivel } from '@/lib/payments'
 import {
   getProviderForOrganization,
   getSplitForOrganization,
@@ -121,6 +122,16 @@ export async function createPixChargeAction(
 
   try {
     requirePermission(session, 'finance:write')
+
+    // Mesma trava da ação do aluno: o PIX simulado em cima de um banco real
+    // vira um código que o banco recusa, e quem leva o prejuízo de imagem é a
+    // academia que mandou.
+    if (cobrancaIndisponivel()) {
+      return {
+        status: 'error',
+        message: 'A cobrança por PIX está desligada enquanto o novo provedor de pagamento não é conectado.',
+      }
+    }
 
     const parsed = createPixSchema.safeParse({ chargeId: formData.get('chargeId') })
     if (!parsed.success) return { status: 'error', message: 'Cobrança inválida.' }

@@ -272,6 +272,30 @@ export type SaveContentInput = {
   authorStaffId: string | null
 }
 
+/**
+ * Um item do acervo Synse — conteúdo **sem dono**, da plataforma.
+ *
+ * Não reaproveita `SaveContentInput` porque as duas coisas divergem onde mais
+ * importa: lá `organizationId` é obrigatório e a visibilidade é sempre
+ * `ORGANIZATION`; aqui não há academia e a visibilidade é a decisão central —
+ * é ela que separa o acervo aberto do que só o assinante vê. Um tipo só com
+ * campos opcionais escondendo essa diferença convidaria ao engano caro:
+ * publicar como aberto o que era para ser do Synse+.
+ */
+export type SaveSynseContentInput = {
+  id?: string
+  type: ContentType
+  title: string
+  summary: string | null
+  body: string | null
+  coverUrl: string | null
+  mediaUrl: string | null
+  visibility: 'FREE' | 'SYNSE_PLUS'
+  pinned: boolean
+  /** Nulo mantém como rascunho. Data no futuro agenda. */
+  publishedAt: string | null
+}
+
 export type Paginated<T> = {
   rows: T[]
   total: number
@@ -748,6 +772,12 @@ export interface DataSource {
   deleteContent(organizationId: string, contentId: string): Promise<void>
   /** O que está publicado, para o aluno. Fixado primeiro, depois o recente. */
   listPublishedContent(organizationId: string, limite: number): Promise<ContentItem[]>
+
+  // Acervo Synse — conteúdo da plataforma, sem dono. Só conta de plataforma.
+  /** Tudo que a plataforma escreveu, rascunho incluído. */
+  listSynseContent(): Promise<ContentItem[]>
+  saveSynseContent(input: SaveSynseContentInput): Promise<string>
+  deleteSynseContent(contentId: string): Promise<void>
 
   // CRM
   listLeads(organizationId: string): Promise<Lead[]>

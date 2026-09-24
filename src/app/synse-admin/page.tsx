@@ -4,6 +4,7 @@ import {
   Building2,
   ChevronLeft,
   CircleDollarSign,
+  Library,
   Percent,
   Receipt,
   ShieldCheck,
@@ -212,6 +213,24 @@ export default async function SynseAdminPage() {
             empty={<EmptyState icon={Building2} title="Nenhuma organização cadastrada." />}
           />
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Library className="size-4 text-synse-primary" aria-hidden />
+              Acervo Synse
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-synse-muted">
+              E-books, guias e receitas da plataforma. Chega a toda a base, em qualquer academia —
+              e é onde mora o que o Synse+ promete.
+            </p>
+            <Button asChild className="shrink-0">
+              <Link href="/synse-admin/acervo">Abrir o acervo</Link>
+            </Button>
+          </CardContent>
+        </Card>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Card>

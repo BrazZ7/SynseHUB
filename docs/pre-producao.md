@@ -33,7 +33,7 @@ npm run env:check
 
 ## Migrations
 
-**Estado em 24/09/2026: 0001 a 0037 aplicadas em produção** (a 0038 aguarda colagem), confirmado por
+**Estado em 24/09/2026: 0001 a 0037 aplicadas em produção** (a 0038 e a 0039 aguardam colagem), confirmado por
 `/api/health?deep=1` (`appliedMigrations: 31`, `pendingMigrations: []`).
 
 Esta linha envelhece a cada migration e por isso não é a fonte da verdade: a
@@ -262,6 +262,39 @@ existem, não para conferir se subiram.
   `CANCELED` derruba 1; reabrir os passos do programa derruba 1.
 
   `consumer_subscriptions` fica no schema, sem uso e sem nada conferindo-a.
+
+- **0039 (`0039_acervo_synse.sql`)** — o acervo Synse ganha porta de entrada.
+
+  A 0038 consertou o cadeado e sobrou o outro lado: **não havia como criar**
+  conteúdo de plataforma. A política de escrita da 0004 exige dono
+  (`organization_id is not null and is_org_staff(...)`), e conteúdo de acervo é
+  justamente o que não tem. O cadeado estava certo e a porta não existia.
+
+  `save_synse_content` e `delete_synse_content`, as duas `security definer`,
+  com três travas em série: a rota é de conta de plataforma, a função confere
+  `is_super_admin()` **no banco** — sessão é cookie e cookie se edita — e o
+  `update` e o `delete` só alcançam linha **sem dono**, para que esta porta
+  nunca sirva de atalho para editar o conteúdo de uma academia.
+
+  Uma política `or (organization_id is null and is_super_admin())` seria uma
+  linha só e deixaria escrever `visibility` livre, inclusive `ORGANIZATION` em
+  linha sem academia — estado que o `check` da 0031 recusa e que a tela
+  ofereceria até o banco reclamar. A regra tem condição, e condição em política
+  vira regra espalhada.
+
+  A trilha em `platform_access_log` é escrita pela função, com contexto
+  `ACERVO`. Registro que depende de a aplicação lembrar de chamar é registro
+  que um dia falta — e "quem pôs esse e-book no ar, e quando" precisa ter
+  resposta, do mesmo jeito que a troca de contexto da 0034.
+
+  A política de leitura ganhou `or (organization_id is null and
+  is_super_admin())`: sem isso quem escreve o acervo escreveria às cegas, já
+  que rascunho sem dono não cai em nenhum dos outros ramos.
+
+  `tests/db/acervo-synse.test.ts`: 15 testes, conferidos por mutação. Tirar a
+  guarda de super admin derruba 2; deixar o `update` ou o `delete` alcançarem
+  linha com dono derruba 1 cada; tirar a trilha de qualquer uma das duas
+  funções derruba 1 cada.
 
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona

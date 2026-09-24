@@ -178,6 +178,7 @@ const MIGRATIONS_ESPERADAS = [
   '0036_assinatura_plus.sql',
   '0037_amigos.sql',
   '0038_cadeado_do_plus.sql',
+  '0039_acervo_synse.sql',
 ]
 
 async function schemaReadiness() {
@@ -198,6 +199,7 @@ async function schemaReadiness() {
     amigos,
     rankingDeAmigos,
     cadeadoDoPlus,
+    acervoSynse,
   ] = await Promise.all([
     schemaCheck('user_profiles?select=tier&limit=1'),
     schemaCheck('baseline_challenges?select=code&limit=1'),
@@ -321,6 +323,20 @@ async function schemaReadiness() {
      * confirmação.
      */
     rpcCheck('tem_synse_plus', {}, { executa: true }),
+    /*
+     * A porta do acervo (0039). Sem ela não há como criar conteúdo de
+     * plataforma — a política de escrita exige dono desde a 0004 —, e a tela
+     * do acervo abriria oferecendo um formulário que o banco recusa.
+     *
+     * `save_synse_content` é revogada do anônimo, então 401/403 é "existe" e
+     * 404 é "não existe". Sem `executa`, e aqui isso não é detalhe: ligá-lo
+     * faria a sonda **publicar** a cada visita ao endereço de saúde.
+     */
+    rpcCheck('save_synse_content', {
+      p_id: null,
+      p_type: 'ARTICLE',
+      p_title: 'sonda',
+    }),
   ])
 
   const registradas = await migracoesRegistradas()
@@ -382,6 +398,7 @@ async function schemaReadiness() {
       amigos,
       rankingDeAmigos,
       cadeadoDoPlus,
+      acervoSynse,
       appliedMigrations: registradas.length,
       pendingMigrations: faltando,
     }
@@ -419,6 +436,7 @@ async function schemaReadiness() {
     '0036_assinatura_plus.sql',
     '0037_amigos.sql',
     '0038_cadeado_do_plus.sql',
+    '0039_acervo_synse.sql',
   )
 
   return {
@@ -438,6 +456,7 @@ async function schemaReadiness() {
     amigos,
     rankingDeAmigos,
     cadeadoDoPlus,
+    acervoSynse,
     pendingMigrations: pendentes,
   }
 }

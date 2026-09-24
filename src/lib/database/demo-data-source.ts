@@ -11,6 +11,7 @@ import type {
   LogWorkoutSetInput,
   SaveClassScheduleInput,
   SaveContentInput,
+  SaveSynseContentInput,
   SaveGymChallengeInput,
   SaveLeadInput,
   SaveNutritionPlanInput,
@@ -191,6 +192,15 @@ export class DemoDataSource implements DataSource {
   private readonly demoNutritionPlans: NutritionPlanWithMeals[] = []
   private nutricaoPronta = false
   private readonly demoContent: ContentItem[] = []
+  /**
+   * O acervo Synse da demonstração.
+   *
+   * Separado de `demoContent` porque é outra coisa: conteúdo sem dono, da
+   * plataforma. Misturar os dois faria a tela da academia listar o acervo, que
+   * é justamente o engano que a 0039 existe para impedir.
+   */
+  private readonly demoAcervo: ContentItem[] = []
+  private acervoPronto = false
   private conteudosProntos = false
 
   // ── Índices ────────────────────────────────────────────────────────────────
@@ -2095,6 +2105,101 @@ export class DemoDataSource implements DataSource {
       (c) => c.organizationId === organizationId && c.id === contentId,
     )
     if (indice >= 0) this.demoContent.splice(indice, 1)
+  }
+
+  // ── Acervo Synse ───────────────────────────────────────────────────────────
+
+  private montarAcervo() {
+    if (this.acervoPronto) return
+    this.acervoPronto = true
+
+    const dias = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString()
+    /*
+     * Dois itens, e os dois de propósito: um aberto e um do Synse+. É o par
+     * mínimo para a demonstração mostrar o cadeado funcionando — o aluno com
+     * assinatura vê os dois, o do plano grátis vê um.
+     */
+    this.demoAcervo.push(
+      {
+        id: 'acv_1',
+        organizationId: null,
+        type: 'GUIDE',
+        title: 'Como montar sua primeira semana de treino',
+        summary: 'O guia que abre o Synse: por onde começar sem se machucar.',
+        body: null,
+        coverUrl: null,
+        mediaUrl: null,
+        visibility: 'FREE',
+        publishedAt: dias(20),
+        pinned: false,
+        authorStaffId: null,
+        authorName: 'Synse',
+        createdAt: dias(20),
+      },
+      {
+        id: 'acv_2',
+        organizationId: null,
+        type: 'EBOOK',
+        title: 'E-book: hipertrofia sem achismo',
+        summary: 'Volume, frequência e descanso, com o que a evidência sustenta.',
+        body: null,
+        coverUrl: null,
+        mediaUrl: null,
+        visibility: 'SYNSE_PLUS',
+        publishedAt: dias(6),
+        pinned: true,
+        authorStaffId: null,
+        authorName: 'Synse',
+        createdAt: dias(6),
+      },
+    )
+  }
+
+  async listSynseContent(): Promise<ContentItem[]> {
+    this.montarAcervo()
+    return [...this.demoAcervo].sort((a, b) => {
+      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
+      return b.createdAt.localeCompare(a.createdAt)
+    })
+  }
+
+  async saveSynseContent(input: SaveSynseContentInput): Promise<string> {
+    this.montarAcervo()
+    const existente = input.id ? this.demoAcervo.find((c) => c.id === input.id) : undefined
+
+    const item: ContentItem = {
+      id: input.id ?? `acv_${this.demoAcervo.length + 1}`,
+      organizationId: null,
+      type: input.type,
+      title: input.title,
+      summary: input.summary,
+      body: input.body,
+      coverUrl: input.coverUrl,
+      mediaUrl: input.mediaUrl,
+      visibility: input.visibility,
+      publishedAt: input.publishedAt,
+      pinned: input.pinned,
+      authorStaffId: null,
+      authorName: 'Synse',
+      createdAt: existente?.createdAt ?? new Date().toISOString(),
+    }
+
+    const indice = this.demoAcervo.findIndex((c) => c.id === item.id)
+    if (indice >= 0) this.demoAcervo[indice] = item
+    else this.demoAcervo.push(item)
+
+    /*
+     * Sem diário, como o conteúdo de academia: o journal vive num cookie de
+     * orçamento apertado, e o acervo da demonstração é para ser visto, não
+     * para sobreviver a um reinício do processo.
+     */
+    return item.id
+  }
+
+  async deleteSynseContent(contentId: string): Promise<void> {
+    this.montarAcervo()
+    const indice = this.demoAcervo.findIndex((c) => c.id === contentId)
+    if (indice >= 0) this.demoAcervo.splice(indice, 1)
   }
 
   async listPublishedContent(organizationId: string, limite: number): Promise<ContentItem[]> {

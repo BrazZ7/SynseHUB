@@ -15,6 +15,7 @@ import type {
   LogWorkoutSetInput,
   SaveClassScheduleInput,
   SaveContentInput,
+  SaveSynseContentInput,
   SaveGymChallengeInput,
   SaveLeadInput,
   SaveNutritionPlanInput,
@@ -2216,6 +2217,59 @@ export class SupabaseDataSource implements DataSource {
       authorName: row.autor ?? null,
       createdAt: row.publicado_em ?? new Date().toISOString(),
     }))
+  }
+
+  // ── Acervo Synse ───────────────────────────────────────────────────────────
+
+  /**
+   * O acervo, rascunho incluído.
+   *
+   * A leitura é direta na tabela, e não por função: a política da 0039 já dá o
+   * conteúdo sem dono à conta de plataforma, incluindo o que ainda não foi
+   * publicado. Quem não é plataforma recebe lista vazia pela RLS — é o banco
+   * negando, não esta consulta.
+   */
+  async listSynseContent(): Promise<ContentItem[]> {
+    const rows =
+      (await this.select<Row[]>(
+        'listSynseContent',
+        this.client
+          .from('content_library')
+          .select(SupabaseDataSource.CONTEUDO_SELECT)
+          .is('organization_id', null)
+          .order('pinned', { ascending: false })
+          .order('created_at', { ascending: false }),
+      )) ?? []
+    return rows.map((row) => this.mapContent(row))
+  }
+
+  /**
+   * Escreve pela função, e não pela tabela.
+   *
+   * A política de escrita exige dono desde a 0004, e conteúdo de plataforma é
+   * o que não tem. `save_synse_content` é a porta — e é ela que confere o
+   * super admin, recusa visibilidade sem sentido e grava a trilha.
+   */
+  async saveSynseContent(input: SaveSynseContentInput): Promise<string> {
+    const { data, error } = await this.client.rpc('save_synse_content', {
+      p_id: input.id ?? null,
+      p_type: input.type,
+      p_title: input.title,
+      p_summary: input.summary,
+      p_body: input.body,
+      p_cover_url: input.coverUrl,
+      p_media_url: input.mediaUrl,
+      p_visibility: input.visibility,
+      p_published_at: input.publishedAt,
+      p_pinned: input.pinned,
+    })
+    if (error) throw new Error(error.message)
+    return data as string
+  }
+
+  async deleteSynseContent(contentId: string): Promise<void> {
+    const { error } = await this.client.rpc('delete_synse_content', { p_id: contentId })
+    if (error) throw new Error(error.message)
   }
 
   // ── Nutrição ───────────────────────────────────────────────────────────────

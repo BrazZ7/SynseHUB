@@ -776,6 +776,7 @@ export interface DataSource {
   // Acervo Synse — conteúdo da plataforma, sem dono. Só conta de plataforma.
   /** Tudo que a plataforma escreveu, rascunho incluído. */
   listSynseContent(): Promise<ContentItem[]>
+  getSynseContent(contentId: string): Promise<ContentItem | null>
   saveSynseContent(input: SaveSynseContentInput): Promise<string>
   deleteSynseContent(contentId: string): Promise<void>
 

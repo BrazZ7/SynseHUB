@@ -149,6 +149,91 @@ describe.skipIf(!temBanco)('a conta de plataforma publica', () => {
   })
 })
 
+describe.skipIf(!temBanco)('editar o que já está no acervo', () => {
+  /*
+   * A função aceitava `p_id` desde o primeiro dia e nada provava que ela
+   * **edita** — só que ela recusa editar linha alheia. São coisas diferentes:
+   * a segunda passaria com o `update` quebrado, porque não achar nada e não
+   * poder achar nada dão o mesmo erro.
+   */
+  it('muda o item e mantém o id', async () => {
+    const [{ id }] = await comoAdmin<{ id: string }>(SALVAR, [
+      'EBOOK',
+      'Título com erro de digitaçao',
+      'SYNSE_PLUS',
+      null,
+    ])
+
+    const [{ id: depois }] = await comoAdmin<{ id: string }>(
+      `select save_synse_content($1, 'EBOOK'::content_type, $2, null, null, null, null,
+                                 'SYNSE_PLUS'::content_visibility, now()) as id`,
+      [id, 'Título corrigido'],
+    )
+
+    /*
+     * O mesmo id é o ponto: apagar e republicar também "corrigiria" o título,
+     * e trocaria o id — quebrando qualquer link que alguém já tivesse
+     * compartilhado.
+     */
+    expect(depois).toBe(id)
+
+    const { rows } = await client.query(
+      `select title, published_at from content_library where id = $1`,
+      [id],
+    )
+    expect(rows[0].title).toBe('Título corrigido')
+    expect(rows[0].published_at).not.toBeNull()
+  })
+
+  it('a edição também troca a visibilidade', async () => {
+    const [{ id }] = await comoAdmin<{ id: string }>(SALVAR, ['GUIDE', 'Vai abrir', 'SYNSE_PLUS', null])
+
+    await comoAdmin(
+      `select save_synse_content($1, 'GUIDE'::content_type, 'Vai abrir', null, null, null, null,
+                                 'FREE'::content_visibility, now())`,
+      [id],
+    )
+
+    const { rows } = await client.query(`select visibility from content_library where id = $1`, [id])
+    expect(rows[0].visibility).toBe('FREE')
+  })
+
+  it('editar deixa rastro, como publicar', async () => {
+    const [{ id }] = await comoAdmin<{ id: string }>(SALVAR, ['ARTICLE', 'Rastro ao editar', 'FREE', null])
+
+    const conta = async () =>
+      (
+        await client.query<{ n: number }>(
+          `select count(*)::int as n from platform_access_log
+           where context = 'ACERVO' and user_profile_id = $1`,
+          [perfilAdmin],
+        )
+      ).rows[0].n
+
+    const antes = await conta()
+    await comoAdmin(
+      `select save_synse_content($1, 'ARTICLE'::content_type, 'Rastro ao editar, corrigido', null,
+                                 null, null, null, 'FREE'::content_visibility, null)`,
+      [id],
+    )
+    expect(await conta()).toBe(antes + 1)
+  })
+
+  it('id que não existe recusa, em vez de criar por engano', async () => {
+    /*
+     * Cair no `insert` quando o id não existe seria pior que o erro: a pessoa
+     * pensa que corrigiu e o item velho continua no ar, agora com um irmão.
+     */
+    await expect(
+      comoAdmin(
+        `select save_synse_content($1, 'ARTICLE'::content_type, 'Do nada', null, null, null, null,
+                                   'FREE'::content_visibility, null)`,
+        ['00000000-0000-0000-0000-000000000000'],
+      ),
+    ).rejects.toThrow(/não encontrado/)
+  })
+})
+
 describe.skipIf(!temBanco)('quem não é plataforma não passa', () => {
   it('a dona da academia não publica no acervo de todo mundo', async () => {
     await expect(

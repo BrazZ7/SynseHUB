@@ -2163,6 +2163,11 @@ export class DemoDataSource implements DataSource {
     })
   }
 
+  async getSynseContent(contentId: string): Promise<ContentItem | null> {
+    this.montarAcervo()
+    return this.demoAcervo.find((c) => c.id === contentId) ?? null
+  }
+
   async saveSynseContent(input: SaveSynseContentInput): Promise<string> {
     this.montarAcervo()
     const existente = input.id ? this.demoAcervo.find((c) => c.id === input.id) : undefined

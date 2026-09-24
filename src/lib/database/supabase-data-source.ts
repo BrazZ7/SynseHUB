@@ -2244,6 +2244,28 @@ export class SupabaseDataSource implements DataSource {
   }
 
   /**
+   * Um item do acervo, para a tela de edição.
+   *
+   * `organization_id is null` na cláusula, e não só o id: sem isso a tela de
+   * edição do acervo abriria conteúdo de academia se alguém passasse o id
+   * dele na barra de endereços. A RLS já daria a linha — a conta de plataforma
+   * enxerga tudo —, e a tela ofereceria um formulário que a função recusa.
+   * Melhor não achar do que achar e frustrar no envio.
+   */
+  async getSynseContent(contentId: string): Promise<ContentItem | null> {
+    const row = await this.select<Row>(
+      'getSynseContent',
+      this.client
+        .from('content_library')
+        .select(SupabaseDataSource.CONTEUDO_SELECT)
+        .is('organization_id', null)
+        .eq('id', contentId)
+        .maybeSingle(),
+    )
+    return row ? this.mapContent(row) : null
+  }
+
+  /**
    * Escreve pela função, e não pela tabela.
    *
    * A política de escrita exige dono desde a 0004, e conteúdo de plataforma é

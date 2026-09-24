@@ -81,6 +81,10 @@ export async function saveSynseContentAction(
 
     logger.info('acervo:salvo', { contentId, visibility: dados.visibility })
     revalidatePath('/synse-admin/acervo')
+    // A tela de edição mostra o estado do item no topo — selo, data, o aviso
+    // de abrir o que estava trancado. Sem isto ela continuaria mostrando o de
+    // antes de salvar.
+    revalidatePath(`/synse-admin/acervo/${contentId}`)
 
     return {
       status: 'success',

@@ -47,7 +47,17 @@ export type SaveContentForm = z.infer<typeof saveContentSchema>
  * em um clique; errar para o lado de abrir não desfaz quem já baixou.
  */
 export const saveSynseContentSchema = z.object({
-  id: z.union([z.literal(''), z.string().uuid()]).optional().default(''),
+  /*
+   * Identificador, e não UUID — a mesma lição que `validations/workout.ts` já
+   * carrega, e que este arquivo repetiu. `uuid()` aqui quebrava a edição
+   * inteira no modo de demonstração, onde os ids são legíveis (`acv_2`), com
+   * um "Invalid uuid" que não diz nada a quem clicou em "Editar".
+   *
+   * Não afrouxa nada que importasse: id inexistente é recusado pela função, e
+   * a asserção de formato só comprava mensagem bonita para entrada malformada
+   * — cobrando por isso o modo em que a academia conhece o produto.
+   */
+  id: z.string().trim().max(64).optional().default(''),
   type: z.enum(['ARTICLE', 'VIDEO', 'GUIDE', 'RECIPE', 'EBOOK']),
   title: z.string().trim().min(3, 'Dê um título.').max(140),
   summary: z.string().trim().max(300).optional().default(''),

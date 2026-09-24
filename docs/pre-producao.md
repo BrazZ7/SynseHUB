@@ -32,8 +32,8 @@ npm run env:check
 
 ## Migrations
 
-**Estado em 16/09/2026: 0001 a 0026 aplicadas em produção**, confirmado por
-`/api/health?deep=1` (`appliedMigrations: 20`, `pendingMigrations: []`).
+**Estado em 24/09/2026: 0001 a 0037 aplicadas em produção**, confirmado por
+`/api/health?deep=1` (`appliedMigrations: 31`, `pendingMigrations: []`).
 
 Esta linha envelhece a cada migration e por isso não é a fonte da verdade: a
 sonda é. Quem quiser saber o que falta abre o endereço, não este arquivo. O que
@@ -174,6 +174,59 @@ existem, não para conferir se subiram.
   `SECURITY INVOKER`, como toda a 0027 — a RLS filtra sozinha, e
   `tests/db/aderencia.test.ts` confere que o aluno de uma academia não lê a
   aderência do aluno de outra.
+
+- **0036 (`0036_assinatura_plus.sql`)** — a assinatura do Synse+: `plus_status`
+  (`NONE`, `TRIAL`, `ACTIVE`, `CANCELED`, `EXPIRED`), `plus_until`,
+  `plus_provider` e `plus_provider_ref` em `user_profiles`, mais
+  `set_plus_subscription` e `expire_plus_subscriptions`, as duas revogadas a
+  todo mundo menos a chave de serviço.
+
+  O modelo é primeiro mês a R$ 0,00 com renovação automática pelo preço cheio,
+  então quem manda é a **data**, não o rótulo: `resumoDaAssinatura` decide por
+  `plus_until`, e um `plus_status` que diga `ACTIVE` com a data vencida não
+  libera nada. É a mesma regra de nunca confiar no cliente para confirmar
+  pagamento, aplicada ao próprio banco.
+
+  Duas coisas que essa migration ensinou, e que vão custar caro para quem
+  repetir:
+
+  - **A primeira versão protegia uma função morta.** Ela estendia
+    `guard_user_tier`, que é o nome da 0014 — a 0015 já o havia trocado por
+    `guard_paid_columns`. O gatilho continuava existindo com o nome antigo e
+    não guardava nada, então um `update` vindo do cliente marcava
+    `plus_status = 'ACTIVE'` com `plus_until` em 2036. Synse+ vitalício de
+    graça, e o SQL subia sem erro nenhum. Quem achou foi a sonda de mutação,
+    não a leitura.
+  - **O SQL Editor do Supabase corta colagem grande em silêncio.** Das 213
+    linhas chegaram 100, e o erro que apareceu — `unterminated /* comment` na
+    linha 97 — parecia defeito do SQL. Desde então vai sempre uma versão enxuta
+    junto da documentada, conferida pelos mesmos testes.
+
+- **0037 (`0037_amigos.sql`)** — amigos e o ranking entre eles, a última
+  promessa do Synse+ que dava para cumprir com código.
+
+  Amizade é o único eixo do sistema que **atravessa academia**: o Synse+ é
+  assinatura de consumidor, e quem treina na Alpha quer disputar com o primo
+  que treina em outro lugar. As políticas daqui não olham organização, olham a
+  própria linha de amizade — não é exceção ao isolamento, é outro eixo.
+
+  O ranking tem duas trancas independentes, e as duas precisam passar: amizade
+  `ACCEPTED` **e** consentimento `RANKING_VISIBILITY` vigente da outra pessoa.
+  Aceitar alguém como amigo não é autorizar a publicação do próprio número, e
+  juntar as duas decisões seria transformar "oi, somos amigos" em "pode mostrar
+  meu desempenho para ele". Você aparece sempre no seu próprio ranking: o
+  consentimento é sobre ser visto pelos outros.
+
+  `friendships` só tem política de `select`. Pedir, responder e desfazer passam
+  por funções `security definer`, porque aceitar um pedido é operação com regra
+  — só o destinatário pode, e só uma vez — e regra em política vira regra
+  espalhada.
+
+  Um detalhe que a sonda de saúde descobriu: ler `friendships` com a chave
+  pública responde 401, e não lista vazia. A política chama
+  `is_friendship_party`, que é revogada do anônimo. Não é grant faltando na
+  tabela — quem barra é a função —, e por isso a sonda da 0037 pergunta por
+  `list_friends`, não pela tabela.
 
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona

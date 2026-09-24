@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Clock, Library, Pin, Plus } from 'lucide-react'
 
+import { ListLink } from '@/components/synse/list-link'
 import { EmptyState } from '@/components/synse/empty-state'
 import { PageHeader } from '@/components/synse/page-header'
 import { Badge } from '@/components/ui/badge'
@@ -108,7 +109,7 @@ function Secao({
               </p>
 
               <Button variant="outline" size="sm" asChild className="w-full">
-                <Link href={`/content/${item.id}`}>Abrir</Link>
+                <ListLink href={`/content/${item.id}`}>Abrir</ListLink>
               </Button>
             </CardContent>
           </Card>

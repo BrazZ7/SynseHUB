@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ChevronRight, Timer, Trophy } from 'lucide-react'
 
+import { ListLink } from '@/components/synse/list-link'
 import { Badge } from '@/components/ui/badge'
 import { Metric } from '@/features/synse-run/components/metric'
 import { PendingSync } from '@/features/synse-run/components/pending-sync'
@@ -86,7 +87,7 @@ export default async function SynseRunPage() {
           </div>
 
           {painel.recent.map((atividade) => (
-            <Link
+            <ListLink
               key={atividade.id}
               href={`/app/run/${atividade.id}`}
               className="vidro-led flex items-center gap-3 rounded-2xl border border-synse-border p-4 transition-colors hover:border-synse-primary"
@@ -108,7 +109,7 @@ export default async function SynseRunPage() {
                 </span>
               </span>
               <ChevronRight className="size-4 shrink-0 text-synse-muted" aria-hidden />
-            </Link>
+            </ListLink>
           ))}
         </section>
       )}

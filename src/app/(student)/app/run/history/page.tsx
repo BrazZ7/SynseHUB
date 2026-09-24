@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ChevronRight, Lock, Timer } from 'lucide-react'
 
+import { ListLink } from '@/components/synse/list-link'
 import { BackLink } from '@/components/synse/back-link'
 import { EmptyState } from '@/components/synse/empty-state'
 import { Badge } from '@/components/ui/badge'
@@ -179,7 +180,7 @@ export default async function RunHistoryPage({
         <ul className="space-y-2">
           {atividades.map((atividade) => (
             <li key={atividade.id}>
-              <Link
+              <ListLink
                 href={`/app/run/${atividade.id}`}
                 className="flex items-center gap-3 rounded-2xl border border-synse-border bg-synse-surface p-4 transition-colors hover:border-synse-primary"
               >
@@ -198,7 +199,7 @@ export default async function RunHistoryPage({
                   </span>
                 </span>
                 <ChevronRight className="size-4 shrink-0 text-synse-muted" aria-hidden />
-              </Link>
+              </ListLink>
             </li>
           ))}
         </ul>

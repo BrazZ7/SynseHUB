@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
 import { Activity, CalendarClock, Plus, Users } from 'lucide-react'
 
+import { ListLink } from '@/components/synse/list-link'
 import { EmptyState } from '@/components/synse/empty-state'
 import { MetricCard } from '@/components/synse/metric-card'
 import { PageHeader } from '@/components/synse/page-header'
@@ -120,13 +120,13 @@ export default async function AssessmentsPage() {
                   {linhas.map(({ student, ultima, dias }) => (
                     <tr key={student.id}>
                       <td className="py-2.5 pr-4">
-                        <Link
+                        <ListLink
                           href={`/students/${student.id}`}
                           className="flex items-center gap-2.5 hover:underline"
                         >
                           <StudentAvatar name={student.name} avatarUrl={student.avatarUrl} size="sm" />
                           <span className="font-medium text-synse-text">{student.name}</span>
-                        </Link>
+                        </ListLink>
                       </td>
                       <td className="py-2.5 pr-4">
                         {ultima ? (
@@ -152,10 +152,10 @@ export default async function AssessmentsPage() {
                       <td className="py-2.5 text-right">
                         {canWrite && (
                           <Button variant="outline" size="sm" asChild>
-                            <Link href={`/students/${student.id}/assessments/new`}>
+                            <ListLink href={`/students/${student.id}/assessments/new`}>
                               <Plus className="size-4" aria-hidden />
                               Avaliar
-                            </Link>
+                            </ListLink>
                           </Button>
                         )}
                       </td>

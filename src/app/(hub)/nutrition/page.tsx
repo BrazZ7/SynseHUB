@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Apple, Plus } from 'lucide-react'
 
+import { ListLink } from '@/components/synse/list-link'
 import { EmptyState } from '@/components/synse/empty-state'
 import { PageHeader } from '@/components/synse/page-header'
 import { StudentAvatar } from '@/components/synse/student-avatar'
@@ -93,7 +94,7 @@ export default async function NutritionPage() {
                   )}
 
                   <Button variant="outline" size="sm" asChild className="w-full">
-                    <Link href={`/nutrition/${plano.id}`}>Abrir</Link>
+                    <ListLink href={`/nutrition/${plano.id}`}>Abrir</ListLink>
                   </Button>
                 </CardContent>
               </Card>

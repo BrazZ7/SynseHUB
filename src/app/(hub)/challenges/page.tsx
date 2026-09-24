@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Eye, EyeOff, Plus, Trophy, Users } from 'lucide-react'
 
+import { ListLink } from '@/components/synse/list-link'
 import { EmptyState } from '@/components/synse/empty-state'
 import { PageHeader } from '@/components/synse/page-header'
 import { Badge } from '@/components/ui/badge'
@@ -145,7 +146,7 @@ function CartaoDesafio({
 
         {editavel && (
           <Button variant="outline" size="sm" asChild className="w-full">
-            <Link href={`/challenges/${desafio.id}`}>Editar</Link>
+            <ListLink href={`/challenges/${desafio.id}`}>Editar</ListLink>
           </Button>
         )}
       </CardContent>

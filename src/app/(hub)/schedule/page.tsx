@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { CalendarDays, ChevronLeft, ChevronRight, Plus, Users } from 'lucide-react'
 
+import { ListLink } from '@/components/synse/list-link'
 import { EmptyState } from '@/components/synse/empty-state'
 import { PageHeader } from '@/components/synse/page-header'
 import { Badge } from '@/components/ui/badge'
@@ -148,7 +149,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Sea
                       const cancelada = aula.status === 'CANCELLED'
 
                       return (
-                        <Link
+                        <ListLink
                           key={aula.id}
                           href={`/schedule/session/${aula.id}`}
                           className={cn(
@@ -200,7 +201,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Sea
                               </p>
                             </div>
                           )}
-                        </Link>
+                        </ListLink>
                       )
                     })
                   )}
@@ -218,7 +219,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Sea
             <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {ativas.map((regra) => (
                 <li key={regra.id}>
-                  <Link
+                  <ListLink
                     href={`/schedule/${regra.id}`}
                     className="flex items-center justify-between gap-3 rounded-lg border border-synse-border p-2.5 text-sm transition-colors hover:border-synse-primary"
                   >
@@ -230,7 +231,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Sea
                       </span>
                     </span>
                     <span className="text-xs text-synse-muted">{regra.room ?? '—'}</span>
-                  </Link>
+                  </ListLink>
                 </li>
               ))}
             </ul>

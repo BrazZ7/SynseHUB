@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
 
+import { ListLink } from '@/components/synse/list-link'
 import { DataTable, type Column } from '@/components/synse/data-table'
 import { EmptyState } from '@/components/synse/empty-state'
 import { FilterBar } from '@/components/synse/filter-bar'
@@ -57,7 +57,7 @@ export default async function OverduePage({ searchParams }: { searchParams: Sear
       key: 'student',
       header: 'Aluno',
       render: (charge) => (
-        <Link href={`/students/${charge.studentId}`} className="flex items-center gap-3 hover:opacity-80">
+        <ListLink href={`/students/${charge.studentId}`} className="flex items-center gap-3 hover:opacity-80">
           <StudentAvatar name={charge.studentName} size="sm" />
           <span className="min-w-0">
             <span className="block truncate text-sm font-medium text-synse-text">
@@ -67,7 +67,7 @@ export default async function OverduePage({ searchParams }: { searchParams: Sear
               {formatPhone(charge.studentPhone)}
             </span>
           </span>
-        </Link>
+        </ListLink>
       ),
     },
     {

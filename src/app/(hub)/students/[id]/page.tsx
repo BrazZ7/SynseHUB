@@ -14,6 +14,7 @@ import {
   Wallet,
 } from 'lucide-react'
 
+import { ListLink } from '@/components/synse/list-link'
 import { ProgressLineChart } from '@/components/synse/charts/progress-line-chart'
 import { ChartCard } from '@/components/synse/chart-card'
 import { EmptyState } from '@/components/synse/empty-state'
@@ -322,7 +323,7 @@ export default async function StudentProfilePage({ params }: { params: Params })
                         {assignment.validUntil && ` · válido até ${formatDate(assignment.validUntil)}`}
                       </p>
                       <Button variant="link" size="sm" asChild className="h-auto p-0">
-                        <Link href={`/workouts/${plan.id}`}>Ver exercícios</Link>
+                        <ListLink href={`/workouts/${plan.id}`}>Ver exercícios</ListLink>
                       </Button>
                     </CardContent>
                   </Card>
@@ -414,11 +415,11 @@ export default async function StudentProfilePage({ params }: { params: Params })
                               <td className="py-2.5 text-right">
                                 {canWriteAssessments && (
                                   <Button variant="ghost" size="sm" asChild>
-                                    <Link
+                                    <ListLink
                                       href={`/students/${student.id}/assessments/${assessment.id}`}
                                     >
                                       Abrir
-                                    </Link>
+                                    </ListLink>
                                   </Button>
                                 )}
                               </td>

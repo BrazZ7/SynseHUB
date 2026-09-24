@@ -9,6 +9,7 @@ import {
   Users,
 } from 'lucide-react'
 
+import { ListLink } from '@/components/synse/list-link'
 import { AttendanceChart } from '@/components/synse/charts/attendance-chart'
 import { RevenueChart } from '@/components/synse/charts/revenue-chart'
 import { ChartCard } from '@/components/synse/chart-card'
@@ -141,12 +142,12 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
               {emRisco.slice(0, 12).map((aluno) => (
                 <li key={aluno.studentId} className="flex items-center gap-3 py-2.5">
                   <StudentAvatar name={aluno.name} size="sm" />
-                  <Link
+                  <ListLink
                     href={`/students/${aluno.studentId}`}
                     className="flex-1 truncate text-sm font-medium text-synse-text hover:underline"
                   >
                     {aluno.name}
-                  </Link>
+                  </ListLink>
                   <span className="text-xs text-synse-muted">
                     {aluno.lastVisitAt ? formatDate(aluno.lastVisitAt) : 'Nunca apareceu'}
                   </span>

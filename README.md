@@ -131,10 +131,10 @@ intencional: se uma policy for afrouxada por engano, a aplicação continua isol
 Cada server action passa por `requirePermission()` antes de tocar em dados.
 Esconder um botão nunca é o controle de acesso.
 
-**Gateway atrás de uma interface.** Nenhum código específico de Asaas existe fora de
-`lib/payments/providers/asaas.ts`. O resto do sistema conhece apenas
-`PaymentProvider` — trocar por Mercado Pago, Stripe ou Pagar.me não toca em regra
-de negócio.
+**Gateway atrás de uma interface.** Nenhum código específico de gateway existe fora
+de `lib/payments/providers/`. O resto do sistema conhece apenas `PaymentProvider`,
+e isso já se provou na prática: o Asaas foi removido sem que uma linha de regra de
+negócio, tela ou migration precisasse mudar.
 
 **Dinheiro só muda por confirmação externa.** O status de um pagamento muda a partir
 de um webhook validado ou de uma consulta ao provedor. Nunca a partir do navegador.
@@ -219,10 +219,7 @@ Copie `.env.example` para `.env.local`. Nenhum segredo é versionado.
 | `NEXT_PUBLIC_SUPABASE_URL` | não¹ | URL do projeto Supabase |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | não¹ | Chave anônima (sujeita à RLS) |
 | `SUPABASE_SERVICE_ROLE_KEY` | não² | **Somente servidor.** Ignora RLS |
-| `PAYMENT_PROVIDER` | sim | `mock` ou `asaas` |
-| `ASAAS_API_KEY` | se `asaas` | Chave da API |
-| `ASAAS_API_URL` | se `asaas` | Sandbox ou produção |
-| `ASAAS_WEBHOOK_TOKEN` | se `asaas` | Token do webhook. **Sem ele, todo webhook é rejeitado** |
+| `PAYMENT_PROVIDER` | sim | `mock` — é o único hoje. Nome desconhecido cai no simulado e aparece em `/api/health?deep=1` |
 | `SYNSE_DEFAULT_PLATFORM_FEE_PERCENTAGE` | não | Comissão padrão (o valor efetivo vem do banco) |
 
 ¹ Sem as duas, a aplicação entra em modo demonstração.
@@ -346,34 +343,30 @@ soma feche com o valor cobrado, sem centavo perdido.
 
 ### Webhooks
 
-```
-POST /api/webhooks/payments/asaas
-```
+Sem provedor, não há rota de webhook — ela nasce junto com o adapter. O mecanismo
+que recebe o evento continua de pé e vale para quem vier:
 
-- O token do cabeçalho é comparado em **tempo constante**. Sem `ASAAS_WEBHOOK_TOKEN`
-  configurado, todo webhook é rejeitado — nunca aceito por omissão.
+- O token do cabeçalho é comparado em **tempo constante**, e sem token configurado
+  todo webhook é rejeitado — nunca aceito por omissão.
 - **Idempotência por constraint:** `webhook_events` tem `UNIQUE (provider, event_id)`.
   O mesmo evento reenviado falha no INSERT, é reconhecido e ignorado. Não existe
   liquidação em duplicidade.
 - Uma confirmação grava, na mesma transação lógica: baixa da cobrança, registro do
   pagamento, split calculado e entrada na trilha de auditoria.
 
-### Configurando o Asaas
+### Estado da cobrança
 
-```env
-PAYMENT_PROVIDER=asaas
-ASAAS_API_KEY=<sua-chave>
-ASAAS_API_URL=https://api-sandbox.asaas.com/v3
-ASAAS_WEBHOOK_TOKEN=<token-forte-gerado-por-você>
-```
+**Não há provedor de pagamento conectado.** O Asaas foi removido por causa da taxa
+e o substituto ainda não foi escolhido, então o único provedor é o simulado: nenhum
+centavo se move, em nenhum ambiente. O Synse Pay — o marketplace em que a academia
+cobra o aluno e a plataforma retém a comissão — está engavetado junto, e as telas
+dizem isso em vez de fingir que operam.
 
-Cadastre o webhook no painel do Asaas apontando para
-`{NEXT_PUBLIC_APP_URL}/api/webhooks/payments/asaas` com o mesmo token.
-
-> **Estado da integração:** o adapter foi escrito contra a API do Asaas mas **ainda
-> não foi exercitado contra uma instância real**. O projeto roda com
-> `PAYMENT_PROVIDER=mock` por padrão. Valide em sandbox — em especial o payload de
-> split e o formato do webhook — antes de ir a produção.
+Quem for ligar o próximo provedor escreve um adapter em `lib/payments/providers/`
+e uma rota de webhook. O que a interface exige é o que restringe a escolha: além de
+PIX, boleto, cartão e assinatura recorrente, ela pede `createPaymentAccount`
+(subconta por academia) e `configureSplit`. Provedor sem marketplace atende a
+assinatura do Synse+ e não atende o Synse Pay.
 
 ---
 
@@ -525,9 +518,10 @@ Honestidade sobre o estado atual, revisada em 12/09/2026.
 - **Cobrança é avulsa.** PIX por aluno, na mão. A régua de cobrança e as regras
   de recorrência estão no schema e são lidas, mas não existe geração mensal
   automática de mensalidade.
-- **Synse Pay opera em sandbox.** O adapter foi exercitado contra a API real do
-  Asaas (5/5), e a abertura de subconta responde 403 até a conta ser habilitada
-  para marketplace. Webhook ainda não configurado.
+- **Synse Pay está engavetado.** Sem provedor de pagamento conectado, nenhuma
+  cobrança é emitida: as telas funcionam sobre o provedor simulado e dizem isso.
+  O marketplace — subconta por academia e split da comissão — volta quando o
+  substituto do Asaas for escolhido.
 - **O fechamento do desafio acontece quando a pessoa abre o app.** Sem
   agendador: se ninguém abrir, a medalha do mês não sai — e é idempotente, então
   sai inteira na primeira visita seguinte.
@@ -565,8 +559,9 @@ Honestidade sobre o estado atual, revisada em 12/09/2026.
 - **As migrations não concedem privilégios de tabela.** Dependem do padrão que o
   Supabase aplica ao schema `public`. Num PostgreSQL fora do Supabase é preciso
   conceder na mão.
-- **A suíte tem 205 testes** — unidade, banco contra PostgreSQL real e uma
-  integração opcional contra o sandbox do Asaas, que pula sem credencial.
+- **A suíte passa de mil testes** — unidade e banco contra um PostgreSQL real.
+  Os de banco **pulam em silêncio** sem Postgres no ar, então conferir o número
+  de arquivos que rodaram vale mais do que a cor do resultado.
 
 ---
 

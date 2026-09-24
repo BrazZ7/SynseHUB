@@ -90,7 +90,7 @@ describe.skipIf(!temBanco)('a trava da assinatura', () => {
 })
 
 describe.skipIf(!temBanco)('set_plus_subscription', () => {
-  const aplicar = (status: string, until: Date | null = daquiA(30), prov = 'ASAAS', ref = 'sub_1') =>
+  const aplicar = (status: string, until: Date | null = daquiA(30), prov = 'GATEWAY', ref = 'sub_1') =>
     client.query(`select set_plus_subscription($1, $2, $3, $4, $5)`, [
       perfil,
       status,
@@ -104,7 +104,7 @@ describe.skipIf(!temBanco)('set_plus_subscription', () => {
     expect(await leEstado()).toMatchObject({
       tier: 'PRO',
       plus_status: 'TRIAL',
-      plus_provider: 'ASAAS',
+      plus_provider: 'GATEWAY',
       plus_provider_ref: 'sub_1',
     })
   })

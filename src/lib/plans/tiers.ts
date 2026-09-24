@@ -21,7 +21,7 @@ export type UserTier = 'FREE' | 'PRO'
  *
  * O primeiro ciclo custa zero: é uma assinatura só, com o primeiro mês
  * cobrado R$ 0,00 e renovação automática pelo valor cheio. Não é "assinatura
- * grátis que muda de preço" — essa distinção importa porque Asaas, App Store e
+ * grátis que muda de preço" — essa distinção importa porque gateway, App Store e
  * Google Play modelam teste grátis nativamente, e "trocar o preço na
  * renovação" seria construir na mão o que eles já fazem.
  */

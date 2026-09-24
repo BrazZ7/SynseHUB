@@ -18,7 +18,6 @@
     "test:unit": "vitest run tests/unit",
     "test:db": "vitest run tests/db",
     "db:set-password": "node scripts/set-password.mjs",
-    "test:asaas": "vitest run tests/integration/asaas.test.ts",
     "env:check": "node scripts/env-check.mjs",
     "mobile:sync": "cap sync",
     "mobile:android": "cap open android",

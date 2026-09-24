@@ -17,10 +17,11 @@ mostrar tela para pedir ajuda.
       Keys, atualizar `.env.local` e a Vercel (como **Sensitive**), e só então
       revogar a antiga — nessa ordem, senão o webhook de pagamento fica sem
       chave válida no intervalo.
-- [ ] `ASAAS_API_KEY` — pode esperar enquanto for sandbox. Ao criar a chave de
-      produção, tratar como a de cima.
-- [ ] `ASAAS_WEBHOOK_TOKEN` — trocar junto, e refletir a troca no painel do
-      Asaas.
+- [x] `ASAAS_API_KEY` e `ASAAS_WEBHOOK_TOKEN` — não se aplicam mais. O adapter
+      do Asaas foi removido. **Apagar as duas da Vercel**, junto com
+      `ASAAS_API_URL`, `ASAAS_TEST_WALLET_ID` e `PAYMENT_PROVIDER` — variável
+      que sobra vira credencial esquecida, e `PAYMENT_PROVIDER=asaas` pede um
+      provedor que esta build não tem.
 - [ ] Tokens da Vercel em https://vercel.com/account/tokens — apagar os que não
       estiverem em uso.
 
@@ -301,14 +302,15 @@ Decidido: **sem terminal**. O ciclo é publicar, deixar a Vercel implantar e
 testar no navegador. Migração de banco vai pelo SQL Editor do Supabase.
 
 O que fica indisponível nesse modo são os scripts locais — `db:seed`,
-`db:set-password`, `env:check` e `test:asaas`. Nenhum deles é necessário no uso
-normal; se um dia forem, é uma execução pontual, não uma rotina.
+`db:set-password` e `env:check`. Nenhum deles é necessário no uso normal; se um
+dia forem, é uma execução pontual, não uma rotina.
 
-Consequência a não esquecer: com `PAYMENT_PROVIDER=asaas` e a URL de sandbox,
-**produção emite cobranças de mentira**. O aviso amarelo de "provedor simulado"
-some da tela, porque do ponto de vista do código o provedor é real — só a conta
-do outro lado é de teste. Trocar para a chave e a URL de produção é item da
-lista do Synse Pay, abaixo.
+Uma armadilha que existiu aqui e vale guardar: com `PAYMENT_PROVIDER=asaas` e a
+URL de sandbox, **produção emitia cobranças de mentira** sem o aviso amarelo de
+"provedor simulado" na tela — do ponto de vista do código o provedor era real,
+só a conta do outro lado era de teste. Hoje não há provedor real nenhum, e o
+aviso voltou a aparecer. Quem ligar o próximo precisa lembrar que "o provedor
+responde" e "o dinheiro é real" são duas perguntas diferentes.
 
 ## Rotina diária de cobrança
 
@@ -360,40 +362,55 @@ copiado da tela.
       (US$ 20/mês) antes do primeiro cliente pagante.
 - [ ] Reativar "Confirm email" no Supabase, agora que o SMTP funciona.
 
-## Synse Pay — bloqueado aguardando o provedor
+## Synse Pay — engavetado, sem provedor
 
-**Estado atual:** a abertura de subconta responde **HTTP 403**. A chave é
-válida; o que falta é o recurso de criar subcontas, que no Asaas pertence ao
-produto white label e precisa ser liberado para a conta da plataforma.
+**Decidido em 24/09/2026: sair do Asaas, por causa da taxa.** O adapter, a rota
+de webhook e os testes dele foram removidos. O marketplace fica engavetado até
+haver substituto — não apagado: as telas, o split, a régua de cobrança e o
+schema continuam de pé, e o que sumiu foi só o que dependia de conhecer o
+gateway.
 
-Enquanto não for liberado, nenhuma academia conecta, e sem conta conectada não
-há como emitir cobrança. O resto do SynseHub — alunos, check-in, treinos,
-painel — não depende disso e segue funcionando.
+Hoje o único provedor é o simulado. Nenhum centavo se move, em nenhum ambiente,
+e as telas dizem isso em vez de fingir que operam. O resto do SynseHub — alunos,
+check-in, treinos, painel — nunca dependeu disso.
 
-**O que pedir ao Asaas:** habilitar a criação de subcontas via API
-(`POST /accounts`) para a conta da plataforma. O caso de uso é marketplace: cada
-academia opera na própria subconta, recebe a mensalidade nela, e o split desvia
-a comissão do Synse. Vale dizer que o modelo foi escolhido justamente para o
-dinheiro não passar pela plataforma.
+**O que sobreviveu à remoção, e por quê.** A carteira da plataforma e o
+percentual vindo do banco são regra do marketplace, não do Asaas. Continuam em
+`getSplitForOrganization`, com os testes: entregar ao próximo provedor um
+caminho sem essa tranca seria perigoso, porque a falta dela não dá erro nenhum
+na tela — a cobrança sai inteira para a academia e o painel segue exibindo os
+2% como se tivessem sido retidos.
 
-**Alternativa avaliada e não escolhida:** cada academia criar a própria conta no
-Asaas e colar a chave de API no SynseHub. O fluxo do dinheiro seria idêntico e
-funcionaria hoje, sem depender de liberação — o custo é um passo manual na
-entrada de cada academia. Fica registrado como saída caso a liberação demore ou
-não venha.
+**O que o substituto precisa ter.** Além de PIX, boleto, cartão e assinatura
+recorrente, a interface `PaymentProvider` pede `createPaymentAccount` (subconta
+por academia) e `configureSplit`. Provedor sem marketplace atende a assinatura
+do Synse+ e não atende o Synse Pay — e essa é a decisão que vem antes de
+qualquer linha de código.
 
-## Synse Pay
+**Aprendizado do Asaas que vale para a escolha.** A abertura de subconta via API
+respondia HTTP 403: a chave era válida, e o que faltava era o recurso pertencer
+ao produto white label, liberado caso a caso. Perguntar isso **antes** de
+escrever o adapter — "criar subconta via API está liberado para a minha conta,
+ou depende de aprovação comercial?" — economiza a integração inteira.
+
+**Alternativa que continua na mesa:** cada academia cria a própria conta no
+provedor e cola a chave de API no SynseHub. O fluxo do dinheiro é idêntico e não
+depende de liberação de marketplace; o custo é um passo manual na entrada de
+cada academia.
+
+### Quando houver provedor
 
 - [ ] `SYNSE_PLATFORM_WALLET_ID` apontando para a carteira real da plataforma —
       é ela que recebe a comissão. Com o valor errado, o dinheiro vai inteiro
       para a academia e nada na tela indica isso.
-- [ ] Webhook configurado no Asaas apontando para
-      `https://synse.com.br/api/webhooks/payments/asaas`, com o mesmo token do
-      `ASAAS_WEBHOOK_TOKEN`.
-- [ ] Um pagamento de ponta a ponta no sandbox: emitir PIX, pagar, e ver a
-      mensalidade virar "paga" sozinha. O webhook está escrito e testado
+- [ ] Adapter em `src/lib/payments/providers/` e a rota de webhook que vem com
+      ele. O filtro por `provider` na leitura da chave da subconta sai do `id`
+      do adapter, não escrito à mão — foi assim que o nome do gateway vazou
+      para fora do adapter da última vez.
+- [ ] Um pagamento de ponta a ponta: emitir PIX, pagar, e ver a mensalidade
+      virar "paga" sozinha. O mecanismo de webhook está escrito e testado
       unitariamente, mas nenhum pagamento real passou por ele ainda.
-- [ ] Abertura de subconta em produção: o Asaas pede mais campos que no sandbox
+- [ ] Abertura de subconta em produção costuma pedir mais campos que em sandbox
       (endereço, faturamento estimado, telefone). Validar antes de prometer a
       alguma academia.
 

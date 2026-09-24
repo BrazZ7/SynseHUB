@@ -233,11 +233,15 @@ export default async function SynseAdminPage() {
                   )
                 }
               />
-              <Row label="Endpoint" value={<code className="text-xs">/api/webhooks/payments/asaas</code>} />
+              <Row
+                label="Endpoint"
+                value={<span className="text-xs text-synse-muted">nenhum provedor conectado</span>}
+              />
               <p className="text-xs text-synse-muted">
-                Todo evento é gravado em <code>webhook_events</code> com chave de idempotência
-                (provider + event_id). Um evento repetido é reconhecido e ignorado, nunca
-                reprocessado.
+                A rota de webhook nasce junto com o adapter do provedor. O mecanismo que a recebe
+                continua de pé: todo evento é gravado em <code>webhook_events</code> com chave de
+                idempotência (provider + event_id), e um evento repetido é reconhecido e ignorado,
+                nunca reprocessado.
               </p>
             </CardContent>
           </Card>

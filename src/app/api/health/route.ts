@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { APP, LEGAL } from '@/config/app'
 import { SUPABASE_ANON_KEY, SUPABASE_URL, isDemoMode } from '@/lib/database/env'
-import { getPaymentProvider } from '@/lib/payments'
+import { getPaymentProvider, provedorConfigurado, provedorDesconhecido } from '@/lib/payments'
 import { env } from '@/lib/env'
 import {
   vereditoDeFuncao,
@@ -427,16 +427,24 @@ async function schemaReadiness() {
 }
 
 /**
- * Contra qual ambiente do provedor de pagamento o app fala.
+ * O que a configuração pede, e o que está em uso.
  *
- * "Está batendo no sandbox ou em produção?" é a primeira pergunta de qualquer
- * suporte de gateway, e responder de memória erra. O host não é segredo — é
- * endereço público documentado — e o valor aqui é prova, não afirmação.
+ * Os dois lados, e não só um, porque é justamente a diferença que interessa.
+ * `PAYMENT_PROVIDER=asaas` continua no ambiente depois de o adapter ter sido
+ * removido, e a fábrica cai no simulado — a aplicação continua de pé, e sem
+ * isto aqui ninguém saberia que a cobrança real está desligada olhando o
+ * endereço. Uma sonda que responde só "mock" esconde o desencontro; esta
+ * mostra.
+ *
+ * `pedido` é nome de configuração, não segredo, e nunca foi chave nenhuma.
  */
-function paymentEnvironment(): string | null {
-  const url = env(process.env.ASAAS_API_URL, '')
-  if (!url || !URL.canParse(url)) return null
-  return new URL(url).hostname
+function paymentConfiguration(): { pedido: string | null; emUso: string; desconhecido: boolean } {
+  const pedido = provedorConfigurado()
+  return {
+    pedido: pedido || null,
+    emUso: getPaymentProvider().id,
+    desconhecido: provedorDesconhecido() !== null,
+  }
 }
 
 /**
@@ -499,8 +507,7 @@ export async function GET(request: Request) {
     ...(deep && !demo
       ? { databaseAuth: await databaseReachable(), schema: await schemaReadiness() }
       : {}),
-    paymentProvider: getPaymentProvider().id,
-    paymentProviderHost: paymentEnvironment(),
+    paymentProvider: paymentConfiguration(),
     timestamp: new Date().toISOString(),
   })
 }

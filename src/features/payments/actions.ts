@@ -73,7 +73,7 @@ export async function registerManualPaymentAction(
 /**
  * Garante que o aluno exista como cliente no provedor.
  *
- * O provedor identifica o pagador por um id próprio (`cus_...` no Asaas) e
+ * O provedor identifica o pagador por um id próprio — `cus_...`, e similares —
  * exige CPF para emitir cobrança. A referência é guardada na primeira vez:
  * criar um cliente novo a cada PIX encheria a conta da academia de duplicatas
  * e quebraria o histórico do pagador.

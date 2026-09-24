@@ -97,11 +97,11 @@ export default async function SynsePayPage() {
         >
           <TriangleAlert className="mt-0.5 size-4 shrink-0 text-synse-warning" aria-hidden />
           <div className="min-w-0 text-sm">
-            <p className="font-medium text-synse-text">Provedor simulado</p>
+            <p className="font-medium text-synse-text">Cobrança real desligada</p>
             <p className="text-synse-muted">
-              Nenhum valor real é movimentado. Configure{' '}
-              <code className="break-all">PAYMENT_PROVIDER=asaas</code> e a chave de API para operar
-              com cobranças reais.
+              Nenhum valor é movimentado. Os números abaixo são de demonstração e servem para
+              conhecer a tela — as cobranças automáticas voltam quando o novo provedor de pagamento
+              estiver escolhido e conectado.
             </p>
           </div>
         </div>

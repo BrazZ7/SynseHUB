@@ -39,7 +39,8 @@ export const conflict = (userMessage: string, detail?: string) =>
 /**
  * `detail` entra na `message` do erro, que só existe no servidor — a UI lê
  * `userMessage`. Serve para dizer qual chamada falhou e com que código, sem
- * carregar o corpo da resposta: o do Asaas traz CPF e nome do pagador.
+ * carregar o corpo da resposta: o de gateway de pagamento costuma trazer CPF
+ * e nome do pagador.
  */
 export const providerUnavailable = (provider: string, detail?: string) =>
   new AppError(

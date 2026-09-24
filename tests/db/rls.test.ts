@@ -140,14 +140,14 @@ describe.skipIf(!temBanco)('credencial da subconta', () => {
   beforeAll(async () => {
     await client.query(
       `insert into payment_accounts (organization_id, provider, provider_account_id, status)
-       values ($1, 'asaas', 'wallet_alpha', 'ACTIVE')
+       values ($1, 'gateway', 'wallet_alpha', 'ACTIVE')
        on conflict (organization_id, provider) do nothing`,
       [ALPHA.orgId],
     )
     await client.query(
       `insert into payment_account_secrets (payment_account_id, organization_id, provider, api_key)
-       select id, organization_id, 'asaas', 'chave-da-subconta-alpha'
-       from payment_accounts where organization_id = $1 and provider = 'asaas'
+       select id, organization_id, 'gateway', 'chave-da-subconta-alpha'
+       from payment_accounts where organization_id = $1 and provider = 'gateway'
        on conflict (payment_account_id) do nothing`,
       [ALPHA.orgId],
     )
@@ -186,7 +186,7 @@ describe.skipIf(!temBanco)('credencial da subconta', () => {
         client,
         ALPHA.authId,
         `insert into payment_account_secrets (payment_account_id, organization_id, provider, api_key)
-         select id, organization_id, 'asaas', 'chave-plantada' from payment_accounts limit 1`,
+         select id, organization_id, 'gateway', 'chave-plantada' from payment_accounts limit 1`,
       ),
     ).rejects.toThrow()
   })

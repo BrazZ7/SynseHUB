@@ -43,7 +43,9 @@ Vieram do dono do produto e de defeitos que já custaram caro:
 - **Nunca armazenar dados completos de cartão.**
 - **Nunca confiar no front-end para confirmar pagamento.**
 - **Nunca hard-code da taxa de 2%** — ela mora em `organization_billing_settings`.
-- **Código específico do Asaas fica no adapter**, não espalhado pelo sistema.
+- **Código específico de gateway fica no adapter**, não espalhado pelo sistema.
+  O Asaas saiu por causa da taxa e não há substituto escolhido: hoje só existe o
+  provedor simulado, e o Synse Pay está engavetado.
 - **Segredos não entram no código.** `.env.local` local, `.env.example` versionado.
 - **Nunca publicar métrica pessoal do usuário sem consentimento.**
 - Nunca pedir nem aceitar chave de API, `service_role` ou senha colada no chat.

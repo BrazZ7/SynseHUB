@@ -5,28 +5,37 @@ import { createSupabaseAdminClient } from '@/lib/database/supabase-admin'
 import { AppError } from '@/lib/errors'
 import { logger } from '@/lib/logger'
 import { getPaymentProvider, isSimulatedProvider } from '@/lib/payments'
-import { AsaasPaymentProvider } from '@/lib/payments/providers/asaas'
 import type { PaymentProvider, SplitConfiguration } from '@/lib/payments/provider'
 import { env } from '@/lib/env'
 
 /**
- * Provedor de pagamento na perspectiva de uma academia.
+ * ── Provedor de pagamento na perspectiva de uma academia ─────────────────────
  *
  * O Synse Pay é marketplace: cada academia tem subconta própria no provedor, a
  * mensalidade cai direto na conta dela e o split desvia a comissão para a
- * carteira Synse. Nenhum centavo passa pela plataforma.
+ * carteira Synse. Nenhum centavo passa pela plataforma. Na prática isso
+ * significa que a chave usada para emitir a cobrança depende de qual academia
+ * está cobrando — não é uma credencial global.
  *
- * Na prática isso significa que a chave usada para emitir a cobrança depende de
- * qual academia está cobrando — não é uma credencial global. Este módulo
- * resolve qual usar.
+ * ── O que saiu daqui e o que ficou ──────────────────────────────────────────
+ *
+ * O Asaas saiu por causa da taxa, e o substituto ainda não foi escolhido. Saiu
+ * junto **só o que dependia de conhecer o gateway**: montar o cliente da
+ * subconta exige uma classe concreta, e não dá para escrever essa linha sem
+ * saber qual é.
+ *
+ * O resto ficou, e de propósito. A carteira da plataforma e o percentual do
+ * banco são regra do marketplace, não do Asaas, e valem igual para quem vier.
+ * Apagá-las junto entregaria ao próximo provedor um caminho sem a tranca que
+ * existe justamente porque a falta dela não dá erro nenhum na tela.
  */
 
-export const paymentAccountMissing = () =>
+export const cobrancaDesligada = () =>
   new AppError(
-    'payment_account_missing',
-    'O Synse Pay ainda não está conectado nesta academia. Conclua a configuração em Configurações → Synse Pay.',
-    409,
-    'sem subconta ativa no provedor',
+    'payment_provider_missing',
+    'A cobrança automática está desligada enquanto escolhemos o novo provedor de pagamento.',
+    503,
+    'nenhum provedor real configurado — só o simulado',
   )
 
 export const platformWalletMissing = () =>
@@ -42,29 +51,26 @@ export const platformWalletMissing = () =>
  *
  * Em modo simulado devolve o provedor global — não há subconta a resolver, e
  * exigir uma impediria a demonstração de funcionar.
+ *
+ * Fora dele não há provedor nenhum hoje, e o erro diz isso em vez de deixar a
+ * tela achar que emitiu. Quem for ligar o próximo adapter volta a escrever
+ * aqui, e precisa de duas coisas que a versão do Asaas já tinha resolvido:
+ *
+ * 1. **A chave da subconta é lida pelo service role.**
+ *    `payment_account_secrets` não tem política de RLS e o GRANT está
+ *    revogado, então nenhuma consulta autenticada alcança a chave — nem a da
+ *    dona da academia.
+ *
+ * 2. **O filtro por `provider` na consulta vem do `id` do adapter**, não
+ *    escrito à mão. A versão do Asaas tinha `'asaas'` fixo na cláusula, que
+ *    era exatamente a regra da casa — código de gateway só dentro do adapter —
+ *    sendo quebrada fora dele.
  */
-export async function getProviderForOrganization(organizationId: string): Promise<PaymentProvider> {
+export async function getProviderForOrganization(
+  _organizationId: string,
+): Promise<PaymentProvider> {
   if (isSimulatedProvider()) return getPaymentProvider()
-
-  const admin = createSupabaseAdminClient()
-  if (!admin) throw paymentAccountMissing()
-
-  /*
-   * Leitura pelo service role de propósito: `payment_account_secrets` não tem
-   * política de RLS e o GRANT está revogado, então nenhuma consulta
-   * autenticada alcança a chave — nem a da dona da academia.
-   */
-  const { data, error } = await admin
-    .from('payment_account_secrets')
-    .select('api_key')
-    .eq('organization_id', organizationId)
-    .eq('provider', 'asaas')
-    .maybeSingle()
-
-  if (error) throw paymentAccountMissing()
-  if (!data?.api_key) throw paymentAccountMissing()
-
-  return new AsaasPaymentProvider({ apiKey: data.api_key })
+  throw cobrancaDesligada()
 }
 
 /**

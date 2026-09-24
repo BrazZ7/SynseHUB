@@ -3,8 +3,14 @@
  *
  * Nenhum código específico de gateway pode vazar para fora de
  * `src/lib/payments/providers/*`. Services, actions e UI conhecem apenas esta
- * interface — é o que permite trocar Asaas por Mercado Pago, Stripe ou Pagar.me
- * sem tocar em regra de negócio.
+ * interface — e isso já se provou: o Asaas saiu sem que uma linha de regra de
+ * negócio, tela ou migration precisasse mudar.
+ *
+ * Hoje o único provedor é o simulado. O que a interface exige de um substituto
+ * é o que restringe a escolha: além de PIX, boleto, cartão e assinatura
+ * recorrente, ela pede `createPaymentAccount` (subconta por academia) e
+ * `configureSplit` — o marketplace do Synse Pay. Provedor sem marketplace
+ * atende a assinatura do Synse+ e não atende o Synse Pay.
  *
  * Dados completos de cartão NUNCA transitam por aqui: o adapter recebe apenas
  * um token gerado pelo SDK do provedor no cliente.

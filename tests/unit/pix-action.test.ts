@@ -23,7 +23,7 @@ const dataSource = {
 }
 
 const provider = {
-  id: 'asaas',
+  id: 'gateway',
   createCustomer: vi.fn(),
   createPix: vi.fn(),
 }
@@ -98,7 +98,7 @@ describe('createPixChargeAction', () => {
     expect(dataSource.attachProviderCharge).toHaveBeenCalledWith({
       organizationId: 'org-1',
       chargeId: 'cobranca-1',
-      provider: 'asaas',
+      provider: 'gateway',
       providerChargeId: 'pay_abc',
     })
   })

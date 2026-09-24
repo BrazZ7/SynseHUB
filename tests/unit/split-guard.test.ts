@@ -30,7 +30,7 @@ async function carregar(ambiente: string, walletId?: string) {
   }))
   vi.doMock('@/lib/payments', () => ({
     isSimulatedProvider: () => false,
-    getPaymentProvider: () => ({ id: 'asaas' }),
+    getPaymentProvider: () => ({ id: 'gateway' }),
   }))
 
   return import('@/lib/payments/organization-provider')

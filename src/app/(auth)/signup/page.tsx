@@ -19,9 +19,18 @@ export default async function SignUpPage() {
     <div className="animate-fade-in-up space-y-8">
       <header className="space-y-1.5">
         <h1 className="text-page-title font-semibold text-synse-text">Criar conta</h1>
+        {/*
+          A frase não afirma mais o passo de confirmação por e-mail.
+          Ele é uma configuração do Supabase que liga e desliga sem deploy, e
+          estava **desligada** enquanto a tela prometia "depois de confirmar o
+          e-mail" — a pessoa criava a conta, caía direto no onboarding, e a
+          primeira coisa que o produto disse a ela já não tinha acontecido.
+
+          "Depois" é verdade nas duas configurações: com confirmação ligada o
+          depois inclui o clique no e-mail, sem ela é a tela seguinte.
+        */}
         <p className="text-sm text-synse-muted">
-          Comece pela conta. Depois de confirmar o e-mail você diz apenas se tem uma academia ou
-          se vai treinar.
+          Comece pela conta. Depois você diz apenas se tem uma academia ou se vai treinar.
         </p>
       </header>
 

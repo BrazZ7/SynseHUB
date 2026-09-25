@@ -23,6 +23,18 @@ export function SignUpForm() {
      * cliente testando endereços, um por um. O preço é que quem esqueceu que já
      * tinha conta fica esperando um e-mail que nunca vem — por isso a saída para
      * o login aparece aqui, para todo mundo, sem revelar de quem é o caso.
+     *
+     * ── Por que a frase virou condicional ───────────────────────────────────
+     *
+     * Ela afirmava que o link estava a caminho. Com a confirmação por e-mail
+     * desligada no Supabase — que é o estado de hoje —, **o único caso que
+     * chega a esta tela é quem já tem conta**: para quem é novo, o cadastro
+     * devolve sessão na hora e a pessoa vai direto para o onboarding. Ou seja,
+     * a frase prometia um e-mail exatamente para quem nunca o receberia.
+     *
+     * A forma condicional é verdade nas quatro combinações de conta nova ou
+     * existente e confirmação ligada ou desligada, e continua não revelando
+     * qual é o caso de quem está lendo.
      */
     return (
       <div className="space-y-4">
@@ -32,8 +44,8 @@ export function SignUpForm() {
         >
           <MailCheck className="mt-0.5 size-4 shrink-0 text-synse-primary" aria-hidden />
           <span>
-            Se este e-mail ainda não tiver conta, o link de confirmação está a caminho. Abra o link
-            para continuar.
+            Recebemos seu cadastro. Se este endereço ainda não tiver conta, o link de confirmação
+            chega em instantes — e se já tiver, é só entrar.
           </span>
         </p>
 
@@ -48,10 +60,18 @@ export function SignUpForm() {
               </Link>
               .
             </li>
+            {/*
+              Aponta para a recuperação, e não mais para o link de acesso. As
+              duas coisas resolvem o acesso de hoje; só uma troca a senha, e é
+              essa que quem esqueceu está procurando.
+            */}
             <li>
               Esqueceu a senha?{' '}
-              <Link href="/login" className="text-synse-primary underline-offset-2 hover:underline">
-                Entre com link por e-mail
+              <Link
+                href="/recuperar-senha"
+                className="text-synse-primary underline-offset-2 hover:underline"
+              >
+                Crie uma nova
               </Link>
               .
             </li>

@@ -65,13 +65,28 @@ function PasswordForm({ onUseLink, proximo }: { onUseLink: () => void; proximo?:
 
       <SubmitButton label="Entrar" pendingLabel="Entrando…" />
 
-      <button
-        type="button"
-        onClick={onUseLink}
-        className="w-full rounded text-center text-sm text-synse-primary underline-offset-2 hover:underline"
-      >
-        Entrar com link por e-mail
-      </button>
+      {/*
+        Dois caminhos, e eles não são a mesma coisa — por isso os dois ficam
+        aqui. "Entrar com link" resolve o acesso de hoje e deixa a senha como
+        estava; "Esqueci minha senha" troca a senha de verdade. Quem esqueceu
+        procura pela segunda frase, e antes ela não existia: o único caminho de
+        volta era um botão que não diz o que a pessoa está procurando.
+      */}
+      <div className="flex flex-col gap-2 text-center text-sm">
+        <Link
+          href="/recuperar-senha"
+          className="rounded text-synse-primary underline-offset-2 hover:underline"
+        >
+          Esqueci minha senha
+        </Link>
+        <button
+          type="button"
+          onClick={onUseLink}
+          className="rounded text-synse-primary underline-offset-2 hover:underline"
+        >
+          Entrar com link por e-mail
+        </button>
+      </div>
 
       <Terms />
     </form>

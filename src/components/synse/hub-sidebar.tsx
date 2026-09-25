@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { CircleHelp, LogOut, Menu, X } from 'lucide-react'
+import { CircleHelp, KeyRound, LogOut, Menu, X } from 'lucide-react'
 import { useState } from 'react'
 
 import { HubBottomNavigation } from '@/components/synse/hub-bottom-navigation'
@@ -147,6 +147,13 @@ export function HubSidebar({
             >
               <CircleHelp className="size-4" />
               Ajuda
+            </Link>
+            <Link
+              href="/nova-senha"
+              className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <KeyRound className="size-4" />
+              Trocar senha
             </Link>
             <form action={signOutAction}>
               <button

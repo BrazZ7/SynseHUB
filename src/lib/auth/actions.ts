@@ -3,12 +3,23 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 
-import { DEMO_SESSION_COOKIE, findDemoPersona } from '@/lib/auth/session'
+import {
+  CAMINHO_NOVA_SENHA,
+  DEMO_SESSION_COOKIE,
+  RECUPERACAO_COOKIE,
+  findDemoPersona,
+} from '@/lib/auth/session'
 import { isDemoMode } from '@/lib/database/env'
 import { createSupabaseServerClient } from '@/lib/database/supabase-server'
 import { logger } from '@/lib/logger'
 import { rateLimit } from '@/lib/rate-limit'
-import { credentialsSchema, emailLinkSchema, signUpSchema } from '@/lib/validations/auth'
+import {
+  credentialsSchema,
+  emailLinkSchema,
+  novaSenhaSchema,
+  recuperarSenhaSchema,
+  signUpSchema,
+} from '@/lib/validations/auth'
 import { APP } from '@/config/app'
 
 export type AuthActionState = { error?: string; sent?: boolean }
@@ -212,6 +223,134 @@ export async function signUpWithPassword(
   if (!data.session) return { sent: true }
 
   redirect('/onboarding')
+}
+
+/**
+ * ── Recuperar a senha ────────────────────────────────────────────────────────
+ *
+ * Manda o link que leva a `/nova-senha`. O callback troca o código por sessão
+ * e marca que a pessoa veio por aqui — é essa marca que a dispensa de informar
+ * a senha atual, justamente o que ela não tem.
+ *
+ * A resposta é a mesma com e sem conta: dizer "e-mail não cadastrado" entrega
+ * a quem perguntar a lista de quem tem conta no Synse. E como a resposta não
+ * distingue, o limite por e-mail é o que impede usar esta tela como máquina de
+ * mandar e-mail no nome de outra pessoa.
+ */
+export async function requestPasswordReset(
+  _state: AuthActionState,
+  formData: FormData,
+): Promise<AuthActionState> {
+  const parsed = recuperarSenhaSchema.safeParse({ email: formData.get('email') })
+  if (!parsed.success) return { error: 'Informe um e-mail válido.' }
+
+  const limit = rateLimit(`recuperar:${parsed.data.email.toLowerCase()}`, 3, 300_000)
+  if (!limit.allowed) {
+    return { error: 'Já enviamos um link há pouco. Confira sua caixa de entrada.' }
+  }
+
+  const supabase = await createSupabaseServerClient()
+  if (!supabase) {
+    return { error: 'Recuperação indisponível neste ambiente. Use uma conta de demonstração.' }
+  }
+
+  const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
+    redirectTo: `${APP.url}/auth/callback?next=${CAMINHO_NOVA_SENHA}`,
+  })
+  if (error) logger.warn('auth:reset_request_failed', { reason: error.message })
+
+  // Idêntica com ou sem erro: não revela quais e-mails existem.
+  return { sent: true }
+}
+
+/**
+ * ── Gravar a senha nova ──────────────────────────────────────────────────────
+ *
+ * Dois caminhos chegam aqui, e a diferença entre eles é a única regra que
+ * importa:
+ *
+ * - **Veio pelo link do e-mail.** Tem a marca de recuperação, e não precisa da
+ *   senha atual — ela é o que esqueceu.
+ * - **Já estava logado.** Precisa da senha atual, conferida contra o Supabase
+ *   antes de qualquer escrita. É o que impede que um navegador deixado aberto
+ *   vire uma conta perdida: quem senta na cadeira não sabe a senha, então não
+ *   troca e não expulsa o dono.
+ *
+ * A marca é apagada no fim, dê certo ou não o resto — um link de uso único que
+ * deixa a porta encostada por quinze minutos depois de usado não é de uso
+ * único.
+ */
+export async function setNewPassword(
+  _state: AuthActionState,
+  formData: FormData,
+): Promise<AuthActionState> {
+  const parsed = novaSenhaSchema.safeParse({
+    password: formData.get('password'),
+    confirmacao: formData.get('confirmacao'),
+    senhaAtual: formData.get('senhaAtual') ?? '',
+  })
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Confira os campos.' }
+  }
+
+  const supabase = await createSupabaseServerClient()
+  if (!supabase) {
+    return { error: 'Troca de senha indisponível neste ambiente.' }
+  }
+
+  const { data: sessao } = await supabase.auth.getUser()
+  const email = sessao.user?.email
+  if (!email) {
+    return { error: 'Sua sessão expirou. Peça um novo link e tente de novo.' }
+  }
+
+  const cookieStore = await cookies()
+  const veioDoLink = cookieStore.get(RECUPERACAO_COOKIE)?.value === '1'
+
+  if (!veioDoLink) {
+    if (!parsed.data.senhaAtual) {
+      return { error: 'Informe a sua senha atual para trocá-la.' }
+    }
+
+    /*
+     * A reautenticação é o `signInWithPassword` com a senha informada. Não há
+     * atalho mais barato, e ele tem o efeito certo: senha errada não passa, e
+     * a sessão continua a mesma quando passa.
+     */
+    const limit = rateLimit(`trocar-senha:${email.toLowerCase()}`, 5, 300_000)
+    if (!limit.allowed) {
+      return { error: 'Muitas tentativas. Aguarde alguns minutos.' }
+    }
+
+    const { error: reauth } = await supabase.auth.signInWithPassword({
+      email,
+      password: parsed.data.senhaAtual,
+    })
+    if (reauth) {
+      logger.warn('auth:reauth_failed', { reason: reauth.message })
+      return { error: 'A senha atual está incorreta.' }
+    }
+  }
+
+  const { error } = await supabase.auth.updateUser({ password: parsed.data.password })
+
+  cookieStore.delete(RECUPERACAO_COOKIE)
+
+  if (error) {
+    logger.warn('auth:password_update_failed', { reason: error.message, code: error.code })
+    /*
+     * O Supabase recusa a senha igual à atual com este código. Vale dizer em
+     * voz alta: a pessoa acabou de provar que é dona da conta, e a mensagem
+     * genérica a deixaria tentando de novo a mesma coisa.
+     */
+    if (error.code === 'same_password') {
+      return { error: 'A senha nova precisa ser diferente da anterior.' }
+    }
+    return { error: 'Não foi possível trocar a senha. Tente novamente em instantes.' }
+  }
+
+  logger.info('auth:password_changed', { viaLink: veioDoLink })
+  return { sent: true }
 }
 
 export async function signOut() {

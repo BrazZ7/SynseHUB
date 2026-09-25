@@ -1,9 +1,11 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import {
   BarChart3,
   Briefcase,
   Building2,
   Flame,
+  KeyRound,
   LogOut,
   ShieldCheck,
   Star,
@@ -110,6 +112,19 @@ export default async function StudentProfilePage({
               <span className="text-xs text-synse-muted">Tema do aplicativo</span>
               <ThemeToggle />
             </div>
+
+            {/*
+              Trocar a senha estando logado pede a senha atual — é o que
+              impede que um celular deixado desbloqueado vire uma conta
+              perdida. Quem esqueceu a senha entra pelo link do e-mail, na
+              tela de entrada, e chega na mesma tela sem precisar da atual.
+            */}
+            <Button variant="outline" className="w-full" asChild>
+              <Link href="/nova-senha">
+                <KeyRound className="size-4" />
+                Trocar minha senha
+              </Link>
+            </Button>
 
             <form action={signOut}>
               <Button type="submit" variant="outline" className="w-full">

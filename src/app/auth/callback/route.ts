@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 
+import { CAMINHO_NOVA_SENHA, RECUPERACAO_COOKIE, RECUPERACAO_MAX_AGE } from '@/lib/auth/session'
 import { createSupabaseServerClient } from '@/lib/database/supabase-server'
 import { logger } from '@/lib/logger'
 
@@ -43,5 +44,30 @@ export async function GET(request: NextRequest) {
    * — recusava o retorno sem consumir o token. O clique no link de confirmação
    * não fazia nada, sem erro nenhum à vista.
    */
-  return NextResponse.redirect(`${origin}${destinoPedido ?? '/onboarding'}`)
+  const resposta = NextResponse.redirect(`${origin}${destinoPedido ?? '/onboarding'}`)
+
+  /*
+   * A marca de recuperação.
+   *
+   * O destino é nosso: quem monta o link é `requestPasswordReset`, e só ele
+   * pede `next=/nova-senha`. Chegar aqui com esse destino exige um código de
+   * uso único válido, que só sai na caixa de e-mail da própria conta — então a
+   * marca prova o que precisa provar: a pessoa tem o e-mail, mesmo sem ter a
+   * senha.
+   *
+   * Sem isto a tela de senha nova teria de aceitar qualquer sessão, e a
+   * exigência de senha atual na troca comum viraria enfeite — bastaria abrir a
+   * outra tela.
+   */
+  if (destinoPedido === CAMINHO_NOVA_SENHA) {
+    resposta.cookies.set(RECUPERACAO_COOKIE, '1', {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: RECUPERACAO_MAX_AGE,
+    })
+  }
+
+  return resposta
 }

@@ -28,6 +28,35 @@ export const DEMO_SESSION_COOKIE = 'synse_demo_session'
 export const PLATFORM_CONTEXT_COOKIE = 'synse_contexto'
 export const CONTEXTO_PESSOAL = 'pessoal'
 
+/**
+ * ── A marca de quem chegou por um link de recuperação ────────────────────────
+ *
+ * Trocar a senha estando logado exige a senha atual. É o que impede que um
+ * navegador deixado aberto vire uma conta perdida: quem senta na cadeira não
+ * sabe a senha, então não consegue trocá-la e expulsar o dono.
+ *
+ * Quem chega pelo link do e-mail não tem senha atual para dar — é justamente o
+ * que ele esqueceu. Este cookie marca esse caso, e sem ele a exigência de
+ * senha atual não valeria nada: bastaria abrir a tela de recuperação.
+ *
+ * É `httpOnly` e escrito **só pelo servidor**, depois de o Supabase aceitar o
+ * código de uso único. Quem está no teclado não o forja; quem tem a caixa de
+ * e-mail já é o dono da conta.
+ */
+export const RECUPERACAO_COOKIE = 'synse_recuperacao'
+
+/**
+ * Quinze minutos.
+ *
+ * Tempo de sobra para escolher uma senha e digitá-la duas vezes, e curto o
+ * bastante para a marca não sobreviver à pessoa sair de perto do computador —
+ * que é exatamente o cenário de que a exigência de senha atual protege.
+ */
+export const RECUPERACAO_MAX_AGE = 15 * 60
+
+/** Para onde o link de recuperação leva. Um só lugar, lido pelos dois lados. */
+export const CAMINHO_NOVA_SENHA = '/nova-senha'
+
 /** A organização reservada que hospeda as contas de plataforma (0034). */
 export const SYNSE_PLATFORM_ORG_ID = '00000000-0000-0000-0000-000000000002'
 

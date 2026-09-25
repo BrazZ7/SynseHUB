@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+        <activity
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
+            android:name=".MainActivity"
+            android:label="@string/title_activity_main"
+            android:theme="@style/AppTheme.NoActionBarLaunch"
+            android:launchMode="singleTask"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!--
+              App Links: link do Synse abre no app, não no navegador.
+
+              `autoVerify` faz o Android buscar
+              https://synse.com.br/.well-known/assetlinks.json na instalação e
+              conferir se o domínio autoriza este aplicativo. Sem o arquivo do
+              outro lado, a verificação falha e o link volta a abrir no
+              navegador — silenciosamente.
+            -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="synse.com.br" />
+                <data android:scheme="https" android:host="www.synse.com.br" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          O serviço em primeiro plano do Treino Ativo. `specialUse` porque
+          nenhum dos tipos prontos descreve um cronômetro de descanso: não é
+          mídia, não é localização, não é chamada. A partir do Android 14 o tipo
+          é obrigatório e a Play Console pede a justificativa que está no
+          `subtype`.
+        -->
+        <service
+            android:name="com.synse.workout.WorkoutService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Acompanha a série e o cronômetro de descanso durante o treino, com a tela bloqueada"
+            />
+        </service>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
+        </provider>
+    </application>
+
+    <!-- Permissions -->
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+      Notificação do treino. A partir do Android 13 é permissão de tempo de
+      execução, pedida quando o primeiro treino começa — não na abertura.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- O cronômetro de descanso sobrevive à tela bloqueada. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!--
+      GPS do SynseRun. `ACCESS_BACKGROUND_LOCATION` fica de fora de propósito:
+      a corrida roda com o app aberto, e pedir localização em segundo plano
+      dispara uma revisão específica da Play Console que não se justifica pelo
+      que o produto faz hoje.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+
+    <!--
+      Bluetooth do Synse Body.
+
+      A partir do Android 12 o modelo mudou: `BLUETOOTH_SCAN` e
+      `BLUETOOTH_CONNECT` substituem as antigas, e `neverForLocation` declara
+      que a varredura não serve para descobrir onde a pessoa está. Sem essa
+      declaração o sistema exigiria permissão de localização para ler uma
+      balança — desproporcional, e a Play Console pergunta por quê.
+
+      As duas antigas ficam com `maxSdkVersion` porque em Android 11 e abaixo
+      não existe outro caminho, e ali a varredura BLE realmente exige
+      localização: é limitação da plataforma, não escolha do produto.
+    -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="s" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" tools:targetApi="s" />
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+
+    <!-- Balança é acessório, não requisito: o app funciona sem nenhuma. -->
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
+</manifest>

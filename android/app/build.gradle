@@ -1,0 +1,116 @@
+apply plugin: 'com.android.application'
+
+/*
+ * A chave de assinatura do release, que nunca entra no repositório.
+ *
+ * A Play Console só aceita AAB assinado, e a chave é o que prova que uma
+ * atualização vem de quem publicou a primeira versão — perdê-la significa não
+ * poder mais atualizar o app, e vazá-la significa alguém poder.
+ *
+ * Vem de `android/keystore.properties` (ignorado pelo git) ou, quando o build
+ * roda numa esteira, das variáveis de ambiente. Sem nenhum dos dois o release
+ * sai sem assinatura, que é o comportamento certo para quem só quer compilar:
+ * falhar aqui impediria `assembleDebug` de rodar numa máquina limpa.
+ */
+def chaveDeAssinatura = new Properties()
+def arquivoDaChave = rootProject.file('keystore.properties')
+if (arquivoDaChave.exists()) {
+    arquivoDaChave.withInputStream { chaveDeAssinatura.load(it) }
+}
+
+def valorDaChave = { String chave, String variavel ->
+    chaveDeAssinatura.getProperty(chave) ?: System.getenv(variavel)
+}
+
+def caminhoDoKeystore = valorDaChave('storeFile', 'SYNSE_KEYSTORE_FILE')
+def temAssinatura = caminhoDoKeystore != null && file(caminhoDoKeystore).exists()
+
+/*
+ * A versão, vinda de fora.
+ *
+ * A Play Console recusa upload com `versionCode` repetido, e ele nunca pode
+ * voltar atrás. Fixo no arquivo, seria editar o build.gradle a cada envio e um
+ * dia esquecer. O padrão existe para quem só quer compilar na própria máquina.
+ *
+ * Calculado aqui fora, e não no `defaultConfig`: em Groovy,
+ * `versionCode (x).toInteger()` chama `.toInteger()` no retorno de
+ * `versionCode`, não em `x` — e o build morre com "Value is null".
+ */
+def codigoDaVersao = Integer.parseInt(System.getenv('SYNSE_VERSION_CODE') ?: '1')
+def nomeDaVersao = System.getenv('SYNSE_VERSION_NAME') ?: '1.0.0'
+
+android {
+    namespace = "br.com.synse.app"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "br.com.synse.app"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode codigoDaVersao
+        versionName nomeDaVersao
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        if (temAssinatura) {
+            release {
+                storeFile file(caminhoDoKeystore)
+                storePassword valorDaChave('storePassword', 'SYNSE_KEYSTORE_PASSWORD')
+                keyAlias valorDaChave('keyAlias', 'SYNSE_KEY_ALIAS')
+                keyPassword valorDaChave('keyPassword', 'SYNSE_KEY_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            if (temAssinatura) {
+                signingConfig signingConfigs.release
+            } else {
+                // Avisa uma vez, em vez de entregar um AAB que a Play recusa em silêncio.
+                logger.warn('AVISO: sem keystore. O release sai sem assinatura e a Play Console vai recusar.')
+            }
+            /*
+             * `minifyEnabled false` de propósito. O código Java do app é o
+             * invólucro do Capacitor mais o plugin do Treino Ativo — poucos
+             * KB. O que o R8 encolheria é desprezível, e ele quebra reflexão,
+             * que é justamente como o Capacitor encontra os plugins.
+             */
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  As cores do Synse, fixas.
+
+  Não seguem o tema claro/escuro do sistema de propósito: a notificação desenha
+  o próprio cartão escuro, e um texto que mudasse de cor com o tema ficaria
+  ilegível sobre ele. Os mesmos valores de `globals.css`.
+-->
+<resources>
+    <color name="synse_surface">#0A2724</color>
+    <color name="synse_primary">#17C4A5</color>
+    <color name="synse_text">#E8F5F2</color>
+    <color name="synse_muted">#9DB8B3</color>
+    <color name="synse_botao">#14413B</color>
+</resources>

@@ -423,6 +423,30 @@ ninguém conseguir alcançá-lo.
 Enquanto isso não estiver configurado, o convite continua funcionando pelo link
 copiado da tela.
 
+## O limitador de tentativas não sobrevive à Vercel
+
+`src/lib/rate-limit.ts` guarda as contagens num `Map` em memória, e o próprio
+arquivo já avisa: "em produção multi-instância trocar o `store` por Redis /
+Upstash mantendo esta mesma assinatura".
+
+O que isso significa na prática: **cada instância serverless tem o próprio
+contador**. A Vercel cria instâncias conforme a carga, então "5 tentativas de
+login por minuto" vira 5 × o número de instâncias — e quem está atacando é
+justamente quem gera carga. Quinze ações dependem disso hoje: login, link por
+e-mail, cadastro, recuperação e troca de senha, PIX do aluno e da academia,
+check-in, convite de equipe, desafios, onboarding e pedido de amizade.
+
+Não é urgente como uma chave vazada, mas é o tipo de proteção que **parece
+existir**. Um relatório de segurança que liste "rate limiting: sim" estaria
+errado, e é por isso que fica escrito aqui.
+
+Trocar custa pouco: a assinatura de `rateLimit(chave, limite, janelaMs)` já
+isola o resto do código do armazenamento, e o Upstash tem plano gratuito que
+cobre este volume com folga.
+
+- [ ] Trocar o `store` de `rate-limit.ts` por Redis antes do primeiro cliente
+      pagante — ou aceitar por escrito que o limite é por instância.
+
 ## Plataforma
 
 - [ ] Plano da Vercel: o Hobby **proíbe uso comercial**. Precisa virar Pro

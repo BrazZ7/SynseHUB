@@ -7,6 +7,7 @@ import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 import { isPendingMigration } from '@/lib/database/pending-migration'
 import { logger } from '@/lib/logger'
+import { rateLimit } from '@/lib/rate-limit'
 
 /**
  * As escritas de amizade.
@@ -35,11 +36,32 @@ function comoErro(erro: unknown, padrao: string): FriendActionState {
   return { error: mensagem && mensagem.length < 120 ? mensagem : padrao }
 }
 
+/**
+ * Pedidos por minuto, por conta.
+ *
+ * ── Por que esta ação precisa de limite ─────────────────────────────────────
+ *
+ * Porque ela responde uma pergunta que ninguém mais responde: "este Synse ID
+ * existe?". Acertar devolve "Pedido enviado"; errar devolve "Não encontramos
+ * ninguém com esse Synse ID" — e a diferença entre as duas frases é um
+ * oráculo de contas.
+ *
+ * O alfabeto tem 32 símbolos e o id tem 8, então adivinhar às cegas é
+ * impraticável. O caso que importa é outro: quem **já tem uma lista** de ids —
+ * de uma captura de tela numa aula, de um grupo, de outra academia — e quer
+ * saber quais viraram conta no Synse. Sem limite isso custa uma tarde de
+ * script.
+ *
+ * Dez por minuto não atrapalha ninguém: adicionar amigo é coisa de uma vez
+ * por semana, e a tela pede o id digitado à mão.
+ */
+const PEDIDOS_POR_MINUTO = 10
+
 export async function requestFriendshipAction(
   _state: FriendActionState,
   formData: FormData,
 ): Promise<FriendActionState> {
-  await requireStudentSession()
+  const session = await requireStudentSession()
 
   const synseId = String(formData.get('synseId') ?? '')
     .trim()
@@ -49,6 +71,16 @@ export async function requestFriendshipAction(
   // quem recusa de verdade é a consulta, que não acha o perfil.
   if (!SYNSE_ID_RE.test(synseId)) {
     return { error: 'O Synse ID tem o formato SYN-XXXXXXXX. Confira e tente de novo.' }
+  }
+
+  /*
+   * O limite é por quem pede, e vem **depois** da conferência de formato: id
+   * malformado nem chega ao banco, então gastar cota com ele deixaria a pessoa
+   * de fora por causa dos próprios erros de digitação.
+   */
+  const limite = rateLimit(`amizade:${session.userProfileId}`, PEDIDOS_POR_MINUTO, 60_000)
+  if (!limite.allowed) {
+    return { error: 'Muitos pedidos seguidos. Aguarde um minuto e tente de novo.' }
   }
 
   try {

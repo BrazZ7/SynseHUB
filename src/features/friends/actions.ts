@@ -7,6 +7,7 @@ import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 import { isPendingMigration } from '@/lib/database/pending-migration'
 import { logger } from '@/lib/logger'
+import { avisarAmizadeAceita, avisarPedidoDeAmizade } from '@/lib/push/eventos'
 import { rateLimit } from '@/lib/rate-limit'
 
 /**
@@ -85,7 +86,13 @@ export async function requestFriendshipAction(
 
   try {
     const dataSource = await getDataSource()
-    await dataSource.requestFriendship(synseId)
+    const amizadeId = await dataSource.requestFriendship(synseId)
+    /*
+     * O aviso sai depois de a amizade existir, e nunca antes: avisar de um
+     * pedido que falhou seria pior do que não avisar. `avisarPedidoDeAmizade`
+     * engole as próprias falhas — o pedido vale mesmo sem o push.
+     */
+    await avisarPedidoDeAmizade(amizadeId)
     revalidatePath('/app/friends')
     return { ok: 'Pedido enviado.' }
   } catch (erro) {
@@ -106,6 +113,12 @@ export async function respondFriendshipAction(
   try {
     const dataSource = await getDataSource()
     await dataSource.respondFriendship(friendshipId, accept)
+    /*
+     * Só no aceite. Quem foi recusado não recebe aviso de recusa — recusar já
+     * é constrangedor de um lado só, e avisar transformaria um silêncio
+     * educado numa notificação no bolso da pessoa.
+     */
+    if (accept) await avisarAmizadeAceita(friendshipId)
     revalidatePath('/app/friends')
     return { ok: accept ? 'Agora vocês são amigos.' : 'Pedido recusado.' }
   } catch (erro) {

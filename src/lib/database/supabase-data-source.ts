@@ -2219,6 +2219,32 @@ export class SupabaseDataSource implements DataSource {
     }))
   }
 
+  // ── Push ───────────────────────────────────────────────────────────────────
+
+  /*
+   * Pelas funções, e não pela tabela: `push_subscriptions` não tem política
+   * nenhuma, então nem o insert nem o delete passam pelo cliente autenticado.
+   */
+  async registerPushSubscription(input: {
+    endpoint: string
+    p256dh: string
+    auth: string
+    userAgent: string | null
+  }): Promise<void> {
+    const { error } = await this.client.rpc('register_push_subscription', {
+      p_endpoint: input.endpoint,
+      p_p256dh: input.p256dh,
+      p_auth: input.auth,
+      p_user_agent: input.userAgent,
+    })
+    if (error) throw new Error(error.message)
+  }
+
+  async removePushSubscription(endpoint: string): Promise<void> {
+    const { error } = await this.client.rpc('remove_push_subscription', { p_endpoint: endpoint })
+    if (error) throw new Error(error.message)
+  }
+
   // ── Acervo Synse ───────────────────────────────────────────────────────────
 
   /**

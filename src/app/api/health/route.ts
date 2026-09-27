@@ -179,6 +179,7 @@ const MIGRATIONS_ESPERADAS = [
   '0037_amigos.sql',
   '0038_cadeado_do_plus.sql',
   '0039_acervo_synse.sql',
+  '0040_push.sql',
 ]
 
 async function schemaReadiness() {
@@ -200,6 +201,7 @@ async function schemaReadiness() {
     rankingDeAmigos,
     cadeadoDoPlus,
     acervoSynse,
+    avisoPush,
   ] = await Promise.all([
     schemaCheck('user_profiles?select=tier&limit=1'),
     schemaCheck('baseline_challenges?select=code&limit=1'),
@@ -337,6 +339,19 @@ async function schemaReadiness() {
       p_type: 'ARTICLE',
       p_title: 'sonda',
     }),
+    /*
+     * A inscrição de push (0040). Sem ela o cartão de avisos grava no vazio e
+     * a pessoa fica com "ligado" na tela sem nunca receber nada.
+     *
+     * `register_push_subscription` é revogada do anônimo, então 401/403 é
+     * "existe" e 404 é "não existe". Sem `executa`, e aqui não é detalhe:
+     * ligá-lo faria a sonda **inscrever um aparelho fantasma** a cada visita.
+     */
+    rpcCheck('register_push_subscription', {
+      p_endpoint: 'sonda',
+      p_p256dh: 'sonda',
+      p_auth: 'sonda',
+    }),
   ])
 
   const registradas = await migracoesRegistradas()
@@ -399,6 +414,7 @@ async function schemaReadiness() {
       rankingDeAmigos,
       cadeadoDoPlus,
       acervoSynse,
+      avisoPush,
       appliedMigrations: registradas.length,
       pendingMigrations: faltando,
     }
@@ -437,6 +453,7 @@ async function schemaReadiness() {
     '0037_amigos.sql',
     '0038_cadeado_do_plus.sql',
     '0039_acervo_synse.sql',
+    '0040_push.sql',
   )
 
   return {
@@ -457,6 +474,7 @@ async function schemaReadiness() {
     rankingDeAmigos,
     cadeadoDoPlus,
     acervoSynse,
+    avisoPush,
     pendingMigrations: pendentes,
   }
 }

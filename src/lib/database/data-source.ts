@@ -780,6 +780,16 @@ export interface DataSource {
   saveSynseContent(input: SaveSynseContentInput): Promise<string>
   deleteSynseContent(contentId: string): Promise<void>
 
+  // Push — aviso com o app fechado. A tabela não tem política de leitura:
+  // o que ela guarda é capacidade de escrever na tela de alguém.
+  registerPushSubscription(input: {
+    endpoint: string
+    p256dh: string
+    auth: string
+    userAgent: string | null
+  }): Promise<void>
+  removePushSubscription(endpoint: string): Promise<void>
+
   // CRM
   listLeads(organizationId: string): Promise<Lead[]>
   getLead(organizationId: string, leadId: string): Promise<Lead | null>

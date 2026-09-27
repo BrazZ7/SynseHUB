@@ -2107,6 +2107,16 @@ export class DemoDataSource implements DataSource {
     if (indice >= 0) this.demoContent.splice(indice, 1)
   }
 
+  // ── Push ───────────────────────────────────────────────────────────────────
+
+  /*
+   * A demonstração aceita e esquece. Não há chave VAPID nem aparelho de
+   * verdade, e guardar a inscrição só para nunca entregar nada seria pior do
+   * que não guardar — a tela diria "ligado" para quem não vai receber.
+   */
+  async registerPushSubscription(): Promise<void> {}
+  async removePushSubscription(): Promise<void> {}
+
   // ── Acervo Synse ───────────────────────────────────────────────────────────
 
   private montarAcervo() {

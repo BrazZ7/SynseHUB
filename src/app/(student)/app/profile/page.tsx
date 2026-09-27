@@ -24,6 +24,7 @@ import { MenuDaConta } from '@/features/account/account-drawer'
 import { SecaoRecolhivel } from '@/features/account/collapsible-section'
 import { MedalShelf } from '@/features/challenges/medal-shelf'
 import { ConsentList } from '@/features/consents/consent-list'
+import { PushCard } from '@/features/push/push-card'
 import {
   CapaPerfil,
   ConquistaHex,
@@ -38,6 +39,7 @@ import { plantaDoNivel } from '@/features/students/plant'
 import { getPerfilCompleto } from '@/features/students/profile-service'
 import { signOut } from '@/lib/auth/actions'
 import { requireStudentSession } from '@/lib/auth/require-session'
+import { VAPID_PUBLIC_KEY } from '@/lib/push/env'
 import { getDataSource } from '@/lib/database'
 import { isPendingMigration } from '@/lib/database/pending-migration'
 
@@ -112,6 +114,13 @@ export default async function StudentProfilePage({
               <span className="text-xs text-synse-muted">Tema do aplicativo</span>
               <ThemeToggle />
             </div>
+
+            {/*
+              O aviso com o app fechado. O cartão some sozinho em navegador
+              que não suporta e em instalação sem chave VAPID — em vez de
+              oferecer um botão que falha no clique.
+            */}
+            <PushCard chavePublica={VAPID_PUBLIC_KEY} />
 
             {/*
               Trocar a senha estando logado pede a senha atual — é o que

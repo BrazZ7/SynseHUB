@@ -33,7 +33,7 @@ npm run env:check
 
 ## Migrations
 
-**Estado em 24/09/2026: 0001 a 0037 aplicadas em produção** (a 0038 e a 0039 aguardam colagem), confirmado por
+**Estado em 24/09/2026: 0001 a 0037 aplicadas em produção** (a 0038, a 0039 e a 0040 aguardam colagem), confirmado por
 `/api/health?deep=1` (`appliedMigrations: 31`, `pendingMigrations: []`).
 
 Esta linha envelhece a cada migration e por isso não é a fonte da verdade: a
@@ -295,6 +295,36 @@ existem, não para conferir se subiram.
   guarda de super admin derruba 2; deixar o `update` ou o `delete` alcançarem
   linha com dono derruba 1 cada; tirar a trilha de qualquer uma das duas
   funções derruba 1 cada.
+
+- **0040 (`0040_push.sql`)** — a inscrição de push, para o aviso chegar com o
+  app fechado.
+
+  Até aqui o sino só funcionava para quem já tinha aberto o app — e é
+  justamente quem já abriu que não precisa ser lembrado.
+
+  Uma linha por **aparelho**, não por pessoa: a mesma conta usa celular e
+  computador, cada um com seu `endpoint`. Guardar um só apagaria o outro a
+  cada login, e a pessoa pararia de receber no celular por ter aberto o app no
+  trabalho, sem nada na tela explicando.
+
+  A tabela **não tem política de leitura nenhuma**. O que ela guarda é
+  capacidade, não informação: quem tem o endpoint e as duas chaves escreve na
+  tela de alguém. Nem a dona do aparelho lê a própria linha pela API — ela não
+  precisa, porque o endpoint é do navegador dela. Quem envia é o servidor, com
+  a chave de serviço, como em `payment_account_secrets`.
+
+  `remove_push_subscription` só alcança a linha de quem pede. Sem essa
+  cláusula, conhecer o endpoint alheio — que é o que um aparelho emprestado
+  revela — bastaria para silenciar a conta de outra pessoa, que deixaria de
+  receber aviso de cobrança sem nunca saber por quê.
+
+  `tests/db/push.test.ts`: 11 testes, conferidos por mutação. Deixar o
+  `remove` alcançar linha alheia derruba 1; dar política de leitura à tabela
+  derruba 3; fazer `has_push_subscription` ignorar o dono derruba 1.
+
+  **Precisa de chave VAPID para funcionar.** `npx web-push generate-vapid-keys`,
+  e as três variáveis em `.env.example`. Sem elas o cartão de avisos não
+  aparece — em vez de oferecer um botão que falha no clique.
 
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona

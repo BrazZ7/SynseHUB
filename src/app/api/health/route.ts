@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { APP, LEGAL } from '@/config/app'
 import { SUPABASE_ANON_KEY, SUPABASE_URL, isDemoMode } from '@/lib/database/env'
 import { getPaymentProvider, provedorConfigurado, provedorDesconhecido } from '@/lib/payments'
+import { diagnosticoDoPush } from '@/lib/push/env'
 import { env } from '@/lib/env'
 import {
   vereditoDeFuncao,
@@ -558,7 +559,18 @@ export async function GET(request: Request) {
     databaseRef: demo ? null : databaseRef(),
     databaseKey: demo ? null : databaseKey(),
     ...(deep && !demo
-      ? { databaseAuth: await databaseReachable(), schema: await schemaReadiness() }
+      ? {
+          databaseAuth: await databaseReachable(),
+          schema: await schemaReadiness(),
+          /*
+           * O estado das chaves de push, sem nenhum valor.
+           *
+           * Fica atrás de `?deep=1` como as outras verificações caras, e existe
+           * porque a alternativa era alguém entrar no app, abrir a gaveta da
+           * conta e procurar um cartão para responder "as chaves chegaram?".
+           */
+          push: await diagnosticoDoPush(),
+        }
       : {}),
     paymentProvider: paymentConfiguration(),
     timestamp: new Date().toISOString(),

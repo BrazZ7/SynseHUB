@@ -32,7 +32,7 @@ import {
   NivelCard,
   RecordeRow,
   SemanaChart,
-  StatTile,
+  BarraDeTotais,
 } from '@/features/students/components/profile-pieces'
 import { PainelPlanta } from '@/features/students/components/plant-panel'
 import { plantaDoNivel } from '@/features/students/plant'
@@ -178,29 +178,15 @@ export default async function StudentProfilePage({
         </div>
       </CapaPerfil>
 
-      {/* ── Os quatro números, numa linha só ─────────────────────────────── */}
-      <section className="grid grid-cols-4 gap-2">
-        <StatTile
-          icone={ICONES_DO_TOPO.Dumbbell}
-          valor={String(perfil.totais.treinos)}
-          rotulo="Treinos"
-        />
-        <StatTile
-          icone={ICONES_DO_TOPO.Footprints}
-          valor={km(perfil.totais.quilometros)}
-          rotulo="Corrida"
-        />
-        <StatTile
-          icone={ICONES_DO_TOPO.Trophy}
-          valor={String(perfil.totais.desafios)}
-          rotulo="Desafios"
-        />
-        <StatTile
-          icone={ICONES_DO_TOPO.Medal}
-          valor={String(perfil.totais.medalhas)}
-          rotulo="Medalhas"
-        />
-      </section>
+      {/* ── Os quatro números, numa barra só ─────────────────────────────── */}
+      <BarraDeTotais
+        itens={[
+          { icone: ICONES_DO_TOPO.Dumbbell, valor: String(perfil.totais.treinos), rotulo: 'Treinos' },
+          { icone: ICONES_DO_TOPO.Footprints, valor: km(perfil.totais.quilometros), rotulo: 'Corrida' },
+          { icone: ICONES_DO_TOPO.Trophy, valor: String(perfil.totais.desafios), rotulo: 'Desafios' },
+          { icone: ICONES_DO_TOPO.Medal, valor: String(perfil.totais.medalhas), rotulo: 'Medalhas' },
+        ]}
+      />
 
       {/* O nível e a muda dividem a linha, como no desenho. No celular a muda
           vira uma faixa abaixo: a barra de XP com "1.840 / 2.000 XP" na mesma

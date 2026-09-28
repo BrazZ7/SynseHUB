@@ -165,20 +165,36 @@ export function CapaPerfil({
  * nessa largura, mas um rótulo maior no futuro quebra em duas sem desalinhar
  * os quatro quadros.
  */
-export function StatTile({
-  icone: Icone,
-  valor,
-  rotulo,
-}: {
-  icone: LucideIcon
-  valor: string
-  rotulo: string
-}) {
+export type TotalDoTopo = { icone: LucideIcon; valor: string; rotulo: string }
+
+/**
+ * ── Os quatro números numa barra só ──────────────────────────────────────────
+ *
+ * Eram quatro cartões soltos, cada um com moldura e fundo próprios. Quatro
+ * molduras lado a lado dividem o que é uma coisa só — o retrato do que a
+ * pessoa fez — em quatro objetos que competem entre si, e num celular de 360px
+ * as bordas somam mais pixel de contorno do que de número.
+ *
+ * Uma moldura, quatro campos separados por um fio. Os traços de divisão fazem
+ * o trabalho que as bordas faziam, com um quarto do peso visual, e o conjunto
+ * volta a ser lido como um painel — que é o que ele é.
+ *
+ * `divide-x` em vez de borda por célula: o fio aparece **entre** os campos e
+ * não nas pontas, então a barra não ganha uma linha dupla encostada na
+ * moldura.
+ */
+export function BarraDeTotais({ itens }: { itens: readonly TotalDoTopo[] }) {
   return (
-    <div className="vidro-led rounded-xl border border-synse-border bg-synse-surface px-2 py-3 text-center">
-      <Icone className="mx-auto size-4 text-synse-primary" aria-hidden />
-      <p className="mt-1.5 text-sm font-semibold tabular-nums text-synse-text">{valor}</p>
-      <p className="text-[10px] leading-tight text-synse-muted">{rotulo}</p>
+    <div className="vidro-led flex items-stretch divide-x divide-synse-border overflow-hidden rounded-xl border border-synse-border bg-synse-surface">
+      {itens.map(({ icone: Icone, valor, rotulo }) => (
+        // `min-w-0` porque `flex-1` sozinho não deixa o texto encolher, e
+        // "Medalhas" empurraria os vizinhos na largura de um celular pequeno.
+        <div key={rotulo} className="min-w-0 flex-1 px-2 py-3 text-center">
+          <Icone className="mx-auto size-4 text-synse-primary" aria-hidden />
+          <p className="mt-1.5 text-sm font-semibold tabular-nums text-synse-text">{valor}</p>
+          <p className="truncate text-[10px] leading-tight text-synse-muted">{rotulo}</p>
+        </div>
+      ))}
     </div>
   )
 }

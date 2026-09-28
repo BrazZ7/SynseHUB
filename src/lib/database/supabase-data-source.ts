@@ -2219,6 +2219,57 @@ export class SupabaseDataSource implements DataSource {
     }))
   }
 
+  /**
+   * Um item publicado, com o corpo.
+   *
+   * ── Pela tabela, e não por uma função ──────────────────────────────────────
+   *
+   * `published_content` é uma função de lista e não devolve `body`. Trazer o
+   * corpo por ela pediria uma migration nova — e não há o que a função faria
+   * aqui que a política não faça: `content_read` já resolve academia, acervo
+   * da plataforma e o cadeado do Synse+, e a leitura direta passa por ela.
+   *
+   * ── Por que filtrar de novo o que a RLS já filtra ──────────────────────────
+   *
+   * A política é mais larga que esta tela em dois pontos, e os dois importam.
+   * Ela deixa a **equipe** ler o rascunho da própria academia: quem é
+   * professor numa e aluno noutra abriria pelo app um texto que ainda não foi
+   * publicado. E ela não conhece a academia da sessão: quem é aluno em duas
+   * leria, pelo app de uma, o mural da outra.
+   *
+   * O recorte repete a regra da lista — o que é da academia da sessão ou o que
+   * é da plataforma — e a data corta o rascunho e o agendado. A RLS continua
+   * por cima; isto é o recorte da tela, não a tranca.
+   *
+   * A conferência da academia é feita aqui e não no filtro `or` do PostgREST
+   * porque aquele filtro se escreve concatenando texto na consulta. O id vem
+   * da sessão e é confiável hoje; concatenar mesmo assim deixa uma arma
+   * carregada para o dia em que alguém reaproveitar este método com um valor
+   * que veio da URL. A busca é por chave primária e traz no máximo uma linha,
+   * então conferir depois custa nada.
+   */
+  async getPublishedContent(
+    organizationId: string,
+    contentId: string,
+  ): Promise<ContentItem | null> {
+    const row = await this.select<Row>(
+      'getPublishedContent',
+      this.client
+        .from('content_library')
+        .select(SupabaseDataSource.CONTEUDO_SELECT)
+        .eq('id', contentId)
+        .not('published_at', 'is', null)
+        .lte('published_at', new Date().toISOString())
+        .maybeSingle(),
+    )
+    if (!row) return null
+
+    const dono = (row.organization_id as string | null) ?? null
+    if (dono !== null && dono !== organizationId) return null
+
+    return this.mapContent(row)
+  }
+
   // ── Push ───────────────────────────────────────────────────────────────────
 
   /*

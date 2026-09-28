@@ -2136,7 +2136,12 @@ export class DemoDataSource implements DataSource {
         type: 'GUIDE',
         title: 'Como montar sua primeira semana de treino',
         summary: 'O guia que abre o Synse: por onde começar sem se machucar.',
-        body: null,
+        body: [
+          'A primeira semana não é para provar nada. Ela é para o seu corpo descobrir o movimento e para você descobrir o horário que consegue cumprir.',
+          'Três dias bastam. Dois seriam pouco para criar hábito, cinco seriam muito para quem está voltando — e a semana que você não cumpre é a que faz desistir na terceira.',
+          'Em cada dia, seis exercícios: dois para pernas, dois para o tronco empurrando, dois para o tronco puxando. Três séries de dez, com uma carga que deixa você terminar a última série ainda conseguindo mais duas.',
+          'Se no dia seguinte doer a ponto de atrapalhar, foi carga demais. Dor muscular de treino incomoda; dor que limita é aviso.',
+        ].join('\n\n'),
         coverUrl: null,
         mediaUrl: null,
         visibility: 'FREE',
@@ -2152,7 +2157,13 @@ export class DemoDataSource implements DataSource {
         type: 'EBOOK',
         title: 'E-book: hipertrofia sem achismo',
         summary: 'Volume, frequência e descanso, com o que a evidência sustenta.',
-        body: null,
+        body: [
+          'Três variáveis explicam quase tudo em hipertrofia, e nenhuma delas é o exercício da moda.',
+          'Volume é o número de séries duras por grupo muscular por semana. A faixa que a literatura sustenta vai de dez a vinte; abaixo disso o estímulo é pequeno, acima o retorno cai e a recuperação começa a cobrar.',
+          'Frequência é como esse volume se espalha. Vinte séries de peito num dia só rendem menos que dez em dois dias, porque a síntese proteica responde por volta de quarenta e oito horas e depois volta ao normal.',
+          'Descanso entre séries é o mais subestimado. Menos de um minuto derruba a carga da série seguinte, e carga derrubada é estímulo perdido. Dois a três minutos nos exercícios grandes.',
+          'O resto — ordem dos exercícios, máquina contra peso livre, cadência — muda pouco perto disso.',
+        ].join('\n\n'),
         coverUrl: null,
         mediaUrl: null,
         visibility: 'SYNSE_PLUS',
@@ -2217,17 +2228,44 @@ export class DemoDataSource implements DataSource {
     if (indice >= 0) this.demoAcervo.splice(indice, 1)
   }
 
-  async listPublishedContent(organizationId: string, limite: number): Promise<ContentItem[]> {
+  /**
+   * O que o aluno vê: o mural da academia dele **e** o acervo da plataforma.
+   *
+   * A primeira versão só chamava `listContent(organizationId)`, que filtra por
+   * dono e portanto descartava tudo que tem `organizationId: null`. Em
+   * produção a `published_content` traz os dois (`or c.organization_id is
+   * null`, 0031), então a demonstração mostrava um app sem acervo nenhum —
+   * justamente a parte que o Synse+ vende. A divergência é o defeito: a
+   * demonstração existe para parecer o produto.
+   */
+  private async publicados(organizationId: string): Promise<ContentItem[]> {
+    this.montarAcervo()
+    const daAcademia = await this.listContent(organizationId)
     const agora = new Date().toISOString()
-    const todos = await this.listContent(organizationId)
+
     // Mesma regra da produção: rascunho e agendado ficam de fora.
-    return todos
+    return [...daAcademia, ...this.demoAcervo]
       .filter((c) => c.publishedAt !== null && c.publishedAt <= agora)
       .sort((a, b) => {
         if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
         return (b.publishedAt ?? '').localeCompare(a.publishedAt ?? '')
       })
-      .slice(0, limite)
+  }
+
+  async listPublishedContent(organizationId: string, limite: number): Promise<ContentItem[]> {
+    return (await this.publicados(organizationId)).slice(0, limite)
+  }
+
+  /*
+   * Sem cadeado do Synse+ aqui, e de propósito: em demonstração não há RLS
+   * nem assinatura, e travar pela aplicação criaria uma segunda cópia da
+   * regra que mora no banco. Quem visita a demonstração vê o acervo inteiro.
+   */
+  async getPublishedContent(
+    organizationId: string,
+    contentId: string,
+  ): Promise<ContentItem | null> {
+    return (await this.publicados(organizationId)).find((c) => c.id === contentId) ?? null
   }
 
   // ── Nutrição ───────────────────────────────────────────────────────────────

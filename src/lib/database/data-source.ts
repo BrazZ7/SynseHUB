@@ -772,6 +772,18 @@ export interface DataSource {
   deleteContent(organizationId: string, contentId: string): Promise<void>
   /** O que está publicado, para o aluno. Fixado primeiro, depois o recente. */
   listPublishedContent(organizationId: string, limite: number): Promise<ContentItem[]>
+  /**
+   * Um item publicado, com o corpo — o que a lista não traz.
+   *
+   * A lista devolve `body: null` de propósito: são até 20 mil caracteres por
+   * item, e cinquenta itens de texto na resposta de uma tela que só mostra
+   * título e resumo. Quem abre um item paga por um.
+   *
+   * A organização entra pela mesma regra da lista — o que é da academia dela
+   * ou o que é da plataforma. Ela não é a autorização: quem autoriza é a RLS,
+   * que também é quem tranca o `SYNSE_PLUS` de quem não assina.
+   */
+  getPublishedContent(organizationId: string, contentId: string): Promise<ContentItem | null>
 
   // Acervo Synse — conteúdo da plataforma, sem dono. Só conta de plataforma.
   /** Tudo que a plataforma escreveu, rascunho incluído. */

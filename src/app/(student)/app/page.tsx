@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 
 import { ProgressRing } from '@/components/synse/progress-ring'
+import { ListLink } from '@/components/synse/list-link'
 import { SynseLogo } from '@/components/synse/synse-logo'
 import { PoeiraDaTrilha } from '@/components/synse/trail-dust'
 import { Badge } from '@/components/ui/badge'
@@ -232,7 +233,7 @@ export default async function StudentHomePage() {
       {conteudos.length > 0 && (
         <section className="rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-synse-text">Da sua academia</h2>
+            <h2 className="text-sm font-semibold text-synse-text">Para ler</h2>
             <Button variant="ghost" size="sm" asChild className="text-synse-muted">
               <Link href="/app/content">
                 Ver tudo
@@ -244,12 +245,16 @@ export default async function StudentHomePage() {
           <ul className="mt-2 divide-y divide-synse-border">
             {conteudos.slice(0, 3).map((item) => (
               <li key={item.id} className="py-2.5">
-                <Link href="/app/content" className="block">
+                {/* Para o item, e não para a lista: o elo levava a pessoa ao
+                    índice e ela tinha que procurar de novo o que já clicou.
+                    `ListLink` porque agora são elos de linha de lista, e o
+                    `<Link>` comum busca os três assim que a home aparece. */}
+                <ListLink href={`/app/content/${item.id}`} className="block">
                   <p className="truncate text-sm font-medium text-synse-text">{item.title}</p>
                   {item.summary && (
                     <p className="truncate text-xs text-synse-muted">{item.summary}</p>
                   )}
-                </Link>
+                </ListLink>
               </li>
             ))}
           </ul>

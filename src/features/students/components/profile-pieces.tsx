@@ -157,13 +157,13 @@ export function CapaPerfil({
  *
  * Eram dois por linha, grandes, e ocupavam quase um terço da primeira tela do
  * perfil sem dizer mais por isso — quem abre o perfil quer bater o olho nos
- * quatro de uma vez, não rolar entre eles. Em quatro colunas cada quadro fica
+ * quatro de uma vez, não rolar entre eles. Em quatro colunas cada campo fica
  * com cerca de 80px numa tela de 390, então o conteúdo é centralizado e o
  * texto encolhe junto: ícone menor, número em `text-sm` e rótulo em 10px.
  *
  * `leading-tight` no rótulo porque "Medalhas" e "Desafios" cabem numa linha
  * nessa largura, mas um rótulo maior no futuro quebra em duas sem desalinhar
- * os quatro quadros.
+ * os quatro campos.
  */
 export type TotalDoTopo = { icone: LucideIcon; valor: string; rotulo: string }
 
@@ -175,17 +175,19 @@ export type TotalDoTopo = { icone: LucideIcon; valor: string; rotulo: string }
  * pessoa fez — em quatro objetos que competem entre si, e num celular de 360px
  * as bordas somam mais pixel de contorno do que de número.
  *
- * Uma moldura, quatro campos separados por um fio. Os traços de divisão fazem
- * o trabalho que as bordas faziam, com um quarto do peso visual, e o conjunto
- * volta a ser lido como um painel — que é o que ele é.
+ * Uma moldura só, e nada dentro dela. Houve uma versão com um fio entre os
+ * campos; o fio ainda era uma divisão, três traços cortando a barra que tinha
+ * acabado de virar uma coisa só. Quem separa agora é o espaço: cada campo tem
+ * a mesma largura, o conteúdo fica centralizado nela, e o branco entre um
+ * número e o seguinte é maior do que o de dentro do campo — que é como o olho
+ * agrupa, sem precisar de linha.
  *
- * `divide-x` em vez de borda por célula: o fio aparece **entre** os campos e
- * não nas pontas, então a barra não ganha uma linha dupla encostada na
- * moldura.
+ * `overflow-hidden` fica: o fundo dos campos não escapa pelos cantos
+ * arredondados da moldura.
  */
 export function BarraDeTotais({ itens }: { itens: readonly TotalDoTopo[] }) {
   return (
-    <div className="vidro-led flex items-stretch divide-x divide-synse-border overflow-hidden rounded-xl border border-synse-border bg-synse-surface">
+    <div className="vidro-led flex items-stretch overflow-hidden rounded-xl border border-synse-border bg-synse-surface">
       {itens.map(({ icone: Icone, valor, rotulo }) => (
         // `min-w-0` porque `flex-1` sozinho não deixa o texto encolher, e
         // "Medalhas" empurraria os vizinhos na largura de um celular pequeno.

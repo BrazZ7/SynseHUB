@@ -1,3 +1,6 @@
+import Link from 'next/link'
+import { Library } from 'lucide-react'
+
 import { ContextSwitcher } from '@/features/platform/context-switcher'
 import type { ContextoDisponivel } from '@/features/platform/state'
 import { CONTEXTO_PESSOAL, SYNSE_PLATFORM_ORG_ID, type SessionContext } from '@/lib/auth/session'
@@ -52,24 +55,46 @@ export async function ContextBar({ session }: { session: SessionContext }) {
           },
         ]
       : []),
-    ...academias.map(
-      (org): ContextoDisponivel => ({
-        valor: org.id,
-        rotulo: org.name,
-        detalhe: org.slug,
-        tipo: 'ACADEMIA',
-      }),
-    ),
+    ...academias.map((org): ContextoDisponivel => ({
+      valor: org.id,
+      rotulo: org.name,
+      detalhe: org.slug,
+      tipo: 'ACADEMIA',
+    })),
   ]
 
-  const emAcademia = session.role === 'SUPER_ADMIN' && academias.some((o) => o.id === session.organizationId)
+  const emAcademia =
+    session.role === 'SUPER_ADMIN' && academias.some((o) => o.id === session.organizationId)
 
   return (
-    <ContextSwitcher
-      atual={emAcademia ? session.organizationId : CONTEXTO_PESSOAL}
-      opcoes={opcoes}
-      emAcademiaDeCliente={emAcademia}
-    />
+    <div className="flex items-start gap-2">
+      {/*
+       * ── O caminho que não existia ─────────────────────────────────────────
+       *
+       * `/synse-admin` não era linkado de lugar nenhum. A conta de plataforma
+       * entrava, caía no painel da academia e só chegava lá digitando o
+       * endereço — então, na prática, publicar no acervo era impossível para
+       * quem não decorou a URL. A 0039 abriu a porta e ninguém pôs a maçaneta.
+       *
+       * Fica aqui, e não na navegação lateral, porque esta barra já é a faixa
+       * que só a conta de plataforma enxerga: a verificação é a mesma de
+       * sempre (`isPlatformAccount`, lá em cima, consultada no banco) e não
+       * precisa ser repetida num terceiro lugar.
+       */}
+      <Link
+        href="/synse-admin"
+        className="inline-flex h-9 shrink-0 items-center gap-2 rounded-xl border border-synse-border bg-synse-surface px-3 text-sm font-medium text-synse-text transition-colors hover:bg-synse-surface-2"
+      >
+        <Library className="size-4 text-synse-primary" aria-hidden />
+        Plataforma
+      </Link>
+
+      <ContextSwitcher
+        atual={emAcademia ? session.organizationId : CONTEXTO_PESSOAL}
+        opcoes={opcoes}
+        emAcademiaDeCliente={emAcademia}
+      />
+    </div>
   )
 }
 

@@ -132,7 +132,17 @@ function demoSessionFor(persona: DemoPersona): SessionContext {
     plus: assinatura,
     professionalPlan: false,
     isDemo: true,
-    isPlatformAccount: false,
+    /*
+     * A persona de plataforma é conta de plataforma — parece óbvio e estava
+     * fixo em `false`.
+     *
+     * O efeito era uma demonstração meio quebrada: `/synse-admin` abria,
+     * porque a guarda olha o papel, mas a barra de contexto não desenhava
+     * nada (ela olha este campo) e trocar de academia respondia "esta conta
+     * não tem acesso de plataforma". Encontrado tentando clicar no caminho
+     * até o acervo, que é a única forma de achar esse tipo de coisa.
+     */
+    isPlatformAccount: persona.role === 'SUPER_ADMIN',
   }
 }
 

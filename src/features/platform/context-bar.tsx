@@ -69,17 +69,24 @@ export async function ContextBar({ session }: { session: SessionContext }) {
   return (
     <div className="flex items-start gap-2">
       {/*
-       * ── O caminho que não existia ─────────────────────────────────────────
+       * ── O caminho até a plataforma, no app do aluno ───────────────────────
        *
-       * `/synse-admin` não era linkado de lugar nenhum. A conta de plataforma
-       * entrava, caía no painel da academia e só chegava lá digitando o
-       * endereço — então, na prática, publicar no acervo era impossível para
-       * quem não decorou a URL. A 0039 abriu a porta e ninguém pôs a maçaneta.
+       * Correção de um erro meu. Eu afirmei que `/synse-admin` não era
+       * linkado de lugar nenhum e que a conta de plataforma só chegava lá
+       * digitando o endereço. **Falso.** `HUB_NAVIGATION` tem
+       * "Plataforma → Synse Admin" desde o primeiro commit, com
+       * `permission: 'platform:read'`, que o SUPER_ADMIN tem. Eu rodei o
+       * `grep` certo e li a saída errado: `src/config/navigation.ts` estava
+       * no meio da lista e eu não vi.
        *
-       * Fica aqui, e não na navegação lateral, porque esta barra já é a faixa
-       * que só a conta de plataforma enxerga: a verificação é a mesma de
-       * sempre (`isPlatformAccount`, lá em cima, consultada no banco) e não
-       * precisa ser repetida num terceiro lugar.
+       * O elo aqui continua valendo, por outra razão que não aquela: a
+       * navegação lateral só existe nas rotas do hub, e esta barra aparece
+       * **também no app do aluno**, onde não há sidebar nenhuma. No celular,
+       * o menu do hub ainda fica atrás do botão de sanduíche.
+       *
+       * Fica nesta barra, e não numa quarta checagem de papel, porque ela já
+       * é a faixa que só a conta de plataforma enxerga: a verificação é
+       * `isPlatformAccount`, lá em cima, consultada no banco.
        */}
       <Link
         href="/synse-admin"

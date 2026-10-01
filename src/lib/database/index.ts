@@ -1,5 +1,9 @@
 import 'server-only'
 
+import { cookies } from 'next/headers'
+
+import { assinaturaDaPersonaNoCookie, DEMO_SESSION_COOKIE } from '@/lib/auth/demo-personas'
+import { resumoDaAssinatura } from '@/lib/plans/subscription'
 import { DemoDataSource } from '@/lib/database/demo-data-source'
 import { readDemoJournal } from '@/lib/database/demo-journal'
 import { SupabaseDataSource } from '@/lib/database/supabase-data-source'
@@ -22,7 +26,21 @@ export async function getDataSource(): Promise<DataSource> {
   const supabase = await createSupabaseServerClient()
   if (supabase) return new SupabaseDataSource(supabase)
 
-  return new DemoDataSource(await readDemoJournal())
+  /*
+   * A demonstração não tem RLS, então ela precisa saber quem está vendo para
+   * decidir entre entregar o conteúdo do Synse+ e mostrar a vitrine do
+   * cadeado. Em produção esta conta não existe: quem decide é o banco.
+   *
+   * Lido aqui, e não dentro do data source, porque o módulo das personas
+   * depende da semente e dos planos e de nada mais — `session.ts` importa
+   * este arquivo, e importá-lo de volta fecharia um ciclo.
+   */
+  const cookieStore = await cookies()
+  const assinatura = assinaturaDaPersonaNoCookie(cookieStore.get(DEMO_SESSION_COOKIE)?.value)
+
+  return new DemoDataSource(await readDemoJournal(), {
+    temPlus: resumoDaAssinatura(assinatura).ativa,
+  })
 }
 
 export type { DataSource } from '@/lib/database/data-source'

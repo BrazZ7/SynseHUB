@@ -1,9 +1,10 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { ExternalLink } from 'lucide-react'
+import { ExternalLink, Lock } from 'lucide-react'
 
 import { BackLink } from '@/components/synse/back-link'
 import { Badge } from '@/components/ui/badge'
+import { ChamadaDoPlus } from '@/features/content/vitrine'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 import { TIPOS, type TipoConteudo } from '@/lib/validations/content'
@@ -28,14 +29,68 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
   const item = await dataSource.getPublishedContent(session.organizationId, id)
 
   /*
-   * Vazio aqui é 404, e não "sem permissão".
+   * ── O que fazer com o vazio ───────────────────────────────────────────────
    *
-   * São três coisas que chegam vazias: o item não existe, é rascunho, ou é do
-   * Synse+ e quem abriu não assina — a RLS devolve nenhuma linha nos três.
-   * Distinguir seria informar que aquele id existe, que é o que um endereço
-   * chutado quer descobrir.
+   * Vazio chegava por três motivos — o item não existe, é rascunho, ou é do
+   * Synse+ sem assinatura — e os três viravam 404, para não confirmar a
+   * existência de um id chutado.
+   *
+   * A vitrine muda isso para um deles, e só para ele: o acervo **da
+   * plataforma** marcado como Synse+ passa a se anunciar. É decisão de
+   * produto, não afrouxamento — `acervo_trancado` (0041) devolve título,
+   * resumo e capa, nunca o corpo nem o link do arquivo, e nunca conteúdo de
+   * academia. O id de rascunho e o de outra academia continuam indistinguíveis
+   * de um id inventado.
    */
-  if (!item) notFound()
+  if (!item) {
+    const trancado = await dataSource.getLockedShowcase(id)
+    if (!trancado) notFound()
+
+    return (
+      <article className="animate-fade-in-up space-y-5">
+        <BackLink href="/app/content" label="Conteúdos" />
+
+        <header className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline">{TIPOS[trancado.type as TipoConteudo] ?? trancado.type}</Badge>
+            <Badge variant="primary">Synse+</Badge>
+          </div>
+
+          <h1 className="text-xl font-semibold leading-tight text-synse-text">{trancado.title}</h1>
+
+          {trancado.summary && <p className="text-sm text-synse-muted">{trancado.summary}</p>}
+
+          <p className="text-xs text-synse-muted">{formatDate(trancado.publishedAt)} · Synse</p>
+        </header>
+
+        {trancado.coverUrl && (
+          // Mesmo motivo da capa do item aberto, logo abaixo: o otimizador do
+          // Next só aceita as origens de `remotePatterns`.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={trancado.coverUrl}
+            alt=""
+            loading="lazy"
+            className="aspect-[16/9] w-full rounded-2xl border border-synse-border bg-synse-surface-2 object-cover"
+          />
+        )}
+
+        {/*
+         * Onde o texto começaria. A faixa ocupa o lugar do conteúdo em vez de
+         * a página simplesmente acabar — é a diferença entre "está trancado" e
+         * "não tem nada aqui", e a segunda leitura é a que faz desistir.
+         */}
+        <div className="rounded-2xl border border-dashed border-synse-border bg-synse-surface/60 p-5 text-center">
+          <Lock className="mx-auto size-5 text-synse-muted" aria-hidden />
+          <p className="mt-2 text-sm text-synse-muted">
+            O texto começaria aqui. Ele faz parte do Synse+.
+          </p>
+        </div>
+
+        <ChamadaDoPlus />
+      </article>
+    )
+  }
 
   /*
    * De quem é o conteúdo. O acervo da plataforma não tem staff autor, então

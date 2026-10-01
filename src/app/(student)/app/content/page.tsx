@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/synse/page-header'
 import { Badge } from '@/components/ui/badge'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
+import { CartaoTrancado, ChamadaDoPlus } from '@/features/content/vitrine'
 import { TIPOS, type TipoConteudo } from '@/lib/validations/content'
 import { formatDate } from '@/lib/utils'
 
@@ -16,7 +17,15 @@ export const metadata: Metadata = { title: 'Conteúdos' }
 export default async function StudentContentPage() {
   const session = await requireStudentSession()
   const dataSource = await getDataSource()
-  const itens = await dataSource.listPublishedContent(session.organizationId, 50)
+  const [itens, trancados] = await Promise.all([
+    dataSource.listPublishedContent(session.organizationId, 50),
+    /*
+     * A vitrine vem vazia para quem assina — esses itens já estão na lista
+     * acima, com o corpo. Quem decide é `acervo_trancado` (0041), não esta
+     * tela.
+     */
+    dataSource.listLockedShowcase(),
+  ])
 
   return (
     <div className="animate-fade-in-up space-y-5">
@@ -32,7 +41,7 @@ export default async function StudentContentPage() {
         description="O que a sua academia publicou e o acervo do Synse."
       />
 
-      {itens.length === 0 ? (
+      {itens.length === 0 && trancados.length === 0 ? (
         <EmptyState
           icon={Library}
           title="Nada publicado ainda"
@@ -88,6 +97,31 @@ export default async function StudentContentPage() {
             )
           })}
         </div>
+      )}
+
+      {trancados.length > 0 && (
+        /*
+         * Depois do que dá para ler, nunca antes.
+         *
+         * A ordem é a diferença entre uma prateleira e um anúncio atravessado:
+         * quem abriu a tela veio buscar conteúdo, e topar primeiro com o que
+         * não pode abrir é o que faz paywall irritar. Aqui a oferta só aparece
+         * depois que a pessoa passou pelo que já é dela.
+         */
+        <section className="space-y-3 pt-2">
+          <div>
+            <h2 className="text-sm font-semibold text-synse-text">No Synse+</h2>
+            <p className="text-xs text-synse-muted">
+              O acervo da assinatura. Você vê do que se trata; o conteúdo abre com o Synse+.
+            </p>
+          </div>
+
+          {trancados.map((item) => (
+            <CartaoTrancado key={item.id} item={item} />
+          ))}
+
+          <ChamadaDoPlus titulo="Abra o acervo com o Synse+" />
+        </section>
       )}
     </div>
   )

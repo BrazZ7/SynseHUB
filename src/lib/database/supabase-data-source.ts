@@ -44,6 +44,7 @@ import type {
   Charge,
   ConsentState,
   ContentItem,
+  ItemTrancado,
   ConsentType,
   StaffInvite,
   UserRole,
@@ -2268,6 +2269,55 @@ export class SupabaseDataSource implements DataSource {
     if (dono !== null && dono !== organizationId) return null
 
     return this.mapContent(row)
+  }
+
+  /**
+   * ── A vitrine do cadeado ───────────────────────────────────────────────────
+   *
+   * Pela função, e não pela tabela, porque aqui a RLS é o obstáculo e não a
+   * guarda: são justamente as linhas que ela esconde desta conta. A
+   * `acervo_trancado` (0041) é `security definer` e devolve uma projeção
+   * estreita — sem `body`, sem `media_url` —, que é o que separa o anúncio do
+   * produto.
+   *
+   * Ela também decide sozinha quando devolver nada: quem assina recebe lista
+   * vazia, porque já vê esses itens pela lista normal. A tela não informa se
+   * assina, e isso é de propósito — um parâmetro desses seria o cliente
+   * declarando o próprio direito.
+   */
+  private mapTrancado(row: Row): ItemTrancado {
+    return {
+      id: row.id,
+      type: row.tipo,
+      title: row.titulo,
+      summary: row.resumo ?? null,
+      coverUrl: row.capa_url ?? null,
+      publishedAt: row.publicado_em,
+      pinned: Boolean(row.fixado),
+    }
+  }
+
+  private async vitrine(operacao: string, p_id: string | null): Promise<ItemTrancado[]> {
+    const { data, error } = await this.client.rpc('acervo_trancado', { p_id })
+    if (error) {
+      /*
+       * Vitrine que falha vira prateleira vazia, nunca tela quebrada. Cobre
+       * também a janela entre publicar e migrar, em que a função ainda não
+       * existe: perder o anúncio é aborrecimento, derrubar a tela de
+       * conteúdos por causa dele seria o defeito maior.
+       */
+      logger.warn(operacao, { erro: String((error as Error).message) })
+      return []
+    }
+    return ((data as Row[]) ?? []).map((row) => this.mapTrancado(row))
+  }
+
+  async listLockedShowcase(): Promise<ItemTrancado[]> {
+    return this.vitrine('listLockedShowcase', null)
+  }
+
+  async getLockedShowcase(contentId: string): Promise<ItemTrancado | null> {
+    return (await this.vitrine('getLockedShowcase', contentId))[0] ?? null
   }
 
   // ── Push ───────────────────────────────────────────────────────────────────

@@ -326,6 +326,32 @@ existem, não para conferir se subiram.
   e as três variáveis em `.env.example`. Sem elas o cartão de avisos não
   aparece — em vez de oferecer um botão que falha no clique.
 
+- **0041 (`0041_vitrine_do_cadeado.sql`)** — a vitrine do cadeado.
+
+  A 0038 trancou o conteúdo do Synse+ e a 0039 abriu a porta para publicá-lo.
+  Sobrou o efeito colateral: quem não assina não fica sabendo que aquilo
+  existe. A RLS não devolve a linha, e item invisível não vende — o aluno do
+  plano grátis conclui que o Synse+ não tem acervo.
+
+  `acervo_trancado(p_id)` devolve a prateleira trancada com uma projeção
+  estreita: tipo, título, resumo, capa e data. **Nunca `body` nem
+  `media_url`** — são o conteúdo pago e o link do arquivo, e expor qualquer um
+  dos dois entregaria o produto na vitrine. É por isso que é função e não um
+  ramo a mais em `content_read`: política governa a linha inteira.
+
+  `organization_id is null` é a garantia multi-inquilino, não detalhe: o que
+  uma academia escreve nunca vira anúncio para os alunos das concorrentes, por
+  mais que alguém marque a visibilidade errada.
+
+  `not tem_synse_plus()` dentro da função, e não na tela: quem assina já vê
+  esses itens pela lista normal, e a conferência no banco é o que dispensa a
+  tela de ser confiável.
+
+  Concedida ao anônimo de propósito — vitrine serve para ser vista antes de
+  entrar.
+
+  `tests/db/vitrine-do-cadeado.test.ts`: 12 testes, conferidos por mutação.
+
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona
 enquanto toda migration cria algo visível pela API. A 0018 não cria: ela troca

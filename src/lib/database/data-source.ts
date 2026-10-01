@@ -42,6 +42,7 @@ import type {
   Friend,
   FriendRankRow,
   ContentItem,
+  ItemTrancado,
   ContentType,
   StaffInvite,
   UserRole,
@@ -784,6 +785,16 @@ export interface DataSource {
    * que também é quem tranca o `SYNSE_PLUS` de quem não assina.
    */
   getPublishedContent(organizationId: string, contentId: string): Promise<ContentItem | null>
+  /**
+   * A prateleira trancada: o que existe no Synse+ e esta conta não assina.
+   *
+   * Vazia para quem assina — esses itens aparecem na lista normal, com o
+   * corpo — e vazia quando não há acervo pago. Quem decide é o banco
+   * (`acervo_trancado`, 0041), não a tela.
+   */
+  listLockedShowcase(): Promise<ItemTrancado[]>
+  /** O mesmo, para um id só: "este que me pediram está trancado?" */
+  getLockedShowcase(contentId: string): Promise<ItemTrancado | null>
 
   // Acervo Synse — conteúdo da plataforma, sem dono. Só conta de plataforma.
   /** Tudo que a plataforma escreveu, rascunho incluído. */

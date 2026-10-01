@@ -48,6 +48,7 @@ import type {
   BaselineChallenge,
   ConsentState,
   ContentItem,
+  ItemTrancado,
   ConsentType,
   StaffInvite,
   UserRole,
@@ -212,7 +213,25 @@ export class DemoDataSource implements DataSource {
   private lastCheckInIndex: Map<string, string> | null = null
   private nextChargeIndex: Map<string, Charge> | null = null
 
-  constructor(journal: DemoMutation[] = []) {
+  /**
+   * Quem está vendo assina o Synse+?
+   *
+   * Em produção ninguém pergunta isto à aplicação: a RLS esconde o que é pago
+   * e `acervo_trancado` decide sozinha a quem mostrar a vitrine. Na
+   * demonstração não há RLS nenhuma, então sem este campo o aluno do plano
+   * grátis leria o e-book inteiro — e a vitrine do cadeado, que é justamente
+   * o que a persona "Aluno no plano grátis" existe para mostrar, nunca
+   * apareceria.
+   *
+   * Vem do cookie da persona, lido em `lib/database/index.ts`. Não é um
+   * parâmetro de método de propósito: numa assinatura pública ele pareceria o
+   * cliente declarando o próprio direito, que é a forma de um bug de
+   * segurança mesmo quando não é um.
+   */
+  private readonly temPlus: boolean
+
+  constructor(journal: DemoMutation[] = [], opcoes: { temPlus?: boolean } = {}) {
+    this.temPlus = opcoes.temPlus ?? false
     for (const mutation of journal) this.apply(mutation)
     this.reindex()
   }
@@ -1215,7 +1234,9 @@ export class DemoDataSource implements DataSource {
    */
   async listFriends(): Promise<Friend[]> {
     const daSemente = this.db.friends.filter((amigo) => !this.friendEdits.has(amigo.friendshipId))
-    const daVisita = [...this.friendEdits.values()].filter((amigo): amigo is Friend => amigo !== null)
+    const daVisita = [...this.friendEdits.values()].filter(
+      (amigo): amigo is Friend => amigo !== null,
+    )
 
     return [...daSemente, ...daVisita].sort(
       (a, b) => a.status.localeCompare(b.status) || a.name.localeCompare(b.name, 'pt-BR'),
@@ -1245,7 +1266,13 @@ export class DemoDataSource implements DataSource {
       noRanking: false,
       since: new Date().toISOString(),
     })
-    await appendDemoMutation({ t: 'friend', id, profileId: alvo.id, action: 'request', at: new Date().toISOString() })
+    await appendDemoMutation({
+      t: 'friend',
+      id,
+      profileId: alvo.id,
+      action: 'request',
+      at: new Date().toISOString(),
+    })
     return id
   }
 
@@ -1297,15 +1324,16 @@ export class DemoDataSource implements DataSource {
     )
 
     const linhas = await Promise.all(
-      [{ profileId: 'prof_0001', name: 'Você', souEu: true }, ...amigos.map((a) => ({ profileId: a.profileId, name: a.name, souEu: false }))].map(
-        async (pessoa) => {
-          const aluno = this.db.students.find((s) => s.userProfileId === pessoa.profileId)
-          const totais = aluno
-            ? await this.getWorkoutTotals(aluno.id, from, to)
-            : { workouts: 0, volumeKg: 0 }
-          return { ...pessoa, workouts: totais.workouts, volumeKg: totais.volumeKg }
-        },
-      ),
+      [
+        { profileId: 'prof_0001', name: 'Você', souEu: true },
+        ...amigos.map((a) => ({ profileId: a.profileId, name: a.name, souEu: false })),
+      ].map(async (pessoa) => {
+        const aluno = this.db.students.find((s) => s.userProfileId === pessoa.profileId)
+        const totais = aluno
+          ? await this.getWorkoutTotals(aluno.id, from, to)
+          : { workouts: 0, volumeKg: 0 }
+        return { ...pessoa, workouts: totais.workouts, volumeKg: totais.volumeKg }
+      }),
     )
 
     return linhas
@@ -1885,10 +1913,7 @@ export class DemoDataSource implements DataSource {
     to: string,
   ): Promise<WorkoutAdherenceRow[]> {
     const doPlano = new Map(
-      [...this.db.workoutExercises, ...this.addedWorkoutExercises].map((item) => [
-        item.id,
-        item,
-      ]),
+      [...this.db.workoutExercises, ...this.addedWorkoutExercises].map((item) => [item.id, item]),
     )
 
     const porDia = new Map<string, WorkoutAdherenceRow>()
@@ -2243,9 +2268,11 @@ export class DemoDataSource implements DataSource {
     const daAcademia = await this.listContent(organizationId)
     const agora = new Date().toISOString()
 
-    // Mesma regra da produção: rascunho e agendado ficam de fora.
+    // Mesma regra da produção: rascunho e agendado ficam de fora, e o que é
+    // do Synse+ só chega a quem assina — lá quem faz isso é a RLS.
     return [...daAcademia, ...this.demoAcervo]
       .filter((c) => c.publishedAt !== null && c.publishedAt <= agora)
+      .filter((c) => c.visibility !== 'SYNSE_PLUS' || this.temPlus)
       .sort((a, b) => {
         if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
         return (b.publishedAt ?? '').localeCompare(a.publishedAt ?? '')
@@ -2256,16 +2283,50 @@ export class DemoDataSource implements DataSource {
     return (await this.publicados(organizationId)).slice(0, limite)
   }
 
-  /*
-   * Sem cadeado do Synse+ aqui, e de propósito: em demonstração não há RLS
-   * nem assinatura, e travar pela aplicação criaria uma segunda cópia da
-   * regra que mora no banco. Quem visita a demonstração vê o acervo inteiro.
-   */
   async getPublishedContent(
     organizationId: string,
     contentId: string,
   ): Promise<ContentItem | null> {
     return (await this.publicados(organizationId)).find((c) => c.id === contentId) ?? null
+  }
+
+  /**
+   * A vitrine, do lado da demonstração.
+   *
+   * Espelha a projeção de `acervo_trancado` (0041) à mão: o tipo `ItemTrancado`
+   * não tem onde guardar o corpo, então nem por descuido o conteúdo pago sai
+   * por aqui.
+   */
+  private trancados(): ItemTrancado[] {
+    if (this.temPlus) return []
+    this.montarAcervo()
+    const agora = new Date().toISOString()
+
+    return this.demoAcervo
+      .filter(
+        (c) => c.visibility === 'SYNSE_PLUS' && c.publishedAt !== null && c.publishedAt <= agora,
+      )
+      .sort((a, b) => {
+        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
+        return (b.publishedAt ?? '').localeCompare(a.publishedAt ?? '')
+      })
+      .map((c) => ({
+        id: c.id,
+        type: c.type,
+        title: c.title,
+        summary: c.summary,
+        coverUrl: c.coverUrl,
+        publishedAt: c.publishedAt!,
+        pinned: c.pinned,
+      }))
+  }
+
+  async listLockedShowcase(): Promise<ItemTrancado[]> {
+    return this.trancados()
+  }
+
+  async getLockedShowcase(contentId: string): Promise<ItemTrancado | null> {
+    return this.trancados().find((c) => c.id === contentId) ?? null
   }
 
   // ── Nutrição ───────────────────────────────────────────────────────────────
@@ -3337,9 +3398,7 @@ export class DemoDataSource implements DataSource {
   }
 
   async getActivitySplits(activityId: string): Promise<ActivitySplit[]> {
-    return (
-      DemoDataSource.parciais.get(activityId) ?? this.db.activitySplits.get(activityId) ?? []
-    )
+    return DemoDataSource.parciais.get(activityId) ?? this.db.activitySplits.get(activityId) ?? []
   }
 
   /**

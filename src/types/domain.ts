@@ -767,6 +767,29 @@ export type ContentItem = {
   createdAt: string
 }
 
+/**
+ * Um item da vitrine do Synse+: o anúncio, nunca o produto.
+ *
+ * Tipo próprio, e não um `ContentItem` com campos nulos, porque a ausência
+ * aqui precisa ser **impossível de confundir com vazio**. Quem recebesse um
+ * `ContentItem` leria `body: null` como "o autor não escreveu nada" e poderia
+ * renderizá-lo; recebendo isto, não há `body` para renderizar.
+ *
+ * Espelha a projeção de `acervo_trancado` (0041), onde a mesma regra está
+ * escrita em SQL. Acrescentar `body` ou `mediaUrl` aqui seria o primeiro passo
+ * para entregar o e-book pago na prateleira — os dois lados precisam mudar
+ * juntos, e nenhum dos dois deve.
+ */
+export type ItemTrancado = {
+  id: string
+  type: ContentType
+  title: string
+  summary: string | null
+  coverUrl: string | null
+  publishedAt: string
+  pinned: boolean
+}
+
 // ---------------------------------------------------------------------------
 // CRM
 // ---------------------------------------------------------------------------

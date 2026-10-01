@@ -181,6 +181,7 @@ const MIGRATIONS_ESPERADAS = [
   '0038_cadeado_do_plus.sql',
   '0039_acervo_synse.sql',
   '0040_push.sql',
+  '0041_vitrine_do_cadeado.sql',
 ]
 
 async function schemaReadiness() {
@@ -203,6 +204,7 @@ async function schemaReadiness() {
     cadeadoDoPlus,
     acervoSynse,
     avisoPush,
+    vitrineDoCadeado,
   ] = await Promise.all([
     schemaCheck('user_profiles?select=tier&limit=1'),
     schemaCheck('baseline_challenges?select=code&limit=1'),
@@ -353,6 +355,19 @@ async function schemaReadiness() {
       p_p256dh: 'sonda',
       p_auth: 'sonda',
     }),
+    /*
+     * A vitrine do cadeado (0041). Sem ela a tela de conteúdos abre sem a
+     * prateleira do Synse+ — e falha calada, porque a leitura devolve lista
+     * vazia de propósito para não derrubar a tela. É o tipo de ausência que
+     * ninguém percebe olhando: a tela funciona, só não vende.
+     *
+     * `executa: true` porque `acervo_trancado` é `stable`, só lê, e é
+     * concedida ao anônimo por decisão de produto — vitrine serve para ser
+     * vista antes de entrar. Aqui 200 é a confirmação, e o que ela devolve ao
+     * anônimo é o que qualquer visitante veria: título e resumo, nunca o
+     * conteúdo.
+     */
+    rpcCheck('acervo_trancado', { p_id: null }, { executa: true }),
   ])
 
   const registradas = await migracoesRegistradas()
@@ -416,6 +431,7 @@ async function schemaReadiness() {
       cadeadoDoPlus,
       acervoSynse,
       avisoPush,
+      vitrineDoCadeado,
       appliedMigrations: registradas.length,
       pendingMigrations: faltando,
     }
@@ -455,6 +471,7 @@ async function schemaReadiness() {
     '0038_cadeado_do_plus.sql',
     '0039_acervo_synse.sql',
     '0040_push.sql',
+    '0041_vitrine_do_cadeado.sql',
   )
 
   return {
@@ -476,6 +493,7 @@ async function schemaReadiness() {
     cadeadoDoPlus,
     acervoSynse,
     avisoPush,
+    vitrineDoCadeado,
     pendingMigrations: pendentes,
   }
 }

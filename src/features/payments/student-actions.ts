@@ -38,7 +38,7 @@ export async function createStudentPixAction(
     const parsed = createPixSchema.safeParse({ chargeId: formData.get('chargeId') })
     if (!parsed.success) return { status: 'error', message: 'Cobrança inválida.' }
 
-    const limit = rateLimit(`student-pix:${session.studentId}`, 10, 60_000)
+    const limit = await rateLimit(`student-pix:${session.studentId}`, 10, 60_000)
     if (!limit.allowed) {
       return { status: 'error', message: 'Aguarde um instante antes de gerar outro código.' }
     }

@@ -19,14 +19,18 @@ export async function studentCheckInAction(): Promise<CheckInState> {
   const session = await requireStudentSession()
 
   try {
-    const limit = rateLimit(`student-checkin:${session.studentId}`, 5, 60_000)
+    const limit = await rateLimit(`student-checkin:${session.studentId}`, 5, 60_000)
     if (!limit.allowed) {
       return { status: 'error', message: 'Aguarde um instante antes de tentar novamente.' }
     }
 
     const dataSource = await getDataSource()
     const today = new Date()
-    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString()
+    const todayStart = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+    ).toISOString()
 
     const recent = await dataSource.listCheckInsForStudent(
       session.organizationId,
@@ -51,7 +55,8 @@ export async function studentCheckInAction(): Promise<CheckInState> {
     revalidatePath('/app')
     return { status: 'success', message: 'Presença registrada. Bom treino!' }
   } catch (error) {
-    if (!(error instanceof AppError)) logger.error('checkin:student_failed', { error: String(error) })
+    if (!(error instanceof AppError))
+      logger.error('checkin:student_failed', { error: String(error) })
     return { status: 'error', message: toUserMessage(error) }
   }
 }

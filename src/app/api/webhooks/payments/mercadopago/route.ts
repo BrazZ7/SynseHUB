@@ -32,7 +32,7 @@ export async function POST(request: Request) {
   pruneRateLimits()
 
   const de = request.headers.get('x-forwarded-for') ?? 'desconhecido'
-  if (!rateLimit(`webhook:mercadopago:${de}`, 300, 60_000).allowed) {
+  if (!(await rateLimit(`webhook:mercadopago:${de}`, 300, 60_000)).allowed) {
     return NextResponse.json({ received: false }, { status: 429 })
   }
 

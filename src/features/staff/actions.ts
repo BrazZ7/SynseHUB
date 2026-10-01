@@ -36,7 +36,7 @@ export async function inviteStaffAction(
      * escolhido por quem chama. Sem ele, o painel de uma academia vira uma
      * pequena máquina de mandar mensagem em nome do Synse.
      */
-    const limite = rateLimit(`invite:${session.organizationId}`, 20, 3_600_000)
+    const limite = await rateLimit(`invite:${session.organizationId}`, 20, 3_600_000)
     if (!limite.allowed) {
       return {
         status: 'error',
@@ -92,7 +92,10 @@ export async function inviteStaffAction(
       return { status: 'error', message: 'Esta pessoa já faz parte da equipe.' }
     }
     if (mensagem.includes('acesso maior')) {
-      return { status: 'error', message: 'Você não pode convidar alguém com acesso maior que o seu.' }
+      return {
+        status: 'error',
+        message: 'Você não pode convidar alguém com acesso maior que o seu.',
+      }
     }
     if (mensagem.includes('direção da academia')) {
       return { status: 'error', message: 'Só a direção da academia convida a equipe.' }

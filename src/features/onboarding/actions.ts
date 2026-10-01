@@ -32,7 +32,7 @@ export async function createOrganizationAction(
     return { error: parsed.error.issues[0]?.message ?? 'Confira os dados informados.' }
   }
 
-  const limit = rateLimit(`onboarding:${authUserId}`, 5, 600_000)
+  const limit = await rateLimit(`onboarding:${authUserId}`, 5, 600_000)
   if (!limit.allowed) return { error: 'Muitas tentativas. Aguarde alguns minutos.' }
 
   // O slug vai na URL pública da academia, então precisa ser único. O sufixo
@@ -89,7 +89,7 @@ export async function startPersonalAction(
    * Limite apertado de propósito: sem ele, o código de seis caracteres vira
    * alvo de tentativa e erro até alguém entrar numa academia qualquer.
    */
-  const limit = rateLimit(`start:${authUserId}`, 8, 600_000)
+  const limit = await rateLimit(`start:${authUserId}`, 8, 600_000)
   if (!limit.allowed) {
     return { error: 'Muitas tentativas. Aguarde alguns minutos e confira o código.' }
   }

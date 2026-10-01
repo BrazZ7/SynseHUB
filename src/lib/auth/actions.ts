@@ -72,7 +72,7 @@ export async function signInWithPassword(
   }
 
   // Proteção contra força bruta e enumeração de contas.
-  const limit = rateLimit(`login:${parsed.data.email.toLowerCase()}`, 5, 60_000)
+  const limit = await rateLimit(`login:${parsed.data.email.toLowerCase()}`, 5, 60_000)
   if (!limit.allowed) {
     return { error: 'Muitas tentativas. Aguarde um minuto e tente novamente.' }
   }
@@ -152,7 +152,7 @@ export async function signInWithEmailLink(
   const parsed = emailLinkSchema.safeParse({ email: formData.get('email') })
   if (!parsed.success) return { error: 'Informe um e-mail válido.' }
 
-  const limit = rateLimit(`magiclink:${parsed.data.email.toLowerCase()}`, 3, 300_000)
+  const limit = await rateLimit(`magiclink:${parsed.data.email.toLowerCase()}`, 3, 300_000)
   if (!limit.allowed) {
     return { error: 'Já enviamos um link há pouco. Confira sua caixa de entrada.' }
   }
@@ -194,7 +194,7 @@ export async function signUpWithPassword(
     return { error: parsed.error.issues[0]?.message ?? 'Confira os dados informados.' }
   }
 
-  const limit = rateLimit(`signup:${parsed.data.email}`, 3, 600_000)
+  const limit = await rateLimit(`signup:${parsed.data.email}`, 3, 600_000)
   if (!limit.allowed) {
     return { error: 'Muitas tentativas de cadastro. Aguarde alguns minutos.' }
   }
@@ -244,7 +244,7 @@ export async function requestPasswordReset(
   const parsed = recuperarSenhaSchema.safeParse({ email: formData.get('email') })
   if (!parsed.success) return { error: 'Informe um e-mail válido.' }
 
-  const limit = rateLimit(`recuperar:${parsed.data.email.toLowerCase()}`, 3, 300_000)
+  const limit = await rateLimit(`recuperar:${parsed.data.email.toLowerCase()}`, 3, 300_000)
   if (!limit.allowed) {
     return { error: 'Já enviamos um link há pouco. Confira sua caixa de entrada.' }
   }
@@ -317,7 +317,7 @@ export async function setNewPassword(
      * atalho mais barato, e ele tem o efeito certo: senha errada não passa, e
      * a sessão continua a mesma quando passa.
      */
-    const limit = rateLimit(`trocar-senha:${email.toLowerCase()}`, 5, 300_000)
+    const limit = await rateLimit(`trocar-senha:${email.toLowerCase()}`, 5, 300_000)
     if (!limit.allowed) {
       return { error: 'Muitas tentativas. Aguarde alguns minutos.' }
     }

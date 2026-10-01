@@ -24,7 +24,7 @@ export async function registerCheckInAction(
     const parsed = manualCheckInSchema.safeParse({ studentId: formData.get('studentId') })
     if (!parsed.success) return { status: 'error', message: 'Selecione um aluno para registrar.' }
 
-    const limit = rateLimit(`checkin:${session.organizationId}`, 120, 60_000)
+    const limit = await rateLimit(`checkin:${session.organizationId}`, 120, 60_000)
     if (!limit.allowed) {
       return { status: 'error', message: 'Muitos registros seguidos. Aguarde alguns segundos.' }
     }

@@ -35,7 +35,7 @@ export async function assinarPlusAction(
    * e uma tela travando com o botão apertado não pode encher a conta de
    * pendências — nem gastar chamada de API à toa.
    */
-  if (!rateLimit(`plus:assinar:${session.userProfileId}`, 3, 60_000).allowed) {
+  if (!(await rateLimit(`plus:assinar:${session.userProfileId}`, 3, 60_000)).allowed) {
     return { status: 'error', message: 'Muitas tentativas. Espere um minuto e tente de novo.' }
   }
 

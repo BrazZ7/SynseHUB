@@ -43,7 +43,7 @@ export async function registrarPushAction(
    * humana: um laço no cliente encheria a tabela de endpoints de um aparelho
    * só. Vinte por minuto cobre com folga o normal, que é um por aparelho.
    */
-  const limite = rateLimit(`push:${session.userProfileId}`, 20, 60_000)
+  const limite = await rateLimit(`push:${session.userProfileId}`, 20, 60_000)
   if (!limite.allowed) return { error: 'Muitas tentativas. Aguarde um minuto.' }
 
   try {

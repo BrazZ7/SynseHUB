@@ -28,6 +28,7 @@ const PUBLICAS = new Set([
   'NEXT_PUBLIC_LEGAL_TAX_ID',
   'NEXT_PUBLIC_LEGAL_ADDRESS',
   'NEXT_PUBLIC_LEGAL_CONTACT',
+  'UPSTASH_REDIS_REST_URL',
 ])
 
 const ESPERADAS = [
@@ -55,6 +56,8 @@ const ESPERADAS = [
   { nome: 'NEXT_PUBLIC_LEGAL_TAX_ID', obrigatoria: false },
   { nome: 'NEXT_PUBLIC_LEGAL_ADDRESS', obrigatoria: false },
   { nome: 'NEXT_PUBLIC_LEGAL_CONTACT', obrigatoria: false },
+  { nome: 'UPSTASH_REDIS_REST_URL', obrigatoria: false },
+  { nome: 'UPSTASH_REDIS_REST_TOKEN', obrigatoria: false },
 ]
 
 /**
@@ -73,6 +76,11 @@ const PARES = [
    * dizendo "em constituicao" sem explicar por que.
    */
   ['NEXT_PUBLIC_LEGAL_ENTITY', 'NEXT_PUBLIC_LEGAL_TAX_ID'],
+  /*
+   * URL sem token nao fala com o Redis: `upstashConfigurado()` exige as duas,
+   * e com so uma preenchida a contagem volta para a memoria sem avisar.
+   */
+  ['UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN'],
 ]
 
 /** Sobrou o exemplo no lugar do valor? Acontece, e o erro depois é confuso. */

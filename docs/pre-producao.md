@@ -498,29 +498,42 @@ ninguém conseguir alcançá-lo.
 Enquanto isso não estiver configurado, o convite continua funcionando pelo link
 copiado da tela.
 
-## O limitador de tentativas não sobrevive à Vercel
+## O limitador de tentativas
 
-`src/lib/rate-limit.ts` guarda as contagens num `Map` em memória, e o próprio
-arquivo já avisa: "em produção multi-instância trocar o `store` por Redis /
-Upstash mantendo esta mesma assinatura".
+Era um `Map` em memória, e **cada instância serverless tinha o próprio
+contador**: "5 tentativas de login por minuto" virava 5 × o número de
+instâncias — e quem ataca é justamente quem gera carga. O tipo de proteção que
+parece existir; um relatório que listasse "rate limiting: sim" estaria errado.
 
-O que isso significa na prática: **cada instância serverless tem o próprio
-contador**. A Vercel cria instâncias conforme a carga, então "5 tentativas de
-login por minuto" vira 5 × o número de instâncias — e quem está atacando é
-justamente quem gera carga. Quinze ações dependem disso hoje: login, link por
-e-mail, cadastro, recuperação e troca de senha, PIX do aluno e da academia,
-check-in, convite de equipe, desafios, onboarding e pedido de amizade.
+Resolvido: `src/lib/rate-limit/` escolhe entre Upstash (compartilhado) e
+memória (reserva), com a mesma assinatura de antes. Dezoito chamadas em treze
+arquivos passaram a `await`; nenhuma outra mudou.
 
-Não é urgente como uma chave vazada, mas é o tipo de proteção que **parece
-existir**. Um relatório de segurança que liste "rate limiting: sim" estaria
-errado, e é por isso que fica escrito aqui.
+**Uma operação só, via `EVAL`.** O `/pipeline` do Upstash não é atômico, e com
+`INCR` e `PEXPIRE` separados existe o estado em que a chave é criada e fica
+**sem prazo** — o contador nunca zera e a pessoa fica barrada para sempre.
+Num caminho de login, isso é conta travada. O script também evita depender do
+`NX` do `PEXPIRE`, que pede Redis 7.
 
-Trocar custa pouco: a assinatura de `rateLimit(chave, limite, janelaMs)` já
-isola o resto do código do armazenamento, e o Upstash tem plano gratuito que
-cobre este volume com folga.
+**Redis fora do ar não derruba nada.** A contagem cai para a memória da
+instância e o motivo vai para o log. A escolha tem custo e foi deliberada:
+falhar fechado trocaria limite frouxo por indisponibilidade total — ninguém
+faz login, ninguém paga. O desempate é o que o limitador é: proteção em
+profundidade, não autorização. Quem barra escrita indevida é
+`requirePermission` e a RLS, e nenhum dos dois depende do Redis.
 
-- [ ] Trocar o `store` de `rate-limit.ts` por Redis antes do primeiro cliente
-      pagante — ou aceitar por escrito que o limite é por instância.
+`tests/unit/rate-limit.test.ts`: 20 testes, conferidos por mutação — tirar o
+`if atual == 1` do script derruba 1; fazer a falha de rede lançar, 1; aceitar
+só a URL sem o token, 1; errar a comparação do limite, 1; empurrar a janela a
+cada acesso, 1. Mais uma integração de fio contra um servidor HTTP que fala o
+protocolo do Upstash com contador real, que rodou verde e não ficou no
+repositório por abrir porta.
+
+- [x] **Feito em 01/10/2026.** Falta só ligar: `UPSTASH_REDIS_REST_URL` e
+      `UPSTASH_REDIS_REST_TOKEN` na Vercel, com o token de **escrita**.
+      `rateLimitCompartilhado` em `/api/health?deep=1` diz se pegou, e
+      `npm run env:check` acusa URL sem token — meia configuração volta para
+      a memória sem avisar.
 
 ## Plataforma
 

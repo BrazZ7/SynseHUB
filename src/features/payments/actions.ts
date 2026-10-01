@@ -129,14 +129,15 @@ export async function createPixChargeAction(
     if (cobrancaIndisponivel()) {
       return {
         status: 'error',
-        message: 'A cobrança por PIX está desligada enquanto o novo provedor de pagamento não é conectado.',
+        message:
+          'A cobrança por PIX está desligada enquanto o novo provedor de pagamento não é conectado.',
       }
     }
 
     const parsed = createPixSchema.safeParse({ chargeId: formData.get('chargeId') })
     if (!parsed.success) return { status: 'error', message: 'Cobrança inválida.' }
 
-    const limit = rateLimit(`pix:${session.organizationId}`, 30, 60_000)
+    const limit = await rateLimit(`pix:${session.organizationId}`, 30, 60_000)
     if (!limit.allowed) {
       return { status: 'error', message: 'Muitas gerações seguidas. Aguarde um instante.' }
     }

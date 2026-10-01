@@ -38,7 +38,7 @@ export async function linkGymAction(
   }
 
   // Mesmo limite da entrada: seis caracteres são poucos para tentativa e erro.
-  const limit = rateLimit(`link:${session.userProfileId}`, 8, 600_000)
+  const limit = await rateLimit(`link:${session.userProfileId}`, 8, 600_000)
   if (!limit.allowed) {
     return { error: 'Muitas tentativas. Aguarde alguns minutos e confira o código.' }
   }

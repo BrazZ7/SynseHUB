@@ -79,7 +79,7 @@ export async function requestFriendshipAction(
    * malformado nem chega ao banco, então gastar cota com ele deixaria a pessoa
    * de fora por causa dos próprios erros de digitação.
    */
-  const limite = rateLimit(`amizade:${session.userProfileId}`, PEDIDOS_POR_MINUTO, 60_000)
+  const limite = await rateLimit(`amizade:${session.userProfileId}`, PEDIDOS_POR_MINUTO, 60_000)
   if (!limite.allowed) {
     return { error: 'Muitos pedidos seguidos. Aguarde um minuto e tente de novo.' }
   }

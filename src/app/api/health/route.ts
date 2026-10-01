@@ -10,6 +10,7 @@ import {
 } from '@/lib/payments/providers/mercadopago/env'
 import { env } from '@/lib/env'
 import { vereditoDeFuncao, vereditoDeRecurso, type SchemaProbe } from '@/lib/health/probe-verdict'
+import { rateLimitCompartilhado } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -591,6 +592,15 @@ function configuracao() {
   return {
     /** A rotina diária de cobrança consegue rodar? */
     cobrancaAgendada: Boolean(env(process.env.CRON_SECRET, '')),
+    /**
+     * O limite por minuto vale para todas as instâncias, ou só para uma?
+     *
+     * Falso aqui não quebra tela nenhuma, e é justamente por isso que precisa
+     * aparecer: a contagem em memória na Vercel faz "cinco por minuto" virar
+     * cinco **por instância**, e o limite real vira um múltiplo que varia com
+     * o tráfego. O sintoma é não ter sintoma.
+     */
+    rateLimitCompartilhado: rateLimitCompartilhado(),
     /** Termos e privacidade mostram o controlador, ou "em constituição"? */
     identificacaoLegal: Boolean(LEGAL.entity && LEGAL.taxId),
     /** Os azulejos do mapa vêm de fornecedor contratado ou do servidor público? */

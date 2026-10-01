@@ -63,7 +63,7 @@ export async function recordProgressAction(
   }
 
   // Lançamento é manual e sem custo: sem limite, vira alvo de script.
-  const limit = rateLimit(`challenge:${session.userProfileId}`, 30, 600_000)
+  const limit = await rateLimit(`challenge:${session.userProfileId}`, 30, 600_000)
   if (!limit.allowed) return { error: 'Muitos lançamentos seguidos. Tente daqui a pouco.' }
 
   try {

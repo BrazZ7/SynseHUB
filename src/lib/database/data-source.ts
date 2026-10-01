@@ -43,6 +43,11 @@ import type {
   FriendRankRow,
   ContentItem,
   ItemTrancado,
+  Program,
+  ProgramEnrollment,
+  ProgramStep,
+  ProgramaNaLista,
+  ProgramaTrancado as ProgramaTrancadoTipo,
   ContentType,
   StaffInvite,
   UserRole,
@@ -680,11 +685,7 @@ export interface DataSource {
    * por cento no mês", é a comparação entre as últimas sessões e a média — e
    * a mesma porcentagem serviria para as duas.
    */
-  getWorkoutAdherence(
-    studentId: string,
-    from: string,
-    to: string,
-  ): Promise<WorkoutAdherenceRow[]>
+  getWorkoutAdherence(studentId: string, from: string, to: string): Promise<WorkoutAdherenceRow[]>
   getGymTrainingReport(organizationId: string, from: string, to: string): Promise<GymTrainingReport>
   listStudentsAtRisk(organizationId: string, dias: number): Promise<StudentAtRisk[]>
   getClassOccupancyReport(
@@ -795,6 +796,45 @@ export interface DataSource {
   listLockedShowcase(): Promise<ItemTrancado[]>
   /** O mesmo, para um id só: "este que me pediram está trancado?" */
   getLockedShowcase(contentId: string): Promise<ItemTrancado | null>
+
+  // Programas guiados — sequências de dias da plataforma (0003, 0043).
+  /**
+   * Os programas que esta conta pode ver, com a matrícula dela junto.
+   *
+   * Quem filtra é a RLS: o programa `SYNSE_PLUS` não chega a quem não
+   * assina. A lista não precisa saber disso, e é por isso que não recebe o
+   * plano como parâmetro.
+   */
+  listPrograms(): Promise<ProgramaNaLista[]>
+  getProgram(programId: string): Promise<{
+    programa: Program
+    passos: ProgramStep[]
+    matricula: ProgramEnrollment | null
+  } | null>
+  startProgram(programId: string): Promise<void>
+  completeProgramDay(programId: string, dia: number): Promise<void>
+  undoProgramDay(programId: string, dia: number): Promise<void>
+  abandonProgram(programId: string): Promise<void>
+  /** Os programas do Synse+ que esta conta não abre. Vazio para quem já lê. */
+  listLockedPrograms(): Promise<ProgramaTrancadoTipo[]>
+
+  // Autoria de programa — só conta de plataforma. A checagem é no banco.
+  saveProgram(input: {
+    id?: string
+    code: string
+    title: string
+    description: string | null
+    durationDays: number
+    coverUrl: string | null
+    visibility: 'FREE' | 'SYNSE_PLUS'
+  }): Promise<string>
+  saveProgramStep(input: {
+    programId: string
+    dayNumber: number
+    title: string
+    tasks: string[]
+  }): Promise<void>
+  deleteProgram(programId: string): Promise<void>
 
   // Acervo Synse — conteúdo da plataforma, sem dono. Só conta de plataforma.
   /** Tudo que a plataforma escreveu, rascunho incluído. */

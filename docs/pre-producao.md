@@ -33,8 +33,8 @@ npm run env:check
 
 ## Migrations
 
-**Estado em 01/10/2026: 0001 a 0041 aplicadas em produção** (a 0042 aguarda
-colagem), confirmado por `/api/health?deep=1` (`appliedMigrations: 35`,
+**Estado em 01/10/2026: 0001 a 0042 aplicadas em produção** (a 0043 aguarda
+colagem), confirmado por `/api/health?deep=1` (`appliedMigrations: 36`,
 `pendingMigrations: []`).
 
 Esta linha envelhece a cada migration e por isso não é a fonte da verdade: a
@@ -370,6 +370,40 @@ existem, não para conferir se subiram.
 
   Mais 2 testes no mesmo arquivo, com asserção de controle provando que a
   conta de fato lê o conteúdo pago. Tirar o `not is_super_admin()` derruba 1.
+
+- **0043 (`0043_programas_guiados.sql`)** — os programas guiados, dos dois
+  lados.
+
+  `programs`, `program_steps` e `program_enrollments` existiam desde a 0003 e
+  **nunca foram lidas por uma linha de aplicação**. A tabela de planos chegou
+  a anunciá-los, e o comparativo teve de tirar a promessa porque não havia
+  nada atrás dela.
+
+  **O furo que ela fecha:** a 0004 deu ao aluno `for all` em
+  `program_enrollments` com `user_profile_id = auth_profile_id()`, e nada ali
+  conferia se ele pode **ler** o programa. Quem não assina conseguia se
+  matricular num programa `SYNSE_PLUS`. Os passos seguiam trancados pela 0038,
+  então não vazava conteúdo — vazava estado: a tela diria "você está no
+  programa de 90 dias" para quem nunca pagou.
+
+  A política virou só leitura e as quatro escritas passam por função:
+  `iniciar_programa`, `concluir_dia`, `desfazer_dia`, `abandonar_programa`.
+  Elas conferem visibilidade a cada chamada, não só na entrada — assinatura
+  que vence no meio do programa para de render progresso.
+
+  `current_day` é o **menor dia ainda não concluído**, e não "o último mais
+  um": quem pula o dia 3 e faz o 4 continua devendo o 3, e a tela precisa
+  apontar para lá.
+
+  `save_program`, `save_program_step` e `delete_program` exigem
+  `is_super_admin()` e registram em `platform_access_log` com contexto
+  `'PROGRAMA'`. `programas_trancados()` é a vitrine, pelo mesmo motivo da
+  0041 — sem ela a tela de programas abriria vazia no plano grátis.
+
+  `tests/db/programas-guiados.test.ts`: 26 testes, conferidos por mutação.
+  Tirar a conferência de visibilidade do início derruba 1; tirá-la do dia,
+  1; devolver a escrita à política, 1; trocar o menor dia pelo último mais
+  um, 1; tirar o `is_super_admin`, 1; tirar a faixa do dia, 2.
 
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona

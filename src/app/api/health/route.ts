@@ -184,6 +184,7 @@ const MIGRATIONS_ESPERADAS = [
   '0040_push.sql',
   '0041_vitrine_do_cadeado.sql',
   '0042_vitrine_nao_anuncia_a_quem_ja_le.sql',
+  '0043_programas_guiados.sql',
 ]
 
 async function schemaReadiness() {
@@ -207,6 +208,7 @@ async function schemaReadiness() {
     acervoSynse,
     avisoPush,
     vitrineDoCadeado,
+    programasGuiados,
   ] = await Promise.all([
     schemaCheck('user_profiles?select=tier&limit=1'),
     schemaCheck('baseline_challenges?select=code&limit=1'),
@@ -370,6 +372,16 @@ async function schemaReadiness() {
      * conteúdo.
      */
     rpcCheck('acervo_trancado', { p_id: null }, { executa: true }),
+    /*
+     * Os programas guiados (0043). Sem ela a tela de programas abre vazia e
+     * a leitura falha calada, porque ela tolera a migration ausente de
+     * propósito — o tipo de ausência que ninguém percebe olhando a tela.
+     *
+     * `iniciar_programa` é revogada do anônimo, então 401/403 é "existe" e
+     * 404 é "não existe". Sem `executa`, e aqui não é detalhe: ligá-lo faria
+     * a sonda **matricular alguém** a cada visita ao endereço de saúde.
+     */
+    rpcCheck('iniciar_programa', { p_program_id: '00000000-0000-0000-0000-000000000000' }),
   ])
 
   const registradas = await migracoesRegistradas()
@@ -434,6 +446,7 @@ async function schemaReadiness() {
       acervoSynse,
       avisoPush,
       vitrineDoCadeado,
+      programasGuiados,
       appliedMigrations: registradas.length,
       pendingMigrations: faltando,
     }
@@ -475,6 +488,7 @@ async function schemaReadiness() {
     '0040_push.sql',
     '0041_vitrine_do_cadeado.sql',
     '0042_vitrine_nao_anuncia_a_quem_ja_le.sql',
+    '0043_programas_guiados.sql',
   )
 
   return {
@@ -497,6 +511,7 @@ async function schemaReadiness() {
     acervoSynse,
     avisoPush,
     vitrineDoCadeado,
+    programasGuiados,
     pendingMigrations: pendentes,
   }
 }

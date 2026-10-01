@@ -1,4 +1,4 @@
-import { BarChart3, Library, Trophy, Users } from 'lucide-react'
+import { CalendarRange, Library, Trophy, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 /**
@@ -12,14 +12,14 @@ import type { LucideIcon } from 'lucide-react'
  * ── Só o que existe ─────────────────────────────────────────────────────────
  *
  * Os quatro foram escolhidos por um critério e um só: **estar construído
- * hoje**. A biblioteca tem conteúdo publicado, os desafios funcionam, a
- * análise compara meses, o ranking saiu na 0037.
+ * hoje**. A biblioteca tem conteúdo publicado, os desafios funcionam, o
+ * ranking saiu na 0037 — e os programas guiados entraram na 0043, que é o que
+ * fez este cartão trocar a análise comparada pela novidade de maior peso.
  *
- * Ficaram de fora, de propósito, os dois que a tabela ainda promete e o
- * produto não faz: programas guiados e receitas Synse. As tabelas `programs`
- * e `recipes` existem desde a 0003 e não têm uma leitura sequer no aplicativo.
- * Pôr isso num cartão de destaque, na página que agora cobra de verdade,
- * seria vender o que não há.
+ * Continua de fora o que o produto não faz: receitas Synse. A tabela
+ * `recipes` existe desde a 0003 e não tem uma leitura sequer. Pôr isso num
+ * cartão de destaque, na página que cobra de verdade, seria vender o que não
+ * há.
  */
 type Entrega = { icone: LucideIcon; titulo: string; descricao: string }
 
@@ -35,9 +35,9 @@ const ENTREGAS: readonly Entrega[] = [
     descricao: 'Em vez de um, e com os desafios que só o Synse+ abre.',
   },
   {
-    icone: BarChart3,
-    titulo: 'Análise comparada',
-    descricao: 'Mês contra mês, com a evolução de carga por exercício.',
+    icone: CalendarRange,
+    titulo: 'Programas guiados',
+    descricao: 'Sequências de dias com o treino de cada um já montado.',
   },
   {
     icone: Users,

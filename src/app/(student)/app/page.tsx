@@ -229,6 +229,28 @@ export default async function StudentHomePage() {
         </section>
       )}
 
+      {/*
+       * Programas guiados. Fica acima do mural porque é compromisso de
+       * semanas, e o mural é leitura avulsa — quem abre o app para treinar
+       * precisa achar o programa antes do aviso de horário de sábado.
+       */}
+      <section className="rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-synse-text">Programas guiados</h2>
+            <p className="mt-0.5 text-xs text-synse-muted">
+              Uma sequência de dias, com o treino de cada um montado.
+            </p>
+          </div>
+          <Button variant="ghost" size="sm" asChild className="shrink-0 text-synse-muted">
+            <Link href="/app/programs">
+              Ver
+              <ArrowRight className="size-4" aria-hidden />
+            </Link>
+          </Button>
+        </div>
+      </section>
+
       {/* Da academia — some quando não há nada publicado */}
       {conteudos.length > 0 && (
         <section className="rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">

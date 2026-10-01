@@ -74,14 +74,23 @@ export type TierFeature = {
  *
  * `tests/unit/comparativo-honesto.test.ts` prende isso ao código: enquanto
  * aquelas tabelas não forem lidas em lugar nenhum, a comparação não pode
- * prometê-las. No dia em que os programas guiados existirem, o teste solta
- * sozinho e a linha volta a valer.
+ * prometê-las.
+ *
+ * ── E o teste soltou, como prometido ────────────────────────────────────────
+ *
+ * A 0043 construiu os programas guiados: `programs` e `program_steps` passam
+ * a ser lidas pelas telas de `/app/programs` e `/synse-admin/programas`. A
+ * linha do treino voltou a anunciá-los, e o guarda deixou — foi exatamente
+ * para isso que ele foi escrito para se soltar sozinho.
+ *
+ * A da alimentação continua igual nos dois lados: `recipes` segue sem uma
+ * leitura.
  */
 export const TIER_COMPARISON: TierFeature[] = [
   {
     title: 'Treino base Synse',
     free: 'Corpo inteiro, 3 dias por semana',
-    pro: 'Corpo inteiro, 3 dias por semana',
+    pro: 'Base + programas guiados, dia a dia',
   },
   {
     title: 'Plano alimentar base',

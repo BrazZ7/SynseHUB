@@ -1,4 +1,5 @@
 import { generateSynseId } from '@/lib/synse-id'
+import { AppError } from '@/lib/errors'
 import { daysBetween } from '@/lib/utils'
 import type {
   ChargeWithStudent,
@@ -49,6 +50,11 @@ import type {
   ConsentState,
   ContentItem,
   ItemTrancado,
+  Program,
+  ProgramEnrollment,
+  ProgramStep,
+  ProgramaNaLista,
+  ProgramaTrancado as ProgramaTrancadoTipo,
   ConsentType,
   StaffInvite,
   UserRole,
@@ -229,9 +235,15 @@ export class DemoDataSource implements DataSource {
    * segurança mesmo quando não é um.
    */
   private readonly temPlus: boolean
+  /** Conta de plataforma: enxerga o que publica, como `is_super_admin()`. */
+  private readonly ehPlataforma: boolean
 
-  constructor(journal: DemoMutation[] = [], opcoes: { temPlus?: boolean } = {}) {
+  constructor(
+    journal: DemoMutation[] = [],
+    opcoes: { temPlus?: boolean; ehPlataforma?: boolean } = {},
+  ) {
     this.temPlus = opcoes.temPlus ?? false
+    this.ehPlataforma = opcoes.ehPlataforma ?? false
     for (const mutation of journal) this.apply(mutation)
     this.reindex()
   }
@@ -349,6 +361,27 @@ export class DemoDataSource implements DataSource {
           (item) => item.challengeCode === mutation.code && item.cycle === mutation.cycle,
         )
         if (entrada) entrada.progressValue += mutation.delta
+        break
+      }
+      case 'prog': {
+        /*
+         * `montarProgramas` antes de tudo: o diário é reaplicado no
+         * construtor, e sem a semente montada não há duração para recalcular
+         * o próximo dia.
+         */
+        this.montarProgramas()
+        const feitos = this.demoMatriculas.get(mutation.id)?.completedDays ?? []
+
+        if (mutation.a === 'start') this.aplicarProgresso(mutation.id, [])
+        else if (mutation.a === 'quit') {
+          const atual = this.demoMatriculas.get(mutation.id)
+          if (atual) this.demoMatriculas.set(mutation.id, { ...atual, status: 'ABANDONED' })
+        } else if (mutation.d != null) {
+          this.aplicarProgresso(
+            mutation.id,
+            mutation.a === 'day' ? [...feitos, mutation.d] : feitos.filter((d) => d !== mutation.d),
+          )
+        }
         break
       }
       case 'notifread': {
@@ -2319,6 +2352,239 @@ export class DemoDataSource implements DataSource {
         publishedAt: c.publishedAt!,
         pinned: c.pinned,
       }))
+  }
+
+  // ── Programas guiados ──────────────────────────────────────────────────────
+  /**
+   * Dois programas na demonstração: um aberto e um do Synse+.
+   *
+   * O par mínimo para mostrar o cadeado funcionando, como no acervo. Os dias
+   * são gerados por um ciclo de três — é o que um programa de verdade faz, e
+   * escrever 21 dias à mão na semente seria conteúdo falso ocupando espaço.
+   */
+  private programasProntos = false
+  private readonly demoProgramas: Program[] = []
+  private readonly demoPassos = new Map<string, ProgramStep[]>()
+  private readonly demoMatriculas = new Map<string, ProgramEnrollment>()
+
+  private montarProgramas() {
+    if (this.programasProntos) return
+    this.programasProntos = true
+
+    const CICLO = [
+      { titulo: 'Corpo inteiro', tarefas: ['Agachamento 3x10', 'Remada 3x10', 'Prancha 3x30s'] },
+      { titulo: 'Caminhada leve', tarefas: ['25 minutos em ritmo de conversa'] },
+      {
+        titulo: 'Empurrar e puxar',
+        tarefas: ['Supino 3x10', 'Puxada 3x10', 'Elevação lateral 2x15'],
+      },
+    ]
+
+    const montar = (p: Program) => {
+      this.demoProgramas.push(p)
+      this.demoPassos.set(
+        p.id,
+        Array.from({ length: p.durationDays }, (_, i) => {
+          const dia = i + 1
+          const base = CICLO[i % CICLO.length]
+          return {
+            id: `${p.id}-d${dia}`,
+            dayNumber: dia,
+            title: dia % 7 === 0 ? 'Descanso' : base.titulo,
+            tasks: dia % 7 === 0 ? ['Dia de recuperação. Durma bem.'] : base.tarefas,
+          }
+        }),
+      )
+    }
+
+    montar({
+      id: 'prog_livre',
+      code: 'LIVRE_7',
+      title: 'Primeira semana',
+      description: 'Sete dias para criar o hábito, sem equipamento além do seu corpo.',
+      durationDays: 7,
+      coverUrl: null,
+      visibility: 'FREE',
+    })
+    montar({
+      id: 'prog_21',
+      code: 'SYNSE_21',
+      title: 'Programa 21 dias',
+      description: 'Três semanas de treino guiado, com progressão de carga a cada ciclo.',
+      durationDays: 21,
+      coverUrl: null,
+      visibility: 'SYNSE_PLUS',
+    })
+  }
+
+  /**
+   * O que esta sessão enxerga. Em produção quem decide é a RLS.
+   *
+   * A conta de plataforma enxerga tudo, como o `or is_super_admin()` que a
+   * 0043 pôs em `programs_read`. Sem isto a tela de autoria listava zero
+   * programas pagos — encontrado clicando, não lendo: a conta de plataforma
+   * da demonstração não assina nada.
+   */
+  private programasVisiveis(): Program[] {
+    this.montarProgramas()
+    return this.demoProgramas.filter(
+      (p) => p.visibility !== 'SYNSE_PLUS' || this.temPlus || this.ehPlataforma,
+    )
+  }
+
+  async listPrograms(): Promise<ProgramaNaLista[]> {
+    return this.programasVisiveis().map((p) => ({
+      ...p,
+      matricula: this.demoMatriculas.get(p.id) ?? null,
+    }))
+  }
+
+  async getProgram(programId: string) {
+    const programa = this.programasVisiveis().find((p) => p.id === programId)
+    if (!programa) return null
+
+    return {
+      programa,
+      passos: this.demoPassos.get(programId) ?? [],
+      matricula: this.demoMatriculas.get(programId) ?? null,
+    }
+  }
+
+  /** Espelha a recusa da 0043: programa que não se enxerga não se inicia. */
+  private exigirVisivel(programId: string): Program {
+    const programa = this.programasVisiveis().find((p) => p.id === programId)
+    if (!programa) throw new AppError('programa_indisponivel', 'Programa indisponível.', 403)
+    return programa
+  }
+
+  async startProgram(programId: string): Promise<void> {
+    this.exigirVisivel(programId)
+    this.aplicarProgresso(programId, [])
+    await appendDemoMutation({ t: 'prog', id: programId, a: 'start' })
+  }
+
+  /**
+   * O menor dia que falta, como no banco — pular um não o apaga.
+   *
+   * Não exige visibilidade: isto também roda ao reaplicar o diário, no
+   * construtor, e ali o estado já foi autorizado quando foi gravado. A
+   * conferência fica nos métodos públicos, que é por onde a tela entra.
+   */
+  private aplicarProgresso(programId: string, dias: number[]) {
+    this.montarProgramas()
+    const programa = this.demoProgramas.find((p) => p.id === programId)
+    if (!programa) return
+
+    const unicos = [...new Set(dias)].sort((a, b) => a - b)
+    const proximo = Array.from({ length: programa.durationDays }, (_, i) => i + 1).find(
+      (d) => !unicos.includes(d),
+    )
+    const atual = this.demoMatriculas.get(programId)
+
+    this.demoMatriculas.set(programId, {
+      startedAt: atual?.startedAt ?? new Date().toISOString().slice(0, 10),
+      completedDays: unicos,
+      currentDay: proximo ?? programa.durationDays,
+      status: proximo ? 'ACTIVE' : 'COMPLETED',
+    })
+  }
+
+  async completeProgramDay(programId: string, dia: number): Promise<void> {
+    const programa = this.exigirVisivel(programId)
+    if (dia < 1 || dia > programa.durationDays) {
+      throw new AppError('dia_invalido', `O dia ${dia} não existe neste programa.`, 400)
+    }
+    this.aplicarProgresso(programId, [
+      ...(this.demoMatriculas.get(programId)?.completedDays ?? []),
+      dia,
+    ])
+    await appendDemoMutation({ t: 'prog', id: programId, a: 'day', d: dia })
+  }
+
+  async undoProgramDay(programId: string, dia: number): Promise<void> {
+    const feitos = this.demoMatriculas.get(programId)?.completedDays ?? []
+    this.aplicarProgresso(
+      programId,
+      feitos.filter((d) => d !== dia),
+    )
+    await appendDemoMutation({ t: 'prog', id: programId, a: 'undo', d: dia })
+  }
+
+  async abandonProgram(programId: string): Promise<void> {
+    const atual = this.demoMatriculas.get(programId)
+    if (atual) this.demoMatriculas.set(programId, { ...atual, status: 'ABANDONED' })
+    await appendDemoMutation({ t: 'prog', id: programId, a: 'quit' })
+  }
+
+  /*
+   * A autoria não persiste entre requisições, como o acervo: o data source é
+   * remontado a cada pedido e só o diário do cookie sobrevive. Em
+   * demonstração o que importa é a tela responder, não o dado durar.
+   */
+  async listLockedPrograms(): Promise<ProgramaTrancadoTipo[]> {
+    if (this.temPlus || this.ehPlataforma) return []
+    this.montarProgramas()
+
+    return this.demoProgramas
+      .filter((p) => p.visibility === 'SYNSE_PLUS')
+      .map((p) => ({
+        id: p.id,
+        title: p.title,
+        description: p.description,
+        durationDays: p.durationDays,
+      }))
+  }
+
+  async saveProgram(input: {
+    id?: string
+    code: string
+    title: string
+    description: string | null
+    durationDays: number
+    coverUrl: string | null
+    visibility: 'FREE' | 'SYNSE_PLUS'
+  }): Promise<string> {
+    this.montarProgramas()
+    const id = input.id ?? `prog_${this.demoProgramas.length + 1}`
+    const programa: Program = { ...input, id }
+
+    const indice = this.demoProgramas.findIndex((p) => p.id === id)
+    if (indice >= 0) this.demoProgramas[indice] = programa
+    else this.demoProgramas.push(programa)
+
+    return id
+  }
+
+  async saveProgramStep(input: {
+    programId: string
+    dayNumber: number
+    title: string
+    tasks: string[]
+  }): Promise<void> {
+    this.montarProgramas()
+    const passos = this.demoPassos.get(input.programId) ?? []
+    const outros = passos.filter((p) => p.dayNumber !== input.dayNumber)
+
+    this.demoPassos.set(
+      input.programId,
+      [
+        ...outros,
+        {
+          id: `${input.programId}-d${input.dayNumber}`,
+          dayNumber: input.dayNumber,
+          title: input.title,
+          tasks: input.tasks,
+        },
+      ].sort((a, b) => a.dayNumber - b.dayNumber),
+    )
+  }
+
+  async deleteProgram(programId: string): Promise<void> {
+    this.montarProgramas()
+    const indice = this.demoProgramas.findIndex((p) => p.id === programId)
+    if (indice >= 0) this.demoProgramas.splice(indice, 1)
+    this.demoPassos.delete(programId)
+    this.demoMatriculas.delete(programId)
   }
 
   async listLockedShowcase(): Promise<ItemTrancado[]> {

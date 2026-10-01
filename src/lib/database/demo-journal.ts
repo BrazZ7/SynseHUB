@@ -91,6 +91,23 @@ export type DemoMutation =
       delta: number
     }
   | {
+      /**
+       * Programa guiado: entrar, marcar o dia, desmarcar, sair.
+       *
+       * Um tipo só com a ação dentro, como a amizade, e pelo mesmo motivo: o
+       * diário vive num cookie de 4 KB, e quatro chaves para a mesma entidade
+       * seriam desperdício. `d` só aparece quando é dia.
+       *
+       * Sem isto a demonstração não mostra programa nenhum funcionando: o
+       * data source é remontado a cada requisição, e o progresso morria com
+       * ela — justamente a parte que o programa guiado é.
+       */
+      t: 'prog'
+      id: string
+      a: 'start' | 'day' | 'undo' | 'quit'
+      d?: number
+    }
+  | {
       /** Sino aberto: tudo criado antes deste instante conta como lido. */
       t: 'notifread'
       at: string
@@ -207,6 +224,7 @@ const TIPOS_ACEITOS: Record<DemoMutation['t'], true> = {
   notifread: true,
   chal: true,
   chalprog: true,
+  prog: true,
   sstatus: true,
   sedit: true,
   wplan: true,

@@ -2,7 +2,11 @@ import 'server-only'
 
 import { cookies } from 'next/headers'
 
-import { assinaturaDaPersonaNoCookie, DEMO_SESSION_COOKIE } from '@/lib/auth/demo-personas'
+import {
+  assinaturaDaPersonaNoCookie,
+  DEMO_SESSION_COOKIE,
+  personaDoCookieEhPlataforma,
+} from '@/lib/auth/demo-personas'
 import { resumoDaAssinatura } from '@/lib/plans/subscription'
 import { DemoDataSource } from '@/lib/database/demo-data-source'
 import { readDemoJournal } from '@/lib/database/demo-journal'
@@ -36,10 +40,18 @@ export async function getDataSource(): Promise<DataSource> {
    * este arquivo, e importá-lo de volta fecharia um ciclo.
    */
   const cookieStore = await cookies()
-  const assinatura = assinaturaDaPersonaNoCookie(cookieStore.get(DEMO_SESSION_COOKIE)?.value)
+  const persona = cookieStore.get(DEMO_SESSION_COOKIE)?.value
+  const assinatura = assinaturaDaPersonaNoCookie(persona)
 
   return new DemoDataSource(await readDemoJournal(), {
     temPlus: resumoDaAssinatura(assinatura).ativa,
+    /*
+     * A conta de plataforma enxerga o que publica, como o `or
+     * is_super_admin()` das políticas. Sem isto a tela de autoria de
+     * programas listava zero itens pagos — a persona de plataforma não
+     * assina nada.
+     */
+    ehPlataforma: personaDoCookieEhPlataforma(persona),
   })
 }
 

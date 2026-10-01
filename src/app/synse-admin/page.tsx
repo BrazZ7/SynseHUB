@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   CircleDollarSign,
   Library,
+  CalendarRange,
   Percent,
   Receipt,
   ShieldCheck,
@@ -141,7 +142,10 @@ export default async function SynseAdminPage() {
           description="Organizações, volume processado e receita da Synse. GMV e faturamento são grandezas distintas — nunca somadas."
         />
 
-        <section aria-label="Indicadores da plataforma" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section
+          aria-label="Indicadores da plataforma"
+          className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
+        >
           <MetricCard
             label="Academias cadastradas"
             value={formatNumber(totals.organizations)}
@@ -223,11 +227,29 @@ export default async function SynseAdminPage() {
           </CardHeader>
           <CardContent className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-synse-muted">
-              E-books, guias e receitas da plataforma. Chega a toda a base, em qualquer academia —
-              e é onde mora o que o Synse+ promete.
+              E-books, guias e receitas da plataforma. Chega a toda a base, em qualquer academia — e
+              é onde mora o que o Synse+ promete.
             </p>
             <Button asChild className="shrink-0">
               <Link href="/synse-admin/acervo">Abrir o acervo</Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CalendarRange className="size-4 text-synse-primary" aria-hidden />
+              Programas guiados
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-synse-muted">
+              Sequências de dias para o aluno seguir. As tabelas existiam desde a 0003 e nunca
+              tinham sido usadas — a 0043 abriu a porta dos dois lados.
+            </p>
+            <Button asChild className="shrink-0">
+              <Link href="/synse-admin/programas">Abrir os programas</Link>
             </Button>
           </CardContent>
         </Card>

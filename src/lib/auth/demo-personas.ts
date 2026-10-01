@@ -142,3 +142,8 @@ export function assinaturaDaPersonaNoCookie(chave: string | undefined | null): P
   const persona = findDemoPersona(chave)
   return persona ? assinaturaDaDemo(persona, new Date()) : SEM_ASSINATURA
 }
+
+/** A persona que está no cookie é conta de plataforma? */
+export function personaDoCookieEhPlataforma(chave: string | undefined | null): boolean {
+  return findDemoPersona(chave)?.role === 'SUPER_ADMIN'
+}

@@ -45,6 +45,10 @@ import type {
   ConsentState,
   ContentItem,
   ItemTrancado,
+  Program,
+  ProgramEnrollment,
+  ProgramaNaLista,
+  ProgramaTrancado as ProgramaTrancadoTipo,
   ConsentType,
   StaffInvite,
   UserRole,
@@ -2318,6 +2322,212 @@ export class SupabaseDataSource implements DataSource {
 
   async getLockedShowcase(contentId: string): Promise<ItemTrancado | null> {
     return (await this.vitrine('getLockedShowcase', contentId))[0] ?? null
+  }
+
+  // ── Programas guiados ──────────────────────────────────────────────────────
+  /**
+   * ── Pelas tabelas na leitura, por função na escrita ───────────────────────
+   *
+   * Ler é direto: `programs_read` e `program_steps_read` (0038, ajustadas na
+   * 0043) já decidem quem enxerga o quê, e `program_enrollments_self` entrega
+   * só a linha de quem pergunta.
+   *
+   * Escrever não: a 0043 tirou `insert/update/delete` do alcance do cliente,
+   * porque a política não conferia se a pessoa pode **ler** o programa em que
+   * se matricula, e porque `current_day` e `completed_days` precisam andar
+   * juntos. As quatro escritas passam por função.
+   */
+  private mapPrograma(row: Row): Program {
+    return {
+      id: row.id,
+      code: row.code,
+      title: row.title,
+      description: row.description ?? null,
+      durationDays: Number(row.duration_days),
+      coverUrl: row.cover_url ?? null,
+      visibility: row.visibility,
+    }
+  }
+
+  /**
+   * `tasks` é `jsonb` e pode ser qualquer coisa.
+   *
+   * A coluna aceita o que puserem nela, e a tela espera uma lista de textos.
+   * Converter aqui — e descartar o que não for texto — é o que impede um
+   * `[{...}]` gravado à mão de virar "[object Object]" na tela do aluno.
+   */
+  private static tarefas(bruto: unknown): string[] {
+    if (!Array.isArray(bruto)) return []
+    return bruto.filter((t): t is string => typeof t === 'string')
+  }
+
+  private mapMatricula(row: Row | null | undefined): ProgramEnrollment | null {
+    if (!row) return null
+    return {
+      startedAt: row.started_at,
+      currentDay: Number(row.current_day),
+      completedDays: Array.isArray(row.completed_days)
+        ? (row.completed_days as unknown[]).map(Number)
+        : [],
+      status: row.status,
+    }
+  }
+
+  async listPrograms(): Promise<ProgramaNaLista[]> {
+    const programas =
+      (await this.select<Row[]>(
+        'listPrograms',
+        this.client.from('programs').select('*').order('duration_days', { ascending: true }),
+      )) ?? []
+
+    /*
+     * As matrículas numa consulta só, e não uma por programa: a lista tem
+     * poucos itens hoje, mas N+1 escondido numa tela de assinante é o tipo de
+     * custo que só aparece quando há gente usando.
+     */
+    const matriculas =
+      (await this.select<Row[]>(
+        'listPrograms:matriculas',
+        this.client.from('program_enrollments').select('*'),
+      )) ?? []
+
+    const porPrograma = new Map(matriculas.map((m) => [m.program_id as string, m]))
+
+    return programas.map((p) => ({
+      ...this.mapPrograma(p),
+      matricula: this.mapMatricula(porPrograma.get(p.id as string)),
+    }))
+  }
+
+  async getProgram(programId: string) {
+    const programa = await this.select<Row>(
+      'getProgram',
+      this.client.from('programs').select('*').eq('id', programId).maybeSingle(),
+    )
+    if (!programa) return null
+
+    const [passos, matricula] = await Promise.all([
+      this.select<Row[]>(
+        'getProgram:passos',
+        this.client
+          .from('program_steps')
+          .select('*')
+          .eq('program_id', programId)
+          .order('day_number', { ascending: true }),
+      ),
+      this.select<Row>(
+        'getProgram:matricula',
+        this.client
+          .from('program_enrollments')
+          .select('*')
+          .eq('program_id', programId)
+          .maybeSingle(),
+      ),
+    ])
+
+    return {
+      programa: this.mapPrograma(programa),
+      passos: (passos ?? []).map((p) => ({
+        id: p.id,
+        dayNumber: Number(p.day_number),
+        title: p.title,
+        tasks: SupabaseDataSource.tarefas(p.tasks),
+      })),
+      matricula: this.mapMatricula(matricula),
+    }
+  }
+
+  /**
+   * Chama uma função e **falha alto**.
+   *
+   * Não reaproveita o `rpc` logo acima de propósito: aquele devolve um valor
+   * padrão quando dá erro, porque serve a relatório — tela de leitura não
+   * pode cair por causa de uma migration que faltou. Aqui é escrita: matrícula
+   * recusada ou dia não gravado precisa chegar à pessoa, não virar silêncio
+   * com a tela dizendo que deu certo.
+   */
+  private async chamarFuncao(operacao: string, nome: string, args: Record<string, unknown>) {
+    const { error } = await this.client.rpc(nome, args)
+    if (error) this.fail(operacao, error)
+  }
+
+  async startProgram(programId: string): Promise<void> {
+    await this.chamarFuncao('startProgram', 'iniciar_programa', { p_program_id: programId })
+  }
+
+  async completeProgramDay(programId: string, dia: number): Promise<void> {
+    await this.chamarFuncao('completeProgramDay', 'concluir_dia', {
+      p_program_id: programId,
+      p_dia: dia,
+    })
+  }
+
+  async undoProgramDay(programId: string, dia: number): Promise<void> {
+    await this.chamarFuncao('undoProgramDay', 'desfazer_dia', {
+      p_program_id: programId,
+      p_dia: dia,
+    })
+  }
+
+  async abandonProgram(programId: string): Promise<void> {
+    await this.chamarFuncao('abandonProgram', 'abandonar_programa', { p_program_id: programId })
+  }
+
+  async listLockedPrograms(): Promise<ProgramaTrancadoTipo[]> {
+    const { data, error } = await this.client.rpc('programas_trancados')
+    if (error) {
+      // Vitrine que falha vira prateleira vazia, nunca tela quebrada — e
+      // cobre a janela entre publicar e migrar, em que a função não existe.
+      logger.warn('listLockedPrograms', { erro: String((error as Error).message) })
+      return []
+    }
+
+    return ((data as Row[]) ?? []).map((row) => ({
+      id: row.id,
+      title: row.titulo,
+      description: row.descricao ?? null,
+      durationDays: Number(row.dias),
+    }))
+  }
+
+  async saveProgram(input: {
+    id?: string
+    code: string
+    title: string
+    description: string | null
+    durationDays: number
+    coverUrl: string | null
+    visibility: 'FREE' | 'SYNSE_PLUS'
+  }): Promise<string> {
+    const { data, error } = await this.client.rpc('save_program', {
+      p_id: input.id ?? null,
+      p_code: input.code,
+      p_title: input.title,
+      p_description: input.description,
+      p_duration_days: input.durationDays,
+      p_cover_url: input.coverUrl,
+      p_visibility: input.visibility,
+    })
+    if (error) this.fail('saveProgram', error)
+    return String(data)
+  }
+
+  async saveProgramStep(input: {
+    programId: string
+    dayNumber: number
+    title: string
+    tasks: string[]
+  }): Promise<void> {
+    await this.chamarFuncao('saveProgramStep', 'save_program_step', {
+      p_program_id: input.programId,
+      p_day_number: input.dayNumber,
+      p_title: input.title,
+      p_tasks: input.tasks,
+    })
+  }
+
+  async deleteProgram(programId: string): Promise<void> {
+    await this.chamarFuncao('deleteProgram', 'delete_program', { p_id: programId })
   }
 
   // ── Push ───────────────────────────────────────────────────────────────────

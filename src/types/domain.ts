@@ -468,12 +468,7 @@ export type ClassSession = {
   bookedCount: number
 }
 
-export type ClassBookingStatus =
-  | 'BOOKED'
-  | 'WAITLIST'
-  | 'CANCELLED'
-  | 'ATTENDED'
-  | 'NO_SHOW'
+export type ClassBookingStatus = 'BOOKED' | 'WAITLIST' | 'CANCELLED' | 'ATTENDED' | 'NO_SHOW'
 
 export type ClassBooking = {
   id: string
@@ -626,12 +621,7 @@ export type ClassOccupancyRow = {
  * seriam número digitado pelo próprio aluno, e ranking sobre valor
  * auto-declarado é competição de quem mente melhor.
  */
-export type GymChallengeMetric =
-  | 'CHECKINS'
-  | 'WORKOUTS'
-  | 'SETS'
-  | 'VOLUME_KG'
-  | 'CLASS_ATTENDANCE'
+export type GymChallengeMetric = 'CHECKINS' | 'WORKOUTS' | 'SETS' | 'VOLUME_KG' | 'CLASS_ATTENDANCE'
 
 export type GymChallengeStatus = 'DRAFT' | 'ACTIVE' | 'CLOSED'
 
@@ -734,13 +724,7 @@ export type NutritionPlanWithMeals = NutritionPlan & {
 // ---------------------------------------------------------------------------
 
 export type ContentType =
-  | 'ARTICLE'
-  | 'EBOOK'
-  | 'VIDEO'
-  | 'RECIPE'
-  | 'GUIDE'
-  | 'PROGRAM'
-  | 'CHALLENGE'
+  'ARTICLE' | 'EBOOK' | 'VIDEO' | 'RECIPE' | 'GUIDE' | 'PROGRAM' | 'CHALLENGE'
 
 /**
  * `FREE` é conteúdo da plataforma, sem academia dona — e a 0031 recusa a
@@ -780,6 +764,57 @@ export type ContentItem = {
  * para entregar o e-book pago na prateleira — os dois lados precisam mudar
  * juntos, e nenhum dos dois deve.
  */
+/**
+ * ── Os programas guiados ────────────────────────────────────────────────────
+ *
+ * Um programa é uma sequência de dias numerados, de 1 até `durationDays`.
+ * Cada dia tem um título e uma lista de tarefas; o aluno marca o dia como
+ * feito e segue.
+ *
+ * `tasks` é `string[]` aqui e `jsonb` no banco (0003). A conversão acontece
+ * no data source, e o tipo largo fica de lá para cá: a tela não deve receber
+ * um `unknown` para decidir o que fazer com ele.
+ */
+export type Program = {
+  id: string
+  code: string
+  title: string
+  description: string | null
+  durationDays: number
+  coverUrl: string | null
+  visibility: 'FREE' | 'SYNSE_PLUS'
+}
+
+export type ProgramStep = {
+  id: string
+  dayNumber: number
+  title: string
+  tasks: string[]
+}
+
+export type ProgramEnrollment = {
+  startedAt: string
+  /** O menor dia ainda não concluído — quem pula um dia continua devendo. */
+  currentDay: number
+  completedDays: number[]
+  status: 'ACTIVE' | 'COMPLETED' | 'ABANDONED'
+}
+
+/** O programa como a lista do aluno precisa dele: com o estado dele junto. */
+export type ProgramaNaLista = Program & { matricula: ProgramEnrollment | null }
+
+/**
+ * O anúncio de um programa trancado. Nome, duração e descrição — nunca os
+ * dias, que são o conteúdo. O tipo é estreito pelo mesmo motivo de
+ * `ItemTrancado`: a ausência precisa ser impossível de confundir com vazio.
+ */
+export type ProgramaTrancado = {
+  id: string
+  title: string
+  description: string | null
+  durationDays: number
+}
+
 export type ItemTrancado = {
   id: string
   type: ContentType
@@ -796,13 +831,7 @@ export type ItemTrancado = {
 
 export type LeadStage = 'NEW' | 'CONTACTED' | 'TRIAL_CLASS' | 'PROPOSAL' | 'ENROLLED' | 'LOST'
 
-export type LeadSource =
-  | 'INSTAGRAM'
-  | 'GOOGLE'
-  | 'REFERRAL'
-  | 'WEBSITE'
-  | 'WHATSAPP'
-  | 'OTHER'
+export type LeadSource = 'INSTAGRAM' | 'GOOGLE' | 'REFERRAL' | 'WEBSITE' | 'WHATSAPP' | 'OTHER'
 
 export type Lead = {
   id: string
@@ -824,13 +853,7 @@ export type Lead = {
   updatedAt: string
 }
 
-export type LeadEventKind =
-  | 'STAGE_CHANGE'
-  | 'NOTE'
-  | 'CALL'
-  | 'MESSAGE'
-  | 'VISIT'
-  | 'CREATED'
+export type LeadEventKind = 'STAGE_CHANGE' | 'NOTE' | 'CALL' | 'MESSAGE' | 'VISIT' | 'CREATED'
 
 export type LeadEvent = {
   id: string
@@ -1094,11 +1117,7 @@ export type ActivitySummary = {
 
 /** De onde a medição entrou no Synse. Espelha o enum `body_measurement_source`. */
 export type BodyMeasurementSource =
-  | 'BLUETOOTH_SCALE'
-  | 'MANUAL'
-  | 'APPLE_HEALTH'
-  | 'HEALTH_CONNECT'
-  | 'VENDOR_CLOUD'
+  'BLUETOOTH_SCALE' | 'MANUAL' | 'APPLE_HEALTH' | 'HEALTH_CONNECT' | 'VENDOR_CLOUD'
 
 /**
  * Como aquele número chegou ali.

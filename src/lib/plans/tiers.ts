@@ -55,16 +55,38 @@ export type TierFeature = {
   pro: string
 }
 
+/**
+ * ── Duas linhas que prometiam o que não existe ──────────────────────────────
+ *
+ * O treino dizia "Base + programas guiados de 21, 30, 60 e 90 dias" e a
+ * alimentação, "Cardápios por objetivo e receitas Synse". Nenhum dos dois é
+ * verdade: `programs`, `program_steps`, `program_enrollments` e `recipes`
+ * existem no banco desde a 0003 e **não têm uma leitura sequer** no
+ * aplicativo. Nenhuma tela de treino ou de nutrição olha o plano da conta.
+ *
+ * Passou despercebido enquanto ninguém pagava. Deixou de passar no dia em que
+ * o Mercado Pago entrou: a tabela virou a descrição do que a pessoa compra.
+ *
+ * As duas agora dizem o mesmo nos dois lados, como "Check-in e frequência" já
+ * fazia. Não é derrota — é a razão de a tabela mostrar as duas colunas, e
+ * está escrita na página: lista só de vantagens do pago dá a impressão de que
+ * nada funciona sem assinar.
+ *
+ * `tests/unit/comparativo-honesto.test.ts` prende isso ao código: enquanto
+ * aquelas tabelas não forem lidas em lugar nenhum, a comparação não pode
+ * prometê-las. No dia em que os programas guiados existirem, o teste solta
+ * sozinho e a linha volta a valer.
+ */
 export const TIER_COMPARISON: TierFeature[] = [
   {
     title: 'Treino base Synse',
     free: 'Corpo inteiro, 3 dias por semana',
-    pro: 'Base + programas guiados de 21, 30, 60 e 90 dias',
+    pro: 'Corpo inteiro, 3 dias por semana',
   },
   {
     title: 'Plano alimentar base',
     free: 'Cardápio base com trocas',
-    pro: 'Cardápios por objetivo e receitas Synse',
+    pro: 'Cardápio base com trocas',
   },
   {
     title: 'Desafios do mês',

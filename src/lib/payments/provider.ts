@@ -49,6 +49,15 @@ export type ProviderSubscription = {
   providerSubscriptionId: string
   status: 'ACTIVE' | 'PAST_DUE' | 'CANCELLED'
   nextDueDate: string
+  /**
+   * Para onde mandar o pagador para autorizar a cobrança recorrente.
+   *
+   * Nem todo provedor precisa disso — há quem crie a assinatura já autorizada
+   * a partir de um token de cartão. O Mercado Pago precisa: o `preapproval`
+   * nasce `pending` e só vira `authorized` depois que a pessoa autoriza o
+   * débito na tela dele.
+   */
+  checkoutUrl?: string
 }
 
 export type ProviderPaymentAccount = {
@@ -95,6 +104,12 @@ export type CreateChargeInput = {
 export type CreateSubscriptionInput = Omit<CreateChargeInput, 'dueDate'> & {
   cycle: 'MONTHLY' | 'QUARTERLY' | 'SEMIANNUAL' | 'ANNUAL'
   nextDueDate: string
+  /** E-mail de quem paga, quando o provedor identifica o pagador por ele. */
+  payerEmail?: string
+  /** Dias do primeiro ciclo cobrados R$ 0,00. Zero ou ausente desliga. */
+  trialDays?: number
+  /** Para onde o provedor devolve o pagador depois de autorizar. */
+  backUrl?: string
 }
 
 export type WebhookVerification = {
@@ -135,6 +150,19 @@ export interface PaymentProvider {
   readonly id: string
   /** Métodos que este provedor realmente suporta — a UI só mostra estes. */
   readonly supportedMethods: PaymentMethod[]
+  /**
+   * Este provedor sabe cobrar **em nome da academia**, com subconta e split?
+   *
+   * Separa os dois produtos: a assinatura do Synse+ é dinheiro que entra na
+   * conta do Synse e não precisa de nada disso; a mensalidade da academia
+   * precisa dos dois.
+   *
+   * Existe porque `isSimulatedProvider()` sozinho responde a pergunta errada.
+   * Um provedor real sem marketplace faria a tela de cobrança da academia
+   * parecer ligada e falhar no clique — que é exatamente o defeito que o
+   * "Pagar agora" do PIX simulado já produziu uma vez.
+   */
+  readonly suportaMarketplace: boolean
 
   createCustomer(input: CreateCustomerInput): Promise<ProviderCustomer>
   createCharge(input: CreateChargeInput): Promise<ProviderCharge>

@@ -1,5 +1,7 @@
 import 'server-only'
 
+import { MercadoPagoProvider } from '@/lib/payments/providers/mercadopago'
+import { mercadoPagoConfigurado } from '@/lib/payments/providers/mercadopago/env'
 import { MockPaymentProvider } from '@/lib/payments/providers/mock'
 import type { PaymentProvider } from '@/lib/payments/provider'
 import { isDemoMode } from '@/lib/database/env'
@@ -33,10 +35,29 @@ import { env } from '@/lib/env'
 let cached: PaymentProvider | null = null
 
 /** Os nomes que a fábrica sabe construir. */
-const CONHECIDOS = ['mock'] as const
+const CONHECIDOS = ['mock', 'mercadopago'] as const
 
+/**
+ * ── Por que o nome sozinho não liga o Mercado Pago ──────────────────────────
+ *
+ * `PAYMENT_PROVIDER=mercadopago` sem `MERCADOPAGO_ACCESS_TOKEN` cai no
+ * simulado, de propósito. Construir o adapter sem credencial faria a tela de
+ * assinatura parecer ligada e falhar no clique, com um 502 que não diz nada a
+ * quem clicou.
+ *
+ * Caindo no simulado, `isSimulatedProvider()` fica verdadeiro, a tela avisa
+ * que nada é cobrado, e `/api/health?deep=1` mostra o nome pedido ao lado do
+ * que está em uso. A diferença aparece na sonda, não no boleto de alguém.
+ */
 export function getPaymentProvider(): PaymentProvider {
-  if (!cached) cached = new MockPaymentProvider()
+  if (cached) return cached
+
+  if (provedorConfigurado() === 'mercadopago' && mercadoPagoConfigurado()) {
+    cached = new MercadoPagoProvider()
+  } else {
+    cached = new MockPaymentProvider()
+  }
+
   return cached
 }
 
@@ -84,7 +105,22 @@ export function isSimulatedProvider(): boolean {
  */
 export function cobrancaIndisponivel(): 'sem-provedor' | null {
   if (isDemoMode()) return null
-  return isSimulatedProvider() ? 'sem-provedor' : null
+  if (isSimulatedProvider()) return 'sem-provedor'
+
+  /*
+   * ── A segunda razão, que chegou com o Mercado Pago ────────────────────────
+   *
+   * Provedor real não quer dizer provedor que cobra **em nome da academia**.
+   * O Mercado Pago entrou para a assinatura do Synse+, que é dinheiro do
+   * Synse; a mensalidade da academia precisa de subconta e split, que ele faz
+   * por outro caminho e ainda não integramos.
+   *
+   * Sem esta linha, trocar `PAYMENT_PROVIDER` para `mercadopago` acenderia o
+   * "Pagar agora" da academia — e o adapter lançaria no clique. Seria a
+   * mesma falha do PIX simulado de novo, com outro disfarce: a trava precisa
+   * estar antes do botão, não depois.
+   */
+  return getPaymentProvider().suportaMarketplace ? null : 'sem-provedor'
 }
 
 export type { PaymentProvider } from '@/lib/payments/provider'

@@ -1,11 +1,13 @@
 import type { Metadata } from 'next'
 import { Check, Minus } from 'lucide-react'
 
+import { AssinarPlusButton } from '@/features/plus/assinar-button'
 import { BackLink } from '@/components/synse/back-link'
 import { SynseLogo } from '@/components/synse/synse-logo'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { requireStudentSession } from '@/lib/auth/require-session'
+import { isSimulatedProvider } from '@/lib/payments'
 import { PLUS_PRICE, TIER_COMPARISON } from '@/lib/plans/tiers'
 import { resumoDaAssinatura } from '@/lib/plans/subscription'
 import { formatCurrency, formatDate } from '@/lib/utils'
@@ -30,7 +32,7 @@ export default async function SynsePlusPage() {
       <section className="relative overflow-hidden rounded-2xl bg-synse-gradient-deep p-6 text-white shadow-synse-lg">
         <div
           aria-hidden
-          className="bg-synse-cyan/25 pointer-events-none absolute -right-20 -top-20 size-56 rounded-full blur-3xl"
+          className="pointer-events-none absolute -right-20 -top-20 size-56 rounded-full bg-synse-cyan/25 blur-3xl"
         />
         <div className="relative space-y-3">
           <BackLink href="/app" label="Hoje" />
@@ -55,7 +57,7 @@ export default async function SynsePlusPage() {
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-synse-border bg-synse-surface shadow-synse-sm">
-        <header className="bg-synse-surface-2/60 grid grid-cols-[1fr_auto_auto] gap-3 border-b border-synse-border px-4 py-3 text-xs font-semibold text-synse-muted">
+        <header className="grid grid-cols-[1fr_auto_auto] gap-3 border-b border-synse-border bg-synse-surface-2/60 px-4 py-3 text-xs font-semibold text-synse-muted">
           <span>Recurso</span>
           <span className="w-20 text-center">Grátis</span>
           <span className="w-20 text-center text-synse-primary">Synse+</span>
@@ -143,14 +145,32 @@ export default async function SynsePlusPage() {
           </p>
         )}
 
-        <Button variant="gradient" size="lg" className="mt-4 w-full" disabled>
-          {assinante ? 'Assinatura ativa' : 'Começar o mês grátis'}
-        </Button>
-        <p className="mt-2 text-xs text-synse-muted">
-          {assinante
-            ? 'O cancelamento entra junto com a integração real de pagamento.'
-            : `O primeiro mês sai por ${formatCurrency(0)} e a assinatura renova automaticamente por ${formatCurrency(PLUS_PRICE.monthly)} até você cancelar. O pagamento entra na próxima etapa.`}
-        </p>
+        {assinante ? (
+          <>
+            <Button variant="gradient" size="lg" className="mt-4 w-full" disabled>
+              Assinatura ativa
+            </Button>
+            <p className="mt-2 text-xs text-synse-muted">
+              Para cancelar, use a assinatura no app do Mercado Pago. O acesso continua até o fim do
+              ciclo já pago.
+            </p>
+          </>
+        ) : (
+          <>
+            {/*
+             * `isSimulatedProvider` e não `cobrancaIndisponivel`: aquela
+             * pergunta é sobre cobrar **em nome da academia**, e devolve
+             * "sem-provedor" para o Mercado Pago, que não faz marketplace mas
+             * faz esta assinatura muito bem. Usar a pergunta errada aqui
+             * manteria o botão desligado para sempre.
+             */}
+            <AssinarPlusButton indisponivel={isSimulatedProvider()} />
+            <p className="mt-2 text-xs text-synse-muted">
+              O primeiro mês sai por {formatCurrency(0)} e a assinatura renova automaticamente por{' '}
+              {formatCurrency(PLUS_PRICE.monthly)} até você cancelar.
+            </p>
+          </>
+        )}
       </section>
     </div>
   )

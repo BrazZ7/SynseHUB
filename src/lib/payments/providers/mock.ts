@@ -27,6 +27,8 @@ import type { PaymentMethod } from '@/types/domain'
 export class MockPaymentProvider implements PaymentProvider {
   readonly id = 'mock'
   readonly supportedMethods: PaymentMethod[] = ['PIX', 'BOLETO', 'CREDIT_CARD', 'CASH']
+  /** O simulado finge tudo, inclusive subconta e split. */
+  readonly suportaMarketplace = true
 
   private ref(prefix: string) {
     return `${prefix}_${generateSynseId().replace('SYN-', '').toLowerCase()}`

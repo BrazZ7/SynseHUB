@@ -4,12 +4,12 @@ import { APP, LEGAL } from '@/config/app'
 import { SUPABASE_ANON_KEY, SUPABASE_URL, isDemoMode } from '@/lib/database/env'
 import { getPaymentProvider, provedorConfigurado, provedorDesconhecido } from '@/lib/payments'
 import { diagnosticoDoPush } from '@/lib/push/env'
-import { env } from '@/lib/env'
 import {
-  vereditoDeFuncao,
-  vereditoDeRecurso,
-  type SchemaProbe,
-} from '@/lib/health/probe-verdict'
+  diagnosticoDoMercadoPago,
+  type DiagnosticoMercadoPago,
+} from '@/lib/payments/providers/mercadopago/env'
+import { env } from '@/lib/env'
+import { vereditoDeFuncao, vereditoDeRecurso, type SchemaProbe } from '@/lib/health/probe-verdict'
 
 export const dynamic = 'force-dynamic'
 
@@ -512,12 +512,33 @@ async function schemaReadiness() {
  *
  * `pedido` é nome de configuração, não segredo, e nunca foi chave nenhuma.
  */
-function paymentConfiguration(): { pedido: string | null; emUso: string; desconhecido: boolean } {
+function paymentConfiguration(): {
+  pedido: string | null
+  emUso: string
+  desconhecido: boolean
+  marketplace: boolean
+  mercadoPago?: DiagnosticoMercadoPago
+} {
   const pedido = provedorConfigurado()
+  const provider = getPaymentProvider()
+
   return {
     pedido: pedido || null,
-    emUso: getPaymentProvider().id,
+    emUso: provider.id,
     desconhecido: provedorDesconhecido() !== null,
+    /*
+     * Este provedor cobra em nome da academia? Hoje só o simulado — e saber
+     * disso pela sonda evita a conclusão de que a mensalidade "parou de
+     * funcionar" quando na verdade ela nunca ligou com este provedor.
+     */
+    marketplace: provider.suportaMarketplace,
+    /*
+     * Só quando o Mercado Pago é o pedido. O estado que importa é token sem
+     * segredo de webhook: a assinatura é criada, a pessoa paga, e a
+     * confirmação nunca chega porque todo aviso é recusado. Dinheiro sai da
+     * conta dela e o Synse+ não liga — e nada na tela denuncia isso.
+     */
+    ...(pedido === 'mercadopago' ? { mercadoPago: diagnosticoDoMercadoPago() } : {}),
   }
 }
 

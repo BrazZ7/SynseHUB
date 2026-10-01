@@ -14,9 +14,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  * 3. Alguma emissão achar que emitiu quando não há provedor.
  */
 
-async function carregar(provider?: string) {
+async function carregar(provider?: string, tokenDoMercadoPago?: string) {
   vi.resetModules()
   vi.stubEnv('PAYMENT_PROVIDER', provider ?? '')
+  vi.stubEnv('MERCADOPAGO_ACCESS_TOKEN', tokenDoMercadoPago ?? '')
   return import('@/lib/payments')
 }
 
@@ -204,5 +205,63 @@ describe('a ação do aluno recusa no servidor', () => {
     // O que mais importa: nada foi gerado. Uma recusa que ainda chamasse o
     // provedor teria entregue o código falso junto com a mensagem.
     expect(criarPix).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * ── O Mercado Pago entrou, e só para a assinatura ───────────────────────────
+ *
+ * Ele cobra o Synse+ — dinheiro que entra na conta do Synse — e **não** cobra
+ * em nome da academia: isso exige subconta e split, que no Mercado Pago seguem
+ * o caminho de OAuth e ainda não foram integrados.
+ *
+ * O risco concreto é trocar `PAYMENT_PROVIDER` e, sem querer, acender o
+ * "Pagar agora" da academia. `isSimulatedProvider()` ficaria falso, a tela
+ * concluiria que dá para cobrar, e o adapter lançaria no clique — a mesma
+ * falha do PIX simulado com outro disfarce.
+ */
+describe('provedor real que não faz marketplace', () => {
+  it('é construído quando há nome e credencial', async () => {
+    const { getPaymentProvider, isSimulatedProvider } = await carregar('mercadopago', 'token-x')
+
+    expect(getPaymentProvider().id).toBe('mercadopago')
+    expect(isSimulatedProvider()).toBe(false)
+  })
+
+  it('sem credencial, cai no simulado em vez de falhar no clique', async () => {
+    const { getPaymentProvider, isSimulatedProvider } = await carregar('mercadopago', '')
+
+    expect(getPaymentProvider().id).toBe('mock')
+    expect(isSimulatedProvider()).toBe(true)
+  })
+
+  it('a cobrança da academia continua indisponível, e a trava é antes do botão', async () => {
+    /*
+     * Fora da demonstração, de propósito. `cobrancaIndisponivel` devolve nulo
+     * em modo de demonstração — lá o dinheiro falso é o ponto —, e sem estas
+     * duas variáveis o teste passaria pelo motivo errado: por ser
+     * demonstração, não por o provedor não fazer marketplace.
+     */
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://exemplo.supabase.co')
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'chave-publica-de-teste')
+
+    const { cobrancaIndisponivel, getPaymentProvider } = await carregar('mercadopago', 'token-x')
+
+    expect(getPaymentProvider().suportaMarketplace).toBe(false)
+    expect(cobrancaIndisponivel()).toBe('sem-provedor')
+  })
+
+  it('e o simulado fora da demonstração também fica indisponível', async () => {
+    // O controle do teste acima: prova que 'sem-provedor' não vem do simulado.
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://exemplo.supabase.co')
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'chave-publica-de-teste')
+
+    const { cobrancaIndisponivel } = await carregar()
+    expect(cobrancaIndisponivel()).toBe('sem-provedor')
+  })
+
+  it('o simulado, esse sim, finge o marketplace inteiro', async () => {
+    const { getPaymentProvider } = await carregar()
+    expect(getPaymentProvider().suportaMarketplace).toBe(true)
   })
 })

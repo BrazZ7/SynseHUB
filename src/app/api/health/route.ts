@@ -521,6 +521,7 @@ function paymentConfiguration(): {
 } {
   const pedido = provedorConfigurado()
   const provider = getPaymentProvider()
+  const diagnostico = diagnosticoDoMercadoPago()
 
   return {
     pedido: pedido || null,
@@ -533,12 +534,28 @@ function paymentConfiguration(): {
      */
     marketplace: provider.suportaMarketplace,
     /*
-     * Só quando o Mercado Pago é o pedido. O estado que importa é token sem
-     * segredo de webhook: a assinatura é criada, a pessoa paga, e a
-     * confirmação nunca chega porque todo aviso é recusado. Dinheiro sai da
-     * conta dela e o Synse+ não liga — e nada na tela denuncia isso.
+     * ── Por que não é só quando `pedido` bate ─────────────────────────────
+     *
+     * A primeira versão só mostrava este bloco com `PAYMENT_PROVIDER=mercadopago`,
+     * e isso cegou a sonda no momento exato em que ela era necessária:
+     * configuração pela metade na Vercel respondeu `pedido: null`, `emUso:
+     * mock`, e nada dizia se as credenciais tinham chegado ou não. Ficaram
+     * três suspeitas e nenhuma forma de separá-las.
+     *
+     * Agora basta **qualquer** das três variáveis existir para o bloco
+     * aparecer. Quem está diagnosticando precisa ver qual das três faltou, e
+     * esconder duas porque a terceira está ausente é esconder a resposta.
+     *
+     * O estado que mais importa continua sendo token sem segredo de webhook:
+     * a assinatura é criada, a pessoa paga, e a confirmação nunca chega
+     * porque todo aviso é recusado. Dinheiro sai da conta dela e o Synse+
+     * não liga, sem nada na tela denunciando.
      */
-    ...(pedido === 'mercadopago' ? { mercadoPago: diagnosticoDoMercadoPago() } : {}),
+    ...(pedido === 'mercadopago' ||
+    diagnostico.token === 'ok' ||
+    diagnostico.segredoDoWebhook === 'ok'
+      ? { mercadoPago: diagnostico }
+      : {}),
   }
 }
 

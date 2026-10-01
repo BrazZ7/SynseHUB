@@ -24,6 +24,10 @@ const PUBLICAS = new Set([
   'NEXT_PUBLIC_SYNSE_ENV',
   'PAYMENT_PROVIDER',
   'SEED_OWNER_EMAIL',
+  'NEXT_PUBLIC_LEGAL_ENTITY',
+  'NEXT_PUBLIC_LEGAL_TAX_ID',
+  'NEXT_PUBLIC_LEGAL_ADDRESS',
+  'NEXT_PUBLIC_LEGAL_CONTACT',
 ])
 
 const ESPERADAS = [
@@ -43,6 +47,14 @@ const ESPERADAS = [
   { nome: 'CRON_SECRET', obrigatoria: false },
   { nome: 'VAPID_PUBLIC_KEY', obrigatoria: false },
   { nome: 'VAPID_PRIVATE_KEY', obrigatoria: false },
+  /*
+   * A identificacao do controlador nos Termos e na Privacidade. Nao sao
+   * segredo — vao para a tela —, e por isso aparecem inteiras aqui.
+   */
+  { nome: 'NEXT_PUBLIC_LEGAL_ENTITY', obrigatoria: false },
+  { nome: 'NEXT_PUBLIC_LEGAL_TAX_ID', obrigatoria: false },
+  { nome: 'NEXT_PUBLIC_LEGAL_ADDRESS', obrigatoria: false },
+  { nome: 'NEXT_PUBLIC_LEGAL_CONTACT', obrigatoria: false },
 ]
 
 /**
@@ -55,6 +67,12 @@ const ESPERADAS = [
 const PARES = [
   ['MERCADOPAGO_ACCESS_TOKEN', 'MERCADOPAGO_WEBHOOK_SECRET'],
   ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY'],
+  /*
+   * Razao social sem CNPJ nao identifica ninguem: os Termos conferem os dois
+   * juntos (`LEGAL.entity && LEGAL.taxId`) e, com so um preenchido, seguem
+   * dizendo "em constituicao" sem explicar por que.
+   */
+  ['NEXT_PUBLIC_LEGAL_ENTITY', 'NEXT_PUBLIC_LEGAL_TAX_ID'],
 ]
 
 /** Sobrou o exemplo no lugar do valor? Acontece, e o erro depois é confuso. */

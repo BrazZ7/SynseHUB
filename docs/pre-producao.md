@@ -592,11 +592,26 @@ cada academia.
       escrito a partir do que o sistema realmente faz — não é modelo genérico
       copiado — mas descrever a prática certa não é o mesmo que redigir contrato
       que se sustenta. Revisar antes do primeiro cliente pagante.
-- [ ] Preencher a identificação do controlador: `NEXT_PUBLIC_LEGAL_ENTITY`,
-      `NEXT_PUBLIC_LEGAL_TAX_ID`, `NEXT_PUBLIC_LEGAL_ADDRESS` e
-      `NEXT_PUBLIC_LEGAL_CONTACT`. Sem elas, as páginas dizem que a empresa está
-      em constituição — o que é verdade hoje, e deixa de ser no dia em que houver
-      CNPJ.
+- [x] **Identificação do controlador — decidido em 01/10/2026: fica como está.**
+
+      As páginas de Termos e Privacidade dizem "o Synse está em constituição",
+      e isso é a verdade: a empresa não existe. Preencher
+      `NEXT_PUBLIC_LEGAL_ENTITY` e `NEXT_PUBLIC_LEGAL_TAX_ID` com qualquer
+      coisa seria publicar identificação falsa num documento que promete
+      tratamento de dados pessoais — pior do que a ausência.
+
+      **`identificacaoLegal: false` em `/api/health?deep=1` é o estado
+      esperado, não defeito.** Esta linha existe porque o booleano vermelho
+      convida a reabrir o assunto a cada leitura da sonda, e já o fez.
+
+      Reabre quando houver CNPJ: as quatro variáveis na Vercel e um redeploy —
+      elas são `NEXT_PUBLIC_`, então entram no pacote em tempo de build.
+      `npm run env:check` confere as quatro, e acusa razão social sem CNPJ,
+      que é o estado em que a página continua dizendo "em constituição" sem
+      dizer por quê.
+
+      Nada disso bloqueia cobrança: o Mercado Pago ativou credenciais de
+      produção com este campo em `false`.
 - [ ] Fazer o e-mail de privacidade existir de verdade. A política promete
       resposta em 15 dias; promessa de canal que ninguém lê é pior que canal
       nenhum.

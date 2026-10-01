@@ -33,8 +33,9 @@ npm run env:check
 
 ## Migrations
 
-**Estado em 28/09/2026: 0001 a 0040 aplicadas em produção**, confirmado por
-`/api/health?deep=1` (`appliedMigrations: 34`, `pendingMigrations: []`).
+**Estado em 01/10/2026: 0001 a 0041 aplicadas em produção** (a 0042 aguarda
+colagem), confirmado por `/api/health?deep=1` (`appliedMigrations: 35`,
+`pendingMigrations: []`).
 
 Esta linha envelhece a cada migration e por isso não é a fonte da verdade: a
 sonda é. Quem quiser saber o que falta abre o endereço, não este arquivo. O que
@@ -351,6 +352,24 @@ existem, não para conferir se subiram.
   entrar.
 
   `tests/db/vitrine-do-cadeado.test.ts`: 12 testes, conferidos por mutação.
+
+- **0042 (`0042_vitrine_nao_anuncia_a_quem_ja_le.sql`)** — conserta a 0041.
+
+  A 0041 escondia a vitrine de quem assina e esqueceu o outro jeito de poder
+  ler: desde a 0039 a política dá o acervo inteiro — pago incluído — a
+  `is_super_admin()`. O mesmo e-book saía duas vezes para a conta de
+  plataforma sem assinatura: legível na lista, e trancado logo abaixo, com um
+  convite para assinar o que ela acabou de ler.
+
+  Apareceu tarde porque é o estado de **quem publica**, e quem publica é a
+  primeira pessoa a conferir o resultado no app. Os testes da 0041 cobriam o
+  assinante e o visitante; não cobriam o publicador.
+
+  Só `create or replace`: a condição passa a dizer "não pode ler" inteiro —
+  `not tem_synse_plus() and not is_super_admin()` — em vez de metade.
+
+  Mais 2 testes no mesmo arquivo, com asserção de controle provando que a
+  conta de fato lê o conteúdo pago. Tirar o `not is_super_admin()` derruba 1.
 
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona

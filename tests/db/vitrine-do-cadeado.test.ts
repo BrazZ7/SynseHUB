@@ -60,7 +60,17 @@ beforeAll(async () => {
     [AUTH_ASSINANTE, rows[1].user_profile_id, 'assina@vitrine.test'],
   ] as const) {
     await client.query(`insert into auth.users (id, email) values ($1,$2)`, [auth, email])
-    await client.query(`update user_profiles set auth_user_id = $1 where id = $2`, [auth, perfil])
+    /*
+     * O e-mail vai também para `user_profiles`, e não só para `auth.users`:
+     * `grant_super_admin` procura a conta pelo perfil, que é onde a aplicação
+     * guarda o e-mail. Sem esta linha a promoção falha com "nenhuma conta com
+     * o e-mail" — o que, aliás, é a função fazendo o trabalho dela.
+     */
+    await client.query(`update user_profiles set auth_user_id = $1, email = $2 where id = $3`, [
+      auth,
+      email,
+      perfil,
+    ])
     await client.query(
       `insert into organization_members (organization_id, user_profile_id, role)
        values ($1,$2,'STUDENT') on conflict do nothing`,
@@ -159,6 +169,41 @@ describe.skipIf(!temBanco)('o que a vitrine não mostra', () => {
     expect((await vitrine(AUTH_GRATIS)).map((l) => l.titulo)).not.toContain(
       'E-book da academia Alpha',
     )
+  })
+})
+
+describe.skipIf(!temBanco)('a conta de plataforma também não recebe (0042)', () => {
+  /*
+   * O caso que a 0041 esqueceu, e que é o estado de quem publica.
+   *
+   * Desde a 0039 a política dá o acervo inteiro a `is_super_admin()`, pago
+   * incluído. A vitrine conferia só a assinatura, então o mesmo e-book saía
+   * duas vezes para o super admin sem Synse+: legível na lista, e trancado
+   * logo abaixo com um convite para assinar o que ele acabou de ler.
+   *
+   * Dói mais do que parece porque é o primeiro par de olhos a bater na tela:
+   * quem põe o acervo no ar é essa conta, e é com ela que se confere o
+   * resultado no app.
+   */
+  it('porque a política já lhe dá o acervo inteiro, pago incluído', async () => {
+    await client.query(`select grant_super_admin('gratis@vitrine.test')`)
+
+    // O controle: ela de fato lê o conteúdo pago, sem assinar nada.
+    const lidos = await asUser<{ body: string }>(
+      client,
+      AUTH_GRATIS,
+      `select body from content_library where title = 'E-book do Synse+'`,
+    )
+    expect(lidos[0].body).toBe('O CORPO PAGO')
+
+    expect(await vitrine(AUTH_GRATIS)).toHaveLength(0)
+    await client.query(`select revoke_super_admin('gratis@vitrine.test')`)
+  })
+
+  it('e volta a receber quando deixa de ser plataforma', async () => {
+    // Cinto e suspensório para o `revoke` acima: sem esta linha, um teste
+    // seguinte poderia passar por a conta ter ficado super admin sem querer.
+    expect((await vitrine(AUTH_GRATIS)).length).toBeGreaterThan(0)
   })
 })
 

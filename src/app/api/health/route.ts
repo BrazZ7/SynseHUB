@@ -182,6 +182,7 @@ const MIGRATIONS_ESPERADAS = [
   '0039_acervo_synse.sql',
   '0040_push.sql',
   '0041_vitrine_do_cadeado.sql',
+  '0042_vitrine_nao_anuncia_a_quem_ja_le.sql',
 ]
 
 async function schemaReadiness() {
@@ -472,6 +473,7 @@ async function schemaReadiness() {
     '0039_acervo_synse.sql',
     '0040_push.sql',
     '0041_vitrine_do_cadeado.sql',
+    '0042_vitrine_nao_anuncia_a_quem_ja_le.sql',
   )
 
   return {

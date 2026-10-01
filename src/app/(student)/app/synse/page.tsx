@@ -3,8 +3,8 @@ import { Check, Minus } from 'lucide-react'
 
 import { AssinarPlusButton } from '@/features/plus/assinar-button'
 import { BackLink } from '@/components/synse/back-link'
-import { SynseLogo } from '@/components/synse/synse-logo'
-import { Badge } from '@/components/ui/badge'
+import { CapaPlus } from '@/features/plus/capa-plus'
+import { OQueEntra } from '@/features/plus/o-que-entra'
 import { Button } from '@/components/ui/button'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { isSimulatedProvider } from '@/lib/payments'
@@ -28,35 +28,47 @@ export default async function SynsePlusPage() {
   const assinante = resumo.ativa
 
   return (
-    <div className="animate-fade-in-up space-y-6">
-      <section className="relative overflow-hidden rounded-2xl bg-synse-gradient-deep p-6 text-white shadow-synse-lg">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -right-20 -top-20 size-56 rounded-full bg-synse-cyan/25 blur-3xl"
-        />
-        <div className="relative space-y-3">
-          <BackLink href="/app" label="Hoje" />
-          <SynseLogo tone="light" size="md" />
-          <Badge className="bg-white/15 text-white">
-            {resumo.emTeste
-              ? 'Teste grátis'
-              : resumo.encerrando
-                ? 'Assinatura encerrando'
-                : assinante
-                  ? 'Você é Synse+'
-                  : 'Synse+'}
-          </Badge>
-          <h1 className="text-2xl font-semibold leading-tight">
-            Da inspiração a uma vida extraordinária.
-          </h1>
-          <p className="text-sm text-white/65">
-            Conteúdo, orientação e resultados. Um ecossistema completo para a sua saúde e bem-estar,
-            além da academia.
-          </p>
-        </div>
-      </section>
+    /*
+     * Sem `space-y` no contêiner, e isto não é capricho: os cartões precisam
+     * **subir por cima** da arte, e `space-y-*` aplica `margin-top` com
+     * especificidade maior que uma `-mt-*` no filho — a margem negativa
+     * simplesmente não valeria. Com o espaçamento declarado em cada seção, a
+     * sobreposição funciona e cada distância fica visível onde é decidida.
+     */
+    <div className="animate-fade-in-up">
+      <CapaPlus
+        voltar={<BackLink href="/app" label="Hoje" />}
+        selo={
+          resumo.emTeste
+            ? 'Teste grátis'
+            : resumo.encerrando
+              ? 'Assinatura encerrando'
+              : assinante
+                ? 'Você é Synse+'
+                : 'Synse+'
+        }
+        titulo="Da inspiração"
+        destaque="a uma vida extraordinária."
+        descricao="Conteúdo, orientação e resultados. Um ecossistema completo para a sua saúde e bem-estar, além da academia."
+      />
 
-      <section className="overflow-hidden rounded-2xl border border-synse-border bg-synse-surface shadow-synse-sm">
+      {/*
+       * ── A sobreposição que não deu certo ──────────────────────────────────
+       *
+       * Tentei trazer os cartões por cima do pé da arte, que é a assinatura
+       * das peças de divulgação — a barra de busca entrando na foto. No tema
+       * escuro ficou bom; no claro, o título "O que entra com o Synse+"
+       * pousou sobre a arte escura em texto quase preto, ilegível.
+       *
+       * Fica a lição, não a sobreposição: o que pode subir sobre a arte é
+       * elemento com fundo próprio — um cartão, uma pastilha —, nunca texto
+       * solto que depende do token de cor do tema.
+       */}
+      <div className="mt-6">
+        <OQueEntra />
+      </div>
+
+      <section className="vidro-led mt-6 overflow-hidden rounded-2xl border border-synse-border bg-synse-surface">
         <header className="grid grid-cols-[1fr_auto_auto] gap-3 border-b border-synse-border bg-synse-surface-2/60 px-4 py-3 text-xs font-semibold text-synse-muted">
           <span>Recurso</span>
           <span className="w-20 text-center">Grátis</span>
@@ -92,7 +104,7 @@ export default async function SynsePlusPage() {
         </ul>
       </section>
 
-      <section className="rounded-2xl border border-synse-border bg-synse-surface p-5 text-center shadow-synse-sm">
+      <section className="vidro-led mt-6 overflow-hidden rounded-2xl border border-synse-border bg-synse-surface p-5 text-center">
         {/*
           Cada estado tem uma notícia diferente: no teste, quando cobra;
           cancelada, até quando vale; ativa, quando renova. "Você é Synse+"

@@ -5,6 +5,7 @@ import { BackLink } from '@/components/synse/back-link'
 import { PageHeader } from '@/components/synse/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ApagarPrograma } from '@/features/programs/apagar-programa'
 import { ProgramForm } from '@/features/programs/program-form'
 import { StepForm } from '@/features/programs/step-form'
 import { requirePlatformSession } from '@/lib/auth/require-session'
@@ -116,6 +117,24 @@ export default async function EditarProgramaPage({ params }: { params: Promise<{
         </CardHeader>
         <CardContent>
           <ProgramForm programa={programa} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Apagar</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {/*
+            O aviso diz o que a cascata da 0003 faz, e não um "não há como
+            desfazer" genérico: o que some não é só o trabalho de quem está
+            nesta tela.
+          */}
+          <p className="text-sm text-synse-muted">
+            Apagar tira o programa de toda a base, na hora. Os {programa.durationDays} dias somem, e
+            o progresso de quem estiver fazendo some junto.
+          </p>
+          <ApagarPrograma programId={programa.id} dias={programa.durationDays} />
         </CardContent>
       </Card>
     </div>

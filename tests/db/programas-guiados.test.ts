@@ -361,3 +361,114 @@ describe.skipIf(!temBanco)('o que cada um enxerga', () => {
     await client.query(`select revoke_super_admin('assina@prog.test')`)
   })
 })
+
+/**
+ * ── Apagar o programa ───────────────────────────────────────────────────────
+ *
+ * `delete_program` existe desde a 0043 e não tinha um teste sequer — pelo
+ * mesmo motivo que `apagarProgramaAction` não tinha tela: ninguém a
+ * alcançava, então ninguém sentiu falta. Agora que a tela liga o botão, o que
+ * ele faz precisa estar escrito.
+ *
+ * A cascata é o que importa aqui. A 0003 pendura `program_steps` **e**
+ * `program_enrollments` em `programs` com `on delete cascade`: um clique na
+ * conta de plataforma apaga o progresso de gente que não participou da
+ * decisão. Isso tem que ser verdade de propósito, e não por acidente de
+ * schema que a próxima migration desfaz sem perceber.
+ */
+describe.skipIf(!temBanco)('apagar o programa', () => {
+  /*
+   * Um código por chamada: `programs.code` é único desde a 0003, e os três
+   * testes abaixo criam o seu. Reaproveitar o mesmo nome fazia o segundo
+   * falhar com "duplicate key" — e um teste que cai por colisão de dado não
+   * diz nada sobre o que ele deveria estar provando.
+   */
+  let sequencia = 0
+
+  async function programaComAluno() {
+    sequencia += 1
+    const codigo = `PARA_APAGAR_${sequencia}`
+
+    await client.query(`select grant_super_admin('assina@prog.test')`)
+    const criado = await asUser<{ save_program: string }>(
+      client,
+      AUTH_ASSINA,
+      `select save_program(null, $1, 'Para apagar', null, 3::smallint, null, 'FREE')`,
+      [codigo],
+    )
+    const id = criado[0].save_program
+    await asUser(
+      client,
+      AUTH_ASSINA,
+      `select save_program_step($1, 1::smallint, 'Dia 1', '[]'::jsonb)`,
+      [id],
+    )
+    await client.query(`select revoke_super_admin('assina@prog.test')`)
+
+    // Um aluno de verdade, com progresso de verdade.
+    await asUser(client, AUTH_GRATIS, `select iniciar_programa($1)`, [id])
+    await asUser(client, AUTH_GRATIS, `select concluir_dia($1, 1::smallint)`, [id])
+    return id
+  }
+
+  it('aluno comum não apaga', async () => {
+    const id = await programaComAluno()
+    await expect(asUser(client, AUTH_GRATIS, `select delete_program($1)`, [id])).rejects.toThrow()
+
+    const { rows } = await client.query(`select count(*)::int as n from programs where id = $1`, [
+      id,
+    ])
+    expect(rows[0].n).toBe(1)
+  })
+
+  it('a conta de plataforma apaga, e a trilha registra', async () => {
+    const id = await programaComAluno()
+    await client.query(`select grant_super_admin('assina@prog.test')`)
+
+    const { rows: antes } = await client.query(
+      `select count(*)::int as n from platform_access_log where context = 'PROGRAMA'`,
+    )
+    await asUser(client, AUTH_ASSINA, `select delete_program($1)`, [id])
+    const { rows: depois } = await client.query(
+      `select count(*)::int as n from platform_access_log where context = 'PROGRAMA'`,
+    )
+
+    const { rows } = await client.query(`select count(*)::int as n from programs where id = $1`, [
+      id,
+    ])
+    expect(rows[0].n).toBe(0)
+    expect(depois[0].n).toBe(antes[0].n + 1)
+
+    await client.query(`select revoke_super_admin('assina@prog.test')`)
+  })
+
+  it('e leva junto os dias e o progresso de quem estava fazendo', async () => {
+    /*
+     * O aviso que a tela dá ao clicar — "o progresso de quem estiver fazendo
+     * some junto" — é esta asserção. Se a cascata sumir numa migration
+     * futura, o aviso vira mentira e o teste cai antes de alguém ler.
+     */
+    const id = await programaComAluno()
+
+    const { rows: comAluno } = await client.query(
+      `select count(*)::int as n from program_enrollments where program_id = $1`,
+      [id],
+    )
+    expect(comAluno[0].n).toBe(1) // o controle: havia progresso para perder
+
+    await client.query(`select grant_super_admin('assina@prog.test')`)
+    await asUser(client, AUTH_ASSINA, `select delete_program($1)`, [id])
+    await client.query(`select revoke_super_admin('assina@prog.test')`)
+
+    const { rows: passos } = await client.query(
+      `select count(*)::int as n from program_steps where program_id = $1`,
+      [id],
+    )
+    const { rows: matriculas } = await client.query(
+      `select count(*)::int as n from program_enrollments where program_id = $1`,
+      [id],
+    )
+    expect(passos[0].n).toBe(0)
+    expect(matriculas[0].n).toBe(0)
+  })
+})

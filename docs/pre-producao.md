@@ -493,9 +493,12 @@ responde" e "o dinheiro é real" são duas perguntas diferentes.
 A partir da 0019 a mensalidade se gera sozinha. O agendamento está em
 `vercel.json`, às 9h UTC — 6h de Brasília, antes de a academia abrir.
 
-- [ ] **`CRON_SECRET` na Vercel**, como *Sensitive*. Sem ele, o endereço
+- [x] **`CRON_SECRET` na Vercel**, como *Sensitive*. Sem ele, o endereço
       `/api/cron/billing` recusa tudo e devolve 404: nenhuma cobrança é gerada,
-      e nada na tela denuncia. Gere um valor longo e aleatório.
+      e nada na tela denuncia. Conferido em produção: `/api/health?deep=1`
+      devolve `cobrancaAgendada: true`, que é `Boolean(process.env.CRON_SECRET)`
+      — a variável existe. Se ela está *correta*, só a primeira execução diz, e
+      isso é o item abaixo.
 - [ ] Conferir a primeira execução no dia seguinte: `/api/health?deep=1` mostra
       as migrations aplicadas, e a lista de cobranças do painel mostra o
       resultado.

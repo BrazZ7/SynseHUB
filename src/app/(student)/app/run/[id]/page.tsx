@@ -4,6 +4,7 @@ import { Info, Mountain, Timer, Zap } from 'lucide-react'
 
 import { BackLink } from '@/components/synse/back-link'
 import { Badge } from '@/components/ui/badge'
+import { PrivacidadeDaCorrida } from '@/features/synse-run/components/privacidade-da-corrida'
 import { Metric } from '@/features/synse-run/components/metric'
 import { PaceChart } from '@/features/synse-run/components/pace-chart'
 import { RouteMap } from '@/features/synse-run/components/route-map'
@@ -181,19 +182,20 @@ export default async function ActivityDetailPage({ params }: { params: Promise<{
         </section>
       )}
 
+      {/*
+        O selo de privacidade saiu daqui e virou escolha, logo abaixo.
+        Mostrá-lo como fato era o que a tela fazia enquanto
+        `updateActivityPrivacyAction` não tinha chamador: dizia "Público" e
+        não dava o que fazer a respeito.
+      */}
       <section className="flex flex-wrap items-center gap-2">
         <Badge variant="outline">
           <Zap className="mr-1 size-3" aria-hidden />
           {SPORT_LABELS[atividade.sport]}
         </Badge>
-        <Badge variant="outline">
-          {atividade.privacy === 'PUBLIC'
-            ? 'Público'
-            : atividade.privacy === 'GYM'
-              ? 'Visível para a academia'
-              : 'Somente eu'}
-        </Badge>
       </section>
+
+      <PrivacidadeDaCorrida activityId={atividade.id} privacidade={atividade.privacy} />
 
       <p className="flex items-start gap-2.5 rounded-xl bg-synse-surface-2 p-4 text-xs text-synse-muted">
         <Info className="mt-0.5 size-4 shrink-0" aria-hidden />

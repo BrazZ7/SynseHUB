@@ -50,6 +50,7 @@ import type {
   ProgramaTrancado as ProgramaTrancadoTipo,
   Recipe,
   ReceitaTrancada as ReceitaTrancadaTipo,
+  EquipeParaAutorizar,
   ContentType,
   StaffInvite,
   UserRole,
@@ -751,6 +752,16 @@ export interface DataSource {
 
   /** Quem a pessoa autorizou a ver o corpo dela. */
   listBodyShares(): Promise<BodyMeasurementShare[]>
+  /**
+   * A quem ela pode autorizar: a equipe das academias em que é aluna ativa,
+   * menos quem já está autorizado (0045).
+   *
+   * Existe como função no banco porque `staff_read` (0004) exige
+   * `is_org_staff`: o aluno não lê a tabela `staff`, e abrir a política para
+   * `is_org_member` daria a todo aluno o CREF e a situação de contrato de
+   * toda a equipe.
+   */
+  listStaffToAuthorize(): Promise<EquipeParaAutorizar[]>
   grantBodyShare(sharedWithProfileId: string, organizationId: string | null): Promise<void>
   revokeBodyShare(shareId: string): Promise<void>
 

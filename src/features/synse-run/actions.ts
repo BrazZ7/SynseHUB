@@ -10,7 +10,7 @@ import { logger } from '@/lib/logger'
 import { isSoloOrganization } from '@/lib/organizations/solo'
 import { saveActivitySchema } from '@/lib/validations/activity'
 import type { ActivityPrivacy } from '@/types/domain'
-import type { SaveActivityResult } from '@/features/synse-run/state'
+import type { ActivityPrivacyResult, SaveActivityResult } from '@/features/synse-run/state'
 
 /**
  * Recebe a corrida inteira, já calculada no aparelho.
@@ -120,10 +120,21 @@ export async function saveActivityAction(payload: unknown): Promise<SaveActivity
   }
 }
 
+/**
+ * ── As duas devolviam `void` ────────────────────────────────────────────────
+ *
+ * E engoliam a exceção num `logger.error`. Ficaram assim enquanto nenhuma
+ * tela as chamava, o que escondeu o problema: para "salvar rascunho" engolir
+ * é defensável; para privacidade, não. A tela diria "pronto, está escondida"
+ * e a corrida continuaria no ranking, com o traçado do percurso — que passa
+ * na porta de casa de quem correu.
+ *
+ * Agora devolvem resultado, e a tela só diz que deu certo quando deu.
+ */
 export async function updateActivityPrivacyAction(
   activityId: string,
   privacy: ActivityPrivacy,
-): Promise<void> {
+): Promise<ActivityPrivacyResult> {
   await requireSession()
 
   try {
@@ -132,19 +143,25 @@ export async function updateActivityPrivacyAction(
     // um id de outra pessoa simplesmente não encontra linha para atualizar.
     await dataSource.updateActivityPrivacy(activityId, privacy)
     revalidatePath(`/app/run/${activityId}`)
+    revalidatePath('/app/run')
+    return { status: 'success' }
   } catch (error) {
     logger.error('synse-run:falha_privacidade', { error: String(error).slice(0, 200) })
+    return { status: 'error', message: 'Não foi possível mudar a privacidade. Tente de novo.' }
   }
 }
 
-export async function deleteActivityAction(activityId: string): Promise<void> {
+export async function deleteActivityAction(activityId: string): Promise<ActivityPrivacyResult> {
   await requireSession()
 
   try {
     const dataSource = await getDataSource()
     await dataSource.deleteActivity(activityId)
     revalidatePath('/app/run')
+    revalidatePath('/app/run/history')
+    return { status: 'success' }
   } catch (error) {
     logger.error('synse-run:falha_ao_apagar', { error: String(error).slice(0, 200) })
+    return { status: 'error', message: 'Não foi possível apagar esta corrida. Tente de novo.' }
   }
 }

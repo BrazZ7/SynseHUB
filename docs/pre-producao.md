@@ -33,9 +33,9 @@ npm run env:check
 
 ## Migrations
 
-**Estado em 02/10/2026: 0001 a 0043 aplicadas em produção** (a 0044 aguarda
-colagem), confirmado por `/api/health?deep=1` (`appliedMigrations: 37`,
-`pendingMigrations: []`).
+**Estado em 02/10/2026: 0001 a 0043 aplicadas em produção** (a 0044 e a 0045
+aguardam colagem, nessa ordem), confirmado por `/api/health?deep=1`
+(`appliedMigrations: 37`, `pendingMigrations: []`).
 
 Esta linha envelhece a cada migration e por isso não é a fonte da verdade: a
 sonda é. Quem quiser saber o que falta abre o endereço, não este arquivo. O que
@@ -438,6 +438,44 @@ existem, não para conferir se subiram.
   ingredientes na vitrine derruba 1; tirar o `not tem_synse_plus()` dela, 1;
   tirar o `is_super_admin` da gravação, 1; tirar o `or is_super_admin()` da
   política, 1; tirar a trava de `ORGANIZATION`, 1.
+
+- **0045 (`0045_quem_o_aluno_pode_autorizar.sql`)** — o controle de
+  privacidade do corpo ganha porta.
+
+  A 0032 criou `body_measurement_shares` com o desenho certo: autorização
+  nominal, por pessoa, revogável, nunca por academia inteira. As server
+  actions que a operam existem desde então, e **nenhuma tela as chamava** —
+  elas revalidavam `/app/corpo/compartilhamento`, uma rota que não estava no
+  repositório. Bioimpedância diz gordura visceral e água corporal; o controle
+  existir no banco e não ter porta é a pessoa sem como exercer um direito que
+  o sistema diz respeitar.
+
+  **O que faltava tecnicamente:** para oferecer "autorize alguém", a tela
+  precisa listar quem. `staff_read` (0004) exige `is_org_staff`, e o aluno não
+  lê `staff` — está certo que não leia. Abrir a política para `is_org_member`
+  resolveria a tela e daria a todo aluno o CREF, as especialidades e a
+  situação de contrato de toda a equipe.
+
+  `equipe_para_autorizar()` devolve perfil, nome, papel e academia — e nada
+  além. Só equipe ativa das academias em que a conta é aluno ativo, menos quem
+  já está autorizado (a unicidade da 0032 faria o botão sempre falhar).
+
+  `autorizar_corpo(uuid)` fecha o outro lado: `body_shares_owner` impede
+  autorizar **em nome de outro**, mas não confere **para quem** — um insert
+  direto autorizava qualquer perfil do banco. A função exige que a pessoa seja
+  da equipe de uma academia desta conta, e o `on conflict` reabre quem foi
+  revogado, porque trocar de professor e voltar é o caso comum.
+
+  `tests/db/compartilhamento-do-corpo.test.ts`: 14 testes, conferidos por
+  mutação. Pôr o CREF na projeção derruba 1; tirar o filtro pela academia do
+  aluno, 4; tirar a conferência de equipe do `autorizar_corpo`, 1; trocar o
+  `on conflict do update` por `do nothing`, 1.
+
+  **Fora do banco, no mesmo assunto:** `updateActivityPrivacyAction` e
+  `deleteActivityAction` devolviam `void` e engoliam a exceção. Para
+  privacidade isso é pior que não ter o controle — a tela diria "escondida" e
+  a corrida seguiria pública, com o traçado que mostra onde a pessoa mora.
+  Passaram a devolver resultado.
 
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona

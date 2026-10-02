@@ -57,6 +57,7 @@ import type {
   ProgramaTrancado as ProgramaTrancadoTipo,
   Recipe,
   ReceitaTrancada as ReceitaTrancadaTipo,
+  EquipeParaAutorizar,
   ConsentType,
   StaffInvite,
   UserRole,
@@ -384,6 +385,40 @@ export class DemoDataSource implements DataSource {
             mutation.a === 'day' ? [...feitos, mutation.d] : feitos.filter((d) => d !== mutation.d),
           )
         }
+        break
+      }
+      case 'share': {
+        /*
+         * A autorização do corpo, reaplicada do cookie.
+         *
+         * Não vai para o mapa estático: o cabeçalho de `demo-journal.ts`
+         * explica por quê — variável de módulo some na navegação seguinte, e
+         * foi exatamente o que aconteceu aqui. Autorizar alguém na tela não
+         * tinha efeito nenhum, e numa tela de privacidade esse é o pior
+         * defeito possível: o gesto parece feito e não foi.
+         */
+        if (mutation.a === 'revoke') this.autorizacoesDaSessao.delete(mutation.id)
+        else {
+          this.autorizacoesDaSessao.set(mutation.id, {
+            id: `share_${mutation.id}`,
+            userProfileId: this.db.studentIdForApp,
+            sharedWithProfileId: mutation.id,
+            sharedWithName: mutation.nome ?? null,
+            organizationId: this.db.organization.id,
+            grantedAt: new Date().toISOString(),
+            revokedAt: null,
+          })
+        }
+        break
+      }
+      case 'actpriv': {
+        /*
+         * Sem `p` é apagada. Guardadas em campos de instância, nunca nos
+         * mapas estáticos: aquilo some entre requisições, e a corrida voltava
+         * a aparecer — ou voltava a ficar pública.
+         */
+        if (mutation.p) this.privacidadeDaCorrida.set(mutation.id, mutation.p)
+        else this.corridasApagadas.add(mutation.id)
         break
       }
       case 'notifread': {
@@ -3580,7 +3615,21 @@ export class DemoDataSource implements DataSource {
    */
   private static readonly pesagens = new Map<string, BodyMeasurement>()
   private static readonly aparelhos = new Map<string, UserDevice>()
-  private static readonly autorizacoes = new Map<string, BodyMeasurementShare>()
+  /**
+   * As autorizações desta sessão, reconstruídas do diário a cada requisição.
+   *
+   * Instância, e não `static`: o mapa estático que estava aqui sobrevivia
+   * dentro de um processo e sumia entre requisições servidas por módulos
+   * diferentes — a tela autorizava e nada acontecia. Quem transporta estado
+   * de visitante na demonstração é o cookie, não a memória do servidor.
+   */
+  private readonly autorizacoesDaSessao = new Map<string, BodyMeasurementShare>()
+
+  /** A privacidade escolhida nesta sessão, do diário. Vence a do dataset. */
+  private readonly privacidadeDaCorrida = new Map<string, ActivityPrivacy>()
+
+  /** O que o visitante apagou. Some das listas, como no banco. */
+  private readonly corridasApagadas = new Set<string>()
 
   /**
    * Um histórico plausível para a demonstração começar com gráfico.
@@ -3736,32 +3785,87 @@ export class DemoDataSource implements DataSource {
   }
 
   async listBodyShares(): Promise<BodyMeasurementShare[]> {
-    return [...DemoDataSource.autorizacoes.values()].filter((a) => a.revokedAt === null)
+    return [...this.autorizacoesDaSessao.values()]
+  }
+
+  /**
+   * A equipe que esta conta pode autorizar.
+   *
+   * Reproduz `equipe_para_autorizar` (0045) inteira, e não por aproximação:
+   * equipe ativa da academia do aluno, menos quem já está autorizado. Foi
+   * aproximar que fez `listPublishedContent` perder o acervo da plataforma na
+   * demonstração enquanto produção o mostrava.
+   */
+  async listStaffToAuthorize(): Promise<EquipeParaAutorizar[]> {
+    const jaAutorizados = new Set(
+      [...this.autorizacoesDaSessao.values()].map((a) => a.sharedWithProfileId),
+    )
+
+    return this.db.staff
+      .filter(
+        (m) =>
+          m.status === 'ACTIVE' &&
+          m.organizationId === this.db.organization.id &&
+          m.userProfileId !== this.db.studentIdForApp &&
+          !jaAutorizados.has(m.userProfileId),
+      )
+      .map((m) => ({
+        profileId: m.userProfileId,
+        name: m.name,
+        role: m.role,
+        organizationId: m.organizationId,
+        organizationName: this.db.organization.name,
+      }))
+      .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
   }
 
   async grantBodyShare(sharedWithProfileId: string, organizationId: string | null): Promise<void> {
     const id = `share_${sharedWithProfileId}`
     const pessoa = this.db.staff.find((m) => m.userProfileId === sharedWithProfileId)
 
-    DemoDataSource.autorizacoes.set(id, {
+    /*
+     * A trava que `autorizar_corpo` (0045) dá no banco: só equipe ativa de
+     * uma academia desta conta. Em demonstração não há RLS, e sem isto a tela
+     * passaria com um id qualquer — justamente o buraco que a função fecha.
+     */
+    if (
+      !pessoa ||
+      pessoa.status !== 'ACTIVE' ||
+      pessoa.organizationId !== this.db.organization.id
+    ) {
+      throw new AppError(
+        'autorizacao_invalida',
+        'Esta pessoa não é da equipe de uma academia sua.',
+        403,
+      )
+    }
+
+    this.autorizacoesDaSessao.set(sharedWithProfileId, {
       id,
       userProfileId: this.db.studentIdForApp,
       sharedWithProfileId,
-      sharedWithName: pessoa?.name ?? null,
+      sharedWithName: pessoa.name,
       organizationId,
       grantedAt: new Date().toISOString(),
       revokedAt: null,
     })
+
+    await appendDemoMutation({ t: 'share', id: sharedWithProfileId, a: 'grant', nome: pessoa.name })
   }
 
+  /**
+   * Revogar recebe o id da autorização, e o diário guarda o do perfil.
+   *
+   * A conversão é aqui porque a tela trabalha com o que `listBodyShares`
+   * devolve, e o diário precisa de uma chave estável entre requisições — o id
+   * da autorização é inventado a cada remontagem.
+   */
   async revokeBodyShare(shareId: string): Promise<void> {
-    const atual = DemoDataSource.autorizacoes.get(shareId)
-    if (atual) {
-      DemoDataSource.autorizacoes.set(shareId, {
-        ...atual,
-        revokedAt: new Date().toISOString(),
-      })
-    }
+    const atual = [...this.autorizacoesDaSessao.values()].find((a) => a.id === shareId)
+    if (!atual) return
+
+    this.autorizacoesDaSessao.delete(atual.sharedWithProfileId)
+    await appendDemoMutation({ t: 'share', id: atual.sharedWithProfileId, a: 'revoke' })
   }
 
   async saveActivity(input: SaveActivityInput): Promise<string> {
@@ -3832,18 +3936,36 @@ export class DemoDataSource implements DataSource {
 
     return [...DemoDataSource.corridas.values(), ...daSemente]
       .filter((atividade) => atividade.userProfileId === userProfileId)
+      .filter((atividade) => !this.corridasApagadas.has(atividade.id))
       .filter((atividade) => !filters.sport || atividade.sport === filters.sport)
       .filter((atividade) => !filters.since || atividade.startedAt >= filters.since)
+      .map((atividade) => this.comPrivacidadeDoDiario(atividade))
       .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
       .slice(0, filters.limit ?? 50)
   }
 
+  /**
+   * A escolha do visitante vence a do dataset.
+   *
+   * O dataset base é o mesmo em toda requisição, e é dele que vem a
+   * privacidade original. Sem esta sobreposição, mudar para "Só eu" durava
+   * até o próximo carregamento — e um controle de privacidade que volta
+   * atrás sozinho é pior que não existir.
+   */
+  private comPrivacidadeDoDiario(atividade: Activity): Activity {
+    const escolhida = this.privacidadeDaCorrida.get(atividade.id)
+    return escolhida ? { ...atividade, privacy: escolhida } : atividade
+  }
+
   async getActivity(activityId: string): Promise<Activity | null> {
-    return (
+    if (this.corridasApagadas.has(activityId)) return null
+
+    const atividade =
       DemoDataSource.corridas.get(activityId) ??
-      this.db.activities.find((atividade) => atividade.id === activityId) ??
+      this.db.activities.find((a) => a.id === activityId) ??
       null
-    )
+
+    return atividade ? this.comPrivacidadeDoDiario(atividade) : null
   }
 
   async getActivityRoute(activityId: string): Promise<ActivityRoutePoint[]> {
@@ -3886,14 +4008,13 @@ export class DemoDataSource implements DataSource {
   }
 
   async updateActivityPrivacy(activityId: string, privacy: ActivityPrivacy): Promise<void> {
-    const atividade = DemoDataSource.corridas.get(activityId)
-    if (atividade) DemoDataSource.corridas.set(activityId, { ...atividade, privacy })
+    this.privacidadeDaCorrida.set(activityId, privacy)
+    await appendDemoMutation({ t: 'actpriv', id: activityId, p: privacy })
   }
 
   async deleteActivity(activityId: string): Promise<void> {
-    DemoDataSource.corridas.delete(activityId)
-    DemoDataSource.rotas.delete(activityId)
-    DemoDataSource.parciais.delete(activityId)
+    this.corridasApagadas.add(activityId)
+    await appendDemoMutation({ t: 'actpriv', id: activityId })
   }
 }
 

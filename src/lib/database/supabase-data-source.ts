@@ -51,6 +51,7 @@ import type {
   ProgramaTrancado as ProgramaTrancadoTipo,
   Recipe,
   ReceitaTrancada as ReceitaTrancadaTipo,
+  EquipeParaAutorizar,
   ConsentType,
   StaffInvite,
   UserRole,
@@ -3291,31 +3292,42 @@ export class SupabaseDataSource implements DataSource {
     }))
   }
 
-  async grantBodyShare(sharedWithProfileId: string, organizationId: string | null): Promise<void> {
-    const { data: perfil, error: erroPerfil } = await this.client
-      .from('user_profiles')
-      .select('id')
-      .eq('auth_user_id', (await this.client.auth.getUser()).data.user?.id ?? '')
-      .maybeSingle()
-    if (erroPerfil) this.fail('grantBodyShare:profile', erroPerfil)
-    if (!perfil) this.fail('grantBodyShare:profile', new Error('perfil não encontrado'))
+  /** A equipe que esta conta pode autorizar (0045). */
+  async listStaffToAuthorize(): Promise<EquipeParaAutorizar[]> {
+    const { data, error } = await this.client.rpc('equipe_para_autorizar')
+    if (error) {
+      /*
+       * Lista vazia, nunca tela quebrada — e cobre a janela entre publicar e
+       * migrar, em que a função não existe. A tela já sabe dizer "nenhuma
+       * academia para autorizar", que é o que a pessoa vê nesse intervalo.
+       */
+      logger.warn('listStaffToAuthorize', { erro: String((error as Error).message) })
+      return []
+    }
 
-    /*
-     * `upsert` e não `insert`: reautorizar quem foi revogado é o caso comum —
-     * a pessoa troca de professor e volta. Sem isto, a segunda autorização
-     * esbarraria na unicidade e a tela mostraria erro por um gesto legítimo.
-     */
-    const { error } = await this.client.from('body_measurement_shares').upsert(
-      {
-        user_profile_id: perfil.id,
-        shared_with_profile_id: sharedWithProfileId,
-        organization_id: organizationId,
-        granted_at: new Date().toISOString(),
-        revoked_at: null,
-      },
-      { onConflict: 'user_profile_id,shared_with_profile_id' },
-    )
-    if (error) this.fail('grantBodyShare', error)
+    return ((data as Row[]) ?? []).map((row) => ({
+      profileId: row.perfil_id,
+      name: row.nome,
+      role: row.papel,
+      organizationId: row.organization_id,
+      organizationName: row.academia,
+    }))
+  }
+
+  /**
+   * Autoriza, pela função da 0045.
+   *
+   * O `upsert` que estava aqui gravava direto na tabela. A política
+   * `body_shares_owner` da 0032 impede autorizar **em nome de outro**, mas
+   * não confere **para quem**: dava para autorizar qualquer perfil do banco,
+   * inclusive alguém de outra academia. `autorizar_corpo` exige que a pessoa
+   * seja da equipe de uma academia desta conta, e resolve a organização
+   * sozinha — por isso `organizationId` deixa de ser lido aqui.
+   */
+  async grantBodyShare(sharedWithProfileId: string, _organizationId: string | null): Promise<void> {
+    await this.chamarFuncao('grantBodyShare', 'autorizar_corpo', {
+      p_perfil: sharedWithProfileId,
+    })
   }
 
   /** Revogar carimba a hora; a linha fica, para a pessoa ver o que já autorizou. */

@@ -108,6 +108,35 @@ export type DemoMutation =
       d?: number
     }
   | {
+      /**
+       * Quem o visitante autorizou a ver o corpo dele, e de quem tirou.
+       *
+       * Um tipo só com a ação dentro, como a amizade e o programa. Precisa
+       * estar aqui pelo motivo que o cabeçalho deste arquivo explica: a
+       * autorização morava numa variável de módulo (`DemoDataSource.autorizacoes`)
+       * e sumia na navegação seguinte — autorizar parecia não ter efeito, e
+       * numa tela de privacidade isso é o pior defeito possível.
+       */
+      t: 'share'
+      id: string
+      a: 'grant' | 'revoke'
+      nome?: string
+    }
+  | {
+      /**
+       * A privacidade de uma corrida, ou o apagar dela.
+       *
+       * Pelo mesmo motivo do `share`: estava em variável de módulo e voltava
+       * atrás ao recarregar. Numa corrida isso é pior que no corpo — o que
+       * fica exposto é o **percurso**, que diz onde a pessoa mora.
+       *
+       * `p` ausente quer dizer apagada.
+       */
+      t: 'actpriv'
+      id: string
+      p?: 'PUBLIC' | 'GYM' | 'PRIVATE'
+    }
+  | {
       /** Sino aberto: tudo criado antes deste instante conta como lido. */
       t: 'notifread'
       at: string
@@ -225,6 +254,8 @@ const TIPOS_ACEITOS: Record<DemoMutation['t'], true> = {
   chal: true,
   chalprog: true,
   prog: true,
+  share: true,
+  actpriv: true,
   sstatus: true,
   sedit: true,
   wplan: true,

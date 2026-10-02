@@ -186,6 +186,7 @@ const MIGRATIONS_ESPERADAS = [
   '0042_vitrine_nao_anuncia_a_quem_ja_le.sql',
   '0043_programas_guiados.sql',
   '0044_biblioteca_de_receitas.sql',
+  '0045_quem_o_aluno_pode_autorizar.sql',
 ]
 
 async function schemaReadiness() {
@@ -211,6 +212,7 @@ async function schemaReadiness() {
     vitrineDoCadeado,
     programasGuiados,
     bibliotecaDeReceitas,
+    autorizarOCorpo,
   ] = await Promise.all([
     schemaCheck('user_profiles?select=tier&limit=1'),
     schemaCheck('baseline_challenges?select=code&limit=1'),
@@ -396,6 +398,17 @@ async function schemaReadiness() {
      * ingredientes nem o preparo.
      */
     rpcCheck('receitas_trancadas', {}, { executa: true }),
+    /*
+     * O compartilhamento do corpo (0045). Sem ela a tela de
+     * `/app/corpo/compartilhamento` não tem a quem oferecer, e a pessoa perde
+     * o controle sobre quem vê o dado de saúde dela.
+     *
+     * Sem `executa`, e aqui não é detalhe: ligá-lo faria a sonda
+     * **autorizar alguém** a ver dado corporal a cada visita ao endereço de
+     * saúde. `autorizar_corpo` é revogada do anônimo, então 401/403 é
+     * "existe" e 404 é "não existe".
+     */
+    rpcCheck('autorizar_corpo', { p_perfil: '00000000-0000-0000-0000-000000000000' }),
   ])
 
   const registradas = await migracoesRegistradas()
@@ -462,6 +475,7 @@ async function schemaReadiness() {
       vitrineDoCadeado,
       programasGuiados,
       bibliotecaDeReceitas,
+      autorizarOCorpo,
       appliedMigrations: registradas.length,
       pendingMigrations: faltando,
     }
@@ -505,6 +519,7 @@ async function schemaReadiness() {
     '0042_vitrine_nao_anuncia_a_quem_ja_le.sql',
     '0043_programas_guiados.sql',
     '0044_biblioteca_de_receitas.sql',
+    '0045_quem_o_aluno_pode_autorizar.sql',
   )
 
   return {
@@ -529,6 +544,7 @@ async function schemaReadiness() {
     vitrineDoCadeado,
     programasGuiados,
     bibliotecaDeReceitas,
+    autorizarOCorpo,
     pendingMigrations: pendentes,
   }
 }

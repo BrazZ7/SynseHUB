@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { Bluetooth, Lock, Pencil, Scale, Trash2 } from 'lucide-react'
+import { Bluetooth, Lock, Pencil, Scale, ShieldCheck, Trash2 } from 'lucide-react'
 
+import { ApagarMedicao } from '@/features/synse-body/apagar-medicao'
 import { BackLink } from '@/components/synse/back-link'
 import { ChartCard } from '@/components/synse/chart-card'
 import { EmptyState } from '@/components/synse/empty-state'
@@ -25,7 +26,14 @@ const PERIODO_DO_GRATUITO: BodyPeriod = '3m'
 
 export const metadata: Metadata = { title: 'Synse Body' }
 
-const CAMPOS = ['bodyFatPercent', 'muscleMassKg', 'leanMassKg', 'bodyWaterPercent', 'bmi', 'bmrKcal'] as const
+const CAMPOS = [
+  'bodyFatPercent',
+  'muscleMassKg',
+  'leanMassKg',
+  'bodyWaterPercent',
+  'bmi',
+  'bmrKcal',
+] as const
 
 export default async function SynseBodyPage({
   searchParams,
@@ -105,6 +113,17 @@ export default async function SynseBodyPage({
           <Link href="/app/corpo/aparelhos">
             <Bluetooth className="size-4" aria-hidden />
             Aparelhos
+          </Link>
+        </Button>
+        {/*
+          A porta do controle de privacidade. A 0032 criou a autorização
+          nominal e revogável; a tela que a opera só chegou agora, e sem este
+          elo ela continuaria existindo sem ninguém alcançar.
+        */}
+        <Button asChild size="sm" variant="ghost">
+          <Link href="/app/corpo/compartilhamento">
+            <ShieldCheck className="size-4" aria-hidden />
+            Quem vê
           </Link>
         </Button>
       </div>
@@ -192,11 +211,24 @@ export default async function SynseBodyPage({
                       {medicao.source === 'MANUAL' ? 'digitado' : 'balança'}
                     </p>
                   </div>
-                  {medicao.bodyFatPercent != null && (
-                    <p className="shrink-0 text-xs text-synse-muted">
-                      {medicao.bodyFatPercent.toFixed(1)}% gordura
-                    </p>
-                  )}
+                  <div className="flex shrink-0 items-center gap-2">
+                    {medicao.bodyFatPercent != null && (
+                      <p className="text-xs text-synse-muted">
+                        {medicao.bodyFatPercent.toFixed(1)}% gordura
+                      </p>
+                    )}
+                    {/*
+                      Só o que já está gravado no servidor tem id. A pesagem
+                      ainda na fila offline não tem o que apagar lá, e o botão
+                      prometeria algo que a action não consegue fazer.
+                    */}
+                    {medicao.id && (
+                      <ApagarMedicao
+                        measurementId={medicao.id}
+                        quando={formatDate(medicao.measuredAt)}
+                      />
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>

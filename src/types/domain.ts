@@ -1249,5 +1249,21 @@ export type BodyMeasurementShare = {
   revokedAt: string | null
 }
 
+/**
+ * Alguém da equipe que esta conta pode autorizar a ver o corpo dela (0045).
+ *
+ * Perfil, nome, papel e de qual academia. Nada de CREF, especialidade ou
+ * situação de contrato: isso é dado da relação de trabalho de outra pessoa, e
+ * não ajuda a decidir "autorizo este professor?". A projeção estreita está
+ * também em SQL, em `equipe_para_autorizar`.
+ */
+export type EquipeParaAutorizar = {
+  profileId: string
+  name: string | null
+  role: string
+  organizationId: string
+  organizationName: string
+}
+
 /** As janelas do seletor de período da tela do Synse Body. */
 export type BodyPeriod = '7d' | '30d' | '3m' | '6m' | '1a' | 'tudo'

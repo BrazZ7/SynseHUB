@@ -79,21 +79,20 @@ function importados(arquivo: string, codigo: string): string[] {
 }
 
 /**
- * As que já estavam sem porta quando o guarda foi escrito.
+ * As que ainda estão sem porta.
  *
- * Quatro delas são controle de privacidade — revogar compartilhamento de dado
- * corporal, mudar a privacidade de uma atividade, apagar medição e apagar
- * atividade. O lado do servidor existe e a pessoa não tem por onde chegar
- * nele, o que é pior que uma tela faltando: é uma promessa de controle que o
- * aplicativo não cumpre.
+ * A lista nasceu com seis. Cinco eram controle de privacidade — revogar e
+ * conceder compartilhamento de dado corporal, apagar medição, mudar a
+ * privacidade de uma corrida e apagá-la — e saíram daqui quando as telas
+ * foram construídas: `/app/corpo/compartilhamento`, o apagar no histórico do
+ * corpo e o seletor em `/app/run/[id]`.
+ *
+ * Sobrou uma, que não é de privacidade: `saveWorkoutPreferencesAction`, do
+ * treino ativo. Fica registrada pelo mesmo motivo que as outras ficaram —
+ * dívida escrita encolhe; teste vermelho ignorado, não.
  */
 const SEM_PORTA_CONHECIDAS = [
   'src/features/active-workout/actions.ts → saveWorkoutPreferencesAction',
-  'src/features/synse-body/actions.ts → deleteBodyMeasurementAction',
-  'src/features/synse-body/actions.ts → grantBodyShareAction',
-  'src/features/synse-body/actions.ts → revokeBodyShareAction',
-  'src/features/synse-run/actions.ts → deleteActivityAction',
-  'src/features/synse-run/actions.ts → updateActivityPrivacyAction',
 ].sort()
 
 function actionsSemPorta(): string[] {
@@ -164,6 +163,19 @@ describe('toda server action tem uma porta', () => {
     expect(orfas).not.toContain('src/features/programs/admin-actions.ts → salvarProgramaAction')
     expect(orfas).not.toContain('src/features/programs/admin-actions.ts → apagarProgramaAction')
     expect(orfas).not.toContain('src/features/recipes/admin-actions.ts → apagarReceitaAction')
+
+    /*
+     * E as cinco de privacidade, que são a razão de este guarda existir. Com
+     * a lista reduzida a um nome, `length > 0` quase não prova nada — o que
+     * prova é o contador continuar enxergando estas, que atravessam duas e
+     * três pernas de import até a página.
+     */
+    expect(orfas).not.toContain('src/features/synse-body/actions.ts → revokeBodyShareAction')
+    expect(orfas).not.toContain('src/features/synse-body/actions.ts → grantBodyShareAction')
+    expect(orfas).not.toContain('src/features/synse-body/actions.ts → deleteBodyMeasurementAction')
+    expect(orfas).not.toContain('src/features/synse-run/actions.ts → updateActivityPrivacyAction')
+    expect(orfas).not.toContain('src/features/synse-run/actions.ts → deleteActivityAction')
+
     expect(orfas.length).toBeGreaterThan(0)
   })
 })

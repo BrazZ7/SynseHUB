@@ -58,18 +58,39 @@ export default async function StudentProfilePage({ params }: { params: Params })
   const student = await dataSource.getStudent(session.organizationId, id)
   if (!student) notFound()
 
-  const [charges, checkIns, assignments, workoutLogs, assessments, workoutPlans] = await Promise.all([
-    dataSource.getChargesForStudent(session.organizationId, student.id),
-    dataSource.listCheckInsForStudent(session.organizationId, student.id, 90),
-    dataSource.listAssignmentsForStudent(session.organizationId, student.id),
-    dataSource.listWorkoutLogs(session.organizationId, student.id),
-    dataSource.listAssessments(session.organizationId, student.id),
-    dataSource.listWorkoutPlans(session.organizationId),
-  ])
-
   const canWrite = can(session.role, 'students:write')
   const canSeeFinance = can(session.role, 'finance:read')
   const canSeeHealth = can(session.role, 'assessments:read')
+
+  /*
+   * ── Não buscar o que a tela não pode mostrar ──────────────────────────────
+   *
+   * Antes, peso e cobrança eram lidos sempre e escondidos na renderização —
+   * e dois cartões da aba "Visão geral" **não** escondiam: a recepção, que o
+   * produto nega `assessments:read`, lia "Peso atual: 93 kg" e a variação
+   * desde a última avaliação; o professor, sem `finance:read`, lia o valor da
+   * mensalidade e o vencimento.
+   *
+   * A RLS não segurava: a 0008 afrouxou `assessments` para qualquer staff
+   * (consertado na 0046), e `charges_staff` vale para a equipe inteira de
+   * propósito. O porteiro aqui é a permissão.
+   *
+   * Condicionar a **busca**, e não só a renderização, é o que impede o dado
+   * de chegar ao processo e ao payload que o servidor manda para o navegador.
+   */
+  const [charges, checkIns, assignments, workoutLogs, assessments, workoutPlans] =
+    await Promise.all([
+      canSeeFinance
+        ? dataSource.getChargesForStudent(session.organizationId, student.id)
+        : Promise.resolve([]),
+      dataSource.listCheckInsForStudent(session.organizationId, student.id, 90),
+      dataSource.listAssignmentsForStudent(session.organizationId, student.id),
+      dataSource.listWorkoutLogs(session.organizationId, student.id),
+      canSeeHealth
+        ? dataSource.listAssessments(session.organizationId, student.id)
+        : Promise.resolve([]),
+      dataSource.listWorkoutPlans(session.organizationId),
+    ])
   const canWriteAssessments = can(session.role, 'assessments:write')
   const canSeeNutrition = can(session.role, 'nutrition:read')
 
@@ -101,7 +122,7 @@ export default async function StudentProfilePage({ params }: { params: Params })
     }))
 
   return (
-    <div className="space-y-5 animate-fade-in-up">
+    <div className="animate-fade-in-up space-y-5">
       <BackLink href="/students" label="Alunos" />
 
       {/* Cabeçalho do perfil */}
@@ -184,17 +205,19 @@ export default async function StudentProfilePage({ params }: { params: Params })
         {/* ── Visão geral ── */}
         <TabsContent value="overview" className="space-y-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <MetricCard
-              label="Peso atual"
-              value={latestAssessment?.weight != null ? `${latestAssessment.weight} kg` : '—'}
-              icon={Activity}
-              accent="primary"
-              hint={
-                weightDelta != null
-                  ? `${weightDelta > 0 ? '+' : ''}${weightDelta.toFixed(1)} kg desde a anterior`
-                  : 'Sem avaliação anterior'
-              }
-            />
+            {canSeeHealth && (
+              <MetricCard
+                label="Peso atual"
+                value={latestAssessment?.weight != null ? `${latestAssessment.weight} kg` : '—'}
+                icon={Activity}
+                accent="primary"
+                hint={
+                  weightDelta != null
+                    ? `${weightDelta > 0 ? '+' : ''}${weightDelta.toFixed(1)} kg desde a anterior`
+                    : 'Sem avaliação anterior'
+                }
+              />
+            )}
             <MetricCard
               label="Frequência no mês"
               value={formatNumber(checkInsThisMonth)}
@@ -209,17 +232,19 @@ export default async function StudentProfilePage({ params }: { params: Params })
               accent="default"
               hint="Séries com carga anotada"
             />
-            <MetricCard
-              label="Mensalidade"
-              value={student.planPrice != null ? formatCurrency(student.planPrice) : '—'}
-              icon={Wallet}
-              accent={student.status === 'OVERDUE' ? 'danger' : 'primary'}
-              hint={
-                openCharge
-                  ? `Vence ${formatDate(openCharge.dueDate)}`
-                  : 'Nenhuma cobrança em aberto'
-              }
-            />
+            {canSeeFinance && (
+              <MetricCard
+                label="Mensalidade"
+                value={student.planPrice != null ? formatCurrency(student.planPrice) : '—'}
+                icon={Wallet}
+                accent={student.status === 'OVERDUE' ? 'danger' : 'primary'}
+                hint={
+                  openCharge
+                    ? `Vence ${formatDate(openCharge.dueDate)}`
+                    : 'Nenhuma cobrança em aberto'
+                }
+              />
+            )}
           </div>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -239,13 +264,18 @@ export default async function StudentProfilePage({ params }: { params: Params })
                 </div>
 
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <InfoRow label="Última presença" value={
-                    student.lastCheckInAt ? formatDateTime(student.lastCheckInAt) : 'Sem registro'
-                  } />
                   <InfoRow
-                    label="Última avaliação"
-                    value={latestAssessment ? formatDate(latestAssessment.assessedAt) : 'Nenhuma'}
+                    label="Última presença"
+                    value={
+                      student.lastCheckInAt ? formatDateTime(student.lastCheckInAt) : 'Sem registro'
+                    }
                   />
+                  {canSeeHealth && (
+                    <InfoRow
+                      label="Última avaliação"
+                      value={latestAssessment ? formatDate(latestAssessment.assessedAt) : 'Nenhuma'}
+                    />
+                  )}
                   <InfoRow label="Objetivo" value={student.goal ?? 'Não informado'} />
                   <InfoRow label="Treinos atribuídos" value={String(assignments.length)} />
                 </div>
@@ -320,7 +350,8 @@ export default async function StudentProfilePage({ params }: { params: Params })
                       <p>{plan.goal ?? 'Sem objetivo definido'}</p>
                       <p className="text-xs">
                         Atribuído em {formatDate(assignment.assignedAt)}
-                        {assignment.validUntil && ` · válido até ${formatDate(assignment.validUntil)}`}
+                        {assignment.validUntil &&
+                          ` · válido até ${formatDate(assignment.validUntil)}`}
                       </p>
                       <Button variant="link" size="sm" asChild className="h-auto p-0">
                         <ListLink href={`/workouts/${plan.id}`}>Ver exercícios</ListLink>
@@ -390,12 +421,24 @@ export default async function StudentProfilePage({ params }: { params: Params })
                         <caption className="sr-only">Histórico de medidas do aluno</caption>
                         <thead>
                           <tr className="border-b border-synse-border text-left text-xs uppercase tracking-wide text-synse-muted">
-                            <th scope="col" className="py-2 pr-4 font-semibold">Data</th>
-                            <th scope="col" className="py-2 pr-4 font-semibold">Peso</th>
-                            <th scope="col" className="py-2 pr-4 font-semibold">IMC</th>
-                            <th scope="col" className="py-2 pr-4 font-semibold">Cintura</th>
-                            <th scope="col" className="py-2 pr-4 font-semibold">Braço</th>
-                            <th scope="col" className="py-2 pr-4 font-semibold">Coxa</th>
+                            <th scope="col" className="py-2 pr-4 font-semibold">
+                              Data
+                            </th>
+                            <th scope="col" className="py-2 pr-4 font-semibold">
+                              Peso
+                            </th>
+                            <th scope="col" className="py-2 pr-4 font-semibold">
+                              IMC
+                            </th>
+                            <th scope="col" className="py-2 pr-4 font-semibold">
+                              Cintura
+                            </th>
+                            <th scope="col" className="py-2 pr-4 font-semibold">
+                              Braço
+                            </th>
+                            <th scope="col" className="py-2 pr-4 font-semibold">
+                              Coxa
+                            </th>
                             <th scope="col" className="py-2 font-semibold">
                               <span className="sr-only">Ações</span>
                             </th>
@@ -407,11 +450,19 @@ export default async function StudentProfilePage({ params }: { params: Params })
                               <td className="py-2.5 pr-4 tabular-nums">
                                 {formatDate(assessment.assessedAt)}
                               </td>
-                              <td className="py-2.5 pr-4 tabular-nums">{assessment.weight ?? '—'} kg</td>
+                              <td className="py-2.5 pr-4 tabular-nums">
+                                {assessment.weight ?? '—'} kg
+                              </td>
                               <td className="py-2.5 pr-4 tabular-nums">{assessment.bmi ?? '—'}</td>
-                              <td className="py-2.5 pr-4 tabular-nums">{assessment.waist ?? '—'} cm</td>
-                              <td className="py-2.5 pr-4 tabular-nums">{assessment.arm ?? '—'} cm</td>
-                              <td className="py-2.5 pr-4 tabular-nums">{assessment.thigh ?? '—'} cm</td>
+                              <td className="py-2.5 pr-4 tabular-nums">
+                                {assessment.waist ?? '—'} cm
+                              </td>
+                              <td className="py-2.5 pr-4 tabular-nums">
+                                {assessment.arm ?? '—'} cm
+                              </td>
+                              <td className="py-2.5 pr-4 tabular-nums">
+                                {assessment.thigh ?? '—'} cm
+                              </td>
                               <td className="py-2.5 text-right">
                                 {canWriteAssessments && (
                                   <Button variant="ghost" size="sm" asChild>

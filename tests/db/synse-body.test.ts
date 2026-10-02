@@ -1,7 +1,15 @@
 import type { Client } from 'pg'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-import { ALPHA, BETA, applyMigrations, asUser, connect, databaseAvailable, seedTwoGyms } from './helpers'
+import {
+  ALPHA,
+  BETA,
+  applyMigrations,
+  asUser,
+  connect,
+  databaseAvailable,
+  seedTwoGyms,
+} from './helpers'
 
 /**
  * Synse Body no banco.
@@ -146,16 +154,15 @@ describe.skipIf(!temBanco)('de quem é a pesagem', () => {
   })
 
   it('sem sessão identificada não grava', async () => {
-    await expect(pesar(null as unknown as string, 'm-anon', '2026-09-01T08:00:00Z')).rejects.toThrow(
-      /permission denied|permissão|não identificada/i,
-    )
+    await expect(
+      pesar(null as unknown as string, 'm-anon', '2026-09-01T08:00:00Z'),
+    ).rejects.toThrow(/permission denied|permissão|não identificada/i)
   })
 
   it('o aparelho registra que foi visto', async () => {
-    const { rows } = await client.query(
-      `select last_seen_at from user_devices where id = $1`,
-      [balancaDaDona],
-    )
+    const { rows } = await client.query(`select last_seen_at from user_devices where id = $1`, [
+      balancaDaDona,
+    ])
     expect(rows[0].last_seen_at).not.toBeNull()
   })
 })
@@ -238,13 +245,13 @@ describe.skipIf(!temBanco)('quem enxerga o corpo de alguém', () => {
   })
 
   it('com autorização dada por ela, o professor enxerga', async () => {
-    await asUser(
-      client,
-      AUTH_DONA,
-      `insert into body_measurement_shares (user_profile_id, shared_with_profile_id, organization_id)
-       values ($1,$2,$3)`,
-      [perfilDona, perfilProfessor, ALPHA.orgId],
-    )
+    /*
+     * Pela função, e não por `insert` direto: a 0046 revogou a escrita da
+     * tabela. Era um contorno de `autorizar_corpo` que tornava inútil a
+     * garantia que a 0045 tinha acabado de comprar — "só é possível autorizar
+     * quem a tela oferece".
+     */
+    await asUser(client, AUTH_DONA, `select autorizar_corpo($1)`, [perfilProfessor])
 
     const linhas = await asUser(
       client,
@@ -266,13 +273,12 @@ describe.skipIf(!temBanco)('quem enxerga o corpo de alguém', () => {
   })
 
   it('revogada, a autorização para de valer na hora', async () => {
-    await asUser(
-      client,
-      AUTH_DONA,
-      `update body_measurement_shares set revoked_at = now()
-       where user_profile_id = $1 and shared_with_profile_id = $2`,
+    const { rows: autorizacao } = await client.query(
+      `select id from body_measurement_shares
+        where user_profile_id = $1 and shared_with_profile_id = $2`,
       [perfilDona, perfilProfessor],
     )
+    await asUser(client, AUTH_DONA, `select revogar_corpo($1)`, [autorizacao[0].id])
 
     const linhas = await asUser(
       client,
@@ -285,8 +291,11 @@ describe.skipIf(!temBanco)('quem enxerga o corpo de alguém', () => {
 
   it('ninguém autoriza em nome de outra pessoa', async () => {
     /*
-     * O `with check` recusa; se um dia ele cair, a linha entra e o teste
-     * quebra aqui em vez de na notícia sobre vazamento.
+     * A garantia ficou mais forte com a 0046, e por isso a mensagem mudou:
+     * antes o `with check` recusava **esta** escrita; agora a escrita da
+     * tabela está revogada para todo mundo, e nem chega à política. O
+     * professor também não consegue pela função — `autorizar_corpo` grava
+     * sempre em nome de quem chama.
      */
     await expect(
       asUser(
@@ -296,7 +305,14 @@ describe.skipIf(!temBanco)('quem enxerga o corpo de alguém', () => {
          values ($1,$2)`,
         [perfilDona, perfilProfessor],
       ),
-    ).rejects.toThrow(/row-level security|violates/i)
+    ).rejects.toThrow(/permission denied|row-level security|violates/i)
+
+    const { rows } = await client.query(
+      `select count(*)::int as n from body_measurement_shares
+        where user_profile_id = $1 and shared_with_profile_id = $2 and revoked_at is null`,
+      [perfilDona, perfilProfessor],
+    )
+    expect(rows[0].n).toBe(0)
   })
 
   it('quem recebeu a autorização sabe que ela existe', async () => {
@@ -329,9 +345,12 @@ describe.skipIf(!temBanco)('o caminho da escrita', () => {
 
   it('update direto na tabela é recusado', async () => {
     await expect(
-      asUser(client, AUTH_DONA, `update body_measurements set weight_kg = 60 where user_profile_id = $1`, [
-        perfilDona,
-      ]),
+      asUser(
+        client,
+        AUTH_DONA,
+        `update body_measurements set weight_kg = 60 where user_profile_id = $1`,
+        [perfilDona],
+      ),
     ).rejects.toThrow(/permission denied|permissão/i)
   })
 
@@ -339,9 +358,10 @@ describe.skipIf(!temBanco)('o caminho da escrita', () => {
     const [{ id }] = await pesar(AUTH_DONA, 'm-apagavel', '2026-09-05T07:00:00Z', 70.5)
     await asUser(client, AUTH_DONA, `delete from body_measurements where id = $1`, [id])
 
-    const { rows } = await client.query(`select count(*)::int as total from body_measurements where id = $1`, [
-      id,
-    ])
+    const { rows } = await client.query(
+      `select count(*)::int as total from body_measurements where id = $1`,
+      [id],
+    )
     expect(rows[0].total).toBe(0)
   })
 
@@ -349,9 +369,10 @@ describe.skipIf(!temBanco)('o caminho da escrita', () => {
     const [{ id }] = await pesar(AUTH_DONA, 'm-protegida', '2026-09-06T07:00:00Z', 70.6)
     await asUser(client, AUTH_COLEGA, `delete from body_measurements where id = $1`, [id])
 
-    const { rows } = await client.query(`select count(*)::int as total from body_measurements where id = $1`, [
-      id,
-    ])
+    const { rows } = await client.query(
+      `select count(*)::int as total from body_measurements where id = $1`,
+      [id],
+    )
     expect(rows[0].total).toBe(1)
   })
 })

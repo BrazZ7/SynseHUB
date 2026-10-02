@@ -187,6 +187,7 @@ const MIGRATIONS_ESPERADAS = [
   '0043_programas_guiados.sql',
   '0044_biblioteca_de_receitas.sql',
   '0045_quem_o_aluno_pode_autorizar.sql',
+  '0046_fechando_a_auditoria.sql',
 ]
 
 async function schemaReadiness() {
@@ -213,6 +214,7 @@ async function schemaReadiness() {
     programasGuiados,
     bibliotecaDeReceitas,
     autorizarOCorpo,
+    auditoriaFechada,
   ] = await Promise.all([
     schemaCheck('user_profiles?select=tier&limit=1'),
     schemaCheck('baseline_challenges?select=code&limit=1'),
@@ -409,6 +411,18 @@ async function schemaReadiness() {
      * "existe" e 404 é "não existe".
      */
     rpcCheck('autorizar_corpo', { p_perfil: '00000000-0000-0000-0000-000000000000' }),
+    /*
+     * A 0046 fecha nove furos achados em auditoria, e o mais grave deles é a
+     * auto-promoção a conta de plataforma. Enquanto ela não estiver aplicada,
+     * **qualquer dona de academia pode virar super admin com um `update`** —
+     * por isso esta sonda importa mais que as outras.
+     *
+     * `health_organization_ids` é a função nova mais fácil de sondar: é
+     * `stable`, só lê, e devolve conjunto vazio sem sessão. Sem `executa`
+     * porque ela é revogada do anônimo, então 401/403 é "existe" e 404 é
+     * "não existe" — que é a resposta que interessa.
+     */
+    rpcCheck('health_organization_ids', {}),
   ])
 
   const registradas = await migracoesRegistradas()
@@ -476,6 +490,7 @@ async function schemaReadiness() {
       programasGuiados,
       bibliotecaDeReceitas,
       autorizarOCorpo,
+      auditoriaFechada,
       appliedMigrations: registradas.length,
       pendingMigrations: faltando,
     }
@@ -520,6 +535,7 @@ async function schemaReadiness() {
     '0043_programas_guiados.sql',
     '0044_biblioteca_de_receitas.sql',
     '0045_quem_o_aluno_pode_autorizar.sql',
+    '0046_fechando_a_auditoria.sql',
   )
 
   return {
@@ -545,6 +561,7 @@ async function schemaReadiness() {
     programasGuiados,
     bibliotecaDeReceitas,
     autorizarOCorpo,
+    auditoriaFechada,
     pendingMigrations: pendentes,
   }
 }

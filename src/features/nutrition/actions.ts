@@ -68,7 +68,8 @@ export async function saveNutritionPlanAction(
     if (!autor) {
       return {
         status: 'error',
-        message: 'Plano alimentar precisa de responsável técnico, e você não tem ficha nesta academia.',
+        message:
+          'Plano alimentar precisa de responsável técnico, e você não tem ficha nesta academia.',
       }
     }
 
@@ -92,6 +93,25 @@ export async function saveNutritionPlanAction(
     }
 
     const dados = parsed.data
+
+    /*
+     * O aluno é da sua academia?
+     *
+     * A ação conferia o `planId` quando ele vinha, e nunca o aluno — e o
+     * banco não cobria a diferença: o `with check` da política só olhava
+     * `organization_id`, que vem da sessão e portanto sempre passa.
+     * Resultado: um `studentId` de outra academia colado no formulário
+     * gravava plano alimentar para a pessoa errada, e publicá-lo **arquivava
+     * a prescrição real dela**, feita por outro profissional.
+     *
+     * A 0046 fechou no banco, que é onde a regra não se contorna. Esta
+     * conferência existe para a mensagem: sem ela o erro chega como falha
+     * genérica, e um id colado merece resposta clara. É o mesmo par que
+     * `assessments` já fazia.
+     */
+    const aluno = await dataSource.getStudent(session.organizationId, dados.studentId)
+    if (!aluno) return { status: 'error', message: 'Aluno não encontrado nesta academia.' }
+
     const plano = await dataSource.saveNutritionPlan({
       id: planId || undefined,
       organizationId: session.organizationId,
@@ -115,7 +135,8 @@ export async function saveNutritionPlanAction(
       planId: plano.id,
     }
   } catch (error) {
-    if (!(error instanceof AppError)) logger.error('nutrition:save_failed', { error: String(error) })
+    if (!(error instanceof AppError))
+      logger.error('nutrition:save_failed', { error: String(error) })
     return { status: 'error', message: toUserMessage(error) }
   }
 }
@@ -177,7 +198,8 @@ export async function newNutritionVersionAction(
 
     return {
       status: 'success',
-      message: 'Nova versão aberta como rascunho. O plano atual continua valendo até você publicar.',
+      message:
+        'Nova versão aberta como rascunho. O plano atual continua valendo até você publicar.',
       planId: nova,
     }
   } catch (error) {

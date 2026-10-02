@@ -33,9 +33,9 @@ npm run env:check
 
 ## Migrations
 
-**Estado em 02/10/2026: 0001 a 0043 aplicadas em produção** (a 0044 e a 0045
-aguardam colagem, nessa ordem), confirmado por `/api/health?deep=1`
-(`appliedMigrations: 37`, `pendingMigrations: []`).
+**Estado em 02/10/2026: 0001 a 0045 aplicadas em produção** (a **0046 aguarda
+colagem, e é urgente** — vide o registro dela abaixo), confirmado por
+`/api/health?deep=1` (`appliedMigrations: 39`).
 
 Esta linha envelhece a cada migration e por isso não é a fonte da verdade: a
 sonda é. Quem quiser saber o que falta abre o endereço, não este arquivo. O que
@@ -476,6 +476,45 @@ existem, não para conferir se subiram.
   privacidade isso é pior que não ter o controle — a tela diria "escondida" e
   a corrida seguiria pública, com o traçado que mostra onde a pessoa mora.
   Passaram a devolver resultado.
+
+- **0046 (`0046_fechando_a_auditoria.sql`)** — nove furos de uma auditoria,
+  cada um reproduzido como ataque antes de ser fechado.
+
+  **Rode esta antes de qualquer outra coisa.** Enquanto ela não estiver
+  aplicada, a dona de qualquer academia cliente vira conta de plataforma com
+  um `update` de uma linha, pelo PostgREST, com a chave que já está no
+  navegador dela.
+
+  | | O que estava aberto |
+  | --- | --- |
+  | **A0** | `organization_members_write` restringia a academia, não o papel, e `is_super_admin()` aceitava a linha em qualquer organização. Auto-promoção a plataforma. |
+  | **F1** | `student_active_memberships` (0001) sem `security_invoker`: o anônimo lia `student_id`, plano, **preço** e dia de cobrança de toda academia. |
+  | **F2** | A 0008 trocou a lista de papéis por `staff_organization_ids()`, que inclui a recepção — dado de saúde ficou legível, editável e apagável por ela. |
+  | **F3** | A 0008 tirou `is_org_member(organization_id)` do check-in: o aluno registrava presença em academia alheia. |
+  | **F4** | `meals_scoped` era `for all` com `using` de existência: o paciente apagava a própria prescrição. |
+  | **F5** | `activities_self` não validava `organization_id`: a corrida entrava no feed de academia alheia. |
+  | **F6** | `claim_personal_records` agia sobre id de atividade sem conferir dono. |
+  | **F7** | A 0045 comprou a garantia "só autoriza quem a tela oferece" e não revogou a escrita da tabela, que a contornava inteira. |
+  | **A1** | `convert_lead_to_student` procurava perfil **por e-mail em todo o banco** e matriculava como ACTIVE: sequestro de conta alheia, com PII, cobrança e o app da vítima abrindo na academia do atacante. |
+  | **A2/A3** | Plano alimentar e treino gravados para `student_id` de outra academia; publicar o plano forjado **arquivava a prescrição real** da vítima. |
+
+  Três deles nasceram de reescritas que se declararam neutras — a 0008 diz "a
+  regra de negócio é idêntica" e mudou três coisas. É por isso que
+  `tests/db/auditoria-de-seguranca.test.ts` são **ataques**, não asserções
+  sobre o texto das políticas: asserção sobre texto envelhece junto com a
+  reescrita que ela deveria pegar.
+
+  `tests/db/auditoria-de-seguranca.test.ts`: 28 testes. Os 17 que
+  reproduziam ataque falhavam antes desta migration e passam depois; os
+  outros 11 são controles, que provam que o produto continua funcionando —
+  o lead de balcão ainda converte, a dona ainda administra a equipe, o
+  paciente ainda lê o plano, quem treina sozinho ainda grava corrida.
+
+  Fora do banco, no mesmo commit: `saveNutritionPlanAction` e
+  `assignWorkoutAction` passaram a conferir que o aluno é da academia (o
+  banco já recusa; a conferência é pela mensagem), e a ficha do aluno parou
+  de mostrar peso a quem não tem `assessments:read` e mensalidade a quem não
+  tem `finance:read` — condicionando a **busca**, não só a renderização.
 
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona

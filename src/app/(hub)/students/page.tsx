@@ -70,6 +70,13 @@ export default async function StudentsPage({ searchParams }: { searchParams: Sea
 
   const trainers = staff.filter((member) => member.role === 'TRAINER')
   const canWrite = can(session.role, 'students:write')
+  /*
+   * A coluna "Próxima mensalidade" mostrava data **e valor** para quem só tem
+   * `students:read` — professor e nutricionista, que o produto nega
+   * `finance:read`. Na ficha do aluno a aba Financeiro já ficava escondida
+   * deles, então a inconsistência aparecia na própria tela.
+   */
+  const canSeeFinance = can(session.role, 'finance:read')
 
   const columns: Column<StudentListItem>[] = [
     {
@@ -127,24 +134,28 @@ export default async function StudentsPage({ searchParams }: { searchParams: Sea
       header: 'Status',
       render: (student) => <StudentStatusBadge status={student.status} />,
     },
-    {
-      key: 'next-charge',
-      header: 'Próxima mensalidade',
-      hideBelow: 'lg',
-      render: (student) =>
-        student.nextChargeDueDate ? (
-          <span className="text-sm text-synse-text">
-            <span className="tabular-nums">{formatDate(student.nextChargeDueDate)}</span>
-            {student.nextChargeAmount != null && (
-              <span className="ml-1.5 text-xs text-synse-muted">
-                {formatCurrency(student.nextChargeAmount)}
-              </span>
-            )}
-          </span>
-        ) : (
-          <span className="text-sm text-synse-muted">—</span>
-        ),
-    },
+    ...(canSeeFinance
+      ? ([
+          {
+            key: 'next-charge',
+            header: 'Próxima mensalidade',
+            hideBelow: 'lg',
+            render: (student) =>
+              student.nextChargeDueDate ? (
+                <span className="text-sm text-synse-text">
+                  <span className="tabular-nums">{formatDate(student.nextChargeDueDate)}</span>
+                  {student.nextChargeAmount != null && (
+                    <span className="ml-1.5 text-xs text-synse-muted">
+                      {formatCurrency(student.nextChargeAmount)}
+                    </span>
+                  )}
+                </span>
+              ) : (
+                <span className="text-sm text-synse-muted">—</span>
+              ),
+          },
+        ] as Column<StudentListItem>[])
+      : []),
     {
       key: 'attendance',
       header: 'Última presença',

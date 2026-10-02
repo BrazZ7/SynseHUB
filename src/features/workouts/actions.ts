@@ -340,6 +340,14 @@ export async function assignWorkoutAction(
     const plan = await dataSource.getWorkoutPlan(session.organizationId, parsed.data.workoutPlanId)
     if (!plan) return { status: 'error', message: 'Treino não encontrado nesta academia.' }
 
+    /*
+     * E o aluno também. Conferia-se o treino e não quem o recebe: um
+     * `studentId` de outra academia atribuía o treino a ela e disparava a
+     * notificação "Novo treino disponível" no bolso de quem nunca pisou aqui.
+     */
+    const aluno = await dataSource.getStudent(session.organizationId, parsed.data.studentId)
+    if (!aluno) return { status: 'error', message: 'Aluno não encontrado nesta academia.' }
+
     await dataSource.assignWorkoutPlan({
       organizationId: session.organizationId,
       workoutPlanId: parsed.data.workoutPlanId,

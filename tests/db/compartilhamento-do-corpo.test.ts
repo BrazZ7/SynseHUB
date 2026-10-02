@@ -211,12 +211,8 @@ describe.skipIf(!temBanco)('autorizar', () => {
         where user_profile_id = $1 and shared_with_profile_id = $2`,
       [perfilAluno, perfilProf],
     )
-    await asUser(
-      client,
-      AUTH_ALUNO,
-      `update body_measurement_shares set revoked_at = now() where id = $1`,
-      [rows[0].id],
-    )
+    // Pela função: a 0046 revogou o `update` direto da tabela.
+    await asUser(client, AUTH_ALUNO, `select revogar_corpo($1)`, [rows[0].id])
 
     const depois = await asUser(
       client,
@@ -259,7 +255,7 @@ describe.skipIf(!temBanco)('autorizar', () => {
          values ($1, $2)`,
         [perfilAluno, perfilProf],
       ),
-    ).rejects.toThrow()
+    ).rejects.toThrow(/permission denied|row-level security|violates/i)
 
     const leu = await asUser(
       client,

@@ -55,6 +55,8 @@ import type {
   ProgramStep,
   ProgramaNaLista,
   ProgramaTrancado as ProgramaTrancadoTipo,
+  Recipe,
+  ReceitaTrancada as ReceitaTrancadaTipo,
   ConsentType,
   StaffInvite,
   UserRole,
@@ -2585,6 +2587,196 @@ export class DemoDataSource implements DataSource {
     if (indice >= 0) this.demoProgramas.splice(indice, 1)
     this.demoPassos.delete(programId)
     this.demoMatriculas.delete(programId)
+  }
+
+  // ── Biblioteca de receitas (0003, 0044) ────────────────────────────────────
+
+  private readonly demoReceitas: Recipe[] = []
+  private receitasProntas = false
+
+  /**
+   * Um punhado de receitas, metade grátis e metade do Synse+.
+   *
+   * A divisão é o ponto: com tudo grátis a vitrine do cadeado nunca apareceria
+   * na demonstração, e com tudo pago a tela abriria vazia no plano grátis —
+   * nenhum dos dois é o que acontece em produção.
+   */
+  private montarReceitas() {
+    if (this.receitasProntas) return
+    this.receitasProntas = true
+
+    this.demoReceitas.push(
+      {
+        id: 'rec_ovos',
+        title: 'Ovos mexidos com aveia salgada',
+        description: 'Café da manhã de 10 minutos, com proteína de verdade.',
+        category: 'CAFE',
+        ingredients: [
+          '3 ovos',
+          '3 colheres de sopa de aveia em flocos',
+          '1 pitada de sal',
+          'Cebolinha a gosto',
+        ],
+        instructions:
+          'Cozinhe a aveia com um pouco de água até soltar do fundo.\n\nJunte os ovos batidos e mexa em fogo baixo até firmar. Tempere no fim.',
+        prepMinutes: 10,
+        servings: 1,
+        imageUrl: null,
+        tags: ['proteico', 'rápido'],
+        nutritionFacts: { kcal: 380, protein: 26, carbs: 22, fat: 20 },
+        visibility: 'FREE',
+      },
+      {
+        id: 'rec_frango',
+        title: 'Frango desfiado com batata-doce',
+        description: 'A marmita que aguenta a semana inteira na geladeira.',
+        category: 'ALMOCO',
+        ingredients: [
+          '500 g de peito de frango',
+          '2 batatas-doces médias',
+          '1 cebola',
+          'Azeite, sal e páprica',
+        ],
+        instructions:
+          'Cozinhe o frango na água com a cebola e desfie ainda morno.\n\nAsse a batata-doce em cubos por 30 minutos. Junte tudo, tempere e divida em quatro potes.',
+        prepMinutes: 45,
+        servings: 4,
+        imageUrl: null,
+        tags: ['marmita', 'proteico'],
+        nutritionFacts: { kcal: 420, protein: 38, carbs: 40, fat: 10 },
+        visibility: 'FREE',
+      },
+      {
+        id: 'rec_panqueca',
+        title: 'Panqueca de banana pré-treino',
+        description: 'Carboidrato rápido 40 minutos antes de treinar.',
+        category: 'PRE_TREINO',
+        ingredients: ['1 banana madura', '2 ovos', '2 colheres de aveia', 'Canela'],
+        instructions:
+          'Amasse a banana e misture tudo.\n\nFrite em frigideira antiaderente, dois minutos de cada lado.',
+        prepMinutes: 8,
+        servings: 1,
+        imageUrl: null,
+        tags: ['pré-treino', 'rápido'],
+        nutritionFacts: { kcal: 310, protein: 15, carbs: 38, fat: 11 },
+        visibility: 'SYNSE_PLUS',
+      },
+      {
+        id: 'rec_salmao',
+        title: 'Salmão ao forno com legumes',
+        description: 'Jantar leve, pronto numa assadeira só.',
+        category: 'JANTAR',
+        ingredients: ['2 postas de salmão', '1 abobrinha', '1 pimentão', 'Limão, azeite e ervas'],
+        instructions:
+          'Corte os legumes em tiras e espalhe na assadeira.\n\nPonha o salmão por cima, regue com limão e azeite, e asse 20 minutos a 200 °C.',
+        prepMinutes: 30,
+        servings: 2,
+        imageUrl: null,
+        tags: ['leve', 'ômega-3'],
+        nutritionFacts: { kcal: 460, protein: 34, carbs: 14, fat: 29 },
+        visibility: 'SYNSE_PLUS',
+      },
+      {
+        id: 'rec_shake',
+        title: 'Shake de recuperação',
+        description: 'Proteína e carboidrato na janela pós-treino.',
+        category: 'POS_TREINO',
+        ingredients: ['300 ml de leite', '1 scoop de whey', '1 banana', '1 colher de mel'],
+        instructions: 'Bata tudo no liquidificador e tome logo depois do treino.',
+        prepMinutes: 3,
+        servings: 1,
+        imageUrl: null,
+        tags: ['pós-treino', 'rápido'],
+        nutritionFacts: { kcal: 400, protein: 32, carbs: 48, fat: 7 },
+        visibility: 'SYNSE_PLUS',
+      },
+    )
+  }
+
+  /**
+   * O que esta sessão enxerga.
+   *
+   * Em produção quem decide é a RLS da 0038 com o `or is_super_admin()` da
+   * 0044. Aqui a condição é reproduzida inteira, e não aproximada: foi
+   * aproximar que fez `listPublishedContent` perder o acervo da plataforma na
+   * demonstração enquanto produção o mostrava.
+   */
+  private receitasVisiveis(): Recipe[] {
+    this.montarReceitas()
+    return this.demoReceitas.filter(
+      (r) => r.visibility !== 'SYNSE_PLUS' || this.temPlus || this.ehPlataforma,
+    )
+  }
+
+  async listRecipes(): Promise<Recipe[]> {
+    return this.receitasVisiveis()
+      .slice()
+      .sort((a, b) => a.category.localeCompare(b.category) || a.title.localeCompare(b.title))
+  }
+
+  async getRecipe(recipeId: string): Promise<Recipe | null> {
+    return this.receitasVisiveis().find((r) => r.id === recipeId) ?? null
+  }
+
+  /** A vitrine: vazia para quem já lê, como `receitas_trancadas` (0044). */
+  private receitasTrancadas(): ReceitaTrancadaTipo[] {
+    if (this.temPlus || this.ehPlataforma) return []
+    this.montarReceitas()
+
+    return this.demoReceitas
+      .filter((r) => r.visibility === 'SYNSE_PLUS')
+      .map((r) => ({
+        id: r.id,
+        title: r.title,
+        description: r.description,
+        category: r.category,
+        prepMinutes: r.prepMinutes,
+        servings: r.servings,
+        imageUrl: r.imageUrl,
+      }))
+  }
+
+  async listLockedRecipes(): Promise<ReceitaTrancadaTipo[]> {
+    return this.receitasTrancadas()
+  }
+
+  async getLockedRecipe(recipeId: string): Promise<ReceitaTrancadaTipo | null> {
+    return this.receitasTrancadas().find((r) => r.id === recipeId) ?? null
+  }
+
+  /*
+   * A autoria não persiste entre requisições, como o acervo e os programas: o
+   * data source é remontado a cada pedido e só o diário do cookie sobrevive.
+   */
+  async saveRecipe(input: {
+    id?: string
+    title: string
+    description: string | null
+    category: string
+    ingredients: string[]
+    instructions: string | null
+    prepMinutes: number | null
+    servings: number | null
+    imageUrl: string | null
+    tags: string[]
+    nutritionFacts: Record<string, number> | null
+    visibility: 'FREE' | 'SYNSE_PLUS'
+  }): Promise<string> {
+    this.montarReceitas()
+    const id = input.id ?? `rec_${this.demoReceitas.length + 1}`
+    const receita: Recipe = { ...input, id }
+
+    const indice = this.demoReceitas.findIndex((r) => r.id === id)
+    if (indice >= 0) this.demoReceitas[indice] = receita
+    else this.demoReceitas.push(receita)
+
+    return id
+  }
+
+  async deleteRecipe(recipeId: string): Promise<void> {
+    this.montarReceitas()
+    const indice = this.demoReceitas.findIndex((r) => r.id === recipeId)
+    if (indice >= 0) this.demoReceitas.splice(indice, 1)
   }
 
   async listLockedShowcase(): Promise<ItemTrancado[]> {

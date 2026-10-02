@@ -185,6 +185,7 @@ const MIGRATIONS_ESPERADAS = [
   '0041_vitrine_do_cadeado.sql',
   '0042_vitrine_nao_anuncia_a_quem_ja_le.sql',
   '0043_programas_guiados.sql',
+  '0044_biblioteca_de_receitas.sql',
 ]
 
 async function schemaReadiness() {
@@ -209,6 +210,7 @@ async function schemaReadiness() {
     avisoPush,
     vitrineDoCadeado,
     programasGuiados,
+    bibliotecaDeReceitas,
   ] = await Promise.all([
     schemaCheck('user_profiles?select=tier&limit=1'),
     schemaCheck('baseline_challenges?select=code&limit=1'),
@@ -382,6 +384,18 @@ async function schemaReadiness() {
      * a sonda **matricular alguém** a cada visita ao endereço de saúde.
      */
     rpcCheck('iniciar_programa', { p_program_id: '00000000-0000-0000-0000-000000000000' }),
+    /*
+     * A biblioteca de receitas (0044). Sem ela a tela de receitas abre vazia
+     * para quem não assina, e cala: a leitura tolera a migration ausente de
+     * propósito.
+     *
+     * `executa: true` pela mesma razão de `acervo_trancado`:
+     * `receitas_trancadas` é `stable`, só lê, e é concedida ao anônimo porque
+     * vitrine serve para ser vista antes de entrar. O que ela devolve é o que
+     * qualquer visitante veria — título, foto e tempo de preparo, nunca os
+     * ingredientes nem o preparo.
+     */
+    rpcCheck('receitas_trancadas', {}, { executa: true }),
   ])
 
   const registradas = await migracoesRegistradas()
@@ -447,6 +461,7 @@ async function schemaReadiness() {
       avisoPush,
       vitrineDoCadeado,
       programasGuiados,
+      bibliotecaDeReceitas,
       appliedMigrations: registradas.length,
       pendingMigrations: faltando,
     }
@@ -489,6 +504,7 @@ async function schemaReadiness() {
     '0041_vitrine_do_cadeado.sql',
     '0042_vitrine_nao_anuncia_a_quem_ja_le.sql',
     '0043_programas_guiados.sql',
+    '0044_biblioteca_de_receitas.sql',
   )
 
   return {
@@ -512,6 +528,7 @@ async function schemaReadiness() {
     avisoPush,
     vitrineDoCadeado,
     programasGuiados,
+    bibliotecaDeReceitas,
     pendingMigrations: pendentes,
   }
 }

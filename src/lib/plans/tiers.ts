@@ -83,8 +83,17 @@ export type TierFeature = {
  * linha do treino voltou a anunciá-los, e o guarda deixou — foi exatamente
  * para isso que ele foi escrito para se soltar sozinho.
  *
- * A da alimentação continua igual nos dois lados: `recipes` segue sem uma
- * leitura.
+ * ── E soltou de novo ───────────────────────────────────────────────────────
+ *
+ * A 0044 construiu a biblioteca de receitas: `recipes` passa a ser lida pelas
+ * telas de `/app/nutrition/receitas` e `/synse-admin/receitas`. Era a última
+ * tabela daquela leva da 0003 sem uma leitura sequer, e a linha da alimentação
+ * volta a poder dizer o que o Synse+ acrescenta.
+ *
+ * O que ela diz agora é o que existe, nem mais: o cardápio base é o mesmo para
+ * todo mundo — o Synse+ não dá outro plano alimentar —, e o que entra é a
+ * biblioteca de receitas marcada como paga. Prometer "cardápio por objetivo"
+ * seria reabrir exatamente o buraco que este comentário registra.
  */
 export const TIER_COMPARISON: TierFeature[] = [
   {
@@ -95,7 +104,7 @@ export const TIER_COMPARISON: TierFeature[] = [
   {
     title: 'Plano alimentar base',
     free: 'Cardápio base com trocas',
-    pro: 'Cardápio base com trocas',
+    pro: 'Cardápio base + receitas Synse',
   },
   {
     title: 'Desafios do mês',

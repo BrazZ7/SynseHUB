@@ -2,10 +2,11 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import {
   Building2,
+  CalendarRange,
   ChevronLeft,
   CircleDollarSign,
+  CookingPot,
   Library,
-  CalendarRange,
   Percent,
   Receipt,
   ShieldCheck,
@@ -250,6 +251,24 @@ export default async function SynseAdminPage() {
             </p>
             <Button asChild className="shrink-0">
               <Link href="/synse-admin/programas">Abrir os programas</Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CookingPot className="size-4 text-synse-primary" aria-hidden />
+              Receitas
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-synse-muted">
+              A biblioteca de receitas. `recipes` existia desde a 0003 e era a última tabela daquela
+              leva sem uma leitura sequer — a 0044 abriu a porta dos dois lados.
+            </p>
+            <Button asChild className="shrink-0">
+              <Link href="/synse-admin/receitas">Abrir as receitas</Link>
             </Button>
           </CardContent>
         </Card>

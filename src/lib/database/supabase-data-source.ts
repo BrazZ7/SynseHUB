@@ -49,6 +49,8 @@ import type {
   ProgramEnrollment,
   ProgramaNaLista,
   ProgramaTrancado as ProgramaTrancadoTipo,
+  Recipe,
+  ReceitaTrancada as ReceitaTrancadaTipo,
   ConsentType,
   StaffInvite,
   UserRole,
@@ -2528,6 +2530,148 @@ export class SupabaseDataSource implements DataSource {
 
   async deleteProgram(programId: string): Promise<void> {
     await this.chamarFuncao('deleteProgram', 'delete_program', { p_id: programId })
+  }
+
+  // ── Biblioteca de receitas (0003, 0044) ────────────────────────────────────
+
+  private mapReceita(row: Row): Recipe {
+    return {
+      id: row.id,
+      title: row.title,
+      description: row.description ?? null,
+      category: row.category,
+      ingredients: SupabaseDataSource.listaDeTexto(row.ingredients),
+      instructions: row.instructions ?? null,
+      prepMinutes: row.prep_minutes == null ? null : Number(row.prep_minutes),
+      servings: row.servings == null ? null : Number(row.servings),
+      imageUrl: row.image_url ?? null,
+      tags: SupabaseDataSource.listaDeTexto(row.tags),
+      nutritionFacts: SupabaseDataSource.macros(row.nutrition_facts),
+      visibility: row.visibility,
+    }
+  }
+
+  /**
+   * `text[]` do Postgres chega como array, mas nem sempre.
+   *
+   * Mesmo cuidado de `tarefas` com o `jsonb`: a coluna aceita o que puserem
+   * nela — inclusive por um `insert` colado à mão no SQL Editor — e a tela
+   * espera lista de texto. Descartar o que não for texto aqui é o que impede
+   * um `[object Object]` aparecer no meio dos ingredientes.
+   */
+  private static listaDeTexto(bruto: unknown): string[] {
+    if (!Array.isArray(bruto)) return []
+    return bruto.filter((t): t is string => typeof t === 'string')
+  }
+
+  /**
+   * `nutrition_facts` é `jsonb` livre, e aqui vira mapa de número.
+   *
+   * Nulo quando não há nada aproveitável, e não `{}`: a tela decide mostrar a
+   * tabela de macros pela existência do objeto, e um objeto vazio faria
+   * aparecer um quadro sem nada dentro.
+   */
+  private static macros(bruto: unknown): Record<string, number> | null {
+    if (!bruto || typeof bruto !== 'object' || Array.isArray(bruto)) return null
+    const limpo: Record<string, number> = {}
+    for (const [chave, valor] of Object.entries(bruto as Record<string, unknown>)) {
+      if (typeof valor === 'number' && Number.isFinite(valor)) limpo[chave] = valor
+    }
+    return Object.keys(limpo).length > 0 ? limpo : null
+  }
+
+  async listRecipes(): Promise<Recipe[]> {
+    const linhas =
+      (await this.select<Row[]>(
+        'listRecipes',
+        this.client
+          .from('recipes')
+          .select('*')
+          .order('category', { ascending: true })
+          .order('title', { ascending: true }),
+      )) ?? []
+    return linhas.map((r) => this.mapReceita(r))
+  }
+
+  async getRecipe(recipeId: string): Promise<Recipe | null> {
+    const linha = await this.select<Row>(
+      'getRecipe',
+      this.client.from('recipes').select('*').eq('id', recipeId).maybeSingle(),
+    )
+    return linha ? this.mapReceita(linha) : null
+  }
+
+  async listLockedRecipes(): Promise<ReceitaTrancadaTipo[]> {
+    const { data, error } = await this.client.rpc('receitas_trancadas')
+    if (error) {
+      // Vitrine que falha vira prateleira vazia, nunca tela quebrada — e
+      // cobre a janela entre publicar e migrar, em que a função não existe.
+      logger.warn('listLockedRecipes', { erro: String((error as Error).message) })
+      return []
+    }
+    return ((data as Row[]) ?? []).map((row) => SupabaseDataSource.mapTrancada(row))
+  }
+
+  async getLockedRecipe(recipeId: string): Promise<ReceitaTrancadaTipo | null> {
+    /*
+     * A função não recebe id, e o filtro é feito aqui.
+     *
+     * Deliberado: `receitas_trancadas()` já aplica a regra inteira — é do
+     * Synse+, esta conta não assina, não é conta de plataforma — e dar a ela
+     * um parâmetro de id criaria uma segunda porta com a mesma regra escrita
+     * de novo. A lista é pequena, e o custo de filtrar aqui é menor que o de
+     * manter duas cópias da condição que protege o conteúdo pago.
+     */
+    const todas = await this.listLockedRecipes()
+    return todas.find((r) => r.id === recipeId) ?? null
+  }
+
+  private static mapTrancada(row: Row): ReceitaTrancadaTipo {
+    return {
+      id: row.id,
+      title: row.titulo,
+      description: row.descricao ?? null,
+      category: row.categoria,
+      prepMinutes: row.minutos == null ? null : Number(row.minutos),
+      servings: row.porcoes == null ? null : Number(row.porcoes),
+      imageUrl: row.imagem ?? null,
+    }
+  }
+
+  async saveRecipe(input: {
+    id?: string
+    title: string
+    description: string | null
+    category: string
+    ingredients: string[]
+    instructions: string | null
+    prepMinutes: number | null
+    servings: number | null
+    imageUrl: string | null
+    tags: string[]
+    nutritionFacts: Record<string, number> | null
+    visibility: 'FREE' | 'SYNSE_PLUS'
+  }): Promise<string> {
+    const { data, error } = await this.client.rpc('save_recipe', {
+      p_id: input.id ?? null,
+      p_title: input.title,
+      p_description: input.description,
+      p_category: input.category,
+      p_ingredients: input.ingredients,
+      p_instructions: input.instructions,
+      p_prep_minutes: input.prepMinutes,
+      p_servings: input.servings,
+      p_image_url: input.imageUrl,
+      p_tags: input.tags,
+      p_nutrition_facts: input.nutritionFacts,
+      p_visibility: input.visibility,
+    })
+    if (error) this.fail('saveRecipe', error)
+    return String(data)
+  }
+
+  async deleteRecipe(recipeId: string): Promise<void> {
+    await this.chamarFuncao('deleteRecipe', 'delete_recipe', { p_id: recipeId })
   }
 
   // ── Push ───────────────────────────────────────────────────────────────────

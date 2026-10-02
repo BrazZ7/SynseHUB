@@ -48,6 +48,8 @@ import type {
   ProgramStep,
   ProgramaNaLista,
   ProgramaTrancado as ProgramaTrancadoTipo,
+  Recipe,
+  ReceitaTrancada as ReceitaTrancadaTipo,
   ContentType,
   StaffInvite,
   UserRole,
@@ -835,6 +837,38 @@ export interface DataSource {
     tasks: string[]
   }): Promise<void>
   deleteProgram(programId: string): Promise<void>
+
+  // Biblioteca de receitas — catálogo da plataforma, sem dono (0003, 0044).
+  /**
+   * As receitas que esta conta pode ver.
+   *
+   * Quem filtra é a RLS: a receita `SYNSE_PLUS` não chega a quem não assina.
+   * A lista não precisa saber disso, e é por isso que não recebe o plano como
+   * parâmetro — mesmo desenho de `listPrograms`.
+   */
+  listRecipes(): Promise<Recipe[]>
+  getRecipe(recipeId: string): Promise<Recipe | null>
+  /** As receitas do Synse+ que esta conta não abre. Vazio para quem já lê. */
+  listLockedRecipes(): Promise<ReceitaTrancadaTipo[]>
+  /** O mesmo, para um id só: "esta que me pediram está trancada?" */
+  getLockedRecipe(recipeId: string): Promise<ReceitaTrancadaTipo | null>
+
+  // Autoria de receita — só conta de plataforma. A checagem é no banco.
+  saveRecipe(input: {
+    id?: string
+    title: string
+    description: string | null
+    category: string
+    ingredients: string[]
+    instructions: string | null
+    prepMinutes: number | null
+    servings: number | null
+    imageUrl: string | null
+    tags: string[]
+    nutritionFacts: Record<string, number> | null
+    visibility: 'FREE' | 'SYNSE_PLUS'
+  }): Promise<string>
+  deleteRecipe(recipeId: string): Promise<void>
 
   // Acervo Synse — conteúdo da plataforma, sem dono. Só conta de plataforma.
   /** Tudo que a plataforma escreveu, rascunho incluído. */

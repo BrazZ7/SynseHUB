@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
-import { Info, Salad } from 'lucide-react'
+import { ChevronRight, CookingPot, Info, Salad } from 'lucide-react'
 
 import { BackLink } from '@/components/synse/back-link'
+import { ListLink } from '@/components/synse/list-link'
 import { Badge } from '@/components/ui/badge'
 import { PrescribedPlan } from '@/features/nutrition/prescribed-plan'
 import { BASELINE_MEAL_PLAN } from '@/lib/baseline/meal-plan'
@@ -88,6 +89,29 @@ export default async function StudentNutritionPage() {
           ))}
         </ul>
       </section>
+
+      {/*
+        A porta da biblioteca de receitas (0044).
+        
+        Fica acima do aviso legal e abaixo dos hábitos, e não no fim: o plano
+        base diz o que comer, e a pergunta seguinte é como fazer. Enterrar a
+        biblioteca depois do texto de isenção seria construí-la e escondê-la.
+      */}
+      <ListLink
+        href="/app/nutrition/receitas"
+        className="flex items-center justify-between gap-3 rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm transition-colors hover:border-synse-primary/40"
+      >
+        <span className="flex items-center gap-2.5">
+          <CookingPot className="size-4 shrink-0 text-synse-primary" aria-hidden />
+          <span>
+            <span className="block text-sm font-medium text-synse-text">Receitas</span>
+            <span className="block text-xs text-synse-muted">
+              O que cozinhar, com a lista de compras já pronta.
+            </span>
+          </span>
+        </span>
+        <ChevronRight className="size-4 shrink-0 text-synse-muted" aria-hidden />
+      </ListLink>
 
       <p className="flex items-start gap-2.5 rounded-xl bg-synse-surface-2 p-4 text-xs text-synse-muted">
         <Info className="mt-0.5 size-4 shrink-0" aria-hidden />

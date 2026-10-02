@@ -1,4 +1,4 @@
-import { CalendarRange, Library, Trophy, Users } from 'lucide-react'
+import { CalendarRange, CookingPot, Library, Trophy } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 /**
@@ -12,14 +12,24 @@ import type { LucideIcon } from 'lucide-react'
  * ── Só o que existe ─────────────────────────────────────────────────────────
  *
  * Os quatro foram escolhidos por um critério e um só: **estar construído
- * hoje**. A biblioteca tem conteúdo publicado, os desafios funcionam, o
- * ranking saiu na 0037 — e os programas guiados entraram na 0043, que é o que
- * fez este cartão trocar a análise comparada pela novidade de maior peso.
+ * hoje**. A biblioteca tem conteúdo publicado, os desafios funcionam, os
+ * programas guiados entraram na 0043 — e as receitas, na 0044.
  *
- * Continua de fora o que o produto não faz: receitas Synse. A tabela
- * `recipes` existe desde a 0003 e não tem uma leitura sequer. Pôr isso num
- * cartão de destaque, na página que cobra de verdade, seria vender o que não
- * há.
+ * ── Por que quatro, e quem saiu ─────────────────────────────────────────────
+ *
+ * São quatro porque a grade tem duas colunas: cinco deixa um cartão sozinho
+ * na última linha, e seis já é tabela — e a tabela completa está logo abaixo,
+ * onde ela cabe.
+ *
+ * Com as receitas construídas, passou a haver cinco candidatos. Saiu o
+ * ranking entre amigos, e não por ser pior: ele é o único dos cinco que **não
+ * entrega nada sozinho**. É opcional, depende de a pessoa autorizar, e depois
+ * disso ainda depende de ela ter amigos no aplicativo. Como razão de compra,
+ * no segundo em que alguém decide, chega atrás de uma receita que já está lá.
+ * Ele continua inteiro na tabela comparativa, que é a fonte completa.
+ *
+ * Nada de fora por não existir — pela primeira vez desde que este arquivo foi
+ * escrito, a lista de "o que o produto promete e não faz" está vazia.
  */
 type Entrega = { icone: LucideIcon; titulo: string; descricao: string }
 
@@ -40,9 +50,9 @@ const ENTREGAS: readonly Entrega[] = [
     descricao: 'Sequências de dias com o treino de cada um já montado.',
   },
   {
-    icone: Users,
-    titulo: 'Ranking entre amigos',
-    descricao: 'Opcional, e só entra quem você autorizar.',
+    icone: CookingPot,
+    titulo: 'Receitas Synse',
+    descricao: 'Ingredientes, preparo e macros — com a lista de compras pronta.',
   },
 ]
 

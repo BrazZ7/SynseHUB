@@ -33,8 +33,8 @@ npm run env:check
 
 ## Migrations
 
-**Estado em 01/10/2026: 0001 a 0042 aplicadas em produção** (a 0043 aguarda
-colagem), confirmado por `/api/health?deep=1` (`appliedMigrations: 36`,
+**Estado em 02/10/2026: 0001 a 0043 aplicadas em produção** (a 0044 aguarda
+colagem), confirmado por `/api/health?deep=1` (`appliedMigrations: 37`,
 `pendingMigrations: []`).
 
 Esta linha envelhece a cada migration e por isso não é a fonte da verdade: a
@@ -404,6 +404,40 @@ existem, não para conferir se subiram.
   Tirar a conferência de visibilidade do início derruba 1; tirá-la do dia,
   1; devolver a escrita à política, 1; trocar o menor dia pelo último mais
   um, 1; tirar o `is_super_admin`, 1; tirar a faixa do dia, 2.
+
+- **0044 (`0044_biblioteca_de_receitas.sql`)** — a biblioteca de receitas.
+
+  `recipes` nasceu na 0003 junto com `content_library`, `programs` e
+  `program_steps`. As outras três foram construídas — o acervo na 0039, a
+  vitrine na 0041, os programas na 0043 — e esta ficou: tabela completa, com
+  RLS desde a 0004 e visibilidade corrigida na 0038, e **zero leituras** no
+  aplicativo. Era a última daquela leva.
+
+  **O que isso custava:** a linha "Plano alimentar base" do comparativo dizia
+  a mesma coisa nos dois lados, porque não havia o que o Synse+ acrescentasse
+  ali. Honesta e vazia, numa tabela que descreve o que a pessoa compra.
+
+  A migration não cria tabela: dá a porta de autoria e a vitrine, o mesmo par
+  que a 0039 e a 0041 deram ao acervo. `save_recipe` e `delete_recipe` exigem
+  `is_super_admin()` e registram em `platform_access_log` com contexto
+  `'RECEITA'`; `receitas_trancadas()` é a vitrine; `recipes_read` ganha o
+  `or is_super_admin()` sem o qual a conta de plataforma publicaria o que não
+  consegue reler.
+
+  **Onde fica a linha entre anúncio e conteúdo:** a vitrine devolve título,
+  descrição, categoria, tempo, porções e **a foto** — nunca os ingredientes,
+  nunca o preparo, nunca os macros. A foto sai, e é a única escolha que não se
+  repete do acervo: lá a capa é ilustração, aqui o prato é o anúncio.
+
+  `save_recipe` recusa visibilidade `ORGANIZATION`, como `save_program`:
+  `recipes` não tem `organization_id`, e a linha marcada assim não casaria
+  nenhum ramo da política — ficaria gravada e invisível, inclusive para quem a
+  escreveu.
+
+  `tests/db/receitas.test.ts`: 19 testes, conferidos por mutação. Pôr os
+  ingredientes na vitrine derruba 1; tirar o `not tem_synse_plus()` dela, 1;
+  tirar o `is_super_admin` da gravação, 1; tirar o `or is_super_admin()` da
+  política, 1; tirar a trava de `ORGANIZATION`, 1.
 
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona

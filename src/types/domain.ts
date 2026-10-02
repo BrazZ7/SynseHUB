@@ -815,6 +815,50 @@ export type ProgramaTrancado = {
   durationDays: number
 }
 
+/**
+ * ── A receita ───────────────────────────────────────────────────────────────
+ *
+ * `ingredients` e `tags` são `text[]` no banco desde a 0003 e chegam como
+ * lista aqui; `nutritionFacts` é `jsonb` livre, e por isso vem como um mapa de
+ * texto para número — a tela mostra o que vier, sem exigir um conjunto fixo de
+ * macros que a próxima receita contrariaria.
+ */
+export type Recipe = {
+  id: string
+  title: string
+  description: string | null
+  category: string
+  ingredients: string[]
+  instructions: string | null
+  prepMinutes: number | null
+  servings: number | null
+  imageUrl: string | null
+  tags: string[]
+  nutritionFacts: Record<string, number> | null
+  visibility: 'FREE' | 'SYNSE_PLUS'
+}
+
+/**
+ * O anúncio de uma receita trancada.
+ *
+ * Sem `ingredients`, sem `instructions` e sem `nutritionFacts` — os três são o
+ * conteúdo, e com eles não falta nada da receita. A foto fica, e é a única
+ * diferença em relação a `ItemTrancado`: no acervo a capa é ilustração, aqui o
+ * prato é o anúncio.
+ *
+ * O tipo é estreito de propósito. Reaproveitar `Recipe` com campos nulos
+ * deixaria a vitrine a uma linha de distância de vazar o preparo.
+ */
+export type ReceitaTrancada = {
+  id: string
+  title: string
+  description: string | null
+  category: string
+  prepMinutes: number | null
+  servings: number | null
+  imageUrl: string | null
+}
+
 export type ItemTrancado = {
   id: string
   type: ContentType

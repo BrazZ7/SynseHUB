@@ -128,6 +128,12 @@ const SUPABASE_GRANTS = `
     grant execute on functions to anon, authenticated, service_role;
 `
 
+/** O shim e os grants, para quem precisa montar o banco em etapas. */
+export async function aplicarBase(client: Client) {
+  await client.query(SUPABASE_SHIM)
+  await client.query(SUPABASE_GRANTS)
+}
+
 export async function applyMigrations(client: Client) {
   await client.query('drop schema if exists public cascade; create schema public;')
   await client.query('drop schema if exists auth cascade;')

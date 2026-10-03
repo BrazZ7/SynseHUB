@@ -1319,13 +1319,74 @@ export class DemoDataSource implements DataSource {
     return this.scoped(this.avaliacoes(), organizationId).find((a) => a.id === assessmentId) ?? null
   }
 
-  async listLatestAssessments(organizationId: string): Promise<Assessment[]> {
-    const ultima = new Map<string, Assessment>()
+  /**
+   * A mesma fila de `fila_de_avaliacao` (0048), reproduzida inteira.
+   *
+   * Inteira, e não por aproximação: ordem sobre **todos** os ativos — nunca
+   * avaliado primeiro, depois a avaliação mais antiga, desempate por nome —
+   * e só então o recorte da página. Cortar antes de ordenar é exatamente o
+   * defeito que a migration existe para consertar, e a demonstração
+   * ensinando o contrário seria pior que não ter demonstração.
+   */
+  async listAssessmentQueue(organizationId: string, limite: number, deslocamento: number) {
+    const ultimaDe = new Map<string, Assessment>()
     for (const a of this.scoped(this.avaliacoes(), organizationId)) {
-      const atual = ultima.get(a.studentId)
-      if (!atual || a.assessedAt > atual.assessedAt) ultima.set(a.studentId, a)
+      const atual = ultimaDe.get(a.studentId)
+      if (!atual || a.assessedAt > atual.assessedAt) ultimaDe.set(a.studentId, a)
     }
-    return [...ultima.values()]
+
+    const hoje = new Date()
+    const fila = this.students()
+      .filter((aluno) => aluno.organizationId === organizationId && aluno.status === 'ACTIVE')
+      .map((aluno) => {
+        const ultima = ultimaDe.get(aluno.id) ?? null
+        return {
+          studentId: aluno.id,
+          studentName: aluno.name,
+          avatarUrl: aluno.avatarUrl,
+          assessedAt: ultima?.assessedAt ?? null,
+          weight: ultima?.weight ?? null,
+          bmi: ultima?.bmi ?? null,
+          bodyFatPercentage: ultima?.bodyFatPercentage ?? null,
+          diasSemAvaliar: ultima
+            ? Math.floor(
+                (hoje.getTime() - new Date(`${ultima.assessedAt}T00:00:00`).getTime()) / 86_400_000,
+              )
+            : null,
+        }
+      })
+      .sort((a, b) => {
+        // Nunca avaliado encabeça; depois, a avaliação mais antiga.
+        if (a.assessedAt === null && b.assessedAt !== null) return -1
+        if (a.assessedAt !== null && b.assessedAt === null) return 1
+        if (a.assessedAt !== b.assessedAt) {
+          return (a.assessedAt ?? '').localeCompare(b.assessedAt ?? '')
+        }
+        /*
+         * Desempate por nome, espelhando o `order by … , f.student_name` da
+         * 0048. Aqui ele não é o que segura a paginação — o `sort` do V8 é
+         * estável e a entrada é sempre a mesma, então empate já sairia na
+         * mesma ordem. Mutei a linha para conferir e nenhum teste caiu.
+         * Existe para a demonstração produzir a **mesma** ordem que o banco,
+         * onde `order by` sem desempate não garante nada e a página 2 pode
+         * repetir quem a 1 mostrou — isso está preso em
+         * `tests/db/fila-de-avaliacao.test.ts`.
+         */
+        return a.studentName.localeCompare(b.studentName)
+      })
+
+    return { linhas: fila.slice(deslocamento, deslocamento + limite), total: fila.length }
+  }
+
+  async getAssessmentQueueSummary(organizationId: string, diasAteReavaliar: number) {
+    const { linhas, total } = await this.listAssessmentQueue(organizationId, 10_000, 0)
+    return {
+      ativos: total,
+      nuncaAvaliados: linhas.filter((l) => l.assessedAt === null).length,
+      vencidas: linhas.filter(
+        (l) => l.diasSemAvaliar != null && l.diasSemAvaliar > diasAteReavaliar,
+      ).length,
+    }
   }
 
   /*

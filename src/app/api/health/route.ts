@@ -189,6 +189,7 @@ const MIGRATIONS_ESPERADAS = [
   '0045_quem_o_aluno_pode_autorizar.sql',
   '0046_fechando_a_auditoria.sql',
   '0047_treino_fantasma.sql',
+  '0048_fila_de_avaliacao.sql',
 ]
 
 async function schemaReadiness() {
@@ -216,6 +217,7 @@ async function schemaReadiness() {
     bibliotecaDeReceitas,
     autorizarOCorpo,
     auditoriaFechada,
+    filaDeAvaliacao,
   ] = await Promise.all([
     schemaCheck('user_profiles?select=tier&limit=1'),
     schemaCheck('baseline_challenges?select=code&limit=1'),
@@ -431,6 +433,22 @@ async function schemaReadiness() {
      * autorização**, e ligá-lo faria a sonda escrever a cada visita.
      */
     rpcCheck('revogar_corpo', { p_share_id: '00000000-0000-0000-0000-000000000000' }),
+    /*
+     * A 0048 ordena a fila de avaliação no banco. Sem ela a tela volta a
+     * ordenar os 100 primeiros do alfabeto e a chamar aquilo de fila — quem
+     * ficar de fora some, inclusive quem nunca foi avaliado.
+     *
+     * `fila_de_avaliacao` é revogada do anônimo, então 401/403 é "existe" e
+     * 404 é "não existe". Sem `executa`: ela é `security invoker`, e chamada
+     * pelo anônimo não leria nada de qualquer forma — mas a sonda não precisa
+     * executar para saber se existe, e executar o que não precisa é o que
+     * transformou a sonda da 0046 numa que escrevia.
+     */
+    rpcCheck('fila_de_avaliacao', {
+      p_organization_id: '00000000-0000-0000-0000-000000000000',
+      p_limit: 1,
+      p_offset: 0,
+    }),
   ])
 
   const registradas = await migracoesRegistradas()
@@ -499,6 +517,7 @@ async function schemaReadiness() {
       bibliotecaDeReceitas,
       autorizarOCorpo,
       auditoriaFechada,
+      filaDeAvaliacao,
       appliedMigrations: registradas.length,
       pendingMigrations: faltando,
     }
@@ -545,6 +564,7 @@ async function schemaReadiness() {
     '0045_quem_o_aluno_pode_autorizar.sql',
     '0046_fechando_a_auditoria.sql',
     '0047_treino_fantasma.sql',
+    '0048_fila_de_avaliacao.sql',
   )
 
   return {
@@ -571,6 +591,7 @@ async function schemaReadiness() {
     bibliotecaDeReceitas,
     autorizarOCorpo,
     auditoriaFechada,
+    filaDeAvaliacao,
     pendingMigrations: pendentes,
   }
 }

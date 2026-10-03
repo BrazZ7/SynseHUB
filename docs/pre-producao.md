@@ -33,9 +33,9 @@ npm run env:check
 
 ## Migrations
 
-**Estado em 03/10/2026: 0001 a 0046 aplicadas em produção** (a **0047 aguarda
+**Estado em 03/10/2026: 0001 a 0047 aplicadas em produção** (a **0048 aguarda
 colagem** — vide o registro dela abaixo), confirmado por
-`/api/health?deep=1` (`appliedMigrations: 40`).
+`/api/health?deep=1` (`appliedMigrations: 41`).
 
 Esta linha envelhece a cada migration e por isso não é a fonte da verdade: a
 sonda é. Quem quiser saber o que falta abre o endereço, não este arquivo. O que
@@ -544,6 +544,39 @@ existem, não para conferir se subiram.
   (sessão de dez minutos continua sendo reaproveitada) continua passando, e um
   terceiro roda o arquivo inteiro sobre uma sessão pendurada para provar a
   limpeza.
+
+- **0048 (`0048_fila_de_avaliacao.sql`)** — a fila de avaliação ordenada no
+  banco.
+
+  `/avaliações` promete "uma linha por aluno ativo, da avaliação mais antiga
+  para a mais recente" — a fila de trabalho do professor. Ela era montada de
+  duas leituras que cortam em silêncio: `listStudents` para em 100
+  (`Math.min(100, …)` nos dois data sources) e `listLatestAssessments` lê 500
+  avaliações e deduplica na aplicação.
+
+  Numa academia com 478 ativos, a tela ordenava os 100 primeiros em ordem
+  alfabética e chamava aquilo de fila. Quem ficasse de fora não aparecia **nem
+  nunca tendo sido avaliado** — exatamente quem a fila existe para achar. E o
+  corte das 500 avaliações é pior que o dos 100 alunos: ele deixa de fora as
+  mais antigas, que são as vencidas.
+
+  Paginar a lista alfabética não resolveria: a ordem por tempo sem avaliar só
+  existe sobre o conjunto inteiro. Ordenar depois de cortar é ordenar outra
+  coisa.
+
+  Entram duas funções, as duas `security invoker` para a RLS filtrar sozinha
+  (`students_staff` da 0001 e `assessments_professional` da 0046, que exclui a
+  recepção do dado de saúde): `fila_de_avaliacao(org, limite, deslocamento)`,
+  com `total_geral` junto, e `resumo_das_avaliacoes(org, dias)` para os três
+  cartões, que contavam a página em vez da academia — diziam "100 alunos
+  ativos" numa academia de 478.
+
+  Sonda: `filaDeAvaliacao` em `/api/health?deep=1`. Revogada do anônimo, então
+  401/403 é "existe" e 404 é "não existe", sem `executa`.
+
+  `tests/db/fila-de-avaliacao.test.ts`: 9 testes. O que mais importa prova que
+  a ordem é **sobre todos** e não sobre a página — é ele que impede o conserto
+  de virar "paginar o alfabeto", que é o defeito com outro nome.
 
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona

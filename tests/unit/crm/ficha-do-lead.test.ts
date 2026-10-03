@@ -96,7 +96,26 @@ describe('o agrupamento por dia', () => {
 
 // ── A demonstração ──────────────────────────────────────────────────────────
 
-const UM_LEAD = getDemoDataset().leads[0].id
+/**
+ * Um lead que **não** está perdido nem matriculado.
+ *
+ * Era `leads[0]`, e isso tornou o teste frágil de um jeito que só aparece em
+ * certos dias: a semente é determinística para uma data, não entre datas —
+ * `createdAt` sai de `DEMO_NOW`, e um ramo a mais num dia desloca a sequência
+ * do gerador, mudando a etapa que cada lead recebe. Em 02/10 o `lead_0001`
+ * era TRIAL_CLASS; em 03/10 nasceu LOST, e o teste que marcava "perdido com
+ * motivo" passou a cair — `moveLeadStage` não faz nada quando a etapa já é a
+ * pedida, então o motivo lido era o da semente.
+ *
+ * Escolher pela **situação**, e não pela posição, vale em qualquer dia.
+ */
+const UM_LEAD = (() => {
+  const emNegociacao = getDemoDataset().leads.find(
+    (l) => l.stage !== 'LOST' && l.stage !== 'ENROLLED',
+  )
+  if (!emNegociacao) throw new Error('A semente ficou sem lead em negociação.')
+  return emNegociacao.id
+})()
 
 describe('o histórico na demonstração', () => {
   it('a semente já traz uma história para cada lead', async () => {
@@ -157,7 +176,10 @@ describe('o histórico na demonstração', () => {
   })
 
   it('e o histórico de um lead não aparece no de outro', async () => {
-    const outro = getDemoDataset().leads[1].id
+    // Outro lead qualquer, desde que não seja o mesmo — pela mesma razão de
+    // `UM_LEAD` não ser mais `leads[0]`: posição fixa na semente não é estável
+    // entre dias, e aqui o teste chegou a comparar um lead com ele mesmo.
+    const outro = getDemoDataset().leads.find((l) => l.id !== UM_LEAD)!.id
     const fonte = new DemoDataSource([
       { t: 'lead', id: UM_LEAD, a: 'event', k: 'NOTE', b: 'só deste' },
     ])

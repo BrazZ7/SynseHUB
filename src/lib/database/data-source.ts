@@ -10,6 +10,8 @@ import type {
   ActivitySummary,
   AppNotification,
   Assessment,
+  AssessmentQueueRow,
+  AssessmentQueueSummary,
   AssessmentProtocol,
   AssessmentSex,
   BaselineChallenge,
@@ -590,7 +592,23 @@ export interface DataSource {
   listAssessments(organizationId: string, studentId: string): Promise<Assessment[]>
   getAssessment(organizationId: string, assessmentId: string): Promise<Assessment | null>
   /** A última avaliação de cada aluno, para a tela de acompanhamento. */
-  listLatestAssessments(organizationId: string): Promise<Assessment[]>
+  /**
+   * A fila de avaliação, ordenada no banco e devolvida por página.
+   *
+   * Separada de `listStudents` + `listLatestAssessments` porque aquelas duas
+   * cortam em silêncio — 100 alunos e 500 avaliações — e a tela ordenava o
+   * pedaço, chamando de fila. A ordem por tempo sem avaliar só existe sobre
+   * o conjunto inteiro.
+   */
+  listAssessmentQueue(
+    organizationId: string,
+    limite: number,
+    deslocamento: number,
+  ): Promise<{ linhas: AssessmentQueueRow[]; total: number }>
+  getAssessmentQueueSummary(
+    organizationId: string,
+    diasAteReavaliar: number,
+  ): Promise<AssessmentQueueSummary>
   saveAssessment(input: SaveAssessmentInput): Promise<Assessment>
 
   // Agenda

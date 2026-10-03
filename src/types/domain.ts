@@ -522,6 +522,32 @@ export type WorkoutSessionSummary = {
  * composição corporal. O que o professor precisa ver para ajustar carga está
  * na ficha do aluno, atrás de `assessments:read`.
  */
+/**
+ * Uma linha da fila de avaliação: o aluno e a última medida dele.
+ *
+ * Vem pronta do banco (`fila_de_avaliacao`, 0048) porque a ordem — quem está
+ * há mais tempo sem avaliar — só existe sobre todos os alunos ativos.
+ * Ordenar depois de cortar em 100 é ordenar outra coisa.
+ */
+export type AssessmentQueueRow = {
+  studentId: string
+  studentName: string
+  avatarUrl: string | null
+  /** Nulo para quem nunca foi avaliado — é quem encabeça a fila. */
+  assessedAt: string | null
+  weight: number | null
+  bmi: number | null
+  bodyFatPercentage: number | null
+  diasSemAvaliar: number | null
+}
+
+/** Os três números dos cartões, contados sobre a academia inteira. */
+export type AssessmentQueueSummary = {
+  ativos: number
+  nuncaAvaliados: number
+  vencidas: number
+}
+
 export type OngoingWorkout = {
   sessionId: string
   studentId: string

@@ -5,6 +5,7 @@ import { ListLink } from '@/components/synse/list-link'
 import { EmptyState } from '@/components/synse/empty-state'
 import { MetricCard } from '@/components/synse/metric-card'
 import { PageHeader } from '@/components/synse/page-header'
+import { Pagination } from '@/components/synse/pagination'
 import { StudentAvatar } from '@/components/synse/student-avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -25,37 +26,47 @@ export const metadata: Metadata = { title: 'Avaliações' }
  */
 const DIAS_ATE_REAVALIAR = 90
 
-export default async function AssessmentsPage() {
+/** Linhas por página. Uma tela de trabalho, não um relatório para rolar. */
+const POR_PAGINA = 25
+
+type Search = Promise<{ page?: string }>
+
+export default async function AssessmentsPage({ searchParams }: { searchParams: Search }) {
   const session = await requireHubSession('assessments:read')
   const dataSource = await getDataSource()
 
-  const [students, ultimas] = await Promise.all([
-    dataSource.listStudents(session.organizationId, { status: 'ACTIVE', page: 1, pageSize: 200 }),
-    dataSource.listLatestAssessments(session.organizationId),
+  const { page } = await searchParams
+  const pagina = Math.max(1, Number.parseInt(page ?? '1', 10) || 1)
+
+  /*
+   * ── A fila vem ordenada do banco ─────────────────────────────────────────
+   *
+   * Era montada aqui, de duas leituras que cortavam em silêncio:
+   * `listStudents`, que para em 100, e `listLatestAssessments`, que lia 500
+   * avaliações e deduplicava na aplicação. Numa academia com 478 ativos, a
+   * tela ordenava os 100 primeiros do alfabeto e chamava aquilo de fila —
+   * quem ficasse de fora não aparecia **nem nunca tendo sido avaliado**, que
+   * é exatamente quem a fila existe para achar.
+   *
+   * `listLatestAssessments` era chamada só daqui e foi apagada junto: o
+   * guarda `metodo-sem-chamador` a apontou assim que esta linha saiu.
+   *
+   * Paginar a lista alfabética não resolveria: a ordem por tempo sem avaliar
+   * só existe sobre o conjunto inteiro. Ordenar depois de cortar é ordenar
+   * outra coisa. Quem ordena agora é `fila_de_avaliacao` (0048), e os
+   * cartões vêm de `resumo_das_avaliacoes`, contados sobre a academia.
+   */
+  const [fila, resumo] = await Promise.all([
+    dataSource.listAssessmentQueue(
+      session.organizationId,
+      POR_PAGINA,
+      (pagina - 1) * POR_PAGINA,
+    ),
+    dataSource.getAssessmentQueueSummary(session.organizationId, DIAS_ATE_REAVALIAR),
   ])
 
   const canWrite = can(session.role, 'assessments:write')
-  const porAluno = new Map(ultimas.map((avaliacao) => [avaliacao.studentId, avaliacao]))
-  const hoje = Date.now()
-
-  const linhas = students.rows
-    .map((student) => {
-      const ultima = porAluno.get(student.id) ?? null
-      const dias = ultima
-        ? Math.floor((hoje - new Date(`${ultima.assessedAt}T00:00:00`).getTime()) / 86_400_000)
-        : null
-      return { student, ultima, dias }
-    })
-    /*
-     * Quem nunca foi avaliado vem primeiro, depois a avaliação mais antiga: a
-     * ordem é a fila de trabalho do professor, não o histórico.
-     */
-    .sort((a, b) => (b.dias ?? Number.MAX_SAFE_INTEGER) - (a.dias ?? Number.MAX_SAFE_INTEGER))
-
-  const semAvaliacao = linhas.filter((linha) => !linha.ultima).length
-  const vencidas = linhas.filter(
-    (linha) => linha.dias != null && linha.dias > DIAS_ATE_REAVALIAR,
-  ).length
+  const linhas = fila.linhas
 
   return (
     <div className="space-y-5 animate-fade-in-up">
@@ -66,32 +77,29 @@ export default async function AssessmentsPage() {
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {/*
-          `total`, e não `rows.length`: a página pedia 200 alunos e recebia
-          100 — `listStudents` corta em `Math.min(100, …)` nos dois data
-          sources —, então este cartão dizia "100 alunos ativos" numa
-          academia com 478. O número era falso, e os dois ao lado continuam
-          valendo só para quem está listado, que é o que o rótulo deles
-          agora diz.
+          Os três vêm de `resumo_das_avaliacoes`, contados no banco sobre
+          todos os ativos. Contados aqui, eram os números da página: este
+          cartão dizia "100 alunos ativos" numa academia com 478.
         */}
         <MetricCard
           label="Alunos ativos"
-          value={formatNumber(students.total)}
+          value={formatNumber(resumo.ativos)}
           icon={Users}
           accent="default"
         />
         <MetricCard
           label="Nunca avaliados"
-          value={formatNumber(semAvaliacao)}
+          value={formatNumber(resumo.nuncaAvaliados)}
           icon={Activity}
-          accent={semAvaliacao > 0 ? 'warning' : 'success'}
-          hint="Entre os listados abaixo"
+          accent={resumo.nuncaAvaliados > 0 ? 'warning' : 'success'}
+          hint="Encabeçam a fila"
         />
         <MetricCard
           label="Reavaliação vencida"
-          value={formatNumber(vencidas)}
+          value={formatNumber(resumo.vencidas)}
           icon={CalendarClock}
-          accent={vencidas > 0 ? 'warning' : 'success'}
-          hint={`Mais de ${DIAS_ATE_REAVALIAR} dias, entre os listados`}
+          accent={resumo.vencidas > 0 ? 'warning' : 'success'}
+          hint={`Mais de ${DIAS_ATE_REAVALIAR} dias`}
         />
       </section>
 
@@ -106,14 +114,6 @@ export default async function AssessmentsPage() {
           <CardHeader>
             <CardTitle>Fila de avaliação</CardTitle>
           </CardHeader>
-          {students.total > linhas.length && (
-            <p className="border-synse-warning/40 mx-6 -mt-2 mb-2 rounded-lg border bg-synse-warning/5 px-3 py-2 text-xs text-synse-text">
-              Mostrando {linhas.length} de {formatNumber(students.total)} alunos ativos. A
-              listagem para em 100 por página, e a fila abaixo é ordenada só entre esses — quem
-              ficou de fora não aparece, mesmo nunca tendo sido avaliado. Falta paginar esta
-              tela.
-            </p>
-          )}
           <CardContent>
             <div className="synse-scroll overflow-x-auto">
               <table className="w-full text-sm">
@@ -133,42 +133,47 @@ export default async function AssessmentsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-synse-border">
-                  {linhas.map(({ student, ultima, dias }) => (
-                    <tr key={student.id}>
+                  {linhas.map((linha) => (
+                    <tr key={linha.studentId}>
                       <td className="py-2.5 pr-4">
                         <ListLink
-                          href={`/students/${student.id}`}
+                          href={`/students/${linha.studentId}`}
                           className="flex items-center gap-2.5 hover:underline"
                         >
-                          <StudentAvatar name={student.name} avatarUrl={student.avatarUrl} size="sm" />
-                          <span className="font-medium text-synse-text">{student.name}</span>
+                          <StudentAvatar
+                            name={linha.studentName}
+                            avatarUrl={linha.avatarUrl}
+                            size="sm"
+                          />
+                          <span className="font-medium text-synse-text">{linha.studentName}</span>
                         </ListLink>
                       </td>
                       <td className="py-2.5 pr-4">
-                        {ultima ? (
+                        {linha.assessedAt ? (
                           <span className="tabular-nums">
-                            {formatDate(ultima.assessedAt)}
-                            {dias != null && dias > DIAS_ATE_REAVALIAR && (
-                              <Badge variant="warning" className="ml-2">
-                                {dias} dias
-                              </Badge>
-                            )}
+                            {formatDate(linha.assessedAt)}
+                            {linha.diasSemAvaliar != null &&
+                              linha.diasSemAvaliar > DIAS_ATE_REAVALIAR && (
+                                <Badge variant="warning" className="ml-2">
+                                  {linha.diasSemAvaliar} dias
+                                </Badge>
+                              )}
                           </span>
                         ) : (
                           <Badge variant="warning">Nunca avaliado</Badge>
                         )}
                       </td>
                       <td className="py-2.5 pr-4 tabular-nums">
-                        {ultima?.weight != null ? `${ultima.weight} kg` : '—'}
+                        {linha.weight != null ? `${linha.weight} kg` : '—'}
                       </td>
-                      <td className="py-2.5 pr-4 tabular-nums">{ultima?.bmi ?? '—'}</td>
+                      <td className="py-2.5 pr-4 tabular-nums">{linha.bmi ?? '—'}</td>
                       <td className="py-2.5 pr-4 tabular-nums">
-                        {ultima?.bodyFatPercentage != null ? `${ultima.bodyFatPercentage}%` : '—'}
+                        {linha.bodyFatPercentage != null ? `${linha.bodyFatPercentage}%` : '—'}
                       </td>
                       <td className="py-2.5 text-right">
                         {canWrite && (
                           <Button variant="outline" size="sm" asChild>
-                            <ListLink href={`/students/${student.id}/assessments/new`}>
+                            <ListLink href={`/students/${linha.studentId}/assessments/new`}>
                               <Plus className="size-4" aria-hidden />
                               Avaliar
                             </ListLink>
@@ -180,6 +185,8 @@ export default async function AssessmentsPage() {
                 </tbody>
               </table>
             </div>
+            <Pagination page={pagina} pageSize={POR_PAGINA} total={fila.total} />
+
             <p className="mt-4 text-xs text-synse-muted">
               Os valores são registrados pelo profissional responsável. O sistema calcula
               composição corporal pelas equações de Jackson &amp; Pollock e não emite conclusão

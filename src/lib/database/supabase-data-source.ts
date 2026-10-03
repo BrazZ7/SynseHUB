@@ -1477,40 +1477,54 @@ export class SupabaseDataSource implements DataSource {
     return row ? this.mapAssessment(row) : null
   }
 
-  async listLatestAssessments(organizationId: string): Promise<Assessment[]> {
-    /*
-     * A última avaliação de cada aluno. Vem tudo e o corte é aqui porque o
-     * PostgREST não faz `distinct on`; a ordem descendente garante que a
-     * primeira que aparece de cada aluno é a mais recente.
-     */
-    const rows =
-      (await this.select<Row[]>(
-        'listLatestAssessments',
-        this.client
-          .from('assessments')
-          .select('*')
-          .eq('organization_id', organizationId)
-          .order('assessed_at', { ascending: false })
-          .limit(500),
-      )) ?? []
+  /**
+   * A fila de avaliação, ordenada pelo banco.
+   *
+   * Uma chamada no lugar de duas leituras que cortavam em silêncio — 100
+   * alunos de `listStudents`, 500 avaliações de `listLatestAssessments` — e
+   * de uma ordenação feita sobre o pedaço. `count(*) over ()` traz o total
+   * junto, então a tela sabe quantos são sem uma segunda consulta.
+   */
+  async listAssessmentQueue(organizationId: string, limite: number, deslocamento: number) {
+    const { data, error } = await this.client.rpc('fila_de_avaliacao', {
+      p_organization_id: organizationId,
+      p_limit: limite,
+      p_offset: deslocamento,
+    })
+    if (error) this.fail('listAssessmentQueue', error)
 
-    const vistos = new Set<string>()
-    const ultimas: Assessment[] = []
-    for (const row of rows) {
-      if (vistos.has(row.student_id)) continue
-      vistos.add(row.student_id)
-      ultimas.push(this.mapAssessment(row))
+    const rows = (data ?? []) as Row[]
+    return {
+      linhas: rows.map((row) => ({
+        studentId: row.student_id,
+        studentName: row.student_name,
+        avatarUrl: row.avatar_url ?? null,
+        assessedAt: row.assessed_at ?? null,
+        weight: row.weight === null ? null : Number(row.weight),
+        bmi: row.bmi === null ? null : Number(row.bmi),
+        bodyFatPercentage: row.body_fat === null ? null : Number(row.body_fat),
+        diasSemAvaliar: row.dias_sem === null ? null : Number(row.dias_sem),
+      })),
+      // Sem linha nenhuma não há `count(*) over ()` para ler: zero é o total.
+      total: rows.length > 0 ? Number(rows[0].total_geral) : 0,
     }
-    return ultimas
   }
 
-  /**
-   * Grava a avaliação.
-   *
-   * Nada de IMC, densidade ou percentual calculado sai daqui: o gatilho da 0023
-   * recalcula na escrita. Mandar o número junto seria oferecer ao cliente a
-   * chance de contar outra história sobre o mesmo corpo.
-   */
+  async getAssessmentQueueSummary(organizationId: string, diasAteReavaliar: number) {
+    const { data, error } = await this.client.rpc('resumo_das_avaliacoes', {
+      p_organization_id: organizationId,
+      p_dias_ate_reavaliar: diasAteReavaliar,
+    })
+    if (error) this.fail('getAssessmentQueueSummary', error)
+
+    const linha = ((data ?? []) as Row[])[0]
+    return {
+      ativos: Number(linha?.ativos ?? 0),
+      nuncaAvaliados: Number(linha?.nunca_avaliados ?? 0),
+      vencidas: Number(linha?.vencidas ?? 0),
+    }
+  }
+
   async saveAssessment(input: SaveAssessmentInput): Promise<Assessment> {
     const linha = {
       organization_id: input.organizationId,

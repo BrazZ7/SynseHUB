@@ -33,10 +33,14 @@ export default async function WorkoutDetailPage({ params }: { params: Params }) 
   const plan = await dataSource.getWorkoutPlan(session.organizationId, id)
   if (!plan) notFound()
 
-  const [exercises, alunos] = await Promise.all([
-    dataSource.listWorkoutExercises(plan.id),
-    dataSource.listStudents(session.organizationId, { status: 'ACTIVE', pageSize: 200 }),
-  ])
+  /*
+   * A lista de alunos saiu daqui. Ela parava em 100 (`Math.min(100, …)` nos
+   * dois data sources) e o `pageSize: 200` não mudava nada: numa academia com
+   * 478 ativos, o seletor oferecia os 100 primeiros em ordem alfabética e
+   * calava sobre o resto. Quem escolhe agora é `SeletorDeAluno`, que busca no
+   * servidor.
+   */
+  const exercises = await dataSource.listWorkoutExercises(plan.id)
 
   const podeAtribuir = can(session.role, 'workouts:write')
 
@@ -130,14 +134,7 @@ export default async function WorkoutDetailPage({ params }: { params: Params }) 
                 O aluno recebe o aviso no sino e o treino aparece no app dele.
               </p>
             </div>
-            <AssignWorkoutCard
-              workoutPlanId={plan.id}
-              students={alunos.rows.map((aluno) => ({
-                id: aluno.id,
-                name: aluno.name,
-                assigned: jaAtribuido.has(aluno.id),
-              }))}
-            />
+            <AssignWorkoutCard workoutPlanId={plan.id} jaAtribuido={[...jaAtribuido]} />
           </CardContent>
         </Card>
       )}

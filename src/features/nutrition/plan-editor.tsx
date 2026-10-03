@@ -5,11 +5,12 @@ import { useActionState, useState } from 'react'
 import { useFormStatus } from 'react-dom'
 import { Plus, Trash2 } from 'lucide-react'
 
-import { Field, Feedback, SELECT_CLASS } from '@/components/synse/form-field'
+import { Field, Feedback } from '@/components/synse/form-field'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { saveNutritionPlanAction } from '@/features/nutrition/actions'
+import { SeletorDeAluno } from '@/features/students/seletor-de-aluno'
 import { initialNutritionState } from '@/features/nutrition/state'
 import type { NutritionPlanWithMeals } from '@/types/domain'
 
@@ -25,18 +26,16 @@ import type { NutritionPlanWithMeals } from '@/types/domain'
 type LinhaItem = { chave: number; refeicao: number }
 
 export function NutritionPlanEditor({
-  alunos,
   plan,
   alunoInicial,
 }: {
-  alunos: Array<{ id: string; name: string }>
   plan?: NutritionPlanWithMeals
   /**
    * Quem já vem escolhido. Serve a quem chegou pela ficha do aluno: lá a
    * pessoa já está decidida, e obrigá-la a reencontrar o nome numa lista de
    * trezentos é pedir o mesmo dado duas vezes — e é onde se erra o aluno.
    */
-  alunoInicial?: string
+  alunoInicial?: { id: string; name: string } | null
 }) {
   const [state, formAction] = useActionState(saveNutritionPlanAction, initialNutritionState)
 
@@ -72,27 +71,26 @@ export function NutritionPlanEditor({
         <legend className="mb-3 text-sm font-semibold text-synse-text">O plano</legend>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field
-            id="studentId"
-            label="Aluno"
-            errors={state.fieldErrors?.studentId}
-            input={
-              <select
-                id="studentId"
-                name="studentId"
-                defaultValue={plan?.studentId ?? alunoInicial ?? ''}
-                disabled={Boolean(plan)}
-                className={SELECT_CLASS}
-              >
-                <option value="">Escolher aluno…</option>
-                {alunos.map((aluno) => (
-                  <option key={aluno.id} value={aluno.id}>
-                    {aluno.name}
-                  </option>
-                ))}
-              </select>
-            }
-          />
+          {/*
+            Versão nova é do mesmo plano, então o aluno não muda na edição: o
+            seletor some e o id viaja escondido, logo abaixo.
+          */}
+          {plan ? (
+            <Field
+              id="studentId"
+              label="Aluno"
+              input={
+                <p className="rounded-lg border border-synse-border bg-synse-surface-2 px-3 py-2 text-sm text-synse-text">
+                  {plan.studentName ?? 'Aluno'}
+                </p>
+              }
+            />
+          ) : (
+            <SeletorDeAluno
+              inicial={alunoInicial ?? null}
+              erros={state.fieldErrors?.studentId}
+            />
+          )}
           <Field
             id="title"
             label="Título"

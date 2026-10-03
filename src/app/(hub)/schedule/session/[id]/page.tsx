@@ -25,10 +25,12 @@ export default async function SessionPage({ params }: { params: Params }) {
   const sessao = await dataSource.getClassSession(session.organizationId, id)
   if (!sessao) notFound()
 
-  const [reservas, alunos] = await Promise.all([
-    dataSource.listClassBookings(session.organizationId, sessao.id),
-    dataSource.listStudents(session.organizationId, { status: 'ACTIVE', page: 1, pageSize: 300 }),
-  ])
+  /*
+   * A lista de alunos saiu daqui: parava em 100 e o encaixe não achava quem
+   * viesse depois no alfabeto. Quem escolhe agora é `SeletorDeAluno`, que
+   * busca no servidor.
+   */
+  const reservas = await dataSource.listClassBookings(session.organizationId, sessao.id)
 
   const lotacao = ocupacao(sessao)
   const presentes = reservas.filter((r) => r.status === 'ATTENDED').length
@@ -94,7 +96,6 @@ export default async function SessionPage({ params }: { params: Params }) {
       <SessionConsole
         sessao={sessao}
         reservas={reservas}
-        alunos={alunos.rows.map((aluno) => ({ id: aluno.id, name: aluno.name }))}
         podeEscrever={can(session.role, 'schedule:write')}
       />
     </div>

@@ -29,13 +29,12 @@ export default async function CheckInPage() {
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const weekStart = new Date(now.getTime() - 7 * 86_400_000)
 
-  const [organization, todayCheckIns, weekCheckIns, students, dashboard, treinandoAgora] =
+  const [organization, todayCheckIns, weekCheckIns, dashboard, treinandoAgora] =
     await Promise.all([
       dataSource.getOrganization(session.organizationId),
       dataSource.listCheckIns(session.organizationId, { since: todayStart }),
       dataSource.listCheckIns(session.organizationId, { since: weekStart }),
-      dataSource.listStudents(session.organizationId, { status: 'ALL', page: 1, pageSize: 100 }),
-      getDashboardData(session.organizationId),
+        getDashboardData(session.organizationId),
       /*
        * Publicar não é migrar: entre o deploy e a 0047 colada no Supabase, a
        * consulta já funciona (a tabela é da 0026) — o `catch` cobre a
@@ -70,14 +69,8 @@ export default async function CheckInPage() {
                 <CardTitle>Registrar presença na recepção</CardTitle>
               </CardHeader>
               <CardContent>
-                <CheckInConsole
-                  students={students.rows.map((student) => ({
-                    id: student.id,
-                    name: student.name,
-                    synseId: student.synseId,
-                    planName: student.planName,
-                  }))}
-                />
+                {/* A busca é do servidor agora: nada de lista pronta. */}
+                <CheckInConsole />
               </CardContent>
             </Card>
           )}

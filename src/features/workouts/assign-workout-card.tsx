@@ -3,13 +3,12 @@
 import { useActionState } from 'react'
 import { useFormStatus } from 'react-dom'
 
-import { Field, Feedback, SELECT_CLASS } from '@/components/synse/form-field'
+import { Field, Feedback } from '@/components/synse/form-field'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { assignWorkoutAction } from '@/features/workouts/actions'
+import { SeletorDeAluno } from '@/features/students/seletor-de-aluno'
 import { initialWorkoutState } from '@/features/workouts/state'
-
-type Aluno = { id: string; name: string; assigned: boolean }
 
 /**
  * Atribuir o treino a um aluno.
@@ -20,12 +19,15 @@ type Aluno = { id: string; name: string; assigned: boolean }
  */
 export function AssignWorkoutCard({
   workoutPlanId,
-  students,
+  jaAtribuido,
 }: {
   workoutPlanId: string
-  students: Aluno[]
+  /** Quem já tem este treino. Vira recado na lista, não impedimento. */
+  jaAtribuido: string[]
 }) {
   const [state, formAction] = useActionState(assignWorkoutAction, initialWorkoutState)
+
+  const jaTemEsteTreino = Object.fromEntries(jaAtribuido.map((id) => [id, 'já tem este treino']))
 
   return (
     <form action={formAction} className="space-y-4" noValidate>
@@ -35,24 +37,12 @@ export function AssignWorkoutCard({
       {state.status === 'error' && <Feedback tone="error" message={state.message ?? ''} />}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_180px]">
-        <Field
-          id="studentId"
-          label="Aluno"
-          errors={state.fieldErrors?.studentId}
-          input={
-            <select id="studentId" name="studentId" defaultValue="" className={SELECT_CLASS}>
-              <option value="">Escolher aluno…</option>
-              {students.map((aluno) => (
-                <option key={aluno.id} value={aluno.id}>
-                  {aluno.name}
-                  {/* Reatribuir renova a validade em vez de duplicar; dizer isso
-                      antes evita a dúvida de "será que vou criar dois?". */}
-                  {aluno.assigned ? ' — já tem este treino' : ''}
-                </option>
-              ))}
-            </select>
-          }
-        />
+        {/*
+          Reatribuir renova a validade em vez de duplicar; dizer isso antes
+          evita a dúvida de "será que vou criar dois?". A anotação vale só
+          para quem já tem, e por isso ela é um recado e não um bloqueio.
+        */}
+        <SeletorDeAluno erros={state.fieldErrors?.studentId} anotacoes={jaTemEsteTreino} />
 
         <Field
           id="validUntil"

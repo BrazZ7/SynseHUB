@@ -23,12 +23,6 @@ export default async function NutritionPlanPage({ params }: { params: Params }) 
   const plano = await dataSource.getNutritionPlan(session.organizationId, id)
   if (!plano) notFound()
 
-  const alunos = await dataSource.listStudents(session.organizationId, {
-    status: 'ALL',
-    page: 1,
-    pageSize: 300,
-  })
-
   const publicado = plano.status === 'PUBLISHED'
 
   return (
@@ -121,7 +115,6 @@ export default async function NutritionPlanPage({ params }: { params: Params }) 
         <Card>
           <CardContent className="pt-5">
             <NutritionPlanEditor
-              alunos={alunos.rows.map((aluno) => ({ id: aluno.id, name: aluno.name }))}
               plan={plano}
             />
           </CardContent>

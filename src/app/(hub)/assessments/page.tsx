@@ -65,9 +65,17 @@ export default async function AssessmentsPage() {
       />
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {/*
+          `total`, e não `rows.length`: a página pedia 200 alunos e recebia
+          100 — `listStudents` corta em `Math.min(100, …)` nos dois data
+          sources —, então este cartão dizia "100 alunos ativos" numa
+          academia com 478. O número era falso, e os dois ao lado continuam
+          valendo só para quem está listado, que é o que o rótulo deles
+          agora diz.
+        */}
         <MetricCard
           label="Alunos ativos"
-          value={formatNumber(students.rows.length)}
+          value={formatNumber(students.total)}
           icon={Users}
           accent="default"
         />
@@ -76,14 +84,14 @@ export default async function AssessmentsPage() {
           value={formatNumber(semAvaliacao)}
           icon={Activity}
           accent={semAvaliacao > 0 ? 'warning' : 'success'}
-          hint="Sem nenhuma medida registrada"
+          hint="Entre os listados abaixo"
         />
         <MetricCard
           label="Reavaliação vencida"
           value={formatNumber(vencidas)}
           icon={CalendarClock}
           accent={vencidas > 0 ? 'warning' : 'success'}
-          hint={`Mais de ${DIAS_ATE_REAVALIAR} dias`}
+          hint={`Mais de ${DIAS_ATE_REAVALIAR} dias, entre os listados`}
         />
       </section>
 
@@ -98,6 +106,14 @@ export default async function AssessmentsPage() {
           <CardHeader>
             <CardTitle>Fila de avaliação</CardTitle>
           </CardHeader>
+          {students.total > linhas.length && (
+            <p className="border-synse-warning/40 mx-6 -mt-2 mb-2 rounded-lg border bg-synse-warning/5 px-3 py-2 text-xs text-synse-text">
+              Mostrando {linhas.length} de {formatNumber(students.total)} alunos ativos. A
+              listagem para em 100 por página, e a fila abaixo é ordenada só entre esses — quem
+              ficou de fora não aparece, mesmo nunca tendo sido avaliado. Falta paginar esta
+              tela.
+            </p>
+          )}
           <CardContent>
             <div className="synse-scroll overflow-x-auto">
               <table className="w-full text-sm">

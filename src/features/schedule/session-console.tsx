@@ -4,7 +4,7 @@ import { useActionState } from 'react'
 import { useFormStatus } from 'react-dom'
 import { Check, UserMinus, UserPlus, X } from 'lucide-react'
 
-import { Feedback, SELECT_CLASS } from '@/components/synse/form-field'
+import { Feedback } from '@/components/synse/form-field'
 import { StudentAvatar } from '@/components/synse/student-avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -14,6 +14,7 @@ import {
   cancelSessionAction,
   markAttendanceAction,
 } from '@/features/schedule/actions'
+import { SeletorDeAluno } from '@/features/students/seletor-de-aluno'
 import { initialScheduleState } from '@/features/schedule/state'
 import type { ClassBooking, ClassSession } from '@/types/domain'
 
@@ -26,12 +27,10 @@ import type { ClassBooking, ClassSession } from '@/types/domain'
 export function SessionConsole({
   sessao,
   reservas,
-  alunos,
   podeEscrever,
 }: {
   sessao: ClassSession
   reservas: ClassBooking[]
-  alunos: Array<{ id: string; name: string }>
   podeEscrever: boolean
 }) {
   const confirmadas = reservas.filter((r) => r.status === 'BOOKED' || r.status === 'ATTENDED')
@@ -43,7 +42,7 @@ export function SessionConsole({
     <div className="space-y-5">
       {podeEscrever && !cancelada && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <EncaixarAluno sessao={sessao} alunos={alunos} reservas={reservas} />
+          <EncaixarAluno sessao={sessao} reservas={reservas} />
           <CancelarAula sessao={sessao} />
         </div>
       )}
@@ -166,20 +165,17 @@ function Chamada({
 
 function EncaixarAluno({
   sessao,
-  alunos,
   reservas,
 }: {
   sessao: ClassSession
-  alunos: Array<{ id: string; name: string }>
   reservas: ClassBooking[]
 }) {
   const [state, formAction] = useActionState(bookForStudentAction, initialScheduleState)
 
   // Quem já tem reserva viva não precisa aparecer na lista de encaixe.
-  const jaNaAula = new Set(
-    reservas.filter((r) => r.status === 'BOOKED' || r.status === 'WAITLIST').map((r) => r.studentId),
-  )
-  const disponiveis = alunos.filter((aluno) => !jaNaAula.has(aluno.id))
+  const jaNaAula = reservas
+    .filter((r) => r.status === 'BOOKED' || r.status === 'WAITLIST')
+    .map((r) => r.studentId)
 
   return (
     <form action={formAction} className="rounded-xl border border-synse-border p-4">
@@ -202,14 +198,15 @@ function EncaixarAluno({
       )}
 
       <div className="flex flex-wrap gap-2">
-        <select name="studentId" defaultValue="" className={`${SELECT_CLASS} flex-1`} aria-label="Aluno">
-          <option value="">Escolher aluno…</option>
-          {disponiveis.map((aluno) => (
-            <option key={aluno.id} value={aluno.id}>
-              {aluno.name}
-            </option>
-          ))}
-        </select>
+        {/*
+          Busca no servidor, e não uma lista pronta: a que vinha por prop
+          parava em 100 e o encaixe simplesmente não achava quem viesse
+          depois disso no alfabeto. Quem já está na aula fica de fora da
+          busca — é encaixe, não reserva repetida.
+        */}
+        <div className="min-w-[240px] flex-1">
+          <SeletorDeAluno label="Encaixar aluno" excluir={jaNaAula} />
+        </div>
         <BotaoEnviar rotulo="Reservar" pendente="Reservando…" />
       </div>
     </form>

@@ -117,3 +117,49 @@ export async function contarNoRedis(
     return null
   }
 }
+
+/** O que a sonda de saúde descobriu sobre o Redis. */
+export type DiagnosticoUpstash = {
+  /** As duas variáveis estão preenchidas? */
+  configurado: boolean
+  /** O Redis respondeu, e com permissão de escrita? Nulo quando nem foi tentado. */
+  respondendo: boolean | null
+  /** Quanto demorou a ida e volta, em milissegundos. */
+  latenciaMs: number | null
+}
+
+/**
+ * ── Ele responde mesmo, ou só a variável está preenchida? ───────────────────
+ *
+ * `upstashConfigurado()` responde "as duas variáveis não estão vazias", e a
+ * saúde publicava isso como `rateLimitCompartilhado`. Token errado, token
+ * **somente-leitura** (o painel do Upstash oferece os dois, e o de leitura é
+ * o primeiro da lista) ou banco apagado passavam como `true` — e cada pedido
+ * caía para a memória em silêncio, que é exatamente o estado que o campo
+ * existe para denunciar.
+ *
+ * É o mesmo formato de sonda cega que já me enganou duas vezes neste projeto:
+ * uma que mede a configuração em vez do efeito não mede nada.
+ *
+ * ── Por que escrever, e não um PING ─────────────────────────────────────────
+ *
+ * `PING` passa com token somente-leitura, e aí a sonda aprovaria justamente a
+ * credencial que não serve. Esta chama o **mesmo caminho do limitador** —
+ * `EVAL` do script, que incrementa e põe prazo —, então o que ela aprova é o
+ * que o produto usa. A chave é própria e vence em dez segundos; não encosta
+ * na contagem de ninguém.
+ */
+export async function sondarUpstash(fetchImpl: typeof fetch = fetch): Promise<DiagnosticoUpstash> {
+  if (!upstashConfigurado()) {
+    return { configurado: false, respondendo: null, latenciaMs: null }
+  }
+
+  const comecou = Date.now()
+  const resultado = await contarNoRedis('health:sonda', 1_000_000, 10_000, fetchImpl)
+
+  return {
+    configurado: true,
+    respondendo: resultado !== null,
+    latenciaMs: resultado === null ? null : Date.now() - comecou,
+  }
+}

@@ -11,6 +11,7 @@ import {
 import { env } from '@/lib/env'
 import { vereditoDeFuncao, vereditoDeRecurso, type SchemaProbe } from '@/lib/health/probe-verdict'
 import { rateLimitCompartilhado } from '@/lib/rate-limit'
+import { sondarUpstash } from '@/lib/rate-limit/upstash'
 
 export const dynamic = 'force-dynamic'
 
@@ -694,6 +695,12 @@ function configuracao() {
      * aparecer: a contagem em memória na Vercel faz "cinco por minuto" virar
      * cinco **por instância**, e o limite real vira um múltiplo que varia com
      * o tráfego. O sintoma é não ter sintoma.
+     *
+     * **Verdadeiro aqui significa "as duas variáveis estão preenchidas", e
+     * nada além disso.** Para saber se o Redis responde — e se o token tem
+     * escrita, que é o que o limitador precisa —, veja `rateLimit` em
+     * `?deep=1`. Confundir os dois é o que me fez publicar um campo que
+     * media a configuração achando que media o efeito.
      */
     rateLimitCompartilhado: rateLimitCompartilhado(),
     /** Termos e privacidade mostram o controlador, ou "em constituição"? */
@@ -735,6 +742,25 @@ export async function GET(request: Request) {
           push: await diagnosticoDoPush(),
         }
       : {}),
+    /*
+     * ── O Redis responde, ou só a variável está preenchida? ────────────────
+     *
+     * `configuracao.rateLimitCompartilhado` diz a segunda coisa, e por um
+     * tempo eu publiquei isso como se fosse a primeira. Token errado, token
+     * **somente-leitura** — o painel do Upstash oferece os dois — ou banco
+     * apagado passam como configurado, e aí todo pedido cai para a memória
+     * sem nada denunciar. É o defeito que o campo existe para pegar,
+     * acontecendo dentro do campo.
+     *
+     * Esta sonda escreve pelo mesmo caminho do limitador, então o que ela
+     * aprova é o que o produto usa.
+     *
+     * Fora do `!demo`, ao contrário das sondas de schema: o limitador não
+     * tem nada a ver com o Supabase. Pô-la lá dentro escondia a resposta
+     * justamente de quem está conferindo a configuração num ambiente sem
+     * banco — foi onde eu a pus primeiro, e só vi porque fui olhar a saída.
+     */
+    ...(deep ? { rateLimit: await sondarUpstash() } : {}),
     paymentProvider: paymentConfiguration(),
     timestamp: new Date().toISOString(),
   })

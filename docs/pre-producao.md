@@ -732,18 +732,66 @@ faz login, ninguém paga. O desempate é o que o limitador é: proteção em
 profundidade, não autorização. Quem barra escrita indevida é
 `requirePermission` e a RLS, e nenhum dos dois depende do Redis.
 
-`tests/unit/rate-limit.test.ts`: 20 testes, conferidos por mutação — tirar o
+**A memória se limpa sozinha** (03/10/2026). `limparExpirados` era chamado
+pelos handlers, e contando estava em **3 dos 20** caminhos que limitam alguma
+coisa: login, recuperação de senha, convite de equipe e a busca de aluno não
+limpavam nada. Não é vazamento grave — cada bucket são dois números —, mas
+depender de o chamador lembrar é a forma como ele esquece. A varredura passou
+para dentro de `contarNaMemoria`, e só roda quando o mapa passa de 5.000
+chaves, para não cobrar trabalho de todo login.
+
+**A sonda deixou de medir a configuração e passou a medir o efeito**
+(03/10/2026). `rateLimitCompartilhado` responde "as duas variáveis não estão
+vazias" — e eu publicava isso como se fosse "o limite vale para todas as
+instâncias". Token errado, **token somente-leitura** (o painel do Upstash
+oferece os dois, e o de leitura vem primeiro) ou banco apagado passavam como
+pronto, e todo pedido caía para a memória em silêncio: o defeito que o campo
+existe para pegar, acontecendo dentro do campo.
+
+Agora `rateLimit` em `/api/health?deep=1` escreve pelo **mesmo caminho do
+limitador** — o `EVAL` do script, numa chave própria que vence em dez
+segundos — e devolve `{ configurado, respondendo, latenciaMs }`. Um `PING`
+não serviria: ele passa com token somente-leitura, e aprovaria justamente a
+credencial que não funciona.
+
+`tests/unit/rate-limit.test.ts`: 28 testes, conferidos por mutação — tirar o
 `if atual == 1` do script derruba 1; fazer a falha de rede lançar, 1; aceitar
 só a URL sem o token, 1; errar a comparação do limite, 1; empurrar a janela a
-cada acesso, 1. Mais uma integração de fio contra um servidor HTTP que fala o
-protocolo do Upstash com contador real, que rodou verde e não ficou no
-repositório por abrir porta.
+cada acesso, 1; trocar a sonda por um `PING`, 3; fazer a sonda responder
+sempre "sim", 2; tirar a varredura automática, 1; e fazê-la limpar demais, 1.
 
-- [x] **Feito em 01/10/2026.** Falta só ligar: `UPSTASH_REDIS_REST_URL` e
-      `UPSTASH_REDIS_REST_TOKEN` na Vercel, com o token de **escrita**.
-      `rateLimitCompartilhado` em `/api/health?deep=1` diz se pegou, e
-      `npm run env:check` acusa URL sem token — meia configuração volta para
-      a memória sem avisar.
+`tests/unit/rate-limit-fio.test.ts`: 4 testes contra um servidor HTTP que fala
+o protocolo do Upstash com contador real — a contagem compartilhada valendo de
+ponta a ponta, e a sonda recusando o token errado **e o somente-leitura**. Um
+teste assim existiu em 01/10 e eu decidi não guardá-lo por abrir porta; voltei
+atrás, porque o token somente-leitura é o erro mais provável de quem for ligar
+isso, e com `fetch` injetado eu só provava que a sonda lida com a resposta de
+recusa, não que ela chega a recusar de verdade.
+
+### Ligar — o que falta, e é só isto
+
+- [ ] **Criar o banco no Upstash** em https://console.upstash.com → *Create
+      Database*. Região **sa-east-1 (São Paulo)**, a mesma do Supabase e das
+      funções da Vercel: o limitador entra no caminho de cada login e de cada
+      pagamento, e um salto para a Virgínia custa ~150 ms neles.
+- [ ] **Copiar a URL e o token de escrita** em *REST API*. O painel mostra
+      dois tokens e o **somente-leitura vem primeiro** — ele não serve, o
+      limitador conta. É este o erro que a sonda nova pega.
+- [ ] **Pôr na Vercel** (Settings → Environment Variables), nos três
+      ambientes, com o token marcado como **Sensitive**:
+      `UPSTASH_REDIS_REST_URL` e `UPSTASH_REDIS_REST_TOKEN`. E em `.env.local`
+      para o desenvolvimento, que não é versionado.
+- [ ] **Publicar de novo** — variável de ambiente só entra numa build nova.
+- [ ] **Conferir** em `/api/health?deep=1`:
+      `rateLimit: { configurado: true, respondendo: true, latenciaMs: <baixo> }`.
+      `respondendo: false` com `configurado: true` é token errado ou
+      somente-leitura. `latenciaMs` acima de ~50 ms quer dizer que o banco
+      ficou em outra região.
+
+Plano gratuito do Upstash: 10.000 comandos por dia. O limitador gasta um por
+pedido limitado — login, check-in, PIX, busca de aluno. Uma academia média não
+chega perto; se chegar, o aviso vem do painel deles antes de qualquer sintoma
+aqui.
 
 ## Plataforma
 

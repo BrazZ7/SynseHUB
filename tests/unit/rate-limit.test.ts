@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { contarNaMemoria, esquecerTudo, limparExpirados } from '@/lib/rate-limit/memoria'
+import {
+  contarNaMemoria,
+  esquecerTudo,
+  limparExpirados,
+  memoriaInterna,
+} from '@/lib/rate-limit/memoria'
 
 /**
  * ── O limitador, nos dois lugares onde ele pode morar ───────────────────────
@@ -201,5 +206,136 @@ describe('qual backend entra', () => {
 
     const { rateLimitCompartilhado } = await import('@/lib/rate-limit')
     expect(rateLimitCompartilhado()).toBe(false)
+  })
+})
+
+describe('a memória se limpa sozinha', () => {
+  /*
+   * `limparExpirados` era chamado pelos handlers, e estava em 3 dos 20
+   * caminhos que limitam alguma coisa — login, recuperação de senha e
+   * convite de equipe não limpavam nada. Depender de o chamador lembrar é a
+   * forma como ele esquece: as três chamadas são de quando havia três
+   * lugares, e nenhum dos dezessete seguintes copiou a linha.
+   */
+  it('varre o que venceu quando o mapa passa do teto', () => {
+    const T0 = 2_000_000
+
+    // Enche acima do teto com chaves de janela curta.
+    for (let i = 0; i <= memoriaInterna.teto; i += 1) {
+      contarNaMemoria(`velha-${i}`, 5, 1_000, T0)
+    }
+    expect(memoriaInterna.tamanho()).toBeGreaterThan(memoriaInterna.teto)
+
+    // Um pedido depois de todas vencerem: a varredura entra sozinha.
+    contarNaMemoria('nova', 5, 60_000, T0 + 5_000)
+
+    expect(memoriaInterna.tamanho()).toBe(1)
+  })
+
+  it('e não joga fora quem ainda está dentro da janela', () => {
+    /*
+     * O controle. Uma varredura que limpa demais zeraria a contagem de quem
+     * está sendo limitado agora — o limitador soltaria exatamente quem ele
+     * deveria estar segurando.
+     */
+    const T0 = 3_000_000
+    for (let i = 0; i <= memoriaInterna.teto; i += 1) {
+      contarNaMemoria(`velha-${i}`, 5, 1_000, T0)
+    }
+    contarNaMemoria('viva', 5, 600_000, T0)
+
+    contarNaMemoria('gatilho', 5, 60_000, T0 + 5_000)
+
+    // 'viva' sobreviveu com a contagem: o segundo pedido é o segundo mesmo.
+    expect(contarNaMemoria('viva', 5, 600_000, T0 + 5_000).remaining).toBe(3)
+  })
+})
+
+describe('a sonda do Upstash', () => {
+  /*
+   * ── Por que ela existe ────────────────────────────────────────────────────
+   *
+   * `rateLimitCompartilhado` responde "as duas variáveis não estão vazias", e
+   * a saúde publicava isso como se fosse "o limite vale para todas as
+   * instâncias". Token errado, token **somente-leitura** — o painel do
+   * Upstash oferece os dois e o de leitura vem primeiro — ou banco apagado
+   * passam como configurado, e aí todo pedido cai para a memória em silêncio.
+   *
+   * É o mesmo formato de sonda cega que já me enganou duas vezes neste
+   * projeto: uma que mede a configuração em vez do efeito não mede nada.
+   */
+  it('sem as variáveis, não inventa um veredito', async () => {
+    // `respondendo: null` é "não foi perguntado", que é diferente de "não".
+    vi.resetModules()
+    const { sondarUpstash } = await import('@/lib/rate-limit/upstash')
+    const { impl } = respostaFalsa({ result: [1, 10_000] })
+
+    expect(await sondarUpstash(impl)).toEqual({
+      configurado: false,
+      respondendo: null,
+      latenciaMs: null,
+    })
+  })
+
+  it('escreve pelo caminho do limitador, e não um PING', async () => {
+    /*
+     * A asserção que importa. `PING` passa com token somente-leitura, e a
+     * sonda aprovaria justamente a credencial que não serve. Ela precisa
+     * mandar o `EVAL` do script — o mesmo que o limitador manda.
+     */
+    const { sondarUpstash } = await comUpstash()
+    const { impl, chamadas } = respostaFalsa({ result: [1, 10_000] })
+
+    await sondarUpstash(impl)
+
+    expect(chamadas).toHaveLength(1)
+    const comando = JSON.parse(String(chamadas[0].init.body)) as string[]
+    expect(comando[0]).toBe('EVAL')
+    expect(comando[1]).toContain('INCR')
+    expect(JSON.stringify(comando)).not.toContain('PING')
+  })
+
+  it('a chave da sonda é própria e não encosta na de ninguém', async () => {
+    const { sondarUpstash } = await comUpstash()
+    const { impl, chamadas } = respostaFalsa({ result: [1, 10_000] })
+
+    await sondarUpstash(impl)
+
+    const comando = JSON.parse(String(chamadas[0].init.body)) as string[]
+    expect(comando[3]).toBe('health:sonda')
+    // Prazo curto: a sonda não deixa lixo com validade longa no Redis.
+    expect(Number(comando[4])).toBeLessThanOrEqual(10_000)
+  })
+
+  it('Redis fora do ar devolve "não responde", não um erro', async () => {
+    const { sondarUpstash } = await comUpstash()
+    const quebrado = (async () => {
+      throw new Error('ECONNREFUSED')
+    }) as unknown as typeof fetch
+
+    expect(await sondarUpstash(quebrado)).toEqual({
+      configurado: true,
+      respondendo: false,
+      latenciaMs: null,
+    })
+  })
+
+  it('token recusado conta como não respondendo', async () => {
+    // 401 é exatamente o caso que o campo raso deixava passar como pronto.
+    const { sondarUpstash } = await comUpstash()
+    const { impl } = respostaFalsa({ error: 'WRONGPASS' }, false, 401)
+
+    const d = await sondarUpstash(impl)
+    expect(d.configurado).toBe(true)
+    expect(d.respondendo).toBe(false)
+  })
+
+  it('respondeu: diz que sim e quanto demorou', async () => {
+    const { sondarUpstash } = await comUpstash()
+    const { impl } = respostaFalsa({ result: [1, 10_000] })
+
+    const d = await sondarUpstash(impl)
+    expect(d.respondendo).toBe(true)
+    expect(d.latenciaMs).toBeGreaterThanOrEqual(0)
   })
 })

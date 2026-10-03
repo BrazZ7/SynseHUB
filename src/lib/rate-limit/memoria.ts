@@ -25,12 +25,34 @@ type Bucket = { count: number; resetAt: number }
 
 const store = new Map<string, Bucket>()
 
+/**
+ * ── A limpeza mora aqui, e não na memória de quem chama ────────────────────
+ *
+ * `limparExpirados` era chamado pelos handlers, "oportunisticamente" — e
+ * contando, estava em **3 dos 20** caminhos que limitam alguma coisa. Login,
+ * recuperação de senha, convite de equipe e a busca de aluno não limpavam
+ * nada; os buckets vencidos ficavam até alguém abrir um programa guiado ou
+ * assinar o Synse+.
+ *
+ * Não é vazamento grave — cada bucket são dois números —, mas depender de o
+ * chamador lembrar é a forma como ele esquece: as três chamadas existentes
+ * são de quando havia três lugares que limitavam, e nenhum dos dezessete
+ * seguintes copiou a linha.
+ *
+ * A varredura é O(n) e só roda quando o mapa passa do teto, então o custo
+ * fica diluído. O teto é alto de propósito: varrer a cada pedido trocaria um
+ * desperdício de memória desprezível por trabalho em todo login.
+ */
+const TETO_ANTES_DE_VARRER = 5_000
+
 export function contarNaMemoria(
   key: string,
   limit: number,
   windowMs: number,
   agora = Date.now(),
 ): RateLimitResult {
+  if (store.size > TETO_ANTES_DE_VARRER) limparExpirados(agora)
+
   const bucket = store.get(key)
 
   if (!bucket || bucket.resetAt <= agora) {
@@ -44,7 +66,13 @@ export function contarNaMemoria(
   return { allowed, remaining: Math.max(0, limit - bucket.count), resetAt: bucket.resetAt }
 }
 
-/** Limpa buckets expirados. Chamado oportunisticamente pelos handlers. */
+/**
+ * Limpa buckets expirados.
+ *
+ * `contarNaMemoria` chama sozinho quando o mapa cresce; isto segue exportado
+ * para quem quiser forçar — e para o teste, que precisa provar a limpeza sem
+ * criar cinco mil chaves.
+ */
 export function limparExpirados(agora = Date.now()) {
   for (const [key, bucket] of store.entries()) {
     if (bucket.resetAt <= agora) store.delete(key)
@@ -54,4 +82,10 @@ export function limparExpirados(agora = Date.now()) {
 /** Só para teste: zera o estado entre casos. */
 export function esquecerTudo() {
   store.clear()
+}
+
+/** Só para teste: quantos buckets existem agora, e a partir de quanto varre. */
+export const memoriaInterna = {
+  tamanho: () => store.size,
+  teto: TETO_ANTES_DE_VARRER,
 }

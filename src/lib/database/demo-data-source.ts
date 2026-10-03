@@ -3028,7 +3028,41 @@ export class DemoDataSource implements DataSource {
     }
 
     plano.totals = this.somar(plano)
-    this.demoNutritionPlans.push(plano)
+
+    /*
+     * ── A versão anterior, arquivada ───────────────────────────────────────
+     *
+     * A demonstração tinha um plano só, e com um plano só a aba "Nutrição" da
+     * ficha mostra o vigente e nada mais — o histórico, que é a razão de ela
+     * existir, ficaria invisível justamente onde a academia conhece o
+     * produto.
+     *
+     * Reproduz o que `publish_nutrition_plan` (0030) faz em produção ao
+     * publicar a nova: a anterior vira `ARCHIVED` e continua com autor, data
+     * e versão. Mesmas refeições, metas mais baixas — é o ajuste que um
+     * nutricionista faz entre uma consulta e outra, e é o que torna o
+     * "por que mudou?" uma pergunta respondível.
+     */
+    const anterior: NutritionPlanWithMeals = {
+      ...plano,
+      id: 'nplan_0',
+      title: 'Plano de adaptação',
+      version: 1,
+      status: 'ARCHIVED',
+      publishedAt: new Date(Date.now() - 68 * 86_400_000).toISOString(),
+      createdAt: new Date(Date.now() - 70 * 86_400_000).toISOString(),
+      notes: 'Primeiras semanas. Foco em criar rotina de café da manhã.',
+      targetCalories: 2000,
+      targetProteinG: 130,
+      targetCarbsG: 210,
+      targetFatG: 65,
+    }
+
+    // A vigente é a 2: publicar a nova empurra a anterior para o histórico.
+    plano.version = 2
+    plano.title = 'Plano de manutenção'
+
+    this.demoNutritionPlans.push(anterior, plano)
   }
 
   /** A mesma conta da função da 0030, para os números baterem. */

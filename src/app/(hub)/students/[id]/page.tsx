@@ -3,7 +3,6 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import {
   Activity,
-  Apple,
   CalendarCheck,
   Dumbbell,
   FileText,
@@ -22,6 +21,7 @@ import { MetricCard } from '@/components/synse/metric-card'
 import { BackLink } from '@/components/synse/back-link'
 import { PaymentStatus, StudentStatusBadge } from '@/components/synse/status-badge'
 import { haQuantoTempo } from '@/features/checkin/state'
+import { DietasDoAluno } from '@/features/nutrition/dietas-do-aluno'
 import { PesagensDoAluno } from '@/features/synse-body/pesagens-do-aluno'
 import { autorizacaoDoAluno } from '@/features/synse-body/state'
 import { StudentStatusCard } from '@/features/students/student-status-card'
@@ -77,6 +77,8 @@ export default async function StudentProfilePage({ params }: { params: Params })
   const canWrite = can(session.role, 'students:write')
   const canSeeFinance = can(session.role, 'finance:read')
   const canSeeHealth = can(session.role, 'assessments:read')
+  const canSeeNutrition = can(session.role, 'nutrition:read')
+  const canWriteNutrition = can(session.role, 'nutrition:write')
 
   /*
    * ── Não buscar o que a tela não pode mostrar ──────────────────────────────
@@ -104,6 +106,7 @@ export default async function StudentProfilePage({ params }: { params: Params })
     autorizacoesDoCorpo,
     pesagens,
     treinoEmAndamento,
+    dietas,
   ] = await Promise.all([
     canSeeFinance
       ? dataSource.getChargesForStudent(session.organizationId, student.id)
@@ -140,6 +143,16 @@ export default async function StudentProfilePage({ params }: { params: Params })
      * razão pela qual o painel do check-in fica atrás de `checkin:read`.
      */
     dataSource.getActiveWorkoutSession(student.id).catch(seAindaNaoMigrou(null)),
+    /*
+     * As dietas deste aluno. Sob `canSeeNutrition` como o resto da ficha: o
+     * professor e a recepção não leem prescrição alimentar, e condicionar a
+     * **busca** é o que impede o dado de chegar ao payload.
+     */
+    canSeeNutrition
+      ? dataSource
+          .listNutritionPlansForStudent(session.organizationId, student.id)
+          .catch(seAindaNaoMigrou([]))
+      : Promise.resolve([]),
   ])
   const autorizacaoDoCorpo = autorizacaoDoAluno(
     autorizacoesDoCorpo,
@@ -147,7 +160,6 @@ export default async function StudentProfilePage({ params }: { params: Params })
     session.userProfileId,
   )
   const canWriteAssessments = can(session.role, 'assessments:write')
-  const canSeeNutrition = can(session.role, 'nutrition:read')
 
   const planById = new Map(workoutPlans.map((plan) => [plan.id, plan]))
   const latestAssessment = assessments[assessments.length - 1]
@@ -579,11 +591,12 @@ export default async function StudentProfilePage({ params }: { params: Params })
         {/* ── Nutrição ── */}
         {canSeeNutrition && (
           <TabsContent value="nutrition">
-            <EmptyState
-              icon={Apple}
-              title="Nenhum plano nutricional publicado"
-              description="Planos individuais só podem ser publicados por nutricionista habilitado, com autoria, data e versão registradas."
-            />
+            {/*
+              Era este `EmptyState` fixo, que nunca consultava nada e dizia
+              "nenhum plano publicado" para quem tinha três versões
+              prescritas. `listNutritionPlansForStudent` esperava desde a 0030.
+            */}
+            <DietasDoAluno planos={dietas} studentId={student.id} canWrite={canWriteNutrition} />
           </TabsContent>
         )}
 

@@ -22,12 +22,15 @@ import { RAIZ, montarGrafo, semComentarios } from './grafo-de-importacoes'
  *
  * ── Por que a lista de dívida ───────────────────────────────────────────────
  *
- * Ao contar, apareceram cinco. Quatro saíram: `listSharedBodyMeasurements`,
- * com as pesagens na ficha do aluno; `listLeadEvents`, com a ficha do lead;
- * `getActiveWorkoutSession`, com o selo "Treinando agora"; e `getPlan`, que
- * saiu por outro caminho — vide abaixo. O último está nomeado porque dívida
- * escrita encolhe, e teste vermelho ignorado não. **Sair daqui é tirar o nome
- * da lista, não acrescentar outro.**
+ * Ao contar, apareceram cinco, e **todos saíram**:
+ * `listSharedBodyMeasurements`, com as pesagens na ficha do aluno;
+ * `listLeadEvents`, com a ficha do lead; `getActiveWorkoutSession`, com o selo
+ * "Treinando agora"; `listNutritionPlansForStudent`, com o histórico de
+ * dietas; e `getPlan`, que saiu por outro caminho — vide abaixo.
+ *
+ * Vazia, a lista muda de papel: deixa de registrar dívida e passa a ser um
+ * piso. Método novo na interface sem tela que o alcance derruba a suíte no
+ * commit em que aparecer, que é quando custa mais barato resolver.
  *
  * ── O que uma entrada aqui significa, e o que não significa ─────────────────
  *
@@ -42,10 +45,7 @@ import { RAIZ, montarGrafo, semComentarios } from './grafo-de-importacoes'
  * quase a apaguei; ela virou `private`, e a demonstração parou de precisar
  * implementar uma função que nunca chamava.
  */
-const SEM_CHAMADOR_CONHECIDOS = [
-  /* As dietas anteriores do aluno. A tela mostra só a publicada. */
-  'listNutritionPlansForStudent',
-].sort()
+const SEM_CHAMADOR_CONHECIDOS: string[] = []
 
 /** Os data sources: é lá que o método é declarado e implementado, não chamado. */
 const ONDE_NAO_CONTA = (arquivo: string) =>
@@ -87,19 +87,21 @@ describe('todo método do data source tem quem o chame', () => {
     expect(metodosSemChamador()).toEqual(SEM_CHAMADOR_CONHECIDOS)
   })
 
-  it('e as três que já saíram não voltam', () => {
+  it('e as que já saíram não voltam', () => {
     /*
      * O motivo de este guarda existir, nos casos que ele já resolveu. Se a
      * primeira cair, alguém desligou as pesagens da ficha do aluno — e o
      * aluno voltou a autorizar um professor que não vê nada. Se a segunda
      * cair, a ficha do lead perdeu a linha do tempo. Se a terceira cair, a
-     * academia voltou a não saber quem está no salão.
+     * academia voltou a não saber quem está no salão. Se a última cair, o
+     * nutricionista perdeu o que prescreveu antes.
      */
     const orfaos = metodosSemChamador()
     expect(orfaos).not.toContain('listSharedBodyMeasurements')
     expect(orfaos).not.toContain('listLeadEvents')
     expect(orfaos).not.toContain('getActiveWorkoutSession')
     expect(orfaos).not.toContain('listActiveWorkoutSessions')
+    expect(orfaos).not.toContain('listNutritionPlansForStudent')
   })
 
   it('e ainda enxerga um método solto quando existe um', () => {

@@ -27,9 +27,16 @@ type LinhaItem = { chave: number; refeicao: number }
 export function NutritionPlanEditor({
   alunos,
   plan,
+  alunoInicial,
 }: {
   alunos: Array<{ id: string; name: string }>
   plan?: NutritionPlanWithMeals
+  /**
+   * Quem já vem escolhido. Serve a quem chegou pela ficha do aluno: lá a
+   * pessoa já está decidida, e obrigá-la a reencontrar o nome numa lista de
+   * trezentos é pedir o mesmo dado duas vezes — e é onde se erra o aluno.
+   */
+  alunoInicial?: string
 }) {
   const [state, formAction] = useActionState(saveNutritionPlanAction, initialNutritionState)
 
@@ -73,7 +80,7 @@ export function NutritionPlanEditor({
               <select
                 id="studentId"
                 name="studentId"
-                defaultValue={plan?.studentId ?? ''}
+                defaultValue={plan?.studentId ?? alunoInicial ?? ''}
                 disabled={Boolean(plan)}
                 className={SELECT_CLASS}
               >

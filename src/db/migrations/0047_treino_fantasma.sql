@@ -64,11 +64,6 @@ begin
   end if;
 
   /*
-   * O treino já aberto vence o pedido novo. Sem isto, o índice de sessão única
-   * recusaria com erro de constraint, e o aluno que voltou ao app veria falha
-   * onde deveria ver o treino de volta.
-   */
-  /*
    * Fecha o que ficou pendurado antes de procurar a sessão aberta.
    *
    * Sessão sem fim é comum: o app morre no meio, a bateria acaba, a fila
@@ -88,6 +83,11 @@ begin
      and status in ('IN_PROGRESS','PAUSED')
      and started_at < now() - interval '8 hours';
 
+  /*
+   * O treino já aberto — e recente — vence o pedido novo. Sem isto, o índice
+   * de sessão única recusaria com erro de constraint, e o aluno que voltou ao
+   * app veria falha onde deveria ver o treino de volta.
+   */
   select id into v_id from workout_sessions
   where student_id = v_student.id and status in ('IN_PROGRESS','PAUSED');
   if found then return v_id; end if;

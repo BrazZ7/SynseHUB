@@ -10,6 +10,7 @@
  */
 
 import type {
+  LeadEvent,
   Activity,
   Friend,
   ActivityRoutePoint,
@@ -1068,6 +1069,100 @@ function buildDemoDataset() {
     }
   })
 
+  /**
+   * ── O histórico de cada lead ──────────────────────────────────────────────
+   *
+   * Existe porque a ficha do lead passou a mostrar a linha do tempo, e sem
+   * isto ela abriria vazia em toda a demonstração — a tela nova pareceria a
+   * tela quebrada. Em produção quem escreve é o gatilho da 0028 a cada
+   * passagem de etapa; aqui o caminho é reconstruído a partir da etapa onde o
+   * lead parou.
+   *
+   * Não é enfeite: o valor de um funil não é saber em que etapa a pessoa está,
+   * é saber o que já foi tentado com ela. Uma ficha sem histórico demonstra
+   * exatamente o contrário do que o módulo serve.
+   */
+  const CAMINHO: Lead['stage'][] = ['NEW', 'CONTACTED', 'TRIAL_CLASS', 'PROPOSAL', 'ENROLLED']
+  const CONTATOS: { kind: LeadEvent['kind']; body: string }[] = [
+    { kind: 'CALL', body: 'Liguei, pediu para retornar depois do trabalho.' },
+    { kind: 'MESSAGE', body: 'Mandei os valores por WhatsApp.' },
+    { kind: 'CALL', body: 'Atendeu, quer conhecer a estrutura antes de decidir.' },
+    { kind: 'VISIT', body: 'Veio conhecer a academia e gostou do horário da manhã.' },
+    { kind: 'MESSAGE', body: 'Respondeu que vai conversar em casa e dar um retorno.' },
+    { kind: 'NOTE', body: 'Já treinou em outra academia; busca algo mais perto de casa.' },
+  ]
+  const MOTIVOS_DE_PERDA = [
+    'Achou o valor acima do que podia.',
+    'Fechou com a academia do bairro dela.',
+    'Parou de responder depois da proposta.',
+    'Mudou de cidade.',
+  ]
+
+  const demoLeadEvents: LeadEvent[] = []
+  let eventoSeq = 0
+  const eventoDoLead = (
+    lead: Lead,
+    kind: LeadEvent['kind'],
+    quando: Date,
+    extra: Partial<LeadEvent> = {},
+  ) => {
+    eventoSeq += 1
+    demoLeadEvents.push({
+      id: id('levent', eventoSeq),
+      leadId: lead.id,
+      kind,
+      fromStage: null,
+      toStage: null,
+      body: null,
+      actorName: pick(STAFF_SEEDS).name,
+      createdAt: quando.toISOString(),
+      ...extra,
+    })
+  }
+
+  for (const lead of demoLeads) {
+    const nascimento = new Date(lead.createdAt)
+    eventoDoLead(lead, 'CREATED', nascimento, {
+      toStage: 'NEW',
+      body: 'Lead cadastrado',
+      actorName: null,
+    })
+
+    /*
+     * Até onde este lead andou. O perdido não para no "LOST" do caminho — ele
+     * desiste no meio, que é como perda acontece de verdade.
+     */
+    const ateOndeAndou =
+      lead.stage === 'LOST' ? intBetween(1, 3) : CAMINHO.indexOf(lead.stage as Lead['stage'])
+
+    let quando = nascimento
+    for (let passo = 1; passo <= Math.max(ateOndeAndou, 0); passo += 1) {
+      quando = addDays(quando, intBetween(1, 5))
+      if (quando > DEMO_NOW) break
+
+      const contato = CONTATOS[(eventoSeq + passo) % CONTATOS.length]
+      eventoDoLead(lead, contato.kind, quando, { body: contato.body })
+
+      quando = addDays(quando, intBetween(0, 2))
+      if (quando > DEMO_NOW) break
+      eventoDoLead(lead, 'STAGE_CHANGE', quando, {
+        fromStage: CAMINHO[passo - 1],
+        toStage: CAMINHO[passo],
+        body: null,
+      })
+    }
+
+    if (lead.stage === 'LOST') {
+      lead.lostReason = pick(MOTIVOS_DE_PERDA)
+      quando = addDays(quando, intBetween(2, 9))
+      eventoDoLead(lead, 'STAGE_CHANGE', quando > DEMO_NOW ? DEMO_NOW : quando, {
+        fromStage: CAMINHO[Math.max(ateOndeAndou, 0)],
+        toStage: 'LOST',
+        body: lead.lostReason,
+      })
+    }
+  }
+
   // ── Régua de cobrança ────────────────────────────────────────────────────────
   const demoCollectionRules: CollectionRule[] = [
     {
@@ -1434,6 +1529,7 @@ function buildDemoDataset() {
     workoutLogs: demoWorkoutLogs,
     assessments: demoAssessments,
     leads: demoLeads,
+    leadEvents: demoLeadEvents,
     collectionRules: demoCollectionRules,
     friends: demoFriends,
     activities: demoActivities,

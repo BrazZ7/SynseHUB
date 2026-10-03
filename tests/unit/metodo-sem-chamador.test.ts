@@ -22,8 +22,9 @@ import { RAIZ, montarGrafo, semComentarios } from './grafo-de-importacoes'
  *
  * ── Por que a lista de dívida ───────────────────────────────────────────────
  *
- * Ao contar, apareceram cinco. Um era o do corpo e foi ligado; os quatro
- * abaixo continuam sem chamador e estão nomeados porque dívida escrita
+ * Ao contar, apareceram cinco. Dois saíram: `listSharedBodyMeasurements`, com
+ * as pesagens na ficha do aluno, e `listLeadEvents`, com a ficha do lead. Os
+ * dois abaixo continuam sem chamador e estão nomeados porque dívida escrita
  * encolhe, e teste vermelho ignorado não. **Sair daqui é tirar o nome da
  * lista, não acrescentar outro.**
  */
@@ -38,8 +39,6 @@ const SEM_CHAMADOR_CONHECIDOS = [
    * tela faltando: quem precisa do plano já tem a lista em mãos.
    */
   'getPlan',
-  /* O histórico de contatos de um lead. O CRM tem lista e cadastro, não tem a ficha. */
-  'listLeadEvents',
   /* As dietas anteriores do aluno. A tela mostra só a publicada. */
   'listNutritionPlansForStudent',
 ].sort()
@@ -84,13 +83,17 @@ describe('todo método do data source tem quem o chame', () => {
     expect(metodosSemChamador()).toEqual(SEM_CHAMADOR_CONHECIDOS)
   })
 
-  it('e a leitura do corpo pelo professor saiu da lista', () => {
+  it('e as duas que já saíram não voltam', () => {
     /*
-     * O motivo de este guarda existir. Se um dia esta asserção cair, alguém
-     * desligou a ficha do aluno do `listSharedBodyMeasurements` — e o aluno
-     * voltou a autorizar um professor que não vê nada.
+     * O motivo de este guarda existir, nos dois casos que ele já resolveu.
+     * Se a primeira cair, alguém desligou as pesagens da ficha do aluno — e o
+     * aluno voltou a autorizar um professor que não vê nada. Se a segunda
+     * cair, a ficha do lead perdeu a linha do tempo, e o CRM voltou a
+     * registrar ligação em lugar nenhum.
      */
-    expect(metodosSemChamador()).not.toContain('listSharedBodyMeasurements')
+    const orfaos = metodosSemChamador()
+    expect(orfaos).not.toContain('listSharedBodyMeasurements')
+    expect(orfaos).not.toContain('listLeadEvents')
   })
 
   it('e ainda enxerga um método solto quando existe um', () => {

@@ -440,6 +440,46 @@ export class DemoDataSource implements DataSource {
         }
         break
       }
+      case 'lead': {
+        /*
+         * Reaplica o que o visitante fez com o lead. Cada verbo reconstrói o
+         * mesmo efeito do caminho normal — inclusive o evento no histórico,
+         * que em produção é o gatilho da 0028 quem escreve.
+         */
+        const lead = this.leads().find((l) => l.id === mutation.id)
+        if (!lead) break
+
+        if (mutation.a === 'event') {
+          this.demoLeadEvents.push(
+            this.evento(mutation.id, mutation.k ?? 'NOTE', null, null, mutation.b ?? null),
+          )
+          break
+        }
+
+        if (mutation.a === 'convert') {
+          this.demoLeadEvents.push(
+            this.evento(mutation.id, 'STAGE_CHANGE', lead.stage, 'ENROLLED', null),
+          )
+          this.leadEdits.set(mutation.id, {
+            ...lead,
+            stage: 'ENROLLED',
+            convertedStudentId: `stu_lead_${mutation.id}`,
+            nextFollowUpAt: null,
+          })
+          break
+        }
+
+        if (!mutation.s || lead.stage === mutation.s) break
+        this.demoLeadEvents.push(
+          this.evento(mutation.id, 'STAGE_CHANGE', lead.stage, mutation.s, mutation.b ?? null),
+        )
+        this.leadEdits.set(mutation.id, {
+          ...lead,
+          stage: mutation.s,
+          lostReason: mutation.b ?? null,
+        })
+        break
+      }
       case 'notifread': {
         this.notificationsReadAt = mutation.at
         break
@@ -3278,14 +3318,30 @@ export class DemoDataSource implements DataSource {
       lostReason,
       updatedAt: new Date().toISOString(),
     })
+    await appendDemoMutation({
+      t: 'lead',
+      id: leadId,
+      a: 'stage',
+      s: stage,
+      b: lostReason ?? undefined,
+    })
   }
 
   async addLeadEvent(_organizationId: string, leadId: string, kind: LeadEventKind, body: string) {
     this.demoLeadEvents.push(this.evento(leadId, kind, null, null, body))
+    // No diário também: `demoLeadEvents` é campo de instância, e sem isto o
+    // contato recém-registrado some no recarregar seguinte.
+    await appendDemoMutation({ t: 'lead', id: leadId, a: 'event', k: kind, b: body })
   }
 
+  /**
+   * O histórico do lead: o da semente mais o que o visitante fez.
+   *
+   * Os dois juntos, e não só o da sessão: sem a semente a ficha abriria vazia
+   * em toda a demonstração, e a tela nova pareceria a tela quebrada.
+   */
   async listLeadEvents(_organizationId: string, leadId: string): Promise<LeadEvent[]> {
-    return this.demoLeadEvents
+    return [...this.db.leadEvents, ...this.demoLeadEvents]
       .filter((e) => e.leadId === leadId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   }
@@ -3305,6 +3361,7 @@ export class DemoDataSource implements DataSource {
       nextFollowUpAt: null,
       updatedAt: new Date().toISOString(),
     })
+    await appendDemoMutation({ t: 'lead', id: leadId, a: 'convert' })
     return aluno
   }
 

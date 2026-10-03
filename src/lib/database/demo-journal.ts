@@ -3,7 +3,14 @@ import 'server-only'
 import { cookies } from 'next/headers'
 
 import { logger } from '@/lib/logger'
-import type { Charge, CheckIn, MembershipPlan, StudentStatus } from '@/types/domain'
+import type {
+  Charge,
+  CheckIn,
+  LeadEventKind,
+  LeadStage,
+  MembershipPlan,
+  StudentStatus,
+} from '@/types/domain'
 
 /**
  * Diário de alterações da demonstração.
@@ -159,6 +166,28 @@ export type DemoMutation =
       rest: number
     }
   | {
+      /**
+       * O que aconteceu com um lead: etapa, contato registrado ou conversão.
+       *
+       * Um tipo só com a ação dentro, como a amizade e o programa. Precisa
+       * estar aqui pelo motivo do cabeçalho: tudo isso morava em
+       * `DemoDataSource.demoLeadEvents` e nos mapas de edição, campos de
+       * instância, e o data source é remontado a cada requisição. Registrar
+       * uma ligação mostrava "Registrado no histórico" e o histórico voltava
+       * vazio no recarregar — numa ficha de CRM, que existe para lembrar o
+       * que já foi tentado, é o defeito que anula a tela inteira.
+       *
+       * `s` é a etapa de destino (etapa e conversão), `k` o tipo do contato e
+       * `b` o corpo — motivo da perda ou o que aconteceu na ligação.
+       */
+      t: 'lead'
+      id: string
+      a: 'stage' | 'event' | 'convert'
+      s?: LeadStage
+      k?: LeadEventKind
+      b?: string
+    }
+  | {
       /** Sino aberto: tudo criado antes deste instante conta como lido. */
       t: 'notifread'
       at: string
@@ -279,6 +308,7 @@ const TIPOS_ACEITOS: Record<DemoMutation['t'], true> = {
   share: true,
   actpriv: true,
   wpref: true,
+  lead: true,
   sstatus: true,
   sedit: true,
   wplan: true,

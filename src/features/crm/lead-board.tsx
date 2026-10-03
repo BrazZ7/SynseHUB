@@ -1,20 +1,12 @@
 'use client'
 
-import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
-import { ArrowRight, CalendarClock, Phone, UserCheck } from 'lucide-react'
+import Link from 'next/link'
+import { useState } from 'react'
+import { CalendarClock, ExternalLink } from 'lucide-react'
 
-import { Feedback, SELECT_CLASS } from '@/components/synse/form-field'
 import { StudentAvatar } from '@/components/synse/student-avatar'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import {
-  addLeadNoteAction,
-  convertLeadAction,
-  moveLeadStageAction,
-} from '@/features/crm/actions'
-import { initialCrmState } from '@/features/crm/state'
+import { AvancarEtapa, Converter, Perder, Registrar } from '@/features/crm/lead-actions'
+import { PROXIMA } from '@/features/crm/state'
 import { SOURCE_LABELS, STAGE_LABELS } from '@/lib/validations/lead'
 import { cn, formatDate, formatPhone } from '@/lib/utils'
 import type { Lead, LeadStage, MembershipPlan } from '@/types/domain'
@@ -30,13 +22,6 @@ import type { Lead, LeadStage, MembershipPlan } from '@/types/domain'
 
 /** As colunas do quadro. Matriculado e Perdido ficam fora: são destinos. */
 const COLUNAS: LeadStage[] = ['NEW', 'CONTACTED', 'TRIAL_CLASS', 'PROPOSAL']
-
-/** O passo seguinte de cada etapa. */
-const PROXIMA: Partial<Record<LeadStage, LeadStage>> = {
-  NEW: 'CONTACTED',
-  CONTACTED: 'TRIAL_CLASS',
-  TRIAL_CLASS: 'PROPOSAL',
-}
 
 export function LeadBoard({ leads, plans }: { leads: Lead[]; plans: MembershipPlan[] }) {
   const [aberto, setAberto] = useState<string | null>(null)
@@ -133,6 +118,19 @@ function CartaoLead({
         <div className="mt-3 space-y-3 border-t border-synse-border pt-3">
           {lead.notes && <p className="text-xs text-synse-muted">{lead.notes}</p>}
 
+          {/*
+            A porta da ficha. O cartão resolve o passo seguinte sem sair do
+            quadro — é o que a recepção faz o dia inteiro —, e quem precisa do
+            histórico de contatos abre aqui.
+          */}
+          <Link
+            href={`/crm/${lead.id}`}
+            className="flex items-center gap-1.5 text-xs font-medium text-synse-primary hover:underline"
+          >
+            <ExternalLink className="size-3.5" aria-hidden />
+            Abrir ficha e histórico
+          </Link>
+
           {proxima && <AvancarEtapa leadId={lead.id} proxima={proxima} />}
           <Registrar leadId={lead.id} />
           <Converter lead={lead} plans={plans} />
@@ -142,133 +140,3 @@ function CartaoLead({
     </article>
   )
 }
-
-function AvancarEtapa({ leadId, proxima }: { leadId: string; proxima: LeadStage }) {
-  const [state, formAction] = useActionState(moveLeadStageAction, initialCrmState)
-
-  return (
-    <form action={formAction}>
-      <input type="hidden" name="leadId" value={leadId} />
-      <input type="hidden" name="stage" value={proxima} />
-      {state.status === 'error' && <Feedback tone="error" message={state.message ?? ''} />}
-      <Botao variante="default" className="w-full">
-        <ArrowRight className="size-4" aria-hidden />
-        Mover para {STAGE_LABELS[proxima]}
-      </Botao>
-    </form>
-  )
-}
-
-function Registrar({ leadId }: { leadId: string }) {
-  const [state, formAction] = useActionState(addLeadNoteAction, initialCrmState)
-
-  return (
-    <form action={formAction} className="space-y-2">
-      <input type="hidden" name="leadId" value={leadId} />
-      {state.status !== 'idle' && (
-        <Feedback
-          tone={state.status === 'success' ? 'success' : 'error'}
-          message={state.message ?? ''}
-        />
-      )}
-      <div className="flex gap-2">
-        <select name="kind" defaultValue="CALL" className={SELECT_CLASS} aria-label="Tipo">
-          <option value="CALL">Ligação</option>
-          <option value="MESSAGE">Mensagem</option>
-          <option value="VISIT">Visita</option>
-          <option value="NOTE">Observação</option>
-        </select>
-      </div>
-      <Input name="body" maxLength={600} placeholder="O que aconteceu" aria-label="Descrição" />
-      <Botao variante="outline" className="w-full">
-        <Phone className="size-4" aria-hidden />
-        Registrar contato
-      </Botao>
-    </form>
-  )
-}
-
-function Converter({ lead, plans }: { lead: Lead; plans: MembershipPlan[] }) {
-  const [state, formAction] = useActionState(convertLeadAction, initialCrmState)
-
-  if (lead.convertedStudentId) {
-    return <Badge variant="success">Já é aluno</Badge>
-  }
-
-  return (
-    <form action={formAction} className="border-synse-success/30 space-y-2 rounded-lg border p-2.5">
-      <input type="hidden" name="leadId" value={lead.id} />
-      {state.status !== 'idle' && (
-        <Feedback
-          tone={state.status === 'success' ? 'success' : 'error'}
-          message={state.message ?? ''}
-        />
-      )}
-
-      <select name="planId" defaultValue="" className={SELECT_CLASS} aria-label="Plano">
-        <option value="">Sem plano por enquanto</option>
-        {plans.map((plano) => (
-          <option key={plano.id} value={plano.id}>
-            {plano.name}
-          </option>
-        ))}
-      </select>
-      <Input
-        name="billingDay"
-        type="number"
-        min="1"
-        max="28"
-        defaultValue="5"
-        aria-label="Dia do vencimento"
-        placeholder="Dia do vencimento"
-      />
-      <Botao variante="default" className="w-full">
-        <UserCheck className="size-4" aria-hidden />
-        Converter em aluno
-      </Botao>
-      <p className="text-[11px] text-synse-muted">
-        Cria o aluno e a mensalidade de uma vez. É esta ação que matricula — arrastar o cartão
-        não.
-      </p>
-    </form>
-  )
-}
-
-function Perder({ leadId }: { leadId: string }) {
-  const [state, formAction] = useActionState(moveLeadStageAction, initialCrmState)
-
-  return (
-    <form action={formAction} className="space-y-2">
-      <input type="hidden" name="leadId" value={leadId} />
-      <input type="hidden" name="stage" value="LOST" />
-      {state.status === 'error' && <Feedback tone="error" message={state.message ?? ''} />}
-      <Input
-        name="lostReason"
-        maxLength={200}
-        placeholder="Motivo (entra no histórico)"
-        aria-label="Motivo da perda"
-      />
-      <Botao variante="ghost" className="w-full text-synse-muted">
-        Marcar como perdido
-      </Botao>
-    </form>
-  )
-}
-
-function Botao({
-  children,
-  variante,
-  className,
-}: {
-  children: React.ReactNode
-  variante: 'default' | 'outline' | 'ghost'
-  className?: string
-}) {
-  const { pending } = useFormStatus()
-  return (
-    <Button type="submit" size="sm" variant={variante} disabled={pending} className={className}>
-      {pending ? 'Salvando…' : children}
-    </Button>
-  )
-}
-

@@ -3,13 +3,16 @@ import Link from 'next/link'
 import { CalendarClock, KanbanSquare, Plus, TrendingUp, UserCheck, Users } from 'lucide-react'
 
 import { EmptyState } from '@/components/synse/empty-state'
+import { ListLink } from '@/components/synse/list-link'
 import { MetricCard } from '@/components/synse/metric-card'
 import { PageHeader } from '@/components/synse/page-header'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { LeadBoard } from '@/features/crm/lead-board'
 import { requireHubSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 import { can } from '@/lib/permissions/permissions'
+import { SOURCE_LABELS, STAGE_LABELS } from '@/lib/validations/lead'
 import { formatNumber } from '@/lib/utils'
 
 export const metadata: Metadata = { title: 'CRM' }
@@ -110,11 +113,51 @@ export default async function CrmPage() {
         />
       )}
 
-      {perdidos > 0 && (
-        <p className="text-xs text-synse-muted">
-          {formatNumber(perdidos)} {perdidos === 1 ? 'lead perdido' : 'leads perdidos'} no
-          histórico. O motivo de cada um fica registrado e alimenta a taxa de conversão.
-        </p>
+      {/*
+        ── Os que saíram do quadro ──────────────────────────────────────────
+        O funil mostra só quem está em negociação, e estava certo: coluna de
+        matriculado e de perdido viraria depósito. O que faltava era **porta**
+        — a página dizia "o motivo de cada um fica registrado" e não havia
+        onde ler nenhum. Agora cada um abre a própria ficha.
+      */}
+      {decididos > 0 && (
+        <section className="space-y-2">
+          <h2 className="text-sm font-semibold text-synse-text">Já decididos</h2>
+          <p className="text-xs text-synse-muted">
+            {formatNumber(matriculados)} {matriculados === 1 ? 'matriculado' : 'matriculados'} e{' '}
+            {formatNumber(perdidos)} {perdidos === 1 ? 'perdido' : 'perdidos'}. O motivo de cada
+            perda fica no histórico e alimenta a taxa de conversão.
+          </p>
+          <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {leads
+              .filter((lead) => lead.stage === 'ENROLLED' || lead.stage === 'LOST')
+              .map((lead) => (
+                <li key={lead.id}>
+                  {/*
+                    `ListLink`, e não `<Link>`: numa lista o `<Link>` busca no
+                    servidor toda linha que entra na tela. Guardado por
+                    `tests/unit/link-de-lista.test.ts`, que pegou isto aqui.
+                  */}
+                  <ListLink
+                    href={`/crm/${lead.id}`}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-synse-border bg-synse-surface px-3.5 py-2.5 text-sm transition-colors hover:border-synse-primary"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium text-synse-text">
+                        {lead.name}
+                      </span>
+                      <span className="block truncate text-xs text-synse-muted">
+                        {lead.lostReason ?? SOURCE_LABELS[lead.source]}
+                      </span>
+                    </span>
+                    <Badge variant={lead.stage === 'ENROLLED' ? 'success' : 'warning'}>
+                      {STAGE_LABELS[lead.stage]}
+                    </Badge>
+                  </ListLink>
+                </li>
+              ))}
+          </ul>
+        </section>
       )}
     </div>
   )

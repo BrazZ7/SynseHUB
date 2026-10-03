@@ -74,6 +74,7 @@ export async function saveLeadAction(
     })
 
     revalidatePath('/crm')
+    if (leadId) revalidatePath(`/crm/${leadId}`)
     return { status: 'success', message: leadId ? 'Lead atualizado.' : 'Lead cadastrado.' }
   } catch (error) {
     if (!(error instanceof AppError)) logger.error('crm:save_failed', { error: String(error) })
@@ -122,6 +123,7 @@ export async function moveLeadStageAction(
     )
 
     revalidatePath('/crm')
+    revalidatePath(`/crm/${parsed.data.leadId}`)
     return { status: 'success', message: 'Etapa atualizada.' }
   } catch (error) {
     if (!(error instanceof AppError)) logger.error('crm:move_failed', { error: String(error) })
@@ -157,7 +159,13 @@ export async function addLeadNoteAction(
       await staffIdDaSessao(session.organizationId, session.userProfileId),
     )
 
+    /*
+     * A ficha também: é ela que mostra o histórico, e sem esta linha o contato
+     * recém-registrado só apareceria no recarregar seguinte — exatamente a
+     * dúvida que a tela existe para tirar.
+     */
     revalidatePath('/crm')
+    revalidatePath(`/crm/${parsed.data.leadId}`)
     return { status: 'success', message: 'Registrado no histórico.' }
   } catch (error) {
     if (!(error instanceof AppError)) logger.error('crm:note_failed', { error: String(error) })
@@ -202,6 +210,7 @@ export async function convertLeadAction(
     })
 
     revalidatePath('/crm')
+    revalidatePath(`/crm/${parsed.data.leadId}`)
     revalidatePath('/students')
 
     return {

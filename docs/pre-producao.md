@@ -33,9 +33,9 @@ npm run env:check
 
 ## Migrations
 
-**Estado em 03/10/2026: 0001 a 0047 aplicadas em produção** (a **0048 aguarda
-colagem** — vide o registro dela abaixo), confirmado por
-`/api/health?deep=1` (`appliedMigrations: 41`).
+**Estado em 03/10/2026: 0001 a 0048 aplicadas em produção, nada pendente**,
+confirmado por `/api/health?deep=1` (`appliedMigrations: 42`,
+`pendingMigrations: []`).
 
 Esta linha envelhece a cada migration e por isso não é a fonte da verdade: a
 sonda é. Quem quiser saber o que falta abre o endereço, não este arquivo. O que

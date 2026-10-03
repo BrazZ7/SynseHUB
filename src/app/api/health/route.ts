@@ -414,15 +414,22 @@ async function schemaReadiness() {
     /*
      * A 0046 fecha nove furos achados em auditoria, e o mais grave deles é a
      * auto-promoção a conta de plataforma. Enquanto ela não estiver aplicada,
-     * **qualquer dona de academia pode virar super admin com um `update`** —
-     * por isso esta sonda importa mais que as outras.
+     * **qualquer dona de academia vira super admin com um `update`** — por
+     * isso esta sonda importa mais que as outras.
      *
-     * `health_organization_ids` é a função nova mais fácil de sondar: é
-     * `stable`, só lê, e devolve conjunto vazio sem sessão. Sem `executa`
-     * porque ela é revogada do anônimo, então 401/403 é "existe" e 404 é
-     * "não existe" — que é a resposta que interessa.
+     * Sonda `revogar_corpo` e não `health_organization_ids`, e a primeira
+     * escolha estava errada: `health_organization_ids` é concedida ao anônimo
+     * de propósito — ela é chamada de dentro da política de `assessments`, e
+     * revogá-la do anônimo trocaria "nenhuma linha" por `permission denied`
+     * na leitura pública, que é a armadilha que a 0008 documenta. Concedida,
+     * ela responde 200, e sem `executa` o veredito é `null`: sonda que não
+     * diz nada, igual a não ter sonda.
+     *
+     * `revogar_corpo` é revogada do anônimo, então 401/403 é "existe" e 404 é
+     * "não existe". Sem `executa`, e aqui não é detalhe: ela **revoga uma
+     * autorização**, e ligá-lo faria a sonda escrever a cada visita.
      */
-    rpcCheck('health_organization_ids', {}),
+    rpcCheck('revogar_corpo', { p_share_id: '00000000-0000-0000-0000-000000000000' }),
   ])
 
   const registradas = await migracoesRegistradas()

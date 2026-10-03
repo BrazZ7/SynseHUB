@@ -188,6 +188,29 @@ export type DemoMutation =
       b?: string
     }
   | {
+      /**
+       * O treino em andamento do visitante.
+       *
+       * Existe para o painel "Treinando agora" da recepção mostrar alguma
+       * coisa na demonstração. Sem isto ele fica eternamente vazio: a sessão
+       * morava em `DemoDataSource.demoWorkoutSessions`, campo de instância, e
+       * quem abre o Treino Ativo como aluno e troca para a recepção cai em
+       * outra requisição, com outro data source. A tela nova pareceria a tela
+       * quebrada — o mesmo defeito de `share` e `lead`.
+       *
+       * Uma entrada por série (`a: 'set'`), e não um contador: o diário só
+       * acrescenta, nunca edita. São ~25 bytes cada, e o teto de 40 entradas
+       * corta as mais antigas primeiro — no pior caso o painel conta séries a
+       * menos num treino muito longo, que é o erro aceitável aqui.
+       */
+      t: 'wsess'
+      a: 'start' | 'set' | 'finish'
+      /** Só no `start`. */
+      id?: string
+      plano?: string | null
+      at?: string
+    }
+  | {
       /** Sino aberto: tudo criado antes deste instante conta como lido. */
       t: 'notifread'
       at: string
@@ -309,6 +332,7 @@ const TIPOS_ACEITOS: Record<DemoMutation['t'], true> = {
   actpriv: true,
   wpref: true,
   lead: true,
+  wsess: true,
   sstatus: true,
   sedit: true,
   wplan: true,

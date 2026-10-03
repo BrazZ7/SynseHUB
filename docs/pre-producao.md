@@ -33,9 +33,9 @@ npm run env:check
 
 ## Migrations
 
-**Estado em 02/10/2026: 0001 a 0045 aplicadas em produção** (a **0046 aguarda
-colagem, e é urgente** — vide o registro dela abaixo), confirmado por
-`/api/health?deep=1` (`appliedMigrations: 39`).
+**Estado em 03/10/2026: 0001 a 0046 aplicadas em produção** (a **0047 aguarda
+colagem** — vide o registro dela abaixo), confirmado por
+`/api/health?deep=1` (`appliedMigrations: 40`).
 
 Esta linha envelhece a cada migration e por isso não é a fonte da verdade: a
 sonda é. Quem quiser saber o que falta abre o endereço, não este arquivo. O que
@@ -515,6 +515,35 @@ existem, não para conferir se subiram.
   banco já recusa; a conferência é pela mensagem), e a ficha do aluno parou
   de mostrar peso a quem não tem `assessments:read` e mensalidade a quem não
   tem `finance:read` — condicionando a **busca**, não só a renderização.
+
+- **0047 (`0047_treino_fantasma.sql`)** — o treino que ninguém fechou.
+
+  `start_workout_session` (0026) devolve a sessão já aberta em vez de criar
+  outra, e isso está certo para quem voltou ao app dez minutos depois. O que
+  ela não olhava era **quando** aquela sessão abriu.
+
+  Sessão fica pendurada com facilidade: o app morre no meio da série, a
+  bateria acaba, a fila offline esgota as tentativas do FINISH. Na próxima vez
+  que o aluno treina, as séries novas entram naquela sessão — `started_at` de
+  três dias atrás, duração de 72 horas, volume dos dois treinos somado, e o
+  dia de hoje sem nada no histórico. Sem erro em lugar nenhum.
+
+  A função passa a abandonar o que passou de oito horas antes de procurar a
+  sessão aberta, e a migration traz a limpeza única das que já estão
+  penduradas. O `completed_at` recebe `started_at + 8h`, e não `now()`:
+  carimbar agora inventaria no relatório o treino de três dias que a migration
+  existe para impedir.
+
+  **Não tem sonda em `/api/health?deep=1`,** e é o único caso assim até agora:
+  ela só faz `create or replace` numa função que já existe, então não há
+  objeto novo cuja ausência denuncie que ela não subiu. Quem confere é
+  `pendingMigrations`, pelo registro em `schema_migrations`.
+
+  `tests/db/treino-ativo.test.ts`: a reprodução (sessão de três dias atrás
+  engolindo o treino de hoje) falhava antes e passa depois, o controle
+  (sessão de dez minutos continua sendo reaproveitada) continua passando, e um
+  terceiro roda o arquivo inteiro sobre uma sessão pendurada para provar a
+  limpeza.
 
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona

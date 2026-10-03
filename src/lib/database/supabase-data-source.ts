@@ -74,6 +74,7 @@ import type {
   NutritionPlanWithMeals,
   ExercisePersonalRecord,
   StudentAtRisk,
+  OngoingWorkout,
   WorkoutPreferences,
   WorkoutSessionSummary,
   Friend,
@@ -1921,6 +1922,47 @@ export class SupabaseDataSource implements DataSource {
         .maybeSingle(),
     )
     return row ? this.mapWorkoutSession(row) : null
+  }
+
+  /**
+   * Quem está treinando agora.
+   *
+   * A janela de oito horas é a mesma da 0047, e ela está nos dois lugares de
+   * propósito. A migration fecha a sessão esquecida **quando o aluno abre a
+   * próxima** — quem nunca mais voltou continua com a linha pendurada até lá,
+   * e o painel mostraria alguém que foi embora na semana passada como se
+   * estivesse no supino. Aqui o filtro é de leitura; lá é de verdade.
+   *
+   * `workout_set_logs(id)` só para contar: trazer reps e carga de toda sessão
+   * aberta seria pagar transferência por um número que a tela não mostra.
+   */
+  async listActiveWorkoutSessions(organizationId: string): Promise<OngoingWorkout[]> {
+    const desde = new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString()
+
+    const rows =
+      (await this.select<Row[]>(
+        'listActiveWorkoutSessions',
+        this.client
+          .from('workout_sessions')
+          // Aninhamento colado: o parser do PostgREST recusa `a ( b ( c ) )`.
+          .select(
+            'id, student_id, status, started_at, workout_plans:workout_plan_id(name), students(user_profiles(name)), workout_set_logs(id)',
+          )
+          .eq('organization_id', organizationId)
+          .in('status', ['IN_PROGRESS', 'PAUSED'])
+          .gte('started_at', desde)
+          .order('started_at', { ascending: true }),
+      )) ?? []
+
+    return rows.map((row) => ({
+      sessionId: row.id,
+      studentId: row.student_id,
+      studentName: row.students?.user_profiles?.name ?? 'Aluno',
+      planName: row.workout_plans?.name ?? null,
+      startedAt: row.started_at,
+      status: row.status,
+      totalSets: (row.workout_set_logs ?? []).length,
+    }))
   }
 
   async listWorkoutSessions(studentId: string, limite: number): Promise<WorkoutSessionSummary[]> {

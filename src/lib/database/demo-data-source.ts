@@ -80,6 +80,7 @@ import type {
   NutritionPlanWithMeals,
   NutritionTotals,
   StudentAtRisk,
+  OngoingWorkout,
   WorkoutPreferences,
   WorkoutSessionSummary,
   Friend,
@@ -189,6 +190,8 @@ export class DemoDataSource implements DataSource {
   private readonly friendEdits = new Map<string, Friend | null>()
   private readonly demoWorkoutSessions: WorkoutSessionSummary[] = []
   private readonly demoSetLogs = new Map<string, { reps: number; weight: number | null }[]>()
+  /** `sessionId:clientId` já gravados. É o `unique` da 0026, aqui. */
+  private readonly demoSetClientIds = new Set<string>()
   private demoWorkoutPrefs: WorkoutPreferences = { ...DEFAULT_WORKOUT_PREFERENCES }
   private readonly addedLeads: Lead[] = []
   private readonly leadEdits = new Map<string, Lead>()
@@ -478,6 +481,40 @@ export class DemoDataSource implements DataSource {
           stage: mutation.s,
           lostReason: mutation.b ?? null,
         })
+        break
+      }
+      case 'wsess': {
+        /*
+         * Reconstrói o treino em andamento do visitante. `start` recria a
+         * sessão, `set` incrementa a contagem, `finish` fecha — a mesma
+         * ordem em que as três entradas foram gravadas.
+         */
+        if (mutation.a === 'start' && mutation.id) {
+          this.demoWorkoutSessions.push({
+            id: mutation.id,
+            organizationId: DEMO_ORG_ID,
+            studentId: this.db.studentIdForApp,
+            workoutPlanId: mutation.plano ?? null,
+            planName: null,
+            clientId: mutation.id,
+            status: 'IN_PROGRESS',
+            startedAt: mutation.at ?? new Date().toISOString(),
+            completedAt: null,
+            durationSeconds: null,
+            totalSets: 0,
+            totalReps: 0,
+            volumeKg: 0,
+          })
+          break
+        }
+
+        const aberta = this.demoWorkoutSessions.find((s) => s.status === 'IN_PROGRESS')
+        if (!aberta) break
+        if (mutation.a === 'set') aberta.totalSets += 1
+        else {
+          aberta.status = 'COMPLETED'
+          aberta.completedAt = new Date().toISOString()
+        }
         break
       }
       case 'notifread': {
@@ -1839,6 +1876,15 @@ export class DemoDataSource implements DataSource {
       volumeKg: 0,
     })
     this.demoSetLogs.set(id, [])
+    // No diário: sem isto o painel da recepção fica eternamente vazio na
+    // demonstração, porque o data source é remontado a cada requisição.
+    await appendDemoMutation({
+      t: 'wsess',
+      a: 'start',
+      id,
+      plano: workoutPlanId,
+      at: new Date().toISOString(),
+    })
     return id
   }
 
@@ -1849,13 +1895,25 @@ export class DemoDataSource implements DataSource {
     const chave = `${input.sessionId}:${input.clientId}`
     const series = this.demoSetLogs.get(input.sessionId) ?? []
 
-    // Mesma garantia do `unique (session_id, client_id)`: o reenvio não duplica.
-    if (!series.some((_, i) => `${input.sessionId}:${i}` === chave)) {
+    /*
+     * Mesma garantia do `unique (session_id, client_id)`: o reenvio não
+     * duplica.
+     *
+     * A primeira versão comparava `${sessionId}:${clientId}` com
+     * `${sessionId}:${índice}` — um identificador contra uma posição de
+     * array. Só coincidia se o `clientId` fosse, por acaso, o número da
+     * posição, então na prática **nunca** deduplicava: a fila offline
+     * reenviava a série e a demonstração contava duas. Apareceu no painel
+     * "Treinando agora", que mostrou "2 séries" depois de um toque só.
+     */
+    if (!this.demoSetClientIds.has(chave)) {
+      this.demoSetClientIds.add(chave)
       series.push({ reps: input.repsCompleted, weight: input.weight })
       this.demoSetLogs.set(input.sessionId, series)
       sessao.totalSets = series.length
       sessao.totalReps = series.reduce((a, b) => a + b.reps, 0)
       sessao.volumeKg = Math.round(series.reduce((a, b) => a + (b.weight ?? 0) * b.reps, 0))
+      await appendDemoMutation({ t: 'wsess', a: 'set' })
     }
     return chave
   }
@@ -1870,6 +1928,7 @@ export class DemoDataSource implements DataSource {
     sessao.status = status
     sessao.completedAt = new Date().toISOString()
     sessao.durationSeconds = durationSeconds
+    await appendDemoMutation({ t: 'wsess', a: 'finish' })
   }
 
   async getActiveWorkoutSession(studentId: string): Promise<WorkoutSessionSummary | null> {
@@ -1878,6 +1937,38 @@ export class DemoDataSource implements DataSource {
         (s) => s.studentId === studentId && (s.status === 'IN_PROGRESS' || s.status === 'PAUSED'),
       ) ?? null
     )
+  }
+
+  /**
+   * Quem está treinando agora, na demonstração.
+   *
+   * `demoWorkoutSessions` só ganha linha quando alguém usa o Treino Ativo
+   * nesta sessão do navegador — a semente não produz treino em andamento, e
+   * inventar um seria mostrar gente treinando numa academia onde ninguém
+   * abriu o app. O painel vazio é a verdade aqui, e ele explica isso na tela.
+   *
+   * A janela de oito horas é a mesma da 0047 e da consulta de produção.
+   */
+  async listActiveWorkoutSessions(organizationId: string): Promise<OngoingWorkout[]> {
+    const limite = Date.now() - 8 * 60 * 60 * 1000
+
+    return this.demoWorkoutSessions
+      .filter(
+        (s) =>
+          s.organizationId === organizationId &&
+          (s.status === 'IN_PROGRESS' || s.status === 'PAUSED') &&
+          new Date(s.startedAt).getTime() >= limite,
+      )
+      .sort((a, b) => a.startedAt.localeCompare(b.startedAt))
+      .map((s) => ({
+        sessionId: s.id,
+        studentId: s.studentId,
+        studentName: this.studentById.get(s.studentId)?.name ?? 'Aluno',
+        planName: s.planName,
+        startedAt: s.startedAt,
+        status: s.status as 'IN_PROGRESS' | 'PAUSED',
+        totalSets: s.totalSets,
+      }))
   }
 
   /**

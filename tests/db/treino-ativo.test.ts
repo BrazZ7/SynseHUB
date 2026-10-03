@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import type { Client } from 'pg'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
@@ -101,6 +104,92 @@ describe.skipIf(!temBanco)('abertura do treino', () => {
     const primeira = await abrirTreino('c-2', planoAlpha)
     const segunda = await abrirTreino('c-3', planoAlpha)
     expect(segunda).toBe(primeira)
+  })
+
+  it('o treino esquecido de três dias atrás não engole o de hoje', async () => {
+    /*
+     * ── O treino fantasma ───────────────────────────────────────────────────
+     *
+     * `start_workout_session` devolve a sessão já aberta em vez de criar
+     * outra, e está certo para quem voltou ao app dez minutos depois — é o
+     * teste acima. O que ele não distinguia era **quando** aquela sessão
+     * abriu.
+     *
+     * Sessão fica pendurada com facilidade: o app morre no meio, a bateria
+     * acaba, ou a fila offline desiste do FINISH. Aí, na terça, as séries do
+     * aluno caíam dentro da sessão de sábado — com o `started_at` de sábado.
+     * Duração de 72 horas, volume somado dos dois treinos, e o histórico da
+     * terça sem nada. Nenhum erro em lugar nenhum.
+     *
+     * O limite é de oito horas. Treino mais longo que isso não é treino, e
+     * quem passou disso não está mais na academia.
+     */
+    await client.query(`update workout_sessions set status = 'COMPLETED' where student_id = $1`, [
+      alunoAlpha,
+    ])
+
+    const sabado = await abrirTreino('fantasma-1', planoAlpha)
+    await client.query(
+      `update workout_sessions set started_at = now() - interval '3 days' where id = $1`,
+      [sabado],
+    )
+
+    const terca = await abrirTreino('fantasma-2', planoAlpha)
+    expect(terca).not.toBe(sabado)
+
+    // E a de sábado fica fechada, não pendurada para sempre.
+    const { rows } = await client.query(`select status from workout_sessions where id = $1`, [
+      sabado,
+    ])
+    expect(rows[0].status).toBe('ABANDONED')
+  })
+
+  it('mas o de dez minutos atrás continua sendo o mesmo', async () => {
+    // O controle do anterior: o limite não pode atropelar a recuperação, que
+    // é a razão de `start_workout_session` reaproveitar a sessão aberta.
+    await client.query(`update workout_sessions set status = 'COMPLETED' where student_id = $1`, [
+      alunoAlpha,
+    ])
+    const agora = await abrirTreino('recente-1', planoAlpha)
+    await client.query(
+      `update workout_sessions set started_at = now() - interval '10 minutes' where id = $1`,
+      [agora],
+    )
+    expect(await abrirTreino('recente-2', planoAlpha)).toBe(agora)
+  })
+
+  it('a arrumação da 0047 fecha o que já estava pendurado', async () => {
+    /*
+     * A outra metade da migration. A função conserta daqui para frente; este
+     * `update` é o que resolve as linhas que já existem — e sem ele a
+     * academia que roda o SQL hoje continua com o painel mostrando gente que
+     * foi embora na semana passada.
+     *
+     * Rodar o arquivo de novo é seguro: é `create or replace` mais um
+     * `update` com `where`, e é assim que ele chegaria num banco já migrado.
+     */
+    await client.query(`update workout_sessions set status = 'COMPLETED' where student_id = $1`, [
+      alunoAlpha,
+    ])
+    const pendurada = await abrirTreino('arrumacao-1', planoAlpha)
+    await client.query(
+      `update workout_sessions set started_at = now() - interval '2 days' where id = $1`,
+      [pendurada],
+    )
+
+    await client.query(
+      readFileSync(join(process.cwd(), 'src/db/migrations/0047_treino_fantasma.sql'), 'utf8'),
+    )
+
+    const { rows } = await client.query(
+      `select status, completed_at, started_at from workout_sessions where id = $1`,
+      [pendurada],
+    )
+    expect(rows[0].status).toBe('ABANDONED')
+    // Fechada no fim da janela, não agora: carimbar `now()` inventaria um
+    // treino de dois dias de duração no relatório do mês.
+    const horas = (rows[0].completed_at - rows[0].started_at) / 3_600_000
+    expect(horas).toBeCloseTo(8, 1)
   })
 
   it('plano de outra academia não vira treino', async () => {

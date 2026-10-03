@@ -10,10 +10,12 @@ import { StudentAvatar } from '@/components/synse/student-avatar'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CheckInConsole } from '@/features/checkin/checkin-console'
+import { TreinandoAgora } from '@/features/checkin/treinando-agora'
 import { QrPanel } from '@/features/checkin/qr-panel'
 import { getDashboardData } from '@/features/dashboard/service'
 import { requireHubSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
+import { seAindaNaoMigrou } from '@/lib/database/pending-migration'
 import { can } from '@/lib/permissions/permissions'
 import { formatNumber, formatTime } from '@/lib/utils'
 
@@ -27,13 +29,20 @@ export default async function CheckInPage() {
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const weekStart = new Date(now.getTime() - 7 * 86_400_000)
 
-  const [organization, todayCheckIns, weekCheckIns, students, dashboard] = await Promise.all([
-    dataSource.getOrganization(session.organizationId),
-    dataSource.listCheckIns(session.organizationId, { since: todayStart }),
-    dataSource.listCheckIns(session.organizationId, { since: weekStart }),
-    dataSource.listStudents(session.organizationId, { status: 'ALL', page: 1, pageSize: 100 }),
-    getDashboardData(session.organizationId),
-  ])
+  const [organization, todayCheckIns, weekCheckIns, students, dashboard, treinandoAgora] =
+    await Promise.all([
+      dataSource.getOrganization(session.organizationId),
+      dataSource.listCheckIns(session.organizationId, { since: todayStart }),
+      dataSource.listCheckIns(session.organizationId, { since: weekStart }),
+      dataSource.listStudents(session.organizationId, { status: 'ALL', page: 1, pageSize: 100 }),
+      getDashboardData(session.organizationId),
+      /*
+       * Publicar não é migrar: entre o deploy e a 0047 colada no Supabase, a
+       * consulta já funciona (a tabela é da 0026) — o `catch` cobre a
+       * instalação que ainda não tem nem o Treino Ativo.
+       */
+      dataSource.listActiveWorkoutSessions(session.organizationId).catch(seAindaNaoMigrou([])),
+    ])
 
   const canWrite = can(session.role, 'checkin:write')
   const uniqueToday = new Set(todayCheckIns.map((c) => c.studentId)).size
@@ -72,6 +81,12 @@ export default async function CheckInPage() {
               </CardContent>
             </Card>
           )}
+
+          {/*
+            Acima da frequência e das entradas de hoje: é a única informação
+            desta tela que fala do presente. O resto já aconteceu.
+          */}
+          <TreinandoAgora treinos={treinandoAgora} agora={now.getTime()} />
 
           <ChartCard title="Frequência" description="Check-ins registrados nos últimos 14 dias.">
             <AttendanceChart data={dashboard.attendance} />

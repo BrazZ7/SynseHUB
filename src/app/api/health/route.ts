@@ -188,6 +188,7 @@ const MIGRATIONS_ESPERADAS = [
   '0044_biblioteca_de_receitas.sql',
   '0045_quem_o_aluno_pode_autorizar.sql',
   '0046_fechando_a_auditoria.sql',
+  '0047_treino_fantasma.sql',
 ]
 
 async function schemaReadiness() {
@@ -543,6 +544,7 @@ async function schemaReadiness() {
     '0044_biblioteca_de_receitas.sql',
     '0045_quem_o_aluno_pode_autorizar.sql',
     '0046_fechando_a_auditoria.sql',
+    '0047_treino_fantasma.sql',
   )
 
   return {

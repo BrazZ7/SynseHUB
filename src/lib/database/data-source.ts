@@ -33,6 +33,7 @@ import type {
   NutritionPlanWithMeals,
   ExercisePersonalRecord,
   StudentAtRisk,
+  OngoingWorkout,
   WorkoutPreferences,
   WorkoutAdherenceRow,
   WorkoutSessionSummary,
@@ -661,6 +662,14 @@ export interface DataSource {
   ): Promise<void>
   /** O treino em andamento no servidor, para recuperar em outro aparelho. */
   getActiveWorkoutSession(studentId: string): Promise<WorkoutSessionSummary | null>
+  /**
+   * Quem está treinando agora, na academia inteira.
+   *
+   * Separado do `getActiveWorkoutSession` porque a pergunta é outra: aquele
+   * responde por um aluno, e o painel da recepção perguntaria uma vez por
+   * matrícula — quatrocentas consultas para montar uma lista de seis.
+   */
+  listActiveWorkoutSessions(organizationId: string): Promise<OngoingWorkout[]>
   listWorkoutSessions(studentId: string, limite: number): Promise<WorkoutSessionSummary[]>
   getWorkoutPreferences(userProfileId: string): Promise<WorkoutPreferences>
   saveWorkoutPreferences(

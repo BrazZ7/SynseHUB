@@ -22,18 +22,14 @@ import { RAIZ, montarGrafo, semComentarios } from './grafo-de-importacoes'
  *
  * ── Por que a lista de dívida ───────────────────────────────────────────────
  *
- * Ao contar, apareceram cinco. Dois saíram: `listSharedBodyMeasurements`, com
- * as pesagens na ficha do aluno, e `listLeadEvents`, com a ficha do lead. Os
- * dois abaixo continuam sem chamador e estão nomeados porque dívida escrita
- * encolhe, e teste vermelho ignorado não. **Sair daqui é tirar o nome da
- * lista, não acrescentar outro.**
+ * Ao contar, apareceram cinco. Três saíram: `listSharedBodyMeasurements`, com
+ * as pesagens na ficha do aluno; `listLeadEvents`, com a ficha do lead; e
+ * `getActiveWorkoutSession`, com o selo "Treinando agora". Os dois abaixo
+ * continuam sem chamador e estão nomeados porque dívida escrita encolhe, e
+ * teste vermelho ignorado não. **Sair daqui é tirar o nome da lista, não
+ * acrescentar outro.**
  */
 const SEM_CHAMADOR_CONHECIDOS = [
-  /*
-   * A sessão de treino em andamento vista pelo servidor. A tela do aluno
-   * recupera do IndexedDB; falta a do painel — "quem está treinando agora".
-   */
-  'getActiveWorkoutSession',
   /*
    * Um plano por id. Este é o único que provavelmente é código morto, e não
    * tela faltando: quem precisa do plano já tem a lista em mãos.
@@ -83,17 +79,19 @@ describe('todo método do data source tem quem o chame', () => {
     expect(metodosSemChamador()).toEqual(SEM_CHAMADOR_CONHECIDOS)
   })
 
-  it('e as duas que já saíram não voltam', () => {
+  it('e as três que já saíram não voltam', () => {
     /*
-     * O motivo de este guarda existir, nos dois casos que ele já resolveu.
-     * Se a primeira cair, alguém desligou as pesagens da ficha do aluno — e o
+     * O motivo de este guarda existir, nos casos que ele já resolveu. Se a
+     * primeira cair, alguém desligou as pesagens da ficha do aluno — e o
      * aluno voltou a autorizar um professor que não vê nada. Se a segunda
-     * cair, a ficha do lead perdeu a linha do tempo, e o CRM voltou a
-     * registrar ligação em lugar nenhum.
+     * cair, a ficha do lead perdeu a linha do tempo. Se a terceira cair, a
+     * academia voltou a não saber quem está no salão.
      */
     const orfaos = metodosSemChamador()
     expect(orfaos).not.toContain('listSharedBodyMeasurements')
     expect(orfaos).not.toContain('listLeadEvents')
+    expect(orfaos).not.toContain('getActiveWorkoutSession')
+    expect(orfaos).not.toContain('listActiveWorkoutSessions')
   })
 
   it('e ainda enxerga um método solto quando existe um', () => {

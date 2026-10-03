@@ -21,6 +21,7 @@ import { EmptyState } from '@/components/synse/empty-state'
 import { MetricCard } from '@/components/synse/metric-card'
 import { BackLink } from '@/components/synse/back-link'
 import { PaymentStatus, StudentStatusBadge } from '@/components/synse/status-badge'
+import { haQuantoTempo } from '@/features/checkin/state'
 import { PesagensDoAluno } from '@/features/synse-body/pesagens-do-aluno'
 import { autorizacaoDoAluno } from '@/features/synse-body/state'
 import { StudentStatusCard } from '@/features/students/student-status-card'
@@ -53,6 +54,9 @@ type Params = Promise<{ id: string }>
  * academia, e um ano é o horizonte em que uma prescrição faz sentido.
  */
 const JANELA_DA_BALANCA = '1a' as const
+
+/** Depois disso não é mais "agora". O mesmo corte da 0047. */
+const OITO_HORAS = 8 * 60 * 60 * 1000
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { id } = await params
@@ -99,6 +103,7 @@ export default async function StudentProfilePage({ params }: { params: Params })
     workoutPlans,
     autorizacoesDoCorpo,
     pesagens,
+    treinoEmAndamento,
   ] = await Promise.all([
     canSeeFinance
       ? dataSource.getChargesForStudent(session.organizationId, student.id)
@@ -129,6 +134,12 @@ export default async function StudentProfilePage({ params }: { params: Params })
           .listSharedBodyMeasurements(student.userProfileId, JANELA_DA_BALANCA)
           .catch(seAindaNaoMigrou([]))
       : Promise.resolve([]),
+    /*
+     * O mesmo "agora" do painel da recepção, no zoom de uma pessoa. Sem
+     * `canSeeHealth`: estar treinando é presença, como o check-in — a mesma
+     * razão pela qual o painel do check-in fica atrás de `checkin:read`.
+     */
+    dataSource.getActiveWorkoutSession(student.id).catch(seAindaNaoMigrou(null)),
   ])
   const autorizacaoDoCorpo = autorizacaoDoAluno(
     autorizacoesDoCorpo,
@@ -178,6 +189,23 @@ export default async function StudentProfilePage({ params }: { params: Params })
             <div className="flex flex-wrap items-center gap-2.5">
               <h1 className="text-page-title font-semibold text-synse-text">{student.name}</h1>
               <StudentStatusBadge status={student.status} />
+              {/*
+                Treinando agora. `getActiveWorkoutSession` existia desde a
+                0026 e nenhuma tela o chamava — a academia não tinha como
+                saber que o aluno estava no salão com o treino aberto.
+
+                A janela de oito horas é a mesma da 0047 e do painel da
+                recepção: a função devolve a sessão aberta sem olhar a idade
+                dela, e sem o corte aqui um treino que ninguém fechou na
+                semana passada apareceria como "treinando agora" para sempre.
+              */}
+              {treinoEmAndamento &&
+                Date.now() - new Date(treinoEmAndamento.startedAt).getTime() < OITO_HORAS && (
+                  <Badge variant="success">
+                    <Dumbbell className="size-3" aria-hidden />
+                    Treinando {haQuantoTempo(treinoEmAndamento.startedAt, Date.now())}
+                  </Badge>
+                )}
             </div>
 
             <dl className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-synse-muted">

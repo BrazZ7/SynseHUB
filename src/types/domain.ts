@@ -513,6 +513,25 @@ export type WorkoutSessionSummary = {
   volumeKg: number
 }
 
+/**
+ * Alguém com um treino aberto na academia, agora.
+ *
+ * Projeção estreita de propósito: nome, treino, quando começou e quantas
+ * séries já entraram. **Sem carga e sem nenhum número de saúde** — a recepção
+ * precisa saber quem está no salão, e isso é informação de presença, não de
+ * composição corporal. O que o professor precisa ver para ajustar carga está
+ * na ficha do aluno, atrás de `assessments:read`.
+ */
+export type OngoingWorkout = {
+  sessionId: string
+  studentId: string
+  studentName: string
+  planName: string | null
+  startedAt: string
+  status: 'IN_PROGRESS' | 'PAUSED'
+  totalSets: number
+}
+
 export type WorkoutPreferences = {
   autoRest: boolean
   sound: boolean

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Ícone da barra de status.
+
+  Silhueta branca sobre transparente porque o Android descarta a cor e pinta
+  com a do sistema — um ícone colorido vira um quadrado branco. Substitui o
+  `ic_media_play` do próprio Android, que fazia o treino aparecer com o
+  triângulo de "tocar mídia" e parecer notificação de outro aplicativo.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFF">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM12,20c-4.41,0 -8,-3.59 -8,-8s3.59,-8 8,-8 8,3.59 8,8 -3.59,8 -8,8z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M12.75,7h-1.5v5.44l4.22,2.5 0.75,-1.24 -3.47,-2.06z" />
+</vector>

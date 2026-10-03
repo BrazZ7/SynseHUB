@@ -431,7 +431,6 @@ export interface DataSource {
 
   // Planos e matrículas
   listPlans(organizationId: string): Promise<MembershipPlan[]>
-  getPlan(organizationId: string, planId: string): Promise<MembershipPlan | null>
   createPlan(input: Omit<MembershipPlan, 'id' | 'createdAt'>): Promise<MembershipPlan>
   countStudentsByPlan(organizationId: string): Promise<Record<string, number>>
   getActiveMembership(organizationId: string, studentId: string): Promise<Membership | null>

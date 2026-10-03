@@ -22,19 +22,27 @@ import { RAIZ, montarGrafo, semComentarios } from './grafo-de-importacoes'
  *
  * ── Por que a lista de dívida ───────────────────────────────────────────────
  *
- * Ao contar, apareceram cinco. Três saíram: `listSharedBodyMeasurements`, com
- * as pesagens na ficha do aluno; `listLeadEvents`, com a ficha do lead; e
- * `getActiveWorkoutSession`, com o selo "Treinando agora". Os dois abaixo
- * continuam sem chamador e estão nomeados porque dívida escrita encolhe, e
- * teste vermelho ignorado não. **Sair daqui é tirar o nome da lista, não
- * acrescentar outro.**
+ * Ao contar, apareceram cinco. Quatro saíram: `listSharedBodyMeasurements`,
+ * com as pesagens na ficha do aluno; `listLeadEvents`, com a ficha do lead;
+ * `getActiveWorkoutSession`, com o selo "Treinando agora"; e `getPlan`, que
+ * saiu por outro caminho — vide abaixo. O último está nomeado porque dívida
+ * escrita encolhe, e teste vermelho ignorado não. **Sair daqui é tirar o nome
+ * da lista, não acrescentar outro.**
+ *
+ * ── O que uma entrada aqui significa, e o que não significa ─────────────────
+ *
+ * Significa "está na interface e nenhuma tela alcança". **Não** significa
+ * "ninguém usa": a busca exclui os próprios data sources, então chamada
+ * interna (`this.getPlan(...)`) é invisível para ela, de propósito.
+ *
+ * Isso tem duas saídas, e eu só enxerguei a primeira até errar com a segunda:
+ * ligar o método a uma tela, ou tirá-lo do contrato. `getPlan` era o segundo
+ * caso — usada duas vezes dentro do data source do Supabase para montar a
+ * matrícula com o preço certo. Eu a chamei de código morto num relatório e
+ * quase a apaguei; ela virou `private`, e a demonstração parou de precisar
+ * implementar uma função que nunca chamava.
  */
 const SEM_CHAMADOR_CONHECIDOS = [
-  /*
-   * Um plano por id. Este é o único que provavelmente é código morto, e não
-   * tela faltando: quem precisa do plano já tem a lista em mãos.
-   */
-  'getPlan',
   /* As dietas anteriores do aluno. A tela mostra só a publicada. */
   'listNutritionPlansForStudent',
 ].sort()
@@ -104,7 +112,7 @@ describe('todo método do data source tem quem o chame', () => {
       'src/lib/database/data-source.ts': readFileSync(
         join(RAIZ, 'src/lib/database/data-source.ts'),
         'utf8',
-      ).replace('  getPlan(', '  metodoDeMentiraSemChamador(): Promise<void>\n  getPlan('),
+      ).replace('  listPlans(', '  metodoDeMentiraSemChamador(): Promise<void>\n  listPlans('),
     })
 
     expect(comIsca).toContain('metodoDeMentiraSemChamador')
@@ -120,7 +128,7 @@ describe('todo método do data source tem quem o chame', () => {
       'src/lib/database/data-source.ts': readFileSync(
         join(RAIZ, 'src/lib/database/data-source.ts'),
         'utf8',
-      ).replace('  getPlan(', '  metodoDeMentiraSemChamador(): Promise<void>\n  getPlan('),
+      ).replace('  listPlans(', '  metodoDeMentiraSemChamador(): Promise<void>\n  listPlans('),
       'src/app/isca/page.tsx':
         "import { getDataSource } from '@/lib/database'\n" +
         'export default async function Pagina() {\n' +

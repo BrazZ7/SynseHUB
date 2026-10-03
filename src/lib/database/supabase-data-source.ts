@@ -434,7 +434,21 @@ export class SupabaseDataSource implements DataSource {
     return rows.map((row) => this.mapPlan(row))
   }
 
-  async getPlan(organizationId: string, planId: string) {
+  /**
+   * O plano, para montar a matrícula com o preço certo.
+   *
+   * `private`, e isso é o conserto de um engano meu: ela estava na interface
+   * `DataSource`, e o guarda `metodo-sem-chamador` a listou como "nenhuma
+   * tela alcança" — o que era verdade. Eu li isso como "código morto" e quase
+   * a apaguei. Ela é usada duas vezes aqui dentro, em `createStudent` e
+   * `updateStudent`, por `this.getPlan`: o guarda não enxerga chamada interna
+   * porque exclui os próprios data sources da busca, de propósito.
+   *
+   * O achado estava certo e o rótulo estava errado. Método que só a
+   * implementação usa não pertence ao contrato — obrigava o data source de
+   * demonstração a implementar uma função que ele nunca chamava.
+   */
+  private async getPlan(organizationId: string, planId: string) {
     const row = await this.select<Row>(
       'getPlan',
       this.client

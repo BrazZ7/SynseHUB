@@ -836,11 +836,6 @@ export class DemoDataSource implements DataSource {
     return this.scoped(this.plans(), organizationId)
   }
 
-  async getPlan(organizationId: string, planId: string): Promise<MembershipPlan | null> {
-    const plan = this.planById.get(planId)
-    return plan && plan.organizationId === organizationId ? plan : null
-  }
-
   async createOrganization(): Promise<string> {
     // A demonstração roda sobre uma academia fixa e sem autenticação real.
     // Cadastrar outra não teria onde existir.

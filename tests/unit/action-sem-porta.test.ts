@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import fg from 'fast-glob'
 import { describe, expect, it } from 'vitest'
@@ -54,8 +54,19 @@ function semComentarios(codigo: string): string {
     .join('\n')
 }
 
-/** Os arquivos que este `import` alcança, já resolvidos para caminho real. */
-function importados(arquivo: string, codigo: string): string[] {
+/**
+ * Os arquivos que este `import` alcança, já resolvidos para caminho real.
+ *
+ * `existe` é o conjunto de arquivos conhecidos, e não o disco. A diferença só
+ * importa para o controle lá embaixo, que injeta arquivos de mentira para
+ * provar que o detector ainda detecta — com `existsSync` eles nunca seriam
+ * resolvidos, e o controle testaria a si mesmo.
+ */
+function importados(
+  arquivo: string,
+  codigo: string,
+  existe: (caminho: string) => boolean,
+): string[] {
   const alvos: string[] = []
 
   for (const [, especificador] of codigo.matchAll(/from\s+['"]([^'"]+)['"]/g)) {
@@ -66,10 +77,10 @@ function importados(arquivo: string, codigo: string): string[] {
     else continue // pacote de node_modules
 
     for (const sufixo of ['.ts', '.tsx', '/index.ts', '/index.tsx', '']) {
-      const tentativa = base + sufixo
+      const tentativa = relative(RAIZ, base + sufixo)
       if (sufixo === '' && !/\.tsx?$/.test(tentativa)) continue
-      if (existsSync(tentativa)) {
-        alvos.push(relative(RAIZ, tentativa))
+      if (existe(tentativa)) {
+        alvos.push(tentativa)
         break
       }
     }
@@ -79,7 +90,7 @@ function importados(arquivo: string, codigo: string): string[] {
 }
 
 /**
- * As que ainda estão sem porta.
+ * As que ainda estão sem porta — **nenhuma**.
  *
  * A lista nasceu com seis. Cinco eram controle de privacidade — revogar e
  * conceder compartilhamento de dado corporal, apagar medição, mudar a
@@ -87,17 +98,30 @@ function importados(arquivo: string, codigo: string): string[] {
  * foram construídas: `/app/corpo/compartilhamento`, o apagar no histórico do
  * corpo e o seletor em `/app/run/[id]`.
  *
- * Sobrou uma, que não é de privacidade: `saveWorkoutPreferencesAction`, do
- * treino ativo. Fica registrada pelo mesmo motivo que as outras ficaram —
- * dívida escrita encolhe; teste vermelho ignorado, não.
+ * A sexta era `saveWorkoutPreferencesAction`, do treino ativo: as preferências
+ * existiam no banco desde a 0026 e o aluno não tinha onde desligar a vibração.
+ * Saiu com o painel de ajustes em `components/ajustes-do-treino.tsx`.
+ *
+ * Vazia, a lista muda de papel: deixa de registrar dívida e passa a ser um
+ * piso. Qualquer action nova sem tela derruba a suíte no commit em que
+ * aparecer, que é o momento em que custa mais barato consertar.
  */
-const SEM_PORTA_CONHECIDAS = [
-  'src/features/active-workout/actions.ts → saveWorkoutPreferencesAction',
-].sort()
+const SEM_PORTA_CONHECIDAS: string[] = []
 
-function actionsSemPorta(): string[] {
-  const arquivos = fg.sync(['src/**/*.{ts,tsx}'], { cwd: RAIZ })
-  const bruto = new Map(arquivos.map((a) => [a, readFileSync(join(RAIZ, a), 'utf8')]))
+/**
+ * `extras` são arquivos de mentira, só em memória, para o controle: é como se
+ * prova que o detector continua detectando quando a lista de dívida está
+ * vazia. Sem eles, `toEqual([])` passaria igual se o caminhador marcasse o
+ * repositório inteiro como alcançável.
+ */
+function actionsSemPorta(extras: Record<string, string> = {}): string[] {
+  const doDisco = fg.sync(['src/**/*.{ts,tsx}'], { cwd: RAIZ })
+  const bruto = new Map(doDisco.map((a) => [a, readFileSync(join(RAIZ, a), 'utf8')]))
+  for (const [caminho, conteudo] of Object.entries(extras)) bruto.set(caminho, conteudo)
+
+  const arquivos = [...bruto.keys()]
+  const conhecidos = new Set(arquivos)
+  const existe = (caminho: string) => conhecidos.has(caminho)
   const limpo = new Map([...bruto].map(([a, c]) => [a, semComentarios(c)]))
 
   /*
@@ -114,7 +138,7 @@ function actionsSemPorta(): string[] {
     const atual = fila.pop() as string
     if (alcancaveis.has(atual)) continue
     alcancaveis.add(atual)
-    for (const vizinho of importados(atual, limpo.get(atual) ?? '')) {
+    for (const vizinho of importados(atual, limpo.get(atual) ?? '', existe)) {
       if (!alcancaveis.has(vizinho)) fila.push(vizinho)
     }
   }
@@ -153,29 +177,54 @@ describe('toda server action tem uma porta', () => {
     /*
      * O controle. Sem ele, um `importados` que devolvesse sempre vazio
      * deixaria tudo "inalcançável" — ou, pior, um bug que marcasse tudo como
-     * alcançável faria a asserção de cima passar por omissão.
-     *
-     * `salvarProgramaAction` é chamada por `program-form.tsx`, que a página
-     * de programas renderiza: se o caminho de duas pernas não for percorrido,
-     * ela aparece como órfã.
+     * alcançável faria a asserção de cima passar por omissão. Com a lista de
+     * dívida vazia, esse segundo risco deixou de ser teórico: `toEqual([])`
+     * é exatamente o que um detector quebrado devolve.
      */
     const orfas = actionsSemPorta()
+
+    // Duas e três pernas de import até a página, e o caminhador chega.
     expect(orfas).not.toContain('src/features/programs/admin-actions.ts → salvarProgramaAction')
     expect(orfas).not.toContain('src/features/programs/admin-actions.ts → apagarProgramaAction')
     expect(orfas).not.toContain('src/features/recipes/admin-actions.ts → apagarReceitaAction')
-
-    /*
-     * E as cinco de privacidade, que são a razão de este guarda existir. Com
-     * a lista reduzida a um nome, `length > 0` quase não prova nada — o que
-     * prova é o contador continuar enxergando estas, que atravessam duas e
-     * três pernas de import até a página.
-     */
     expect(orfas).not.toContain('src/features/synse-body/actions.ts → revokeBodyShareAction')
     expect(orfas).not.toContain('src/features/synse-body/actions.ts → grantBodyShareAction')
     expect(orfas).not.toContain('src/features/synse-body/actions.ts → deleteBodyMeasurementAction')
     expect(orfas).not.toContain('src/features/synse-run/actions.ts → updateActivityPrivacyAction')
     expect(orfas).not.toContain('src/features/synse-run/actions.ts → deleteActivityAction')
+    expect(orfas).not.toContain(
+      'src/features/active-workout/actions.ts → saveWorkoutPreferencesAction',
+    )
+  })
 
-    expect(orfas.length).toBeGreaterThan(0)
+  it('e ainda enxerga uma órfã quando existe uma', () => {
+    /*
+     * A isca, em memória: uma action que ninguém chama precisa aparecer. Este
+     * é o teste que impede a lista vazia de virar um teste que não testa.
+     */
+    const SOLTA = "'use server'\nexport async function acaoSemPortaDeMentira() {}\n"
+
+    expect(actionsSemPorta({ 'src/features/isca/actions.ts': SOLTA })).toContain(
+      'src/features/isca/actions.ts → acaoSemPortaDeMentira',
+    )
+  })
+
+  it('e não acusa a isca quando uma página a importa', () => {
+    /*
+     * O outro lado do controle: ligada a uma rota, a mesma action some da
+     * lista. Um caminhador que marcasse tudo como órfão passaria no teste
+     * anterior e cairia aqui.
+     */
+    const SOLTA = "'use server'\nexport async function acaoSemPortaDeMentira() {}\n"
+    const PAGINA =
+      "import { acaoSemPortaDeMentira } from '@/features/isca/actions'\n" +
+      'export default function Pagina() {\n  return acaoSemPortaDeMentira\n}\n'
+
+    expect(
+      actionsSemPorta({
+        'src/features/isca/actions.ts': SOLTA,
+        'src/app/isca/page.tsx': PAGINA,
+      }),
+    ).not.toContain('src/features/isca/actions.ts → acaoSemPortaDeMentira')
   })
 })

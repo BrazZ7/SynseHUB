@@ -14,6 +14,7 @@ import {
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { AjustesDoTreino } from '@/features/active-workout/components/ajustes-do-treino'
 import {
   duracaoEfetiva,
   exercicioAtual,
@@ -22,7 +23,9 @@ import {
 import type { PlannedExercise, WorkoutSession } from '@/features/active-workout/engine/types'
 import type { ResumoDoTreino } from '@/features/active-workout/state'
 import { useActiveWorkout, useRestCountdown } from '@/features/active-workout/use-active-workout'
+import { usePreferenciasDoTreino } from '@/features/active-workout/use-preferencias-do-treino'
 import { cn, formatNumber } from '@/lib/utils'
+import type { WorkoutPreferences } from '@/types/domain'
 
 /**
  * A tela do treino.
@@ -42,12 +45,34 @@ export function ActiveWorkoutScreen({
   planName,
   workoutPlanId,
   exercises,
+  preferencias,
 }: {
   planName: string
   workoutPlanId: string | null
   exercises: PlannedExercise[]
+  preferencias: WorkoutPreferences
 }) {
-  const treino = useActiveWorkout()
+  const treino = useActiveWorkout(preferencias)
+  /*
+   * As preferências vivem em dois lugares de propósito, e os dois são
+   * necessários: no servidor, para acompanhar quem troca de aparelho; e dentro
+   * da sessão do treino, porque é de lá que o engine lê. O `aplicar` abaixo
+   * mantém o segundo em dia com o primeiro — `despachar` não faz nada quando
+   * não há treino em andamento, que é justamente o caso da tela de abertura.
+   */
+  const ajustes = usePreferenciasDoTreino(preferencias, (p) =>
+    treino.despachar({ type: 'SETTINGS', settings: p }),
+  )
+
+  const painel = (
+    <AjustesDoTreino
+      preferencias={ajustes.preferencias}
+      erro={ajustes.erro}
+      gravando={ajustes.gravando}
+      onMudar={ajustes.mudar}
+      onLigarSom={() => void treino.prepararSom()}
+    />
+  )
 
   if (treino.carregando) {
     return <div className="h-64 animate-pulse rounded-2xl bg-synse-surface-2" aria-hidden />
@@ -55,11 +80,23 @@ export function ActiveWorkoutScreen({
 
   if (!treino.sessao) {
     return (
-      <Abertura
-        planName={planName}
-        exercises={exercises}
-        onStart={() => void treino.iniciar({ workoutPlanId, planName, exercises })}
-      />
+      <div className="space-y-4">
+        <Abertura
+          planName={planName}
+          exercises={exercises}
+          onStart={() =>
+            void treino.iniciar({
+              workoutPlanId,
+              planName,
+              exercises,
+              // O valor vivo, e não a prop: a pessoa pode ter mexido nos
+              // ajustes logo antes de apertar "Começar treino".
+              settings: ajustes.preferencias,
+            })
+          }
+        />
+        {painel}
+      </div>
     )
   }
 
@@ -102,6 +139,8 @@ export function ActiveWorkoutScreen({
       )}
 
       <ProximoExercicio sessao={sessao} />
+
+      {painel}
 
       <Button
         variant="ghost"

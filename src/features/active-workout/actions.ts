@@ -4,6 +4,7 @@ import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 import { AppError, toUserMessage } from '@/lib/errors'
 import { logger } from '@/lib/logger'
+import { workoutPreferencesSchema } from '@/lib/validations/workout'
 import type { WorkoutPreferences } from '@/types/domain'
 
 /**
@@ -81,15 +82,45 @@ export async function finishWorkoutSessionAction(
   }
 }
 
+/**
+ * As preferências do treino, gravadas no servidor.
+ *
+ * ── Por que a validação está aqui ──────────────────────────────────────────
+ *
+ * Esta action recebe um objeto inteiro vindo do cliente. Até ganhar o
+ * `safeParse`, ela o entregava ao banco como veio: a única defesa era o
+ * `check (default_rest_seconds between 0 and 900)` da 0026 — que recusa, sim,
+ * mas devolvendo erro de banco onde deveria haver uma frase, e sem dizer nada
+ * sobre os cinco booleanos.
+ *
+ * `user_profile_id` continua saindo da sessão, nunca do argumento, e a RLS
+ * (`workout_preferences_self`, 0026) confere de novo pelo `auth_profile_id()`.
+ * O que o esquema acrescenta é a forma — e `analise.data` traz só as chaves
+ * declaradas, então campo a mais colado pelo cliente não chega ao `upsert`.
+ */
 export async function saveWorkoutPreferencesAction(
   preferencias: WorkoutPreferences,
 ): Promise<SyncResult> {
   try {
     const session = await requireStudentSession()
+
+    const analise = workoutPreferencesSchema.safeParse(preferencias)
+    if (!analise.success) {
+      throw new AppError(
+        'invalid_input',
+        'Não reconhecemos estes ajustes de treino.',
+        422,
+        analise.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
+      )
+    }
+
     const dataSource = await getDataSource()
-    await dataSource.saveWorkoutPreferences(session.userProfileId, preferencias)
+    await dataSource.saveWorkoutPreferences(session.userProfileId, analise.data)
     return { ok: true }
   } catch (error) {
+    if (!(error instanceof AppError)) {
+      logger.error('workout:preferences_failed', { error: String(error) })
+    }
     return { ok: false, erro: toUserMessage(error) }
   }
 }

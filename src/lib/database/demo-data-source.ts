@@ -421,6 +421,17 @@ export class DemoDataSource implements DataSource {
         else this.corridasApagadas.add(mutation.id)
         break
       }
+      case 'wpref': {
+        this.demoWorkoutPrefs = {
+          autoRest: mutation.autoRest,
+          sound: mutation.sound,
+          vibration: mutation.vibration,
+          autoAdvance: mutation.autoAdvance,
+          keepScreenAwake: mutation.keepScreenAwake,
+          defaultRestSeconds: mutation.rest,
+        }
+        break
+      }
       case 'notifread': {
         this.notificationsReadAt = mutation.at
         break
@@ -1885,6 +1896,17 @@ export class DemoDataSource implements DataSource {
 
   async saveWorkoutPreferences(_userProfileId: string, p: WorkoutPreferences) {
     this.demoWorkoutPrefs = p
+    // No diário também: o campo de instância não sobrevive à próxima
+    // requisição, e sem isto o ajuste volta atrás ao recarregar a tela.
+    await appendDemoMutation({
+      t: 'wpref',
+      autoRest: p.autoRest,
+      sound: p.sound,
+      vibration: p.vibration,
+      autoAdvance: p.autoAdvance,
+      keepScreenAwake: p.keepScreenAwake,
+      rest: p.defaultRestSeconds,
+    })
     return p
   }
 

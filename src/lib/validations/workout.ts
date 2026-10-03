@@ -87,3 +87,31 @@ export const assignWorkoutSchema = z.object({
 
 export type CreateWorkoutInput = z.infer<typeof createWorkoutSchema>
 export type CreateWeekInput = z.infer<typeof createWeekSchema>
+
+/**
+ * ── As preferências do Treino Ativo ─────────────────────────────────────────
+ *
+ * Existe porque `saveWorkoutPreferencesAction` recebe um objeto do cliente e
+ * o entregava ao banco sem olhar. Server action é endereço público: quem tem
+ * sessão de aluno chama com o que quiser, e sem isto a defesa era o `check`
+ * da 0026 — que recusa, mas devolvendo erro de banco no lugar de uma frase.
+ *
+ * A RLS continua por cima; o `user_profile_id` nunca vem daqui, sai da sessão.
+ * Isto é só a forma do objeto.
+ *
+ * O teto de 900 é o mesmo `check (default_rest_seconds between 0 and 900)` da
+ * 0026, e `tests/unit/active-workout/preferencias.test.ts` lê a migration para
+ * conferir que os dois não se separaram.
+ */
+export const workoutPreferencesSchema = z.object({
+  autoRest: z.boolean(),
+  sound: z.boolean(),
+  vibration: z.boolean(),
+  autoAdvance: z.boolean(),
+  keepScreenAwake: z.boolean(),
+  defaultRestSeconds: z.coerce
+    .number()
+    .int('O descanso vai em segundos inteiros.')
+    .min(0)
+    .max(900, 'Quinze minutos é o máximo de descanso padrão.'),
+})

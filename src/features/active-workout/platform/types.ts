@@ -57,4 +57,16 @@ export type FeedbackPort = {
   vibrate(padrao: number[]): void
   /** Mantém a tela ligada enquanto o treino corre. Devolve como liberar. */
   keepAwake(ativo: boolean): Promise<void>
+  /**
+   * Abre o canal de som, e precisa ser chamado **de dentro de um toque**.
+   *
+   * O navegador só deixa tocar áudio depois de um gesto da pessoa. O fim do
+   * descanso não é gesto nenhum — é um temporizador vencendo —, então um
+   * `beep()` solto ali seria recusado em silêncio, e a preferência "Som"
+   * ficaria ligada sem nunca soar. Os dois gestos que abrem o canal são o
+   * "Começar treino" e o próprio interruptor do som.
+   */
+  prepararSom(): Promise<void>
+  /** O aviso do fim do descanso. Não faz nada se o canal não foi aberto. */
+  beep(): void
 }

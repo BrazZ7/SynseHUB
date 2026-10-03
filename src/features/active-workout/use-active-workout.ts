@@ -46,7 +46,15 @@ const id = () =>
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`
 
-export function useActiveWorkout() {
+/**
+ * As preferências do servidor, para o hook.
+ *
+ * Chegam por argumento em vez de serem lidas aqui porque quem as tem é a
+ * página, que já as carregou do banco no mesmo `Promise.all` do plano — e
+ * buscá-las de novo no cliente seria uma ida à rede para saber o que o HTML
+ * já trouxe.
+ */
+export function useActiveWorkout(preferencias?: Partial<WorkoutSettings>) {
   const [sessao, setSessao] = useState<WorkoutSession | null>(null)
   const [carregando, setCarregando] = useState(true)
   const [pendentes, setPendentes] = useState(0)
@@ -67,6 +75,12 @@ export function useActiveWorkout() {
    * duas defesas de baixo não teriam como saber que é a mesma coisa.
    */
   const concluindoRef = useRef(false)
+  /*
+   * Num ref, e não nas dependências: a recuperação roda uma vez, na montagem,
+   * e pô-las na lista faria a sessão guardada ser relida a cada ajuste.
+   */
+  const preferenciasRef = useRef(preferencias)
+  preferenciasRef.current = preferencias
 
   // ── Recuperação ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -76,9 +90,21 @@ export function useActiveWorkout() {
       if (!vivo) return
       if (guardada && guardada.state !== 'WORKOUT_COMPLETED') {
         serverIdRef.current = guardada.serverId
-        // Reidratar antes de mostrar: o descanso pode ter vencido enquanto o
-        // app estava fechado, e reiniciar o cronômetro seria mentir.
-        setSessao(reidratar(guardada, Date.now()))
+        /*
+         * Reidratar antes de mostrar: o descanso pode ter vencido enquanto o
+         * app estava fechado, e reiniciar o cronômetro seria mentir.
+         *
+         * As preferências vêm por cima das que o aparelho guardou. A sessão
+         * local pode ter começado há dois dias, antes de a pessoa desligar a
+         * vibração no celular novo — e o treino retomado respeitar o ajuste
+         * antigo é o defeito que faz alguém jurar que o interruptor não
+         * funciona.
+         */
+        const comPreferencias = {
+          ...guardada,
+          settings: { ...guardada.settings, ...preferenciasRef.current },
+        }
+        setSessao(reidratar(comPreferencias, Date.now()))
       }
       setCarregando(false)
     })()
@@ -137,6 +163,7 @@ export function useActiveWorkout() {
       setSessao((atual) => (atual ? reduzir(atual, { type: 'REST_ELAPSED', agora }) : atual))
 
       if (sessao.settings.vibration) feedback.vibrate([200, 100, 200])
+      if (sessao.settings.sound) feedback.beep()
       const estado = paraLiveActivity(sessao)
       if (estado) void liveActivity.restFinished({ ...estado, phase: 'REST_FINISHED' })
     }, Math.max(faltam, 0))
@@ -219,6 +246,8 @@ export function useActiveWorkout() {
        */
       if (await liveActivity.isSupported()) await liveActivity.requestPermission()
       if (nova.settings.keepScreenAwake) await feedback.keepAwake(true)
+      // Mesma razão da permissão: é o gesto que abre o canal de som.
+      if (nova.settings.sound) await feedback.prepararSom()
 
       const estado = paraLiveActivity(nova)
       if (estado) await liveActivity.start(estado)
@@ -298,12 +327,21 @@ export function useActiveWorkout() {
     setSessao(null)
   }, [liveActivity, feedback])
 
+  /**
+   * Exposto para o interruptor "Som": ligá-lo é o outro gesto que pode abrir o
+   * canal de áudio. Sem isto, quem liga o som no meio do treino — depois de o
+   * `iniciar` ter passado com ele desligado — não ouviria nada até o treino
+   * seguinte, e não teria como saber por quê.
+   */
+  const prepararSom = useCallback(() => feedback.prepararSom(), [feedback])
+
   return {
     sessao,
     carregando,
     pendentes,
     resumoDaFila,
     iniciar,
+    prepararSom,
     concluirSerie,
     encerrar,
     descartar,

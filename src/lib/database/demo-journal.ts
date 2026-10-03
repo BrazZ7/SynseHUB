@@ -137,6 +137,28 @@ export type DemoMutation =
       p?: 'PUBLIC' | 'GYM' | 'PRIVATE'
     }
   | {
+      /**
+       * Os ajustes do Treino Ativo.
+       *
+       * O objeto inteiro, e não o campo que mudou: são seis valores curtos, e
+       * guardar diferenças exigiria reconstruí-los em ordem na leitura — mais
+       * código para economizar algumas dezenas de bytes.
+       *
+       * Está aqui pelo motivo do cabeçalho: moravam em
+       * `DemoDataSource.demoWorkoutPrefs`, variável de instância, e o data
+       * source é remontado a cada requisição. Desligar a vibração funcionava,
+       * e o interruptor voltava sozinho ao recarregar — o mesmo defeito que
+       * `share` e `actpriv` existem para corrigir.
+       */
+      t: 'wpref'
+      autoRest: boolean
+      sound: boolean
+      vibration: boolean
+      autoAdvance: boolean
+      keepScreenAwake: boolean
+      rest: number
+    }
+  | {
       /** Sino aberto: tudo criado antes deste instante conta como lido. */
       t: 'notifread'
       at: string
@@ -256,6 +278,7 @@ const TIPOS_ACEITOS: Record<DemoMutation['t'], true> = {
   prog: true,
   share: true,
   actpriv: true,
+  wpref: true,
   sstatus: true,
   sedit: true,
   wplan: true,

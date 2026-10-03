@@ -31,10 +31,17 @@ export default async function ActiveWorkoutPage({ searchParams }: { searchParams
   // não pode virar treino de outra pessoa.
   if (!assignments.some((a) => a.workoutPlanId === planId)) notFound()
 
-  const [plan, workoutExercises, exercises] = await Promise.all([
+  const [plan, workoutExercises, exercises, preferencias] = await Promise.all([
     dataSource.getWorkoutPlan(session.organizationId, planId),
     dataSource.listWorkoutExercises(planId),
     dataSource.listExercises(session.organizationId),
+    /*
+     * Junto das outras, e não numa busca do cliente: a tela precisa delas para
+     * desenhar os interruptores na posição certa já no primeiro quadro. Vindo
+     * depois, eles apareceriam no padrão e pulariam para o valor da pessoa —
+     * e quem visse só o primeiro estado concluiria que o ajuste não guardou.
+     */
+    dataSource.getWorkoutPreferences(session.userProfileId),
   ])
   if (!plan) notFound()
 
@@ -58,6 +65,7 @@ export default async function ActiveWorkoutPage({ searchParams }: { searchParams
         planName={plan.name.replace(/^Treino [A-Z]+ — /, '')}
         workoutPlanId={plan.id}
         exercises={planejados}
+        preferencias={preferencias}
       />
     </div>
   )

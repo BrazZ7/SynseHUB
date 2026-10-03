@@ -105,9 +105,74 @@ export class WebLiveActivity implements LiveActivityPort {
   }
 }
 
-/** Vibração e Wake Lock. Ambos degradam em silêncio onde não existem. */
+/** Vibração, som e Wake Lock. Todos degradam em silêncio onde não existem. */
 export class WebFeedback implements FeedbackPort {
   private sentinel: WakeLockSentinel | null = null
+  private audio: AudioContext | null = null
+
+  /**
+   * ── O som, e a razão de ele precisar de duas chamadas ──────────────────────
+   *
+   * `prepararSom` abre o `AudioContext` durante um toque; `beep` só usa o que
+   * já está aberto. Fundir os dois numa função só pareceria mais simples e
+   * seria a volta do defeito: criar o contexto no fim do descanso cai na
+   * política de reprodução automática, o navegador devolve um contexto
+   * `suspended`, e o aviso que a pessoa pediu não sai — sem erro, sem log,
+   * sem nada.
+   *
+   * Nenhum arquivo de áudio: dois tons sintetizados custam zero byte de rede e
+   * tocam na hora. Um `.mp3` de 20 KB chegaria tarde justamente na academia de
+   * subsolo, que é onde este app foi desenhado para funcionar.
+   */
+  async prepararSom() {
+    try {
+      if (typeof window === 'undefined') return
+      const Contexto =
+        window.AudioContext ??
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+      if (!Contexto) return
+
+      this.audio ??= new Contexto()
+      // O iOS devolve o contexto suspenso mesmo criado no toque.
+      if (this.audio.state === 'suspended') await this.audio.resume()
+    } catch {
+      // Sem Web Audio: a vibração e o aviso do sistema continuam valendo.
+    }
+  }
+
+  beep() {
+    const ctx = this.audio
+    if (!ctx || ctx.state !== 'running') return
+
+    try {
+      const agora = ctx.currentTime
+      // Dois tons subindo: lido como "pronto", e não como erro.
+      for (const [atraso, hz] of [
+        [0, 880],
+        [0.18, 1320],
+      ] as const) {
+        const oscilador = ctx.createOscillator()
+        const ganho = ctx.createGain()
+        oscilador.type = 'sine'
+        oscilador.frequency.value = hz
+
+        /*
+         * Envelope em rampa, não um liga-desliga: onda que começa e termina
+         * no talo estala no alto-falante do celular. `exponentialRamp` não
+         * aceita zero, daí o 0.0001 nas pontas.
+         */
+        ganho.gain.setValueAtTime(0.0001, agora + atraso)
+        ganho.gain.exponentialRampToValueAtTime(0.3, agora + atraso + 0.02)
+        ganho.gain.exponentialRampToValueAtTime(0.0001, agora + atraso + 0.15)
+
+        oscilador.connect(ganho).connect(ctx.destination)
+        oscilador.start(agora + atraso)
+        oscilador.stop(agora + atraso + 0.16)
+      }
+    } catch {
+      /* nada a fazer */
+    }
+  }
 
   vibrate(padrao: number[]) {
     // iOS Safari não implementa. Sem `catch` explícito porque a chamada não

@@ -1,7 +1,6 @@
-import { readFileSync } from 'node:fs'
-import { dirname, join, relative, resolve } from 'node:path'
-import fg from 'fast-glob'
 import { describe, expect, it } from 'vitest'
+
+import { montarGrafo } from './grafo-de-importacoes'
 
 /**
  * ── Server action que nenhuma tela alcança ──────────────────────────────────
@@ -36,59 +35,6 @@ import { describe, expect, it } from 'vitest'
  * Sair daqui é tirar o nome da lista, não acrescentar outro.
  */
 
-const RAIZ = process.cwd()
-
-/**
- * Tira comentários antes de contar.
- *
- * Mesma razão de `comparativo-honesto`: este arquivo e o próprio
- * `apagar-programa.tsx` citam `apagarProgramaAction` em comentário, e um
- * contador que lê comentário se convence de que a porta existe porque alguém
- * escreveu sobre ela.
- */
-function semComentarios(codigo: string): string {
-  return codigo
-    .replace(/\/\*[\s\S]*?\*\//g, ' ')
-    .split('\n')
-    .filter((linha) => !/^\s*(\/\/|\*)/.test(linha))
-    .join('\n')
-}
-
-/**
- * Os arquivos que este `import` alcança, já resolvidos para caminho real.
- *
- * `existe` é o conjunto de arquivos conhecidos, e não o disco. A diferença só
- * importa para o controle lá embaixo, que injeta arquivos de mentira para
- * provar que o detector ainda detecta — com `existsSync` eles nunca seriam
- * resolvidos, e o controle testaria a si mesmo.
- */
-function importados(
-  arquivo: string,
-  codigo: string,
-  existe: (caminho: string) => boolean,
-): string[] {
-  const alvos: string[] = []
-
-  for (const [, especificador] of codigo.matchAll(/from\s+['"]([^'"]+)['"]/g)) {
-    let base: string
-    if (especificador.startsWith('@/')) base = join(RAIZ, 'src', especificador.slice(2))
-    else if (especificador.startsWith('.'))
-      base = resolve(dirname(join(RAIZ, arquivo)), especificador)
-    else continue // pacote de node_modules
-
-    for (const sufixo of ['.ts', '.tsx', '/index.ts', '/index.tsx', '']) {
-      const tentativa = relative(RAIZ, base + sufixo)
-      if (sufixo === '' && !/\.tsx?$/.test(tentativa)) continue
-      if (existe(tentativa)) {
-        alvos.push(tentativa)
-        break
-      }
-    }
-  }
-
-  return alvos
-}
-
 /**
  * As que ainda estão sem porta — **nenhuma**.
  *
@@ -115,43 +61,16 @@ const SEM_PORTA_CONHECIDAS: string[] = []
  * repositório inteiro como alcançável.
  */
 function actionsSemPorta(extras: Record<string, string> = {}): string[] {
-  const doDisco = fg.sync(['src/**/*.{ts,tsx}'], { cwd: RAIZ })
-  const bruto = new Map(doDisco.map((a) => [a, readFileSync(join(RAIZ, a), 'utf8')]))
-  for (const [caminho, conteudo] of Object.entries(extras)) bruto.set(caminho, conteudo)
-
-  const arquivos = [...bruto.keys()]
-  const conhecidos = new Set(arquivos)
-  const existe = (caminho: string) => conhecidos.has(caminho)
-  const limpo = new Map([...bruto].map(([a, c]) => [a, semComentarios(c)]))
-
-  /*
-   * Quem está pendurado numa rota.
-   *
-   * Raiz é tudo em `src/app`: página, layout, rota de API, `middleware`. De
-   * lá a busca desce pelos `import`, e só o que ela visita conta como
-   * alcançável a partir de uma tela.
-   */
-  const alcancaveis = new Set<string>()
-  const fila = arquivos.filter((a) => a.startsWith('src/app/') || a === 'src/middleware.ts')
-
-  while (fila.length > 0) {
-    const atual = fila.pop() as string
-    if (alcancaveis.has(atual)) continue
-    alcancaveis.add(atual)
-    for (const vizinho of importados(atual, limpo.get(atual) ?? '', existe)) {
-      if (!alcancaveis.has(vizinho)) fila.push(vizinho)
-    }
-  }
-
+  const grafo = montarGrafo(extras)
   const orfas: string[] = []
 
-  for (const [arquivo, codigo] of limpo) {
-    if (!/^\s*['"]use server['"]/.test(bruto.get(arquivo) ?? '')) continue
+  for (const [arquivo, codigo] of grafo.limpo) {
+    if (!/^\s*['"]use server['"]/.test(grafo.bruto.get(arquivo) ?? '')) continue
 
     for (const [, nome] of codigo.matchAll(/export\s+async\s+function\s+(\w+)/g)) {
       const chamada = new RegExp(`\\b${nome}\\b`)
-      const chamadaViva = [...limpo].some(
-        ([outro, c]) => outro !== arquivo && alcancaveis.has(outro) && chamada.test(c),
+      const chamadaViva = [...grafo.limpo].some(
+        ([outro, c]) => outro !== arquivo && grafo.alcancaveis.has(outro) && chamada.test(c),
       )
       if (!chamadaViva) orfas.push(`${arquivo} → ${nome}`)
     }

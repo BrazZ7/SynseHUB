@@ -38,3 +38,21 @@ export function isPendingMigration(error: unknown, profundidade = 0): boolean {
   // O data source embrulha o erro do PostgREST e guarda o original em `cause`.
   return isPendingMigration(alvo.cause, profundidade + 1)
 }
+
+/**
+ * O `catch` para uma leitura que pode chegar antes da migration dela.
+ *
+ * Escrito como `.catch(seAindaNaoMigrou([]))` na própria chamada, em vez de um
+ * `try` em volta do `Promise.all` inteiro: embrulhar o bloco todo faria uma
+ * tabela faltando apagar as outras seis consultas da página, e a ficha do
+ * aluno abriria vazia por causa de uma coluna que ninguém olhou.
+ *
+ * Só engole "isso ainda não existe aqui". Qualquer outro erro sobe — permissão
+ * negada, rede caída e sintaxe errada precisam continuar quebrando alto.
+ */
+export function seAindaNaoMigrou<T>(vazio: T): (erro: unknown) => T {
+  return (erro: unknown) => {
+    if (isPendingMigration(erro)) return vazio
+    throw erro
+  }
+}

@@ -243,10 +243,11 @@ export class DemoDataSource implements DataSource {
 
   constructor(
     journal: DemoMutation[] = [],
-    opcoes: { temPlus?: boolean; ehPlataforma?: boolean } = {},
+    opcoes: { temPlus?: boolean; ehPlataforma?: boolean; perfilAtual?: string | null } = {},
   ) {
     this.temPlus = opcoes.temPlus ?? false
     this.ehPlataforma = opcoes.ehPlataforma ?? false
+    this.perfilAtual = opcoes.perfilAtual ?? null
     for (const mutation of journal) this.apply(mutation)
     this.reindex()
   }
@@ -401,7 +402,14 @@ export class DemoDataSource implements DataSource {
         else {
           this.autorizacoesDaSessao.set(mutation.id, {
             id: `share_${mutation.id}`,
-            userProfileId: this.db.studentIdForApp,
+            /*
+             * O **perfil** do aluno, não a matrícula dele. Guardava
+             * `studentIdForApp`, que é `students.id`, e ninguém notava porque
+             * a tela do aluno só lia o nome de quem foi autorizado. Quando o
+             * painel do professor passou a casar dono com perfil, a
+             * autorização simplesmente não aparecia.
+             */
+            userProfileId: this.perfilDoAlunoDoApp(),
             sharedWithProfileId: mutation.id,
             sharedWithName: mutation.nome ?? null,
             organizationId: this.db.organization.id,
@@ -3647,6 +3655,16 @@ export class DemoDataSource implements DataSource {
    */
   private readonly autorizacoesDaSessao = new Map<string, BodyMeasurementShare>()
 
+  /**
+   * O perfil de quem está vendo, quando a pergunta depende disso.
+   *
+   * Só a autorização nominal do Synse Body usa. Em produção quem responde é a
+   * RLS pelo `auth_profile_id()`; aqui não há RLS, e sem saber quem pergunta a
+   * demonstração entregaria a qualquer professor o histórico que o aluno
+   * autorizou a um só.
+   */
+  private readonly perfilAtual: string | null
+
   /** A privacidade escolhida nesta sessão, do diário. Vence a do dataset. */
   private readonly privacidadeDaCorrida = new Map<string, ActivityPrivacy>()
 
@@ -3733,14 +3751,50 @@ export class DemoDataSource implements DataSource {
   }
 
   /**
-   * Na demonstração ninguém autorizou ninguém, então não há o que devolver.
+   * O perfil do aluno que a persona do app representa.
    *
-   * Devolver o próprio histórico aqui seria simular uma autorização que não
-   * existe — e esta é justamente a regra que o produto não pode afrouxar nem
-   * de brincadeira.
+   * Lê do dataset base e **não** do índice `studentById`: o diário é aplicado
+   * no construtor antes do `reindex()`, e o índice ainda não existe quando a
+   * autorização é reconstruída. O aluno do app vem da semente, nunca do
+   * diário, então o dataset base basta.
    */
-  async listSharedBodyMeasurements(): Promise<BodyMeasurement[]> {
-    return []
+  private perfilDoAlunoDoApp(): string {
+    const aluno = this.db.students.find((s) => s.id === this.db.studentIdForApp)
+    return aluno?.userProfileId ?? this.db.studentIdForApp
+  }
+
+  /**
+   * As pesagens que um aluno compartilhou com quem está vendo.
+   *
+   * Devolvia `[]` fixo, com o comentário "na demonstração ninguém autorizou
+   * ninguém" — verdade até a 0045 dar ao aluno a tela de autorizar. Depois
+   * dela a frase ficou velha e o `[]` virou mentira: o visitante autorizava o
+   * professor, trocava de persona, e o painel mostrava "nenhuma pesagem".
+   *
+   * A regra é reproduzida inteira, e não por aproximação: precisa existir uma
+   * autorização **deste** aluno para **este** perfil, e não revogada. É o que
+   * a RLS faz em produção (`body_measurements_self` → `body_shared_with_me`),
+   * e afrouxar aqui faria a demonstração ensinar o contrário do produto.
+   */
+  async listSharedBodyMeasurements(
+    userProfileId: string,
+    period: BodyPeriod,
+  ): Promise<BodyMeasurement[]> {
+    const autorizado = [...this.autorizacoesDaSessao.values()].some(
+      (a) =>
+        a.userProfileId === userProfileId &&
+        a.sharedWithProfileId === this.perfilAtual &&
+        a.revokedAt === null,
+    )
+    if (!autorizado) return []
+
+    // Só o aluno do app tem histórico semeado; os outros 519 não pesam.
+    if (userProfileId !== this.perfilDoAlunoDoApp()) return []
+
+    this.semearPesagens()
+    return [...DemoDataSource.pesagens.values()]
+      .filter((m) => this.dentroDoPeriodo(m, period))
+      .sort((a, b) => b.measuredAt.localeCompare(a.measuredAt))
   }
 
   async recordBodyMeasurement(measurement: BodyMeasurement): Promise<string> {

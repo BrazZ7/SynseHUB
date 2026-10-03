@@ -5,6 +5,7 @@ import { cookies } from 'next/headers'
 import {
   assinaturaDaPersonaNoCookie,
   DEMO_SESSION_COOKIE,
+  perfilDaPersonaNoCookie,
   personaDoCookieEhPlataforma,
 } from '@/lib/auth/demo-personas'
 import { resumoDaAssinatura } from '@/lib/plans/subscription'
@@ -52,6 +53,12 @@ export async function getDataSource(): Promise<DataSource> {
      * assina nada.
      */
     ehPlataforma: personaDoCookieEhPlataforma(persona),
+    /*
+     * Quem está olhando. Só a autorização nominal do Synse Body usa: sem
+     * RLS para filtrar, é a demonstração que precisa recusar o histórico a
+     * quem o aluno não autorizou.
+     */
+    perfilAtual: perfilDaPersonaNoCookie(persona),
   })
 }
 

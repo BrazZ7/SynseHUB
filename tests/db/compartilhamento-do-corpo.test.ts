@@ -267,6 +267,52 @@ describe.skipIf(!temBanco)('autorizar', () => {
   })
 })
 
+describe.skipIf(!temBanco)('o professor enxerga a própria autorização', () => {
+  /*
+   * ── Por que isto é um teste, e não um detalhe ───────────────────────────
+   *
+   * O painel do professor precisa separar duas situações que chegam como a
+   * mesma lista vazia: "o aluno não me autorizou" e "autorizou e ainda não
+   * pesou". Quem separa é `body_shares_target_read` (0032) — a política que
+   * deixa quem recebeu ler a linha da própria autorização.
+   *
+   * Se alguém apertá-la achando que é folga, a ficha do aluno passa a dizer
+   * "não compartilhou" para todo mundo, inclusive para quem foi autorizado.
+   * Silencioso, e do lado errado: o professor cobraria do aluno uma
+   * autorização que ele já deu.
+   */
+  it('lê a linha da autorização que recebeu', async () => {
+    await client.query(`delete from body_measurement_shares where user_profile_id = $1`, [
+      perfilAluno,
+    ])
+    await asUser(client, AUTH_ALUNO, `select autorizar_corpo($1)`, [perfilProf])
+
+    const linhas = await asUser<{ user_profile_id: string }>(
+      client,
+      AUTH_PROF,
+      `select user_profile_id from body_measurement_shares where revoked_at is null`,
+    )
+    expect(linhas.map((l) => l.user_profile_id)).toEqual([perfilAluno])
+  })
+
+  it('e não enxerga a que o aluno deu a outra pessoa', async () => {
+    // O controle da anterior: ler a própria não pode virar ler todas.
+    await asUser(client, AUTH_ALUNO, `select autorizar_corpo($1)`, [perfilProf])
+    await client.query(
+      `insert into body_measurement_shares (user_profile_id, shared_with_profile_id)
+       values ($1, $2) on conflict do nothing`,
+      [perfilAluno, perfilProfBeta],
+    )
+
+    const linhas = await asUser<{ shared_with_profile_id: string }>(
+      client,
+      AUTH_PROF,
+      `select shared_with_profile_id from body_measurement_shares`,
+    )
+    expect(linhas.map((l) => l.shared_with_profile_id)).toEqual([perfilProf])
+  })
+})
+
 describe.skipIf(!temBanco)('apagar a própria medição', () => {
   it('a pessoa apaga a dela', async () => {
     // `deleteBodyMeasurementAction` existia desde a 0032 sem tela. A trava é

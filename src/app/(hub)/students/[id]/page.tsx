@@ -21,6 +21,8 @@ import { EmptyState } from '@/components/synse/empty-state'
 import { MetricCard } from '@/components/synse/metric-card'
 import { BackLink } from '@/components/synse/back-link'
 import { PaymentStatus, StudentStatusBadge } from '@/components/synse/status-badge'
+import { PesagensDoAluno } from '@/features/synse-body/pesagens-do-aluno'
+import { autorizacaoDoAluno } from '@/features/synse-body/state'
 import { StudentStatusCard } from '@/features/students/student-status-card'
 import { StudentAvatar } from '@/components/synse/student-avatar'
 import { Badge } from '@/components/ui/badge'
@@ -30,6 +32,7 @@ import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { requireHubSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
+import { seAindaNaoMigrou } from '@/lib/database/pending-migration'
 import { can } from '@/lib/permissions/permissions'
 import {
   daysBetween,
@@ -41,6 +44,15 @@ import {
 } from '@/lib/utils'
 
 type Params = Promise<{ id: string }>
+
+/**
+ * Quanto do histórico da balança o painel mostra.
+ *
+ * Um ano, fixo, e não a janela do plano do aluno: o recorte por plano existe
+ * para a tela **dele**, e é dele a decisão de assinar. Aqui quem olha é a
+ * academia, e um ano é o horizonte em que uma prescrição faz sentido.
+ */
+const JANELA_DA_BALANCA = '1a' as const
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { id } = await params
@@ -78,19 +90,51 @@ export default async function StudentProfilePage({ params }: { params: Params })
    * Condicionar a **busca**, e não só a renderização, é o que impede o dado
    * de chegar ao processo e ao payload que o servidor manda para o navegador.
    */
-  const [charges, checkIns, assignments, workoutLogs, assessments, workoutPlans] =
-    await Promise.all([
-      canSeeFinance
-        ? dataSource.getChargesForStudent(session.organizationId, student.id)
-        : Promise.resolve([]),
-      dataSource.listCheckInsForStudent(session.organizationId, student.id, 90),
-      dataSource.listAssignmentsForStudent(session.organizationId, student.id),
-      dataSource.listWorkoutLogs(session.organizationId, student.id),
-      canSeeHealth
-        ? dataSource.listAssessments(session.organizationId, student.id)
-        : Promise.resolve([]),
-      dataSource.listWorkoutPlans(session.organizationId),
-    ])
+  const [
+    charges,
+    checkIns,
+    assignments,
+    workoutLogs,
+    assessments,
+    workoutPlans,
+    autorizacoesDoCorpo,
+    pesagens,
+  ] = await Promise.all([
+    canSeeFinance
+      ? dataSource.getChargesForStudent(session.organizationId, student.id)
+      : Promise.resolve([]),
+    dataSource.listCheckInsForStudent(session.organizationId, student.id, 90),
+    dataSource.listAssignmentsForStudent(session.organizationId, student.id),
+    dataSource.listWorkoutLogs(session.organizationId, student.id),
+    canSeeHealth
+      ? dataSource.listAssessments(session.organizationId, student.id)
+      : Promise.resolve([]),
+    dataSource.listWorkoutPlans(session.organizationId),
+    /*
+     * ── As pesagens que o aluno compartilhou ──────────────────────────────
+     *
+     * Duas consultas, e as duas precisam existir. A segunda devolve lista
+     * vazia tanto para "não autorizou" quanto para "autorizou e não pesou" —
+     * é a RLS filtrando, e ela não tem como explicar o motivo. A primeira é
+     * quem distingue, porque `body_shares_target_read` (0032) deixa quem
+     * recebeu enxergar a própria autorização.
+     *
+     * Sob `canSeeHealth` como o resto: a recepção não lê dado de saúde, e
+     * condicionar a busca (não só a renderização) é o que impede o peso de
+     * chegar ao payload que o servidor manda ao navegador.
+     */
+    canSeeHealth ? dataSource.listBodyShares().catch(seAindaNaoMigrou([])) : Promise.resolve([]),
+    canSeeHealth
+      ? dataSource
+          .listSharedBodyMeasurements(student.userProfileId, JANELA_DA_BALANCA)
+          .catch(seAindaNaoMigrou([]))
+      : Promise.resolve([]),
+  ])
+  const autorizacaoDoCorpo = autorizacaoDoAluno(
+    autorizacoesDoCorpo,
+    student.userProfileId,
+    session.userProfileId,
+  )
   const canWriteAssessments = can(session.role, 'assessments:write')
   const canSeeNutrition = can(session.role, 'nutrition:read')
 
@@ -487,6 +531,20 @@ export default async function StudentProfilePage({ params }: { params: Params })
                 </Card>
               </>
             )}
+
+            {/*
+              Fora do `assessments.length === 0`: a balança do aluno não
+              depende de o professor já ter avaliado. Ligar as duas faria o
+              aluno que compartilha o histórico e nunca foi avaliado parecer
+              não ter histórico nenhum.
+            */}
+            <div className="border-t border-synse-border pt-4">
+              <PesagensDoAluno
+                nome={student.name}
+                autorizacao={autorizacaoDoCorpo}
+                medicoes={pesagens}
+              />
+            </div>
           </TabsContent>
         )}
 

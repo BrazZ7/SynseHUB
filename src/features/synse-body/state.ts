@@ -1,4 +1,4 @@
-import type { BodyMeasurement } from '@/types/domain'
+import type { BodyMeasurement, BodyMeasurementShare } from '@/types/domain'
 
 /**
  * Constantes e tipos do Synse Body.
@@ -110,4 +110,41 @@ export function resumoDaFila(estado: {
       ? `${estado.pendentes} medições guardadas no aparelho. Sobem sozinhas quando houver internet.`
       : 'Uma medição guardada no aparelho. Sobe sozinha quando houver internet.',
   }
+}
+
+/**
+ * ── A autorização deste aluno para quem está olhando ────────────────────────
+ *
+ * O painel do professor precisa distinguir três situações que, sem isto,
+ * chegariam à tela como a mesma lista vazia:
+ *
+ * 1. o aluno não autorizou quem está olhando;
+ * 2. autorizou, e ainda não pesou;
+ * 3. autorizou, e há histórico.
+ *
+ * Confundir a 1 com a 2 é o defeito que esta função existe para impedir — o
+ * professor concluiria que o aluno nunca usou a balança quando, na verdade,
+ * é ele quem não tem permissão. E a 2 lida como 1 faria o professor cobrar
+ * uma autorização que o aluno já deu.
+ *
+ * ── Isto não autoriza nada ──────────────────────────────────────────────────
+ *
+ * Quem decide o que o professor lê é a RLS: `body_measurements_self` (0032)
+ * exige `body_shared_with_me(user_profile_id)`, e sem autorização a consulta
+ * devolve zero linhas, qualquer coisa que esta função responda. O que está
+ * aqui é a frase certa para a tela, não o portão.
+ */
+export function autorizacaoDoAluno(
+  autorizacoes: BodyMeasurementShare[],
+  alunoProfileId: string,
+  meuProfileId: string,
+): BodyMeasurementShare | null {
+  return (
+    autorizacoes.find(
+      (a) =>
+        a.userProfileId === alunoProfileId &&
+        a.sharedWithProfileId === meuProfileId &&
+        a.revokedAt === null,
+    ) ?? null
+  )
 }

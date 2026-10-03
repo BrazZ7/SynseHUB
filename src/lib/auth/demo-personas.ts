@@ -147,3 +147,17 @@ export function assinaturaDaPersonaNoCookie(chave: string | undefined | null): P
 export function personaDoCookieEhPlataforma(chave: string | undefined | null): boolean {
   return findDemoPersona(chave)?.role === 'SUPER_ADMIN'
 }
+
+/**
+ * O perfil de quem está vendo, para a demonstração conseguir reproduzir uma
+ * regra que depende de **quem** pergunta.
+ *
+ * Em produção isso não existe: a RLS resolve pelo `auth_profile_id()`. Aqui
+ * não há RLS, então a autorização nominal do Synse Body — que é por pessoa,
+ * não por academia — precisaria de uma aproximação para funcionar, e
+ * aproximação em regra de privacidade é exatamente o que não se faz nem na
+ * demonstração: o professor que o aluno **não** autorizou veria o histórico.
+ */
+export function perfilDaPersonaNoCookie(chave: string | undefined | null): string | null {
+  return findDemoPersona(chave)?.userProfileId ?? null
+}

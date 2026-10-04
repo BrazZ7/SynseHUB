@@ -7,6 +7,8 @@ import { logger } from '@/lib/logger'
 import { daysBetween } from '@/lib/utils'
 import type {
   ChargeWithStudent,
+  CrmSummary,
+  LeadFilters,
   CheckInWithStudent,
   DataSource,
   Paginated,
@@ -3847,23 +3849,101 @@ export class SupabaseDataSource implements DataSource {
   private static readonly LEAD_SELECT =
     '*, staff:owner_staff_id(user_profiles:user_profile_id(name))'
 
-  async listLeads(organizationId: string) {
-    const rows =
-      (await this.select<Row[]>(
-        'listLeads',
-        this.client
-          .from('leads')
-          .select(SupabaseDataSource.LEAD_SELECT)
-          .eq('organization_id', organizationId)
-          /*
-           * Quem tem retorno marcado vem primeiro, do mais atrasado para o mais
-           * distante. Ordenar por criação deixaria o lead de hoje no topo e o
-           * contato vencido de terça no fim — e o vencido é o que esfria.
-           */
-          .order('next_follow_up_at', { ascending: true, nullsFirst: false })
-          .order('created_at', { ascending: false }),
-      )) ?? []
-    return rows.map((row) => this.mapLead(row))
+  /** As etapas que saíram do funil: decisão tomada, para um lado ou para o outro. */
+  private static readonly ETAPAS_DECIDIDAS = ['ENROLLED', 'LOST'] as const
+
+  /**
+   * Os leads de uma academia, por página.
+   *
+   * ── Por que isto pagina ────────────────────────────────────────────────────
+   *
+   * Lead entra no CRM e não sai: uma academia com três anos de recepção tem
+   * milhares. A leitura não tinha teto, e o PostgREST corta a resposta no teto
+   * configurado no servidor **sem dar erro** — então a tela montava o funil,
+   * os quatro cartões e a lista "Já decididos" sobre um pedaço, sem jeito de
+   * saber que era um pedaço.
+   *
+   * E o corte caía no pior lugar: a ordem põe o retorno mais atrasado
+   * primeiro, então o que sobrava eram justamente os contatos vencidos — e
+   * sumia quem ainda estava morno. O número de "Retorno atrasado" ficava
+   * certo por acidente e o resto, errado.
+   *
+   * Os dois conjuntos paginam separados porque crescem diferente: o funil é
+   * trabalho em aberto, e "Já decididos" é histórico que nunca encolhe.
+   * `count: 'exact'` traz o total do **filtro**, então o rodapé diz quantos
+   * são de verdade.
+   */
+  async listLeads(organizationId: string, filters: LeadFilters): Promise<Paginated<Lead>> {
+    const page = Math.max(1, filters.page ?? 1)
+    const pageSize = Math.min(200, Math.max(5, filters.pageSize ?? 50))
+    const from = (page - 1) * pageSize
+
+    let query = this.client
+      .from('leads')
+      .select(SupabaseDataSource.LEAD_SELECT, { count: 'exact' })
+      .eq('organization_id', organizationId)
+
+    const decididas = `(${SupabaseDataSource.ETAPAS_DECIDIDAS.join(',')})`
+    query = filters.decided
+      ? query.in('stage', [...SupabaseDataSource.ETAPAS_DECIDIDAS])
+      : query.not('stage', 'in', decididas)
+
+    /*
+     * Quem tem retorno marcado vem primeiro, do mais atrasado para o mais
+     * distante. Ordenar por criação deixaria o lead de hoje no topo e o
+     * contato vencido de terça no fim — e o vencido é o que esfria.
+     *
+     * Em "Já decididos" não há retorno marcado para ordenar, e o `created_at`
+     * assume: o mais recente primeiro, que é o que alguém vai querer reler.
+     */
+    const { data, error, count } = await query
+      .order('next_follow_up_at', { ascending: true, nullsFirst: false })
+      .order('created_at', { ascending: false })
+      .range(from, from + pageSize - 1)
+
+    if (error) this.fail('listLeads', error)
+
+    const rows = ((data as Row[]) ?? []).map((row) => this.mapLead(row))
+    return { rows, total: count ?? rows.length, page, pageSize }
+  }
+
+  /**
+   * Os quatro cartões do CRM, contados pelo banco.
+   *
+   * `select('id', { count: 'exact', head: true })` não traz linha nenhuma: o
+   * Postgres conta e devolve o número no cabeçalho. Quatro consultas em
+   * paralelo saem mais baratas que uma leitura da tabela inteira — e, ao
+   * contrário dela, não têm o que cortar.
+   *
+   * "Retorno atrasado" é sobre quem **ainda está em negociação**: retorno
+   * vencido de quem já matriculou ou já desistiu não é trabalho pendente, é
+   * resíduo.
+   */
+  async getCrmSummary(organizationId: string): Promise<CrmSummary> {
+    const decididas = `(${SupabaseDataSource.ETAPAS_DECIDIDAS.join(',')})`
+    const base = () =>
+      this.client
+        .from('leads')
+        .select('id', { count: 'exact', head: true })
+        .eq('organization_id', organizationId)
+
+    const contar = async (operacao: string, query: PromiseLike<{ count: number | null; error: unknown }>) => {
+      const { count, error } = await query
+      if (error) this.fail(operacao, error)
+      return count ?? 0
+    }
+
+    const [emNegociacao, retornoAtrasado, matriculados, perdidos] = await Promise.all([
+      contar('crm:abertos', base().not('stage', 'in', decididas)),
+      contar(
+        'crm:atrasados',
+        base().not('stage', 'in', decididas).lt('next_follow_up_at', new Date().toISOString()),
+      ),
+      contar('crm:matriculados', base().eq('stage', 'ENROLLED')),
+      contar('crm:perdidos', base().eq('stage', 'LOST')),
+    ])
+
+    return { emNegociacao, retornoAtrasado, matriculados, perdidos }
   }
 
   async getLead(organizationId: string, leadId: string) {

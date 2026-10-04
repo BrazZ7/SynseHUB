@@ -91,6 +91,36 @@ import type { DemoStaff } from '@/lib/database/demo-seed'
  * ser reforçado pela Row Level Security no banco.
  */
 
+/**
+ * O recorte do CRM.
+ *
+ * `decided` separa as duas listas da tela: o funil mostra quem está em
+ * negociação, e "Já decididos" mostra matriculado e perdido. São conjuntos
+ * com crescimento diferente — o funil é trabalho em aberto, o outro é
+ * histórico que nunca encolhe —, e por isso cada um pagina por conta.
+ */
+export type LeadFilters = {
+  /** `true` traz matriculado e perdido; `false` ou ausente, quem está em negociação. */
+  decided?: boolean
+  page?: number
+  pageSize?: number
+}
+
+/**
+ * Os quatro números dos cartões do CRM.
+ *
+ * Contados no banco sobre o funil inteiro. Antes a tela lia todos os leads e
+ * contava na aplicação — e uma leitura sem teto que alimenta um número
+ * devolve número errado com cara de certo quando o PostgREST corta a
+ * resposta.
+ */
+export type CrmSummary = {
+  emNegociacao: number
+  retornoAtrasado: number
+  matriculados: number
+  perdidos: number
+}
+
 export type StudentFilters = {
   search?: string
   status?: StudentStatus | 'ALL'
@@ -925,7 +955,9 @@ export interface DataSource {
   removePushSubscription(endpoint: string): Promise<void>
 
   // CRM
-  listLeads(organizationId: string): Promise<Lead[]>
+  listLeads(organizationId: string, filters: LeadFilters): Promise<Paginated<Lead>>
+  /** Os quatro cartões, contados sobre o CRM inteiro e não sobre a página. */
+  getCrmSummary(organizationId: string): Promise<CrmSummary>
   getLead(organizationId: string, leadId: string): Promise<Lead | null>
   saveLead(input: SaveLeadInput): Promise<Lead>
   /**

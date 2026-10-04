@@ -57,11 +57,7 @@ export default async function AssessmentsPage({ searchParams }: { searchParams: 
    * cartões vêm de `resumo_das_avaliacoes`, contados sobre a academia.
    */
   const [fila, resumo] = await Promise.all([
-    dataSource.listAssessmentQueue(
-      session.organizationId,
-      POR_PAGINA,
-      (pagina - 1) * POR_PAGINA,
-    ),
+    dataSource.listAssessmentQueue(session.organizationId, POR_PAGINA, (pagina - 1) * POR_PAGINA),
     dataSource.getAssessmentQueueSummary(session.organizationId, DIAS_ATE_REAVALIAR),
   ])
 
@@ -69,7 +65,7 @@ export default async function AssessmentsPage({ searchParams }: { searchParams: 
   const linhas = fila.linhas
 
   return (
-    <div className="space-y-5 animate-fade-in-up">
+    <div className="animate-fade-in-up space-y-5">
       <PageHeader
         title="Avaliações físicas"
         description="Uma linha por aluno ativo, da avaliação mais antiga para a mais recente. Medidas, dobras cutâneas e composição corporal por Pollock."
@@ -103,7 +99,15 @@ export default async function AssessmentsPage({ searchParams }: { searchParams: 
         />
       </section>
 
-      {linhas.length === 0 ? (
+      {/*
+        `fila.total`, e não `linhas.length`: a página pedida pode estar vazia
+        sem a fila estar. Em `?page=99` de uma academia com 478 ativos, a tela
+        dizia "Nenhum aluno ativo para avaliar" — e, sem a tabela, a barra de
+        paginação também não aparecia, então não havia caminho de volta. O
+        vazio de verdade é a fila inteira vazia; página fora da faixa é a
+        paginação que avisa.
+      */}
+      {fila.total === 0 ? (
         <EmptyState
           icon={Activity}
           title="Nenhum aluno ativo para avaliar"
@@ -122,11 +126,21 @@ export default async function AssessmentsPage({ searchParams }: { searchParams: 
                 </caption>
                 <thead>
                   <tr className="border-b border-synse-border text-left text-xs uppercase tracking-wide text-synse-muted">
-                    <th scope="col" className="py-2 pr-4 font-semibold">Aluno</th>
-                    <th scope="col" className="py-2 pr-4 font-semibold">Última</th>
-                    <th scope="col" className="py-2 pr-4 font-semibold">Peso</th>
-                    <th scope="col" className="py-2 pr-4 font-semibold">IMC</th>
-                    <th scope="col" className="py-2 pr-4 font-semibold">Gordura</th>
+                    <th scope="col" className="py-2 pr-4 font-semibold">
+                      Aluno
+                    </th>
+                    <th scope="col" className="py-2 pr-4 font-semibold">
+                      Última
+                    </th>
+                    <th scope="col" className="py-2 pr-4 font-semibold">
+                      Peso
+                    </th>
+                    <th scope="col" className="py-2 pr-4 font-semibold">
+                      IMC
+                    </th>
+                    <th scope="col" className="py-2 pr-4 font-semibold">
+                      Gordura
+                    </th>
                     <th scope="col" className="py-2 font-semibold">
                       <span className="sr-only">Ações</span>
                     </th>
@@ -188,9 +202,8 @@ export default async function AssessmentsPage({ searchParams }: { searchParams: 
             <Pagination page={pagina} pageSize={POR_PAGINA} total={fila.total} />
 
             <p className="mt-4 text-xs text-synse-muted">
-              Os valores são registrados pelo profissional responsável. O sistema calcula
-              composição corporal pelas equações de Jackson &amp; Pollock e não emite conclusão
-              clínica.
+              Os valores são registrados pelo profissional responsável. O sistema calcula composição
+              corporal pelas equações de Jackson &amp; Pollock e não emite conclusão clínica.
             </p>
           </CardContent>
         </Card>

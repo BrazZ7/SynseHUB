@@ -51,12 +51,30 @@ export function clienteFalso(combinado: {
         return Promise.resolve(resposta).then(resolve, reject)
       },
     }
+    /*
+     * Os construtores do PostgREST que o data source usa. Todos devolvem o
+     * próprio objeto, então a lista não precisa saber o que cada um faz — só
+     * precisa estar completa. Método de fora dela estoura com "is not a
+     * function" no primeiro teste que o exercitar, o que é o aviso certo: o
+     * dublê não deve adivinhar nada.
+     */
     for (const metodo of [
       'select',
       'eq',
+      'neq',
       'in',
+      'is',
+      'not',
+      'gt',
       'gte',
+      'lt',
+      'lte',
+      'like',
+      'ilike',
       'or',
+      'filter',
+      'contains',
+      'overlaps',
       'order',
       'range',
       'limit',

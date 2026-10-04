@@ -227,25 +227,42 @@ export default async function StudentsPage({ searchParams }: { searchParams: Sea
         rows={result.rows}
         rowKey={(student) => student.id}
         empty={
-          <EmptyState
-            icon={first(params.q) ? Search : Users}
-            title={first(params.q) ? 'Nenhum aluno encontrado.' : 'Nenhum aluno cadastrado ainda.'}
-            description={
-              first(params.q)
-                ? 'Tente outro nome, e-mail ou Synse ID.'
-                : 'Cadastre o primeiro aluno para começar a acompanhar frequência e mensalidades.'
-            }
-            action={
-              canWrite && (
-                <Button asChild>
-                  <Link href="/students/new">
-                    <UserPlus className="size-4" />
-                    Adicionar aluno
-                  </Link>
-                </Button>
-              )
-            }
-          />
+          /*
+           * Três vazios diferentes, e dizer o nome errado para um deles manda
+           * a pessoa para o lugar errado. Página fora da faixa não é academia
+           * sem aluno: em `?page=99` de uma academia com 534, "Nenhum aluno
+           * cadastrado ainda" convidava a cadastrar o primeiro. A barra de
+           * paginação abaixo é que dá o caminho de volta.
+           */
+          result.total > 0 ? (
+            <EmptyState
+              icon={Users}
+              title="Esta página não tem ninguém."
+              description="A lista encolheu ou o endereço veio de um link antigo. Volte ao início para ver os alunos."
+            />
+          ) : (
+            <EmptyState
+              icon={first(params.q) ? Search : Users}
+              title={
+                first(params.q) ? 'Nenhum aluno encontrado.' : 'Nenhum aluno cadastrado ainda.'
+              }
+              description={
+                first(params.q)
+                  ? 'Tente outro nome, e-mail ou Synse ID.'
+                  : 'Cadastre o primeiro aluno para começar a acompanhar frequência e mensalidades.'
+              }
+              action={
+                canWrite && (
+                  <Button asChild>
+                    <Link href="/students/new">
+                      <UserPlus className="size-4" />
+                      Adicionar aluno
+                    </Link>
+                  </Button>
+                )
+              }
+            />
+          )
         }
       />
 

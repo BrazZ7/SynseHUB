@@ -704,6 +704,55 @@ existem, não para conferir se subiram.
   com o motivo de cada uma; as de maior risco são o CRM (`listLeads`), o
   histórico de treino e o de cobranças de um aluno, e os três acervos.
 
+### O CRM paginado, sem migration
+
+Não é migration — entra aqui porque fecha a primeira entrada da lista de
+dívida que o guarda `tests/unit/leitura-sem-teto.test.ts` nomeou.
+
+`/crm` lia **todos** os leads da academia e montava com eles três coisas: os
+quatro cartões, o funil e a lista "Já decididos". Lead entra no CRM e não sai,
+e a leitura não tinha teto. O corte do PostgREST caía no pior lugar possível:
+a ordem põe o retorno mais atrasado primeiro, então o que sobrava na resposta
+eram justamente os contatos vencidos, e sumia quem ainda estava morno —
+"Retorno atrasado" acertava por acidente e os outros três erravam.
+
+O conserto não precisou de função no banco, e por isso não há SQL para colar:
+
+- `listLeads(org, { decided, page, pageSize })` devolve `Paginated<Lead>`, com
+  `count: 'exact'` trazendo o total **do filtro**. Os dois conjuntos paginam
+  separados porque crescem diferente: o funil é trabalho em aberto, "Já
+  decididos" é histórico que nunca encolhe.
+- `getCrmSummary(org)` conta os quatro números com
+  `select('id', { count: 'exact', head: true })` — quatro consultas em paralelo
+  que não trazem linha nenhuma. É o mesmo jeito que `countUnreadNotifications`
+  já usava, e que a 0050 citou como o certo para contagem simples.
+- O funil não pagina (arrastar entre colunas sobre uma página é pior que uma
+  tela cheia), mas também não mente: acima de 150 em negociação a tela diz
+  quantos ficaram de fora.
+- "Retorno atrasado" passou a excluir quem já decidiu. Retorno vencido de um
+  lead perdido não é trabalho pendente, é resíduo — e enchia o cartão de alarme
+  que nunca zera, porque ninguém volta para desmarcar o retorno de quem
+  desistiu.
+
+Junto veio um defeito da barra de paginação, que vale para `/alunos`,
+`/avaliações` e o CRM: ela se escondia sempre que havia **uma página só**. Quem
+chegasse em `?page=2` de uma lista que encolheu — link antigo, item que mudou de
+lista, `?page=` editado na mão — via a seção vazia e **sem botão de voltar**. E
+se a barra aparecesse com a conta antiga, diria "25–9 de 9", porque fora da
+faixa o `de` passa o `até`.
+
+Agora `estadoDaPaginacao` (em `pagination-state.ts`, fora do módulo `'use
+client'`) devolve três casos — oculta, fora da faixa, visível — e a barra
+oferece "Voltar ao início". Duas telas diziam a frase errada no caminho:
+`/avaliações` anunciava "Nenhum aluno ativo para avaliar" em `?page=99` de uma
+academia com 478 ativos (a condição olhava as linhas da página, não o total da
+fila), e `/alunos` convidava a "cadastrar o primeiro" numa academia com 534.
+
+Verificação: 13 testes do CRM (6 da demonstração como especificação, 7 do
+caminho do Supabase com o cliente de mentira; 5 mutações nos dois data sources,
+todas pegas) e 6 da aritmética da paginação (3 mutações, todas pegas). As três
+telas conferidas no Chromium em `page=1` e fora da faixa.
+
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona
 enquanto toda migration cria algo visível pela API. A 0018 não cria: ela troca

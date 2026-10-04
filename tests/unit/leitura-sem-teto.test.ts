@@ -97,7 +97,6 @@ const PAGINACAO_PENDENTE: Record<string, string> = {
   listRecipes: 'a biblioteca de receitas, que cresce com o catálogo',
   listBodyMeasurements: 'as pesagens de um aluno; o período "tudo" não recorta nada',
   listSharedBodyMeasurements: 'as pesagens compartilhadas, mesmo caso',
-  listLeads: 'o CRM de uma academia: lead entra e não sai',
 }
 
 /**
@@ -208,8 +207,9 @@ describe('leitura de lista sem teto no data source', () => {
 
   it('a dívida conhecida é esta, e não cresceu sem alguém decidir', () => {
     // O número no teste existe para a próxima adição exigir uma linha a mais
-    // aqui — que é onde a conversa sobre paginar acontece.
-    expect(Object.keys(PAGINACAO_PENDENTE)).toHaveLength(15)
+    // aqui — que é onde a conversa sobre paginar acontece. E para a lista
+    // encolher **de propósito**: foi 15 enquanto `listLeads` estava nela.
+    expect(Object.keys(PAGINACAO_PENDENTE)).toHaveLength(14)
   })
 })
 

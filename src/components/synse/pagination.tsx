@@ -3,6 +3,7 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
+import { estadoDaPaginacao } from '@/components/synse/pagination-state'
 import { Button } from '@/components/ui/button'
 import { formatNumber } from '@/lib/utils'
 
@@ -18,11 +19,7 @@ export function Pagination({ page, pageSize, total }: PaginationProps) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
-  const totalPages = Math.max(1, Math.ceil(total / pageSize))
-  if (totalPages <= 1) return null
-
-  const from = (page - 1) * pageSize + 1
-  const to = Math.min(total, page * pageSize)
+  const estado = estadoDaPaginacao(page, pageSize, total)
 
   function goTo(nextPage: number) {
     const params = new URLSearchParams(searchParams.toString())
@@ -31,13 +28,38 @@ export function Pagination({ page, pageSize, total }: PaginationProps) {
     router.replace(`${pathname}?${params.toString()}`, { scroll: false })
   }
 
+  if (estado.tipo === 'oculta') return null
+
+  /*
+   * A página pedida não existe: lista que encolheu, link velho, `?page=` na
+   * mão. Antes a barra simplesmente não aparecia — e a pessoa ficava olhando
+   * uma seção vazia sem botão de voltar, sem saber que estava fora da lista.
+   */
+  if (estado.tipo === 'fora_da_faixa') {
+    return (
+      <nav
+        aria-label="Paginação"
+        className="flex flex-wrap items-center justify-between gap-3 px-1 text-sm"
+      >
+        <p className="text-synse-muted">
+          Esta página não existe mais — a lista tem {formatNumber(total)}{' '}
+          {total === 1 ? 'item' : 'itens'}.
+        </p>
+        <Button variant="outline" size="sm" onClick={() => goTo(estado.ultimaPagina)}>
+          <ChevronLeft className="size-4" />
+          Voltar ao início
+        </Button>
+      </nav>
+    )
+  }
+
   return (
     <nav
       aria-label="Paginação"
       className="flex flex-wrap items-center justify-between gap-3 px-1 text-sm"
     >
       <p className="text-synse-muted">
-        {formatNumber(from)}–{formatNumber(to)} de {formatNumber(total)}
+        {formatNumber(estado.de)}–{formatNumber(estado.ate)} de {formatNumber(total)}
       </p>
       <div className="flex items-center gap-2">
         <Button
@@ -51,12 +73,12 @@ export function Pagination({ page, pageSize, total }: PaginationProps) {
           Anterior
         </Button>
         <span className="px-1 text-xs text-synse-muted" aria-current="page">
-          {page} / {totalPages}
+          {page} / {estado.totalPaginas}
         </span>
         <Button
           variant="outline"
           size="sm"
-          disabled={page >= totalPages}
+          disabled={page >= estado.totalPaginas}
           onClick={() => goTo(page + 1)}
           aria-label="Próxima página"
         >

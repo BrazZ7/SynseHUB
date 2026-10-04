@@ -3,6 +3,8 @@ import { AppError } from '@/lib/errors'
 import { daysBetween } from '@/lib/utils'
 import type {
   ChargeWithStudent,
+  CrmSummary,
+  LeadFilters,
   PairUserDeviceInput,
   CheckInWithStudent,
   DataSource,
@@ -3428,9 +3430,20 @@ export class DemoDataSource implements DataSource {
     return base.map((lead) => this.leadEdits.get(lead.id) ?? lead)
   }
 
-  async listLeads(organizationId: string): Promise<Lead[]> {
+  /** As etapas que saíram do funil, como na produção. */
+  private static readonly ETAPAS_DECIDIDAS: LeadStage[] = ['ENROLLED', 'LOST']
+
+  async listLeads(organizationId: string, filters: LeadFilters): Promise<Paginated<Lead>> {
+    const page = Math.max(1, filters.page ?? 1)
+    const pageSize = Math.min(200, Math.max(5, filters.pageSize ?? 50))
+
+    const decidido = (lead: Lead) => DemoDataSource.ETAPAS_DECIDIDAS.includes(lead.stage)
+    const todos = this.scoped(this.leads(), organizationId).filter((lead) =>
+      filters.decided ? decidido(lead) : !decidido(lead),
+    )
+
     // Mesma ordem da produção: quem tem retorno marcado vem primeiro.
-    return this.scoped(this.leads(), organizationId).sort((a, b) => {
+    todos.sort((a, b) => {
       if (a.nextFollowUpAt && b.nextFollowUpAt) {
         return a.nextFollowUpAt.localeCompare(b.nextFollowUpAt)
       }
@@ -3438,6 +3451,25 @@ export class DemoDataSource implements DataSource {
       if (b.nextFollowUpAt) return 1
       return b.createdAt.localeCompare(a.createdAt)
     })
+
+    // Recorta e **só então** conta: o total é do filtro, não da academia.
+    const start = (page - 1) * pageSize
+    return { rows: todos.slice(start, start + pageSize), total: todos.length, page, pageSize }
+  }
+
+  async getCrmSummary(organizationId: string): Promise<CrmSummary> {
+    const todos = this.scoped(this.leads(), organizationId)
+    const abertos = todos.filter((lead) => !DemoDataSource.ETAPAS_DECIDIDAS.includes(lead.stage))
+    const agora = new Date().toISOString()
+
+    return {
+      emNegociacao: abertos.length,
+      // Retorno vencido de quem já decidiu não é trabalho pendente, é resíduo.
+      retornoAtrasado: abertos.filter((lead) => lead.nextFollowUpAt && lead.nextFollowUpAt < agora)
+        .length,
+      matriculados: todos.filter((lead) => lead.stage === 'ENROLLED').length,
+      perdidos: todos.filter((lead) => lead.stage === 'LOST').length,
+    }
   }
 
   async getLead(organizationId: string, leadId: string) {

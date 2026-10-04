@@ -161,6 +161,37 @@ const config: Config = {
           '100%': { transform: 'translateX(100%)' },
         },
         /*
+         * ── A queda d'água ──────────────────────────────────────────────────
+         *
+         * Um fio de luz que desce e recomeça. Só `transform`: a GPU compõe
+         * sozinha, e o painel fica atrás de texto que rola.
+         *
+         * O fio **não** é um risco que atravessa o quadro inteiro — essa foi a
+         * primeira tentativa, e num painel de mil pixels o risco ficava com
+         * quatrocentos de comprimento, que lê como listra, não como água. Aqui
+         * o fio é um degradê que se repete a cada `--ladrilho`, e a volta
+         * desloca exatamente um ladrilho: como o padrão é periódico, o primeiro
+         * quadro e o último são idênticos e a emenda não aparece. É por isso
+         * que a animação pode ser `linear` e `infinite` sem nenhum salto.
+         *
+         * Quem usa precisa esticar o elemento um ladrilho **acima** do quadro,
+         * senão a volta abre uma faixa vazia no topo na primeira passagem.
+         */
+        queda: {
+          from: { transform: 'translateY(0)' },
+          to: { transform: 'translateY(var(--ladrilho, 240px))' },
+        },
+        /*
+         * ── A bruma da base ─────────────────────────────────────────────────
+         *
+         * Onde a água bate ela abre, e o respiro é lento — bem mais lento que
+         * a queda. Fosse no mesmo tempo, leria como piscada.
+         */
+        bruma: {
+          '0%, 100%': { opacity: '0.25', transform: 'scaleX(0.94)' },
+          '50%': { opacity: '0.5', transform: 'scaleX(1.06)' },
+        },
+        /*
          * ── O músculo aceso ─────────────────────────────────────────────────
          *
          * O mapa muscular da tela de treinos acende as regiões que o treino
@@ -369,6 +400,13 @@ const config: Config = {
         respingo: 'respingo 900ms cubic-bezier(0.12, 0.7, 0.3, 1) both',
         /* A duração real vem de cada pedrinha, para elas não subirem em bloco. */
         evaporar: 'evaporar 7s linear infinite',
+        /*
+         * A duração real vem de cada fio, para eles não caírem em bloco — e
+         * `--pressa` deixa o toque apressar a queda inteira, como as folhas
+         * do vale do SynseRun aceleram no hover.
+         */
+        queda: 'queda var(--queda, 3.5s) linear infinite',
+        bruma: 'bruma 7s ease-in-out infinite',
         /*
          * `--pulso` deixa a capa apressar a respiração no toque, como as
          * folhas do vale do SynseRun aceleram no hover. Em linha o estilo

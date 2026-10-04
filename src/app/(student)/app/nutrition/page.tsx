@@ -4,6 +4,7 @@ import { ChevronRight, CookingPot, Info, Salad } from 'lucide-react'
 import { BackLink } from '@/components/synse/back-link'
 import { ListLink } from '@/components/synse/list-link'
 import { Badge } from '@/components/ui/badge'
+import { QuadroDasRefeicoes } from '@/features/nutrition/components/quadro-das-refeicoes'
 import { PrescribedPlan } from '@/features/nutrition/prescribed-plan'
 import { BASELINE_MEAL_PLAN } from '@/lib/baseline/meal-plan'
 import { getDataSource } from '@/lib/database'
@@ -54,27 +55,37 @@ export default async function StudentNutritionPage() {
         <p className="text-sm text-synse-muted">{plano.summary}</p>
       </header>
 
-      <section className="space-y-3">
-        {plano.meals.map((meal) => (
-          <article
-            key={meal.name}
-            className="rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm"
-          >
-            <div className="flex items-baseline justify-between gap-3">
-              <h2 className="text-sm font-medium text-synse-text">{meal.name}</h2>
-              <span className="text-xs text-synse-muted">{meal.time}</span>
-            </div>
-            <p className="mt-1.5 text-sm text-synse-text">{meal.suggestion}</p>
-            <ul className="mt-2 space-y-1">
-              {meal.swaps.map((swap) => (
-                <li key={swap} className="text-xs text-synse-muted">
-                  Troca: {swap}
-                </li>
-              ))}
-            </ul>
-          </article>
-        ))}
-      </section>
+      <QuadroDasRefeicoes
+        refeicoes={plano.meals.map((meal) => ({
+          chave: meal.name,
+          nome: meal.name,
+          horario: meal.time,
+          corpo: (
+            <>
+              <p className="mt-1 text-sm leading-relaxed text-white/75">{meal.suggestion}</p>
+              {/*
+                As trocas viraram fichas em vez de linhas de "Troca: …". No
+                cartão antigo o prefixo se repetia em cada linha e empurrava a
+                informação para a direita; a ficha já diz, pela forma, que
+                aquilo é uma alternativa e não um segundo prato.
+              */}
+              <ul
+                aria-label={`Trocas para ${meal.name.toLowerCase()}`}
+                className="mt-2 flex flex-wrap gap-1.5"
+              >
+                {meal.swaps.map((swap) => (
+                  <li
+                    key={swap}
+                    className="rounded-full border border-white/10 bg-white/[0.07] px-2.5 py-1 text-[11px] text-white/70"
+                  >
+                    {swap}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ),
+        }))}
+      />
 
       <section className="rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
         <div className="flex items-center gap-2">

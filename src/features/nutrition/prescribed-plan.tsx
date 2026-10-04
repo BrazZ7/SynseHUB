@@ -1,6 +1,7 @@
 import { Apple, Info } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
+import { QuadroDasRefeicoes } from '@/features/nutrition/components/quadro-das-refeicoes'
 import { formatDate, formatNumber } from '@/lib/utils'
 import type { NutritionPlanWithMeals } from '@/types/domain'
 
@@ -29,48 +30,66 @@ export function PrescribedPlan({ plano }: { plano: NutritionPlanWithMeals }) {
         <section className="rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
           <h2 className="text-sm font-semibold text-synse-text">Sua meta do dia</h2>
           <dl className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <Meta rotulo="Calorias" alvo={plano.targetCalories} entrega={plano.totals.calories} unidade="kcal" />
-            <Meta rotulo="Proteína" alvo={plano.targetProteinG} entrega={plano.totals.proteinG} unidade="g" />
-            <Meta rotulo="Carboidrato" alvo={plano.targetCarbsG} entrega={plano.totals.carbsG} unidade="g" />
-            <Meta rotulo="Gordura" alvo={plano.targetFatG} entrega={plano.totals.fatG} unidade="g" />
+            <Meta
+              rotulo="Calorias"
+              alvo={plano.targetCalories}
+              entrega={plano.totals.calories}
+              unidade="kcal"
+            />
+            <Meta
+              rotulo="Proteína"
+              alvo={plano.targetProteinG}
+              entrega={plano.totals.proteinG}
+              unidade="g"
+            />
+            <Meta
+              rotulo="Carboidrato"
+              alvo={plano.targetCarbsG}
+              entrega={plano.totals.carbsG}
+              unidade="g"
+            />
+            <Meta
+              rotulo="Gordura"
+              alvo={plano.targetFatG}
+              entrega={plano.totals.fatG}
+              unidade="g"
+            />
           </dl>
         </section>
       )}
 
-      <section className="space-y-3">
-        {plano.meals.map((refeicao) => (
-          <article
-            key={refeicao.id}
-            className="rounded-2xl border border-synse-border bg-synse-surface p-4 shadow-synse-sm"
-          >
-            <div className="flex items-baseline justify-between gap-3">
-              <h2 className="font-semibold text-synse-text">{refeicao.name}</h2>
-              {refeicao.timeOfDay && (
-                <span className="text-xs tabular-nums text-synse-muted">{refeicao.timeOfDay}</span>
-              )}
-            </div>
-
-            <ul className="mt-2 space-y-1.5">
+      {/*
+        O mesmo quadro do plano base, e de propósito: o dia prescrito é o mesmo
+        dia, em ordem. Fosse a cachoeira exclusiva do base, quem é atendido por
+        nutricionista — o caso melhor — ficaria com a tela pior.
+      */}
+      <QuadroDasRefeicoes
+        refeicoes={plano.meals.map((refeicao) => ({
+          chave: refeicao.id,
+          nome: refeicao.name,
+          horario: refeicao.timeOfDay ?? null,
+          corpo: (
+            <ul className="mt-1.5 space-y-1.5">
               {refeicao.items.map((item) => (
                 <li key={item.id} className="flex items-baseline justify-between gap-3 text-sm">
-                  <span className="text-synse-text">
+                  <span className="text-white/80">
                     {item.description}
-                    {item.quantity && <span className="text-synse-muted"> · {item.quantity}</span>}
+                    {item.quantity && <span className="text-white/55"> · {item.quantity}</span>}
                   </span>
                   {item.calories != null && (
-                    <span className="shrink-0 text-xs tabular-nums text-synse-muted">
+                    <span className="shrink-0 text-xs tabular-nums text-white/55">
                       {item.calories} kcal
                     </span>
                   )}
                 </li>
               ))}
             </ul>
-          </article>
-        ))}
-      </section>
+          ),
+        }))}
+      />
 
       {plano.notes && (
-        <section className="bg-synse-primary/5 border-synse-primary/20 rounded-2xl border p-4">
+        <section className="rounded-2xl border border-synse-primary/20 bg-synse-primary/5 p-4">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-synse-text">
             <Apple className="size-4 text-synse-primary" aria-hidden />
             Orientações

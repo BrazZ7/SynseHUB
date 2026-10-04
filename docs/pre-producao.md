@@ -1108,6 +1108,16 @@ recusa, não que ela chega a recusar de verdade.
       prova problema de rede**, e adivinhar a causa mais provável custou um
       palpite errado que o diagnóstico resolveu em um minuto.
 
+      **Por que `.env.local` não pega isso.** O carregador do projeto trata
+      aspas em volta como delimitador e as remove — que é a semântica certa de
+      arquivo `.env`. O painel da Vercel não: lá o valor é literal, aspas
+      incluídas. Então `npm run env:check` passa e a produção quebra, e o par
+      "local funciona, no ar não" é exatamente o que torna este erro confuso.
+
+      Cheguei a acrescentar a conferência de aspas no `env:check` e desfiz:
+      ela nunca dispararia, porque o valor chega lá já sem as aspas. Quem pega
+      é a sonda, contra o ambiente de verdade.
+
       O texto do erro sai com o endereço substituído por `<url>`. `/api/health`
       é público, e o `TypeError` do `fetch` traz a URL inteira na mensagem: o
       endereço não é segredo — sem o token ele não serve —, mas `urlParece`

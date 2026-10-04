@@ -1037,9 +1037,21 @@ recusa, não que ela chega a recusar de verdade.
 - [ ] **Publicar de novo** — variável de ambiente só entra numa build nova.
 - [ ] **Conferir** em `/api/health?deep=1`:
       `rateLimit: { configurado: true, respondendo: true, latenciaMs: <baixo> }`.
-      `respondendo: false` com `configurado: true` é token errado ou
-      somente-leitura. `latenciaMs` acima de ~50 ms quer dizer que o banco
-      ficou em outra região.
+      `latenciaMs` acima de ~50 ms quer dizer que o banco ficou em outra
+      região.
+
+      `respondendo: false` vem com `motivo` e `urlParece`, porque sem eles
+      sobram quatro consertos diferentes para adivinhar:
+
+      | motivo | o que é | conserto |
+      | --- | --- | --- |
+      | `http_401` / `http_403` | token errado, ou de outro banco | copiar de novo em *REST API* |
+      | `redis: NOPERM …` | token **somente-leitura** — ele autentica e recusa só na escrita | pegar o segundo token, o de escrita |
+      | `sem_resposta: TimeoutError…` com `urlParece: 'tcp'` | colaram a URL `rediss://` no lugar da REST | usar a `https://….upstash.io` |
+      | `sem_resposta: …` com `urlParece: 'rest'` | banco apagado, pausado, ou rede | conferir se o banco ainda existe |
+
+      Isto entrou depois de a sonda acusar `respondendo: false` em produção e
+      não haver como saber qual dos quatro era sem abrir o painel.
 
 Plano gratuito do Upstash: 10.000 comandos por dia. O limitador gasta um por
 pedido limitado — login, check-in, PIX, busca de aluno. Uma academia média não

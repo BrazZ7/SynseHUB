@@ -313,10 +313,13 @@ describe('a sonda do Upstash', () => {
       throw new Error('ECONNREFUSED')
     }) as unknown as typeof fetch
 
-    expect(await sondarUpstash(quebrado)).toEqual({
+    expect(await sondarUpstash(quebrado)).toMatchObject({
       configurado: true,
       respondendo: false,
       latenciaMs: null,
+      // O motivo entrou depois: `respondendo: false` sozinho deixava quatro
+      // consertos diferentes para adivinhar, e aconteceu em produção.
+      motivo: expect.stringContaining('sem_resposta'),
     })
   })
 

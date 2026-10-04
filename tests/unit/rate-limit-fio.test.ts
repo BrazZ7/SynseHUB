@@ -120,3 +120,80 @@ describe('fio: contra um Redis que conta de verdade', () => {
     expect(await sondarUpstash()).toMatchObject({ configurado: true, respondendo: false })
   })
 })
+
+/**
+ * ── A sonda diz **por que** não respondeu ───────────────────────────────────
+ *
+ * `respondendo: false` sozinho manda quem está ligando o Redis adivinhar entre
+ * quatro consertos: token errado, token somente-leitura, URL de conexão no
+ * lugar da REST, e banco apagado. Os quatro chegam como o mesmo campo falso.
+ *
+ * Aconteceu de verdade: a sonda acusou `configurado: true, respondendo: false`
+ * em produção e não havia como saber qual dos quatro era sem mexer no painel.
+ */
+describe('o motivo da recusa', () => {
+  const comFetch = async (resposta: Response | Error, url = 'https://exemplo.upstash.io') => {
+    // O módulo lê as variáveis na importação, então o `resetModules` tem de
+    // vir antes — foi o que me pegou na primeira versão deste arquivo.
+    vi.resetModules()
+    vi.stubEnv('UPSTASH_REDIS_REST_URL', url)
+    vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', 'token-qualquer')
+    const { sondarUpstash } = await import('@/lib/rate-limit/upstash')
+    const falso = (async () => {
+      if (resposta instanceof Error) throw resposta
+      return resposta
+    }) as unknown as typeof fetch
+    return sondarUpstash(falso)
+  }
+
+  it('token recusado vem como http_401', async () => {
+    const d = await comFetch(new Response('Unauthorized', { status: 401 }))
+
+    expect(d.respondendo).toBe(false)
+    expect(d.motivo).toBe('http_401')
+  })
+
+  it('token somente-leitura vem com o texto do Redis', async () => {
+    /*
+     * É o erro mais provável de quem for ligar: o painel do Upstash mostra
+     * dois tokens e o somente-leitura vem primeiro. Ele **autentica** — então
+     * não dá 401 —, e recusa só na escrita, com NOPERM no corpo. Sem repassar
+     * esse texto, este caso é idêntico a "banco apagado" na tela.
+     */
+    const d = await comFetch(
+      Response.json({ error: 'NOPERM this user has no permissions to run the EVAL command' }),
+    )
+
+    expect(d.respondendo).toBe(false)
+    expect(d.motivo).toMatch(/NOPERM/)
+  })
+
+  it('URL de conexão no lugar da REST é apontada pela forma', async () => {
+    /*
+     * `rediss://` faz o `fetch` pendurar até o tempo estourar, e o sintoma
+     * chega como "sem resposta" — que parece rede caída. A forma da URL é
+     * olhada sem ir à rede, e sem publicar o endereço.
+     */
+    const tcp = await comFetch(
+      new Error('TimeoutError: signal timed out'),
+      'rediss://exemplo.upstash.io:6379',
+    )
+
+    expect(tcp.respondendo).toBe(false)
+    expect(tcp.motivo).toMatch(/sem_resposta/)
+    expect(tcp.urlParece).toBe('tcp')
+
+    // O controle: a mesma falha de rede com a URL certa não acusa a URL.
+    const rest = await comFetch(new Error('fetch failed'))
+    expect(rest.urlParece).toBe('rest')
+  })
+
+  it('quando responde, não inventa motivo nem forma', async () => {
+    const d = await comFetch(Response.json({ result: [1, 10_000] }))
+
+    expect(d.respondendo).toBe(true)
+    expect(d.motivo).toBeUndefined()
+    expect(d.urlParece).toBeUndefined()
+    expect(d.latenciaMs).toBeGreaterThanOrEqual(0)
+  })
+})

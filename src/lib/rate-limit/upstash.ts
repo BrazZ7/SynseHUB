@@ -65,7 +65,21 @@ export async function contarNoRedis(
   limit: number,
   windowMs: number,
   fetchImpl: typeof fetch = fetch,
+  /**
+   * Chamado com o motivo quando não deu, e só pela sonda de saúde.
+   *
+   * O limitador não passa nada aqui: para ele o motivo já vai para o log e o
+   * comportamento é o mesmo em todos os casos — sai da frente. Quem precisa
+   * distinguir é quem está **ligando** o Redis, porque "não respondeu" tem
+   * quatro causas com consertos diferentes.
+   */
+  aoFalhar?: (motivo: string) => void,
 ): Promise<RateLimitResult | null> {
+  const falhou = (motivo: string) => {
+    aoFalhar?.(motivo)
+    return null
+  }
+
   try {
     const resposta = await fetchImpl(URL_BASE, {
       method: 'POST',
@@ -77,26 +91,28 @@ export async function contarNoRedis(
 
     if (!resposta.ok) {
       logger.warn('ratelimit:upstash_http', { status: resposta.status })
-      return null
+      return falhou(`http_${resposta.status}`)
     }
 
     const corpo = (await resposta.json()) as { result?: unknown; error?: string }
     if (corpo.error) {
       logger.warn('ratelimit:upstash_erro', { erro: corpo.error.slice(0, 200) })
-      return null
+      // O texto do Redis, cortado: ele diz "NOPERM"/"permission" no token
+      // somente-leitura, que é o erro mais provável de quem está ligando.
+      return falhou(`redis: ${corpo.error.slice(0, 120)}`)
     }
 
     const dados = corpo.result
     if (!Array.isArray(dados) || dados.length < 2) {
       logger.warn('ratelimit:upstash_resposta_inesperada')
-      return null
+      return falhou('resposta_inesperada')
     }
 
     const contagem = Number(dados[0])
     const pttl = Number(dados[1])
     if (!Number.isFinite(contagem)) {
       logger.warn('ratelimit:upstash_resposta_inesperada')
-      return null
+      return falhou('contagem_nao_numerica')
     }
 
     /*
@@ -114,7 +130,12 @@ export async function contarNoRedis(
     }
   } catch (erro) {
     logger.warn('ratelimit:upstash_indisponivel', { erro: String(erro).slice(0, 200) })
-    return null
+    /*
+     * Rede, DNS ou o tempo estourando. `TimeoutError` aqui costuma ser URL de
+     * conexão (`rediss://`) no lugar da URL REST: o `fetch` tenta falar HTTP
+     * com a porta do Redis e fica pendurado até o limite.
+     */
+    return falhou(`sem_resposta: ${String(erro).slice(0, 120)}`)
   }
 }
 
@@ -126,6 +147,29 @@ export type DiagnosticoUpstash = {
   respondendo: boolean | null
   /** Quanto demorou a ida e volta, em milissegundos. */
   latenciaMs: number | null
+  /**
+   * Por que não respondeu. Ausente quando respondeu.
+   *
+   * `respondendo: false` sozinho manda a pessoa adivinhar entre quatro
+   * consertos diferentes — e o mais provável, o token somente-leitura, é
+   * indistinguível de "errei o token" sem isto.
+   */
+  motivo?: string
+  /**
+   * A forma da URL configurada, sem revelar qual é.
+   *
+   * `tcp` é o erro de colar a URL de conexão (`rediss://…`) no lugar da REST:
+   * o `fetch` tenta falar HTTP com a porta do Redis e fica pendurado até o
+   * tempo estourar, então o sintoma chega como "sem resposta" e parece rede.
+   */
+  urlParece?: 'rest' | 'tcp' | 'outra'
+}
+
+/** A forma da URL, olhada sem ir à rede e sem publicar o endereço. */
+function formatoDaUrl(url: string): DiagnosticoUpstash['urlParece'] {
+  if (/^rediss?:\/\//i.test(url)) return 'tcp'
+  if (/^https:\/\/[^/]+\.upstash\.io\/?$/i.test(url)) return 'rest'
+  return 'outra'
 }
 
 /**
@@ -155,11 +199,20 @@ export async function sondarUpstash(fetchImpl: typeof fetch = fetch): Promise<Di
   }
 
   const comecou = Date.now()
-  const resultado = await contarNoRedis('health:sonda', 1_000_000, 10_000, fetchImpl)
+  let motivo: string | undefined
+  const resultado = await contarNoRedis('health:sonda', 1_000_000, 10_000, fetchImpl, (m) => {
+    motivo = m
+  })
+
+  if (resultado !== null) {
+    return { configurado: true, respondendo: true, latenciaMs: Date.now() - comecou }
+  }
 
   return {
     configurado: true,
-    respondendo: resultado !== null,
-    latenciaMs: resultado === null ? null : Date.now() - comecou,
+    respondendo: false,
+    latenciaMs: null,
+    motivo: motivo ?? 'desconhecido',
+    urlParece: formatoDaUrl(URL_BASE),
   }
 }

@@ -202,6 +202,37 @@ describe('os números derivados', () => {
     })
 
     expect(await t.dataSource.countAssignments('org-1')).toEqual({ 'ficha-a': 9 })
+    expect(t.argsDaRpc('treinos_por_plano')).toEqual({ p_organization_id: 'org-1' })
+  })
+
+  it('o nome do argumento é o da função, e errar nele não dá erro visível', async () => {
+    /*
+     * Por que isto merece asserção própria: o PostgREST resolve função por
+     * nome **e** por nome de parâmetro. Um `p_organizationId` no lugar de
+     * `p_organization_id` devolve 404 (PGRST202) — e `isPendingMigration`
+     * trata 404 como "a migration ainda não foi colada", caindo no caminho
+     * antigo em silêncio. O número continuaria sendo contado na aplicação
+     * para sempre, com a tela parecendo certa e a sonda de saúde dizendo que
+     * a migration está lá.
+     *
+     * A sonda de `/api/health` pega isso em `alunos_por_plano`, porque ela
+     * chama a função com os mesmos argumentos. Para as outras, é aqui.
+     */
+    const t = clienteFalso({
+      rpcs: {
+        alunos_por_plano: { data: [], error: null },
+        resumo_de_corridas: { data: [], error: null },
+      },
+    })
+
+    await t.dataSource.countStudentsByPlan('org-1')
+    await t.dataSource.summarizeActivities('perfil-1', '2026-01-01T00:00:00.000Z')
+
+    expect(t.argsDaRpc('alunos_por_plano')).toEqual({ p_organization_id: 'org-1' })
+    expect(t.argsDaRpc('resumo_de_corridas')).toEqual({
+      p_user_profile_id: 'perfil-1',
+      p_desde: '2026-01-01T00:00:00.000Z',
+    })
   })
 })
 

@@ -1047,11 +1047,22 @@ recusa, não que ela chega a recusar de verdade.
       | --- | --- | --- |
       | `http_401` / `http_403` | token errado, ou de outro banco | copiar de novo em *REST API* |
       | `redis: NOPERM …` | token **somente-leitura** — ele autentica e recusa só na escrita | pegar o segundo token, o de escrita |
+      | `sem_resposta: TypeError: Failed to parse URL…` com `urlParece: 'com_aspas'` | o valor foi colado **com as aspas em volta** | apagar as aspas na Vercel |
       | `sem_resposta: TimeoutError…` com `urlParece: 'tcp'` | colaram a URL `rediss://` no lugar da REST | usar a `https://….upstash.io` |
       | `sem_resposta: …` com `urlParece: 'rest'` | banco apagado, pausado, ou rede | conferir se o banco ainda existe |
 
       Isto entrou depois de a sonda acusar `respondendo: false` em produção e
-      não haver como saber qual dos quatro era sem abrir o painel.
+      não haver como saber qual dos quatro era sem abrir o painel. E a primeira
+      resposta dela foi o caso das aspas — não o token somente-leitura, que era
+      a aposta óbvia. A lição não é sobre o Upstash: **sintoma de rede não
+      prova problema de rede**, e adivinhar a causa mais provável custou um
+      palpite errado que o diagnóstico resolveu em um minuto.
+
+      O texto do erro sai com o endereço substituído por `<url>`. `/api/health`
+      é público, e o `TypeError` do `fetch` traz a URL inteira na mensagem: o
+      endereço não é segredo — sem o token ele não serve —, mas `urlParece`
+      existe para falar da URL sem mostrá-la, e deixar o erro contrariar isso
+      seria cuidado só na aparência.
 
 Plano gratuito do Upstash: 10.000 comandos por dia. O limitador gasta um por
 pedido limitado — login, check-in, PIX, busca de aluno. Uma academia média não

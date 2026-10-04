@@ -188,6 +188,39 @@ describe('o motivo da recusa', () => {
     expect(rest.urlParece).toBe('rest')
   })
 
+  it('valor colado com aspas é apontado pelo nome', async () => {
+    /*
+     * O que de fato aconteceu ao ligar isto em produção: a URL foi colada com
+     * as aspas em volta, e o `fetch` recusou antes de haver rede. O sintoma
+     * chegava como `sem_resposta`, idêntico a "endereço errado" — e a aposta
+     * natural era o token somente-leitura, que não tinha nada a ver.
+     */
+    const d = await comFetch(
+      new TypeError('Failed to parse URL from "https://exemplo.upstash.io"'),
+      '"https://exemplo.upstash.io"',
+    )
+
+    expect(d.respondendo).toBe(false)
+    expect(d.urlParece).toBe('com_aspas')
+  })
+
+  it('o endereço não vaza no texto do erro', async () => {
+    /*
+     * `/api/health` é público, e o `TypeError` do `fetch` traz a URL inteira
+     * dentro da mensagem. O endereço não é segredo — sem o token ele não serve
+     * —, mas `urlParece` existe para falar da URL **sem** mostrá-la, e deixar o
+     * texto do erro contrariar isso seria manter o cuidado só na aparência.
+     */
+    const d = await comFetch(
+      new TypeError('Failed to parse URL from "https://harmless-yak-194171.upstash.io"'),
+      '"https://harmless-yak-194171.upstash.io"',
+    )
+
+    expect(d.motivo).not.toMatch(/harmless-yak/)
+    expect(d.motivo).not.toMatch(/upstash\.io/)
+    expect(d.motivo).toMatch(/<url>/)
+  })
+
   it('quando responde, não inventa motivo nem forma', async () => {
     const d = await comFetch(Response.json({ result: [1, 10_000] }))
 

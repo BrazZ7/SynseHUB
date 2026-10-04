@@ -99,7 +99,7 @@ export async function contarNoRedis(
       logger.warn('ratelimit:upstash_erro', { erro: corpo.error.slice(0, 200) })
       // O texto do Redis, cortado: ele diz "NOPERM"/"permission" no token
       // somente-leitura, que é o erro mais provável de quem está ligando.
-      return falhou(`redis: ${corpo.error.slice(0, 120)}`)
+      return falhou(`redis: ${semOEndereco(corpo.error).slice(0, 120)}`)
     }
 
     const dados = corpo.result
@@ -135,7 +135,7 @@ export async function contarNoRedis(
      * conexão (`rediss://`) no lugar da URL REST: o `fetch` tenta falar HTTP
      * com a porta do Redis e fica pendurado até o limite.
      */
-    return falhou(`sem_resposta: ${String(erro).slice(0, 120)}`)
+    return falhou(`sem_resposta: ${semOEndereco(String(erro)).slice(0, 120)}`)
   }
 }
 
@@ -161,15 +161,36 @@ export type DiagnosticoUpstash = {
    * `tcp` é o erro de colar a URL de conexão (`rediss://…`) no lugar da REST:
    * o `fetch` tenta falar HTTP com a porta do Redis e fica pendurado até o
    * tempo estourar, então o sintoma chega como "sem resposta" e parece rede.
+   *
+   * `com_aspas` é o que de fato aconteceu ao ligar isto em produção: o valor
+   * foi colado com as aspas em volta, e `fetch` recusou a URL antes de haver
+   * rede. Era indistinguível de "endereço errado" sem este caso.
    */
-  urlParece?: 'rest' | 'tcp' | 'outra'
+  urlParece?: 'rest' | 'tcp' | 'com_aspas' | 'outra'
 }
 
 /** A forma da URL, olhada sem ir à rede e sem publicar o endereço. */
 function formatoDaUrl(url: string): DiagnosticoUpstash['urlParece'] {
+  if (/^["'`]|["'`]$/.test(url)) return 'com_aspas'
   if (/^rediss?:\/\//i.test(url)) return 'tcp'
   if (/^https:\/\/[^/]+\.upstash\.io\/?$/i.test(url)) return 'rest'
   return 'outra'
+}
+
+/**
+ * O endereço fora do texto do erro.
+ *
+ * `/api/health` é público, e o `TypeError` do `fetch` traz a URL inteira
+ * dentro da mensagem — foi o que apareceu em produção. O endereço não é
+ * segredo (sem o token ele não serve), mas publicá-lo num endereço aberto não
+ * era a intenção: o campo `urlParece` existe justamente para falar da URL sem
+ * mostrá-la, e deixar o texto do erro contrariar isso seria manter o cuidado
+ * só na aparência.
+ */
+function semOEndereco(texto: string): string {
+  return texto
+    .replace(/https?:\/\/[^\s"'`)]+/gi, '<url>')
+    .replace(/rediss?:\/\/[^\s"'`)]+/gi, '<url>')
 }
 
 /**

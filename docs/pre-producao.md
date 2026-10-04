@@ -578,6 +578,79 @@ existem, não para conferir se subiram.
   a ordem é **sobre todos** e não sobre a página — é ele que impede o conserto
   de virar "paginar o alfabeto", que é o defeito com outro nome.
 
+- **0049 (`0049_alunos_sem_corte.sql`)** — a lista de alunos sem corte: a
+  decoração da página e a aba "Sumidos".
+
+  `/alunos` mostra duas colunas que não vêm de `students`: "Próxima
+  mensalidade" e "Última presença". Elas eram montadas por `decorateStudents`,
+  que lia `charges` e `check_ins` **sem teto** para os alunos da página e
+  guardava a primeira linha de cada um na aplicação. Cem alunos com um ano de
+  frequência são quinze mil linhas pela rede para preencher cem células — mas
+  o desperdício não é o defeito.
+
+  O PostgREST corta a resposta no teto configurado no servidor **sem dar
+  erro**. Como os check-ins vinham do mais recente para o mais antigo, o corte
+  descartava justamente a presença mais velha: quem não aparece há meses
+  chegava à tela com "Última presença: —", como se nunca tivesse entrado na
+  academia.
+
+  E esse valor cortado **alimenta um filtro**. A aba "Sumidos"
+  (`?status=DORMANT`) era `!lastCheckInAt || dias >= 21` aplicada sobre a
+  página já lida. É a lista para telefonar para quem parou de vir: errar nela
+  é ligar para quem treinou ontem e não ligar para quem está saindo.
+
+  Dois defeitos vizinhos vieram no mesmo conserto, os dois por filtrar depois
+  de paginar:
+
+  - o rodapé lia o `count` da consulta **sem** o filtro, então a tela dizia
+    "478 alunos" e mostrava três;
+  - o recorte por plano era `rows.filter(r => r.planName != null)` — "tem
+    algum plano", não "tem *este* plano" —, então escolher "Mensal" no seletor
+    trazia quem estava no trimestral. Agora o recorte vai ao servidor, com
+    `memberships!inner` e `.eq('memberships.plan_id', …)`. Sem o `!inner` o
+    PostgREST aceita o filtro e não recorta nada, porque a junção é à esquerda.
+
+  Nos três casos a demonstração já fazia certo — filtra e só então conta —, o
+  que torna isto uma divergência entre os dois caminhos, não uma escolha de
+  produto.
+
+  Entram duas funções, as duas `security invoker` para a RLS filtrar sozinha
+  (`students_staff`/`check_ins_staff` da 0001/0003 e `charges_staff` da 0002):
+
+  - `decoracao_dos_alunos(org, ids[])` — uma linha por aluno pedido, com a
+    próxima cobrança em aberto e a última presença. Não há o que cortar: o
+    número de linhas é o número de alunos da página.
+  - `alunos_dormentes(org, dias, busca, professor, plano, limite, deslocamento)`
+    — a aba decidida no banco, com `total_geral` junto. Devolve só ids, para o
+    `select` grande do aluno e o `mapStudent` continuarem num lugar só.
+
+  A aba continua **sem filtro de situação**, como sempre foi nos dois
+  caminhos: ela também lista quem já cancelou. Mudar isso é decisão de produto,
+  e não entrou escondida numa correção de corte.
+
+  Enquanto a migration não estiver colada, `decorateStudents` volta ao caminho
+  antigo e a aba volta a filtrar na aplicação (`isPendingMigration`): errado
+  como sempre foi, mas de pé — publicar não é migrar, e devolver coluna vazia
+  nessa janela mentiria mais do que a leitura que pode cortar. Erro que **não**
+  é migration continua subindo: engolir "permission denied" transformaria uma
+  política mal configurada no mesmo defeito por outra porta.
+
+  Sonda: `listaDeAlunosSemCorte` em `/api/health?deep=1`, sobre
+  `decoracao_dos_alunos` — revogada do anônimo, então 401/403 é "existe" e 404
+  é "não existe", sem `executa`. Como a migration só cria funções, e função
+  some mais fácil que tabela (um `drop function` solto, um backup anterior a
+  ela), a sonda também reinsere a 0049 em `pendingMigrations` quando o registro
+  diz que ela subiu e a função não está lá.
+
+  `tests/db/lista-de-alunos.test.ts`: 15 testes contra Postgres, o principal
+  provando que a decoração devolve **uma linha por aluno** e não uma por
+  presença — um aluno com sessenta check-ins não faz a resposta crescer.
+  `tests/unit/students/lista-sem-corte.test.ts`: 12 testes do lado da
+  aplicação, com um cliente de mentira que anota qual consulta saiu; eles
+  provam a ligação (a junção obrigatória, o total vindo da função, a ordem da
+  fila reimposta, a volta ao caminho antigo sem a migration), e a semântica do
+  SQL fica com os testes de banco.
+
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona
 enquanto toda migration cria algo visível pela API. A 0018 não cria: ela troca

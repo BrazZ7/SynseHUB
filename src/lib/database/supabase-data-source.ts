@@ -2,6 +2,7 @@ import 'server-only'
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import { isPendingMigration } from '@/lib/database/pending-migration'
 import { logger } from '@/lib/logger'
 import { daysBetween } from '@/lib/utils'
 import type {
@@ -552,12 +553,25 @@ export class SupabaseDataSource implements DataSource {
   }
 
   // ── Alunos ─────────────────────────────────────────────────────────────────
-  private readonly studentSelect = `
-    id, organization_id, user_profile_id, status, goal, enrolled_at, cancelled_at, trainer_id, notes,
-    user_profiles ( synse_id, name, email, phone, tax_id, avatar_url, birth_date ),
-    memberships ( id, plan_id, price, status, membership_plans ( name ) ),
-    staff:trainer_id ( user_profiles ( name ) )
-  `
+  /**
+   * O `select` do aluno na lista.
+   *
+   * `planoObrigatorio` troca a matrícula embutida por `memberships!inner`, e é
+   * o que permite filtrar por plano **no servidor**. Sem o `!inner` o
+   * PostgREST aceita o `.eq('memberships.plan_id', …)` mas ele não recorta
+   * nada: a junção é à esquerda, então o aluno de outro plano continua vindo,
+   * só com a matrícula de fora. Era por isso que o filtro de plano precisava
+   * de um remendo na aplicação — e o remendo olhava se havia *algum* plano,
+   * não se era *aquele*.
+   */
+  private studentSelect(planoObrigatorio = false) {
+    return `
+      id, organization_id, user_profile_id, status, goal, enrolled_at, cancelled_at, trainer_id, notes,
+      user_profiles ( synse_id, name, email, phone, tax_id, avatar_url, birth_date ),
+      memberships${planoObrigatorio ? '!inner' : ''} ( id, plan_id, price, status, membership_plans ( name ) ),
+      staff:trainer_id ( user_profiles ( name ) )
+    `
+  }
 
   private mapStudent(row: Row): StudentListItem {
     const profile = row.user_profiles ?? {}
@@ -592,9 +606,65 @@ export class SupabaseDataSource implements DataSource {
     }
   }
 
-  /** Enriquece a página corrente com próxima cobrança e última presença. */
+  /**
+   * Enriquece a página corrente com próxima cobrança e última presença.
+   *
+   * ── Por que isto virou uma função de banco (0049) ──────────────────────────
+   *
+   * As duas colunas não vêm de `students`, e antes eram montadas lendo
+   * `charges` e `check_ins` **sem teto** para os alunos da página, guardando a
+   * primeira linha de cada um na aplicação. Cem alunos com um ano de
+   * frequência são quinze mil linhas pela rede para preencher cem células —
+   * mas o desperdício não é o defeito.
+   *
+   * O PostgREST corta a resposta no teto configurado no servidor **sem dar
+   * erro**. Como os check-ins vinham do mais recente para o mais antigo, o
+   * corte descartava justamente a presença mais velha: o aluno que não aparece
+   * há meses chegava à tela com "Última presença: —", como se nunca tivesse
+   * entrado. E esse valor alimenta a aba "Sumidos", que existe para telefonar
+   * para quem parou de vir.
+   *
+   * `decoracao_dos_alunos` devolve uma linha por aluno pedido. Não há o que
+   * cortar.
+   */
   private async decorateStudents(organizationId: string, students: StudentListItem[]) {
     if (students.length === 0) return students
+    const ids = students.map((s) => s.id)
+
+    const { data, error } = await this.client.rpc('decoracao_dos_alunos', {
+      p_organization_id: organizationId,
+      p_student_ids: ids,
+    })
+
+    /*
+     * Sem a 0049 aplicada, volta ao caminho antigo em vez de devolver vazio:
+     * publicar não é migrar, e nessa janela a tela com as colunas em branco
+     * mentiria mais do que a leitura que pode cortar. Qualquer outro erro
+     * sobe — permissão negada não pode virar coluna vazia.
+     */
+    if (error) {
+      if (!isPendingMigration(error)) this.fail('decorateStudents', error)
+      logger.warn('decorateStudents:sem_0049', {})
+      return this.decoracaoPelaAplicacao(organizationId, students)
+    }
+
+    const porAluno = new Map<string, Row>()
+    for (const row of (data ?? []) as Row[]) porAluno.set(row.student_id, row)
+
+    return students.map((student) => {
+      const linha = porAluno.get(student.id)
+      return {
+        ...student,
+        nextChargeDueDate: linha?.next_charge_due_date ?? null,
+        nextChargeAmount:
+          linha?.next_charge_amount != null ? Number(linha.next_charge_amount) : null,
+        lastCheckInAt: linha?.last_check_in_at ?? null,
+      }
+    })
+  }
+
+  /** A decoração como era antes da 0049. Só roda na janela entre publicar e migrar. */
+  private async decoracaoPelaAplicacao(organizationId: string, students: StudentListItem[]) {
     const ids = students.map((s) => s.id)
 
     const [charges, checkIns] = await Promise.all([
@@ -644,24 +714,54 @@ export class SupabaseDataSource implements DataSource {
     const page = Math.max(1, filters.page ?? 1)
     const pageSize = Math.min(100, Math.max(5, filters.pageSize ?? 20))
     const from = (page - 1) * pageSize
+    const busca = filters.search?.trim() || null
+    const planId = filters.planId?.trim() || null
+
+    /*
+     * A aba "Sumidos" é decidida no banco (0049). Não é otimização: o critério
+     * é "não aparece há 21 dias", e a última presença não está em `students`.
+     * Filtrar na aplicação só podia olhar a página já lida — então a aba
+     * listava quem treinou ontem e o rodapé contava a academia inteira.
+     *
+     * Devolve `null` enquanto a 0049 não estiver aplicada, e aí o filtro
+     * antigo lá embaixo assume: errado como sempre foi, mas de pé.
+     */
+    if (filters.inactiveAttendance && !filters.newcomers) {
+      const sumidos = await this.listarSumidos(organizationId, {
+        busca,
+        planId,
+        trainerId: filters.trainerId ?? null,
+        limite: pageSize,
+        deslocamento: from,
+      })
+      if (sumidos) return { ...sumidos, page, pageSize }
+    }
 
     let query = this.client
       .from('students')
-      .select(this.studentSelect, { count: 'exact' })
+      .select(this.studentSelect(planId != null), { count: 'exact' })
       .eq('organization_id', organizationId)
 
     if (filters.status && filters.status !== 'ALL') query = query.eq('status', filters.status)
     if (filters.trainerId) query = query.eq('trainer_id', filters.trainerId)
+    /*
+     * O plano recorta no servidor, com a junção obrigatória do `studentSelect`.
+     * Antes recortava depois de paginar, e olhando se o aluno tinha *algum*
+     * plano em vez de *aquele*: escolher "Mensal" no seletor trazia quem
+     * estava no trimestral também, e o total do rodapé ignorava o filtro.
+     */
+    if (planId) {
+      query = query.eq('memberships.plan_id', planId).eq('memberships.status', 'ACTIVE')
+    }
     if (filters.newcomers) {
       const since = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10)
       query = query.gte('enrolled_at', since)
     }
-    if (filters.search) {
+    if (busca) {
       // Busca no perfil relacionado — requer o join declarado acima.
-      query = query.or(
-        `name.ilike.%${filters.search}%,email.ilike.%${filters.search}%,synse_id.ilike.%${filters.search}%`,
-        { referencedTable: 'user_profiles' },
-      )
+      query = query.or(`name.ilike.%${busca}%,email.ilike.%${busca}%,synse_id.ilike.%${busca}%`, {
+        referencedTable: 'user_profiles',
+      })
     }
 
     const { data, error, count } = await query
@@ -673,7 +773,6 @@ export class SupabaseDataSource implements DataSource {
     let rows = ((data as Row[]) ?? []).map((row) => this.mapStudent(row))
     rows = await this.decorateStudents(organizationId, rows)
 
-    if (filters.planId) rows = rows.filter((r) => r.planName != null)
     if (filters.inactiveAttendance) {
       rows = rows.filter(
         (r) => !r.lastCheckInAt || daysBetween(r.lastCheckInAt) >= ATTENDANCE_INACTIVE_DAYS,
@@ -683,12 +782,70 @@ export class SupabaseDataSource implements DataSource {
     return { rows, total: count ?? rows.length, page, pageSize }
   }
 
+  /**
+   * A aba "Sumidos", paginada e contada pelo banco.
+   *
+   * A função devolve só ids, de propósito: o `select` grande do aluno e o
+   * `mapStudent` continuam num lugar só. Depois dela o `.in('id', …)` lê no
+   * máximo `pageSize` alunos — nada a cortar — e a ordem da fila é reimposta
+   * aqui, porque o `.in` devolve na ordem que o Postgres quiser.
+   */
+  private async listarSumidos(
+    organizationId: string,
+    p: {
+      busca: string | null
+      planId: string | null
+      trainerId: string | null
+      limite: number
+      deslocamento: number
+    },
+  ): Promise<{ rows: StudentListItem[]; total: number } | null> {
+    const { data, error } = await this.client.rpc('alunos_dormentes', {
+      p_organization_id: organizationId,
+      p_dias: ATTENDANCE_INACTIVE_DAYS,
+      p_busca: p.busca,
+      p_trainer_id: p.trainerId,
+      p_plan_id: p.planId,
+      p_limit: p.limite,
+      p_offset: p.deslocamento,
+    })
+
+    if (error) {
+      if (!isPendingMigration(error)) this.fail('listStudents:sumidos', error)
+      logger.warn('listStudents:sem_0049', {})
+      return null
+    }
+
+    const linhas = (data ?? []) as Row[]
+    // Sem linha nenhuma não há `count(*) over ()` para ler: zero é o total.
+    const total = linhas.length > 0 ? Number(linhas[0].total_geral) : 0
+    if (linhas.length === 0) return { rows: [], total }
+
+    const ids = linhas.map((linha) => linha.student_id as string)
+    const brutos =
+      (await this.select<Row[]>(
+        'listStudents:sumidos',
+        this.client
+          .from('students')
+          .select(this.studentSelect())
+          .eq('organization_id', organizationId)
+          .in('id', ids),
+      )) ?? []
+
+    const porId = new Map(brutos.map((row) => [row.id as string, this.mapStudent(row)]))
+    const naOrdem = ids
+      .map((id) => porId.get(id))
+      .filter((aluno): aluno is StudentListItem => aluno != null)
+
+    return { rows: await this.decorateStudents(organizationId, naOrdem), total }
+  }
+
   async getStudent(organizationId: string, studentId: string) {
     const row = await this.select<Row>(
       'getStudent',
       this.client
         .from('students')
-        .select(this.studentSelect)
+        .select(this.studentSelect())
         .eq('organization_id', organizationId)
         .eq('id', studentId)
         .maybeSingle(),

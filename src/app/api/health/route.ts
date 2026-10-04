@@ -191,6 +191,7 @@ const MIGRATIONS_ESPERADAS = [
   '0046_fechando_a_auditoria.sql',
   '0047_treino_fantasma.sql',
   '0048_fila_de_avaliacao.sql',
+  '0049_alunos_sem_corte.sql',
 ]
 
 async function schemaReadiness() {
@@ -219,6 +220,7 @@ async function schemaReadiness() {
     autorizarOCorpo,
     auditoriaFechada,
     filaDeAvaliacao,
+    listaDeAlunosSemCorte,
   ] = await Promise.all([
     schemaCheck('user_profiles?select=tier&limit=1'),
     schemaCheck('baseline_challenges?select=code&limit=1'),
@@ -450,6 +452,23 @@ async function schemaReadiness() {
       p_limit: 1,
       p_offset: 0,
     }),
+
+    /*
+     * A 0049 — a decoração da lista de alunos e a aba "Sumidos".
+     *
+     * Sem ela `decorateStudents` volta a ler `charges` e `check_ins` sem teto,
+     * e o PostgREST corta a resposta sem dizer: o aluno que não aparece há
+     * meses chega à tela com "Última presença: —", e a aba que existe para
+     * telefonar para quem parou de vir passa a listar quem treinou ontem. É um
+     * defeito que a tela não denuncia, então a sonda precisa.
+     *
+     * `decoracao_dos_alunos` e `alunos_dormentes` entram na mesma migration;
+     * sondar a primeira basta, porque o registro é a última linha do arquivo.
+     */
+    rpcCheck('decoracao_dos_alunos', {
+      p_organization_id: '00000000-0000-0000-0000-000000000000',
+      p_student_ids: [],
+    }),
   ])
 
   const registradas = await migracoesRegistradas()
@@ -494,6 +513,17 @@ async function schemaReadiness() {
     ) {
       faltando.push('0036_assinatura_plus.sql')
     }
+    /*
+     * A 0049 só cria funções, e função some mais fácil que tabela: um
+     * `drop function` solto, ou um banco restaurado de backup anterior a ela,
+     * deixa o registro intacto e a lista de alunos mentindo em silêncio.
+     */
+    if (
+      listaDeAlunosSemCorte.present === false &&
+      !faltando.includes('0049_alunos_sem_corte.sql')
+    ) {
+      faltando.push('0049_alunos_sem_corte.sql')
+    }
     return {
       synseRun: corridas,
       entradaSemVinculo,
@@ -519,6 +549,7 @@ async function schemaReadiness() {
       autorizarOCorpo,
       auditoriaFechada,
       filaDeAvaliacao,
+      listaDeAlunosSemCorte,
       appliedMigrations: registradas.length,
       pendingMigrations: faltando,
     }
@@ -566,6 +597,7 @@ async function schemaReadiness() {
     '0046_fechando_a_auditoria.sql',
     '0047_treino_fantasma.sql',
     '0048_fila_de_avaliacao.sql',
+    '0049_alunos_sem_corte.sql',
   )
 
   return {
@@ -593,6 +625,7 @@ async function schemaReadiness() {
     autorizarOCorpo,
     auditoriaFechada,
     filaDeAvaliacao,
+    listaDeAlunosSemCorte,
     pendingMigrations: pendentes,
   }
 }

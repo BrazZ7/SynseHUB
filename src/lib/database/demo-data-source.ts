@@ -915,9 +915,20 @@ export class DemoDataSource implements DataSource {
 
     if (filters.inactiveAttendance) {
       items = items.filter((s) => !s.lastCheckInAt || daysBetween(s.lastCheckInAt) >= 21)
+      /*
+       * A aba "Sumidos" é ordenada pela urgência, como `alunos_dormentes`
+       * (0049) faz no banco: quem nunca apareceu primeiro, depois do mais
+       * antigo para o mais recente, desempatando pelo nome. Em ordem
+       * alfabética a demonstração mostraria uma tela que o produto não tem.
+       */
+      items.sort(
+        (a, b) =>
+          (a.lastCheckInAt ?? '').localeCompare(b.lastCheckInAt ?? '') ||
+          a.name.localeCompare(b.name, 'pt-BR'),
+      )
+    } else {
+      items.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
     }
-
-    items.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
 
     const total = items.length
     const start = (page - 1) * pageSize

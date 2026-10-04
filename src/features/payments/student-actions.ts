@@ -44,8 +44,21 @@ export async function createStudentPixAction(
     }
 
     const dataSource = await getDataSource()
-    const charges = await dataSource.getChargesForStudent(session.organizationId, session.studentId)
-    const charge = charges.find((item) => item.id === parsed.data.chargeId)
+    /*
+     * Uma consulta por id, com `student_id` dentro dela — e não o histórico
+     * inteiro varrido na aplicação. A varredura dependia de a cobrança estar
+     * na resposta, e a resposta pode vir cortada pelo teto do PostgREST sem
+     * dar erro: o aluno quitando uma dívida velha recebia "cobrança não
+     * encontrada" para algo que a tela estava mostrando a ele.
+     *
+     * O `studentId` continua sendo a conferência de dono. Mudou só quem a faz:
+     * o banco, pela cláusula, em vez de um `find` sobre o que chegou.
+     */
+    const charge = await dataSource.getStudentCharge(
+      session.organizationId,
+      session.studentId,
+      parsed.data.chargeId,
+    )
     if (!charge) throw notFound('cobrança')
 
     const provider = getPaymentProvider()

@@ -157,7 +157,19 @@ describe('a ação do aluno recusa no servidor', () => {
       requireStudentSession: async () => ({ organizationId: 'org-1', studentId: 'stu-1' }),
     }))
     vi.doMock('@/lib/database', () => ({
-      getDataSource: async () => ({ getChargesForStudent: async () => [COBRANCA] }),
+      /*
+       * `getStudentCharge`, com o id e o aluno: a action passou a pedir **uma**
+       * cobrança em vez de varrer o histórico. O dublê confere os dois
+       * argumentos porque é neles que mora a conferência de dono — devolver a
+       * cobrança para qualquer id faria este controle passar com uma action
+       * que ignora de quem é a dívida.
+       */
+      getDataSource: async () => ({
+        getStudentCharge: async (organizationId: string, studentId: string, chargeId: string) =>
+          organizationId === 'org-1' && studentId === 'stu-1' && chargeId === COBRANCA.id
+            ? COBRANCA
+            : null,
+      }),
     }))
     vi.doMock('@/lib/payments', async () => {
       const real = await vi.importActual<typeof import('@/lib/payments')>('@/lib/payments')

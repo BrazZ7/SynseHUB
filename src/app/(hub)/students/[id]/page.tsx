@@ -97,7 +97,8 @@ export default async function StudentProfilePage({ params }: { params: Params })
    * de chegar ao processo e ao payload que o servidor manda para o navegador.
    */
   const [
-    charges,
+    historicoDeCobrancas,
+    openCharge,
     checkIns,
     assignments,
     workoutLogs,
@@ -109,8 +110,18 @@ export default async function StudentProfilePage({ params }: { params: Params })
     dietas,
   ] = await Promise.all([
     canSeeFinance
-      ? dataSource.getChargesForStudent(session.organizationId, student.id)
-      : Promise.resolve([]),
+      ? dataSource.getChargesForStudent(session.organizationId, student.id, { pageSize: 24 })
+      : Promise.resolve(null),
+    /*
+     * A cobrança em aberto sai de consulta própria, e não de um `find` sobre o
+     * histórico. Duas razões: o histórico vem paginado, e a pergunta "qual ele
+     * paga agora" é a **mais antiga** em aberto — o `find` sobre uma ordem
+     * decrescente devolvia a mais nova, então esta tela e a do aluno
+     * mostravam cobranças diferentes para quem tinha dois meses atrasados.
+     */
+    canSeeFinance
+      ? dataSource.getNextOpenCharge(session.organizationId, student.id)
+      : Promise.resolve(null),
     dataSource.listCheckInsForStudent(session.organizationId, student.id, 90),
     dataSource.listAssignmentsForStudent(session.organizationId, student.id),
     dataSource.listWorkoutLogs(session.organizationId, student.id),
@@ -171,7 +182,6 @@ export default async function StudentProfilePage({ params }: { params: Params })
   const attendanceGoal = 12
   const attendanceProgress = Math.min(100, (checkInsThisMonth / attendanceGoal) * 100)
 
-  const openCharge = charges.find((c) => c.status === 'OVERDUE' || c.status === 'PENDING')
   const weightDelta =
     latestAssessment?.weight != null && previousAssessment?.weight != null
       ? latestAssessment.weight - previousAssessment.weight
@@ -608,11 +618,11 @@ export default async function StudentProfilePage({ params }: { params: Params })
                 <CardTitle>Histórico de mensalidades</CardTitle>
               </CardHeader>
               <CardContent>
-                {charges.length === 0 ? (
+                {!historicoDeCobrancas || historicoDeCobrancas.total === 0 ? (
                   <EmptyState title="Nenhuma cobrança gerada" className="py-8" />
                 ) : (
                   <ul className="divide-y divide-synse-border">
-                    {charges.slice(0, 24).map((charge) => (
+                    {historicoDeCobrancas.rows.map((charge) => (
                       <li key={charge.id} className="flex flex-wrap items-center gap-3 py-3">
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium capitalize text-synse-text">
@@ -630,6 +640,18 @@ export default async function StudentProfilePage({ params }: { params: Params })
                       </li>
                     ))}
                   </ul>
+                )}
+                {historicoDeCobrancas && historicoDeCobrancas.total > 24 && (
+                  /*
+                   * A aba mostra as 24 mais recentes, como sempre mostrou — a
+                   * diferença é que agora o corte é pedido, e dito. Antes
+                   * `slice(0, 24)` cortava uma lista que o próprio PostgREST
+                   * já podia ter cortado antes.
+                   */
+                  <p className="pt-3 text-xs text-synse-muted">
+                    Mostrando as 24 mais recentes de {formatNumber(historicoDeCobrancas.total)}{' '}
+                    cobranças.
+                  </p>
                 )}
               </CardContent>
             </Card>

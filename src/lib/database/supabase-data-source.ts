@@ -6,6 +6,7 @@ import { isPendingMigration } from '@/lib/database/pending-migration'
 import { logger } from '@/lib/logger'
 import { daysBetween } from '@/lib/utils'
 import type {
+  ChargeHistoryFilters,
   ChargeWithStudent,
   CrmSummary,
   LeadFilters,
@@ -1072,18 +1073,111 @@ export class SupabaseDataSource implements DataSource {
     return rows.map((row) => this.mapChargeWithStudent(row))
   }
 
-  async getChargesForStudent(organizationId: string, studentId: string) {
-    const rows =
-      (await this.select<Row[]>(
-        'getChargesForStudent',
-        this.client
-          .from('charges')
-          .select('*')
-          .eq('organization_id', organizationId)
-          .eq('student_id', studentId)
-          .order('due_date', { ascending: false }),
-      )) ?? []
-    return rows.map((row) => this.mapCharge(row))
+  /** As cobranças que ainda esperam pagamento. */
+  private static readonly STATUS_EM_ABERTO = ['PENDING', 'OVERDUE'] as const
+
+  /**
+   * O histórico de cobranças de um aluno, por página.
+   *
+   * ── O que esta leitura alimentava ──────────────────────────────────────────
+   *
+   * Sem teto, e ordenada do vencimento mais novo para o mais antigo, ela
+   * respondia por três perguntas diferentes:
+   *
+   *   qual cobrança o aluno paga agora        (a mais antiga em aberto)
+   *   esta cobrança de id X existe e é dele?  (a action do PIX, por varredura)
+   *   o que já foi pago                       (as últimas doze)
+   *
+   * O PostgREST corta a resposta no teto do servidor sem dar erro, e o corte
+   * descarta o **fim** da ordem — ou seja, o vencimento mais antigo. As duas
+   * primeiras perguntas são justamente sobre o mais antigo: o aluno quitando
+   * uma dívida velha recebia "cobrança não encontrada", e a tela oferecia para
+   * pagar a cobrança errada. Só a terceira sobrevivia ao corte, por sorte da
+   * ordem.
+   *
+   * Agora cada pergunta tem a sua consulta: `getNextOpenCharge`,
+   * `getStudentCharge` e esta, que é só histórico.
+   */
+  async getChargesForStudent(
+    organizationId: string,
+    studentId: string,
+    filters: ChargeHistoryFilters = {},
+  ): Promise<Paginated<Charge>> {
+    const page = Math.max(1, filters.page ?? 1)
+    const pageSize = Math.min(200, Math.max(5, filters.pageSize ?? 24))
+    const from = (page - 1) * pageSize
+
+    let query = this.client
+      .from('charges')
+      .select('*', { count: 'exact' })
+      .eq('organization_id', organizationId)
+      .eq('student_id', studentId)
+
+    if (filters.status && filters.status !== 'ALL') query = query.eq('status', filters.status)
+
+    const { data, error, count } = await query
+      .order('due_date', { ascending: false })
+      .range(from, from + pageSize - 1)
+
+    if (error) this.fail('getChargesForStudent', error)
+
+    const rows = ((data as Row[]) ?? []).map((row) => this.mapCharge(row))
+    return { rows, total: count ?? rows.length, page, pageSize }
+  }
+
+  /**
+   * A cobrança em aberto mais próxima de vencer.
+   *
+   * Uma linha, decidida pelo banco. Antes a mesma pergunta era respondida de
+   * dois jeitos sobre a mesma lista: a ficha do aluno pegava a **primeira** de
+   * uma ordem decrescente — a mais nova — e o app ordenava de novo para pegar
+   * a mais antiga. Aluno com dois meses atrasados ouvia um valor na recepção e
+   * via outro no celular.
+   *
+   * A mais antiga é a certa: é a que está vencendo há mais tempo, e quitar na
+   * ordem é o que zera a dívida.
+   */
+  async getNextOpenCharge(organizationId: string, studentId: string): Promise<Charge | null> {
+    const row = await this.select<Row>(
+      'getNextOpenCharge',
+      this.client
+        .from('charges')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .eq('student_id', studentId)
+        .in('status', [...SupabaseDataSource.STATUS_EM_ABERTO])
+        .order('due_date', { ascending: true })
+        .limit(1)
+        .maybeSingle(),
+    )
+    return row ? this.mapCharge(row) : null
+  }
+
+  /**
+   * Uma cobrança do aluno, por id.
+   *
+   * `organization_id` **e** `student_id` na consulta: é a conferência de dono,
+   * feita pelo banco em vez de por varredura de lista na aplicação. A RLS
+   * confere de novo por cima — duas camadas sobre a mesma regra não é
+   * desperdício aqui, porque esta consulta decide se alguém pode gerar um PIX
+   * no valor de uma cobrança.
+   */
+  async getStudentCharge(
+    organizationId: string,
+    studentId: string,
+    chargeId: string,
+  ): Promise<Charge | null> {
+    const row = await this.select<Row>(
+      'getStudentCharge',
+      this.client
+        .from('charges')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .eq('student_id', studentId)
+        .eq('id', chargeId)
+        .maybeSingle(),
+    )
+    return row ? this.mapCharge(row) : null
   }
 
   async markChargeAsPaid(
@@ -3927,7 +4021,10 @@ export class SupabaseDataSource implements DataSource {
         .select('id', { count: 'exact', head: true })
         .eq('organization_id', organizationId)
 
-    const contar = async (operacao: string, query: PromiseLike<{ count: number | null; error: unknown }>) => {
+    const contar = async (
+      operacao: string,
+      query: PromiseLike<{ count: number | null; error: unknown }>,
+    ) => {
       const { count, error } = await query
       if (error) this.fail(operacao, error)
       return count ?? 0

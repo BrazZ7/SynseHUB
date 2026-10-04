@@ -753,6 +753,61 @@ caminho do Supabase com o cliente de mentira; 5 mutações nos dois data sources
 todas pegas) e 6 da aritmética da paginação (3 mutações, todas pegas). As três
 telas conferidas no Chromium em `page=1` e fora da faixa.
 
+### As cobranças de um aluno: três perguntas, três consultas
+
+Também sem migration. Fecha a segunda entrada da lista de dívida do guarda
+`tests/unit/leitura-sem-teto.test.ts`, e no caminho um defeito que não era de
+corte.
+
+`getChargesForStudent` lia o histórico inteiro de cobranças, sem teto, ordenado
+do vencimento mais novo para o mais antigo — e respondia por três perguntas:
+
+| pergunta | como era respondida |
+| --- | --- |
+| qual cobrança o aluno paga agora | a mais antiga em aberto, achada na lista |
+| esta cobrança de id X é dele? | `charges.find(...)` na action do PIX |
+| o que já foi pago | as últimas doze, por `slice` |
+
+O corte do PostgREST descarta o **fim** da ordem, ou seja o vencimento mais
+antigo — e as duas primeiras perguntas são justamente sobre o mais antigo. O
+aluno quitando uma dívida velha recebia **"cobrança não encontrada"** para algo
+que a tela estava mostrando a ele, e a tela oferecia pagar a cobrança errada.
+Só a terceira sobrevivia, por sorte da ordem.
+
+E havia um defeito independente do corte: a mesma pergunta era respondida de
+dois jeitos. A ficha no painel fazia `find` sobre a ordem decrescente e pegava
+a cobrança **mais nova** em aberto; o app do aluno ordenava de novo e pegava a
+**mais antiga**. Aluno com dois meses atrasados ouvia um valor na recepção e
+via outro no celular. A mais antiga é a certa: é a que está vencendo há mais
+tempo, e quitar na ordem é o que zera a dívida.
+
+Cada pergunta ganhou a sua consulta:
+
+- `getNextOpenCharge(org, aluno)` — uma linha, `in('status', ['PENDING',
+  'OVERDUE'])` com `order('due_date', asc).limit(1).maybeSingle()`. Cancelada
+  não entra: oferecer para pagar cobraria de novo algo que a academia desfez.
+- `getStudentCharge(org, aluno, id)` — uma linha, com `organization_id` **e**
+  `student_id` na cláusula. A conferência de dono passou a ser da consulta em
+  vez de uma varredura sobre o que chegou; é ela que decide se alguém pode
+  gerar um PIX no valor de uma cobrança.
+- `getChargesForStudent(org, aluno, { status, page, pageSize })` — só
+  histórico, paginado, com o total do filtro. A aba Financeiro da ficha
+  continua mostrando as 24 mais recentes, mas agora **diz** que são 24 de N.
+
+O app do aluno e o `app-service` deixaram de ler o histórico: pedem a cobrança
+em aberto direto. A ficha no painel idem.
+
+Verificação: 14 testes (6 mutações nos dois data sources, todas pegas). O teste
+da "mais antiga em aberto" varre os 100 alunos da semente em vez de olhar um,
+porque a maioria tem **uma** cobrança em aberto — e com uma só, "a mais antiga"
+e "a mais nova" são a mesma linha, então o teste passaria com a regra errada. A
+asserção final conta quantos alunos puderam distinguir as duas regras (hoje 3)
+e falha se um dia der zero, para o teste não ficar verde sem olhar nada.
+
+Conferido no Chromium: a ficha de Ana Cardoso, a coluna "Próxima mensalidade"
+da lista de alunos (que vem da 0049) e `/app/finance` mostram a mesma cobrança,
+12/11/2026 por R$ 109,90.
+
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona
 enquanto toda migration cria algo visível pela API. A 0018 não cria: ela troca

@@ -99,6 +99,14 @@ import type { DemoStaff } from '@/lib/database/demo-seed'
  * com crescimento diferente — o funil é trabalho em aberto, o outro é
  * histórico que nunca encolhe —, e por isso cada um pagina por conta.
  */
+/** O recorte do histórico de cobranças de um aluno. */
+export type ChargeHistoryFilters = {
+  /** `'ALL'` ou ausente traz todas; a tela do aluno pede só `PAID`. */
+  status?: Charge['status'] | 'ALL'
+  page?: number
+  pageSize?: number
+}
+
 export type LeadFilters = {
   /** `true` traz matriculado e perdido; `false` ou ausente, quem está em negociação. */
   decided?: boolean
@@ -488,7 +496,43 @@ export interface DataSource {
     filters: { status?: Charge['status'] | 'ALL'; studentId?: string; limit?: number },
   ): Promise<ChargeWithStudent[]>
   listOverdueCharges(organizationId: string): Promise<ChargeWithStudent[]>
-  getChargesForStudent(organizationId: string, studentId: string): Promise<Charge[]>
+  /**
+   * O histórico de cobranças de um aluno, por página.
+   *
+   * Paginado porque cobrança não se apaga: um aluno de três anos tem três
+   * dezenas, e um de dez tem mais de cem. A leitura sem teto que havia aqui
+   * alimentava três decisões diferentes, e todas as três erravam quando o
+   * PostgREST cortava a resposta.
+   */
+  getChargesForStudent(
+    organizationId: string,
+    studentId: string,
+    filters?: ChargeHistoryFilters,
+  ): Promise<Paginated<Charge>>
+  /**
+   * A cobrança em aberto mais próxima de vencer: a que a pessoa paga agora.
+   *
+   * Existe como consulta própria porque era decidida de dois jeitos
+   * diferentes sobre a mesma lista — o painel pegava a **primeira** de uma
+   * ordem decrescente (a mais nova) e o app ordenava de novo para pegar a
+   * mais antiga. Aluno com dois meses atrasados ouvia um valor na recepção e
+   * via outro no celular.
+   */
+  getNextOpenCharge(organizationId: string, studentId: string): Promise<Charge | null>
+  /**
+   * Uma cobrança do aluno, por id.
+   *
+   * O `studentId` na assinatura **é** a conferência de dono, feita pela
+   * consulta e não por varredura de lista. Antes a action do PIX lia o
+   * histórico inteiro e procurava o id dentro dele: com a resposta cortada, a
+   * cobrança antiga que o aluno estava tentando quitar simplesmente não era
+   * encontrada.
+   */
+  getStudentCharge(
+    organizationId: string,
+    studentId: string,
+    chargeId: string,
+  ): Promise<Charge | null>
   markChargeAsPaid(
     organizationId: string,
     chargeId: string,

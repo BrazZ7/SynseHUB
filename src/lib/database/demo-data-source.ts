@@ -2,6 +2,7 @@ import { generateSynseId } from '@/lib/synse-id'
 import { AppError } from '@/lib/errors'
 import { daysBetween } from '@/lib/utils'
 import type {
+  ChargeHistoryFilters,
   ChargeWithStudent,
   CrmSummary,
   LeadFilters,
@@ -1017,10 +1018,52 @@ export class DemoDataSource implements DataSource {
       .map((c) => this.toChargeWithStudent(c))
   }
 
-  async getChargesForStudent(organizationId: string, studentId: string): Promise<Charge[]> {
-    return this.scoped(this.charges(), organizationId)
-      .filter((c) => c.studentId === studentId)
+  /** As cobranças que ainda esperam pagamento, como na produção. */
+  private static readonly STATUS_EM_ABERTO: Charge['status'][] = ['PENDING', 'OVERDUE']
+
+  private cobrancasDoAluno(organizationId: string, studentId: string) {
+    return this.scoped(this.charges(), organizationId).filter((c) => c.studentId === studentId)
+  }
+
+  async getChargesForStudent(
+    organizationId: string,
+    studentId: string,
+    filters: ChargeHistoryFilters = {},
+  ): Promise<Paginated<Charge>> {
+    const page = Math.max(1, filters.page ?? 1)
+    const pageSize = Math.min(200, Math.max(5, filters.pageSize ?? 24))
+
+    const todas = this.cobrancasDoAluno(organizationId, studentId)
+      .filter((c) => !filters.status || filters.status === 'ALL' || c.status === filters.status)
       .sort((a, b) => b.dueDate.localeCompare(a.dueDate))
+
+    // Recorta e **só então** conta: o total é do filtro.
+    const start = (page - 1) * pageSize
+    return { rows: todas.slice(start, start + pageSize), total: todas.length, page, pageSize }
+  }
+
+  /**
+   * A mais antiga em aberto — a que a pessoa paga agora.
+   *
+   * A mais antiga, e não a mais nova: é a que está vencendo há mais tempo, e
+   * quitar na ordem é o que zera a dívida. A ficha do aluno no painel pegava a
+   * mais nova, e aí recepção e celular mostravam valores diferentes.
+   */
+  async getNextOpenCharge(organizationId: string, studentId: string): Promise<Charge | null> {
+    return (
+      this.cobrancasDoAluno(organizationId, studentId)
+        .filter((c) => DemoDataSource.STATUS_EM_ABERTO.includes(c.status))
+        .sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0] ?? null
+    )
+  }
+
+  /** Uma cobrança do aluno, por id. O `studentId` é a conferência de dono. */
+  async getStudentCharge(
+    organizationId: string,
+    studentId: string,
+    chargeId: string,
+  ): Promise<Charge | null> {
+    return this.cobrancasDoAluno(organizationId, studentId).find((c) => c.id === chargeId) ?? null
   }
 
   async markChargeAsPaid(

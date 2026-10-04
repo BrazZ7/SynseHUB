@@ -16,17 +16,20 @@ export default async function StudentFinancePage() {
   const session = await requireStudentSession()
   const dataSource = await getDataSource()
 
-  const [student, charges] = await Promise.all([
+  /*
+   * Três consultas no lugar de uma leitura do histórico inteiro, cada uma
+   * respondendo a sua pergunta. A leitura antiga não tinha teto e vinha do
+   * vencimento mais novo para o mais antigo: o corte do PostgREST levava
+   * justamente o mais antigo, que é a cobrança que a tela oferece para pagar.
+   */
+  const [student, openCharge, history] = await Promise.all([
     dataSource.getStudent(session.organizationId, session.studentId),
-    dataSource.getChargesForStudent(session.organizationId, session.studentId),
+    dataSource.getNextOpenCharge(session.organizationId, session.studentId),
+    dataSource.getChargesForStudent(session.organizationId, session.studentId, {
+      status: 'PAID',
+      pageSize: 12,
+    }),
   ])
-
-  const openCharge =
-    charges
-      .filter((charge) => charge.status === 'PENDING' || charge.status === 'OVERDUE')
-      .sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0] ?? null
-
-  const history = charges.filter((charge) => charge.status === 'PAID').slice(0, 12)
   /*
    * Dois impedimentos diferentes, e a ordem importa: "o Synse está sem
    * provedor" vem antes de "o provedor da academia não faz PIX", porque sem
@@ -84,11 +87,11 @@ export default async function StudentFinancePage() {
         <h2 className="border-b border-synse-border px-5 py-4 text-sm font-semibold text-synse-text">
           Histórico
         </h2>
-        {history.length === 0 ? (
+        {history.total === 0 ? (
           <EmptyState icon={Receipt} title="Nenhum pagamento ainda" className="py-8" />
         ) : (
           <ul className="divide-y divide-synse-border">
-            {history.map((charge) => (
+            {history.rows.map((charge) => (
               <li key={charge.id} className="flex items-center gap-3 px-5 py-3.5">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium capitalize text-synse-text">

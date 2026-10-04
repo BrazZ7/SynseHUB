@@ -28,12 +28,12 @@ export async function getStudentHome(
 ): Promise<StudentHomeData> {
   const dataSource = await getDataSource()
 
-  const [student, assignments, plans, checkIns, charges, logs] = await Promise.all([
+  const [student, assignments, plans, checkIns, nextCharge, logs] = await Promise.all([
     dataSource.getStudent(organizationId, studentId),
     dataSource.listAssignmentsForStudent(organizationId, studentId),
     dataSource.listWorkoutPlans(organizationId),
     dataSource.listCheckInsForStudent(organizationId, studentId, 90),
-    dataSource.getChargesForStudent(organizationId, studentId),
+    dataSource.getNextOpenCharge(organizationId, studentId),
     dataSource.listWorkoutLogs(organizationId, studentId),
   ])
 
@@ -46,7 +46,8 @@ export async function getStudentHome(
   const dayOfYear = Math.floor(
     (Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86_400_000,
   )
-  const todayPlan = assignedPlans.length > 0 ? assignedPlans[dayOfYear % assignedPlans.length] : null
+  const todayPlan =
+    assignedPlans.length > 0 ? assignedPlans[dayOfYear % assignedPlans.length] : null
 
   const exercises = todayPlan ? await dataSource.listWorkoutExercises(todayPlan.id) : []
 
@@ -58,11 +59,6 @@ export async function getStudentHome(
   const weeklyDone = checkIns.filter((c) => c.checkedInAt >= weekStart).length
   const monthlyCheckIns = checkIns.filter((c) => c.checkedInAt >= monthStart).length
   const checkedInToday = checkIns.some((c) => c.checkedInAt >= todayStart)
-
-  const nextCharge =
-    charges
-      .filter((c) => c.status === 'PENDING' || c.status === 'OVERDUE')
-      .sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0] ?? null
 
   const loadLogs = logs.filter((log) => log.load != null)
   const currentLoad = loadLogs.length > 0 ? (loadLogs[loadLogs.length - 1].load as number) : null

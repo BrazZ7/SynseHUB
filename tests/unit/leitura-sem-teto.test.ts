@@ -88,7 +88,6 @@ const PAGINACAO_PENDENTE: Record<string, string> = {
   listExercises: 'a biblioteca Synse mais a da academia: cresce a cada exercício publicado',
   listWorkoutPlans: 'as fichas de uma academia: professores criam e não apagam',
   listAssignmentsForPlan: 'os alunos de uma ficha: pode ser a academia inteira',
-  listWorkoutLogs: 'o histórico de treino de um aluno, desde o primeiro dia',
   listAssessments: 'o histórico de avaliações de um aluno',
   listClassSessionsForStudent: 'o histórico de reservas de um aluno',
   listContent: 'o acervo de uma academia',
@@ -208,8 +207,8 @@ describe('leitura de lista sem teto no data source', () => {
     // O número no teste existe para a próxima adição exigir uma linha a mais
     // aqui — que é onde a conversa sobre paginar acontece. E para a lista
     // encolher **de propósito**: foi 15 com `listLeads` dentro, 14 com
-    // `getChargesForStudent`.
-    expect(Object.keys(PAGINACAO_PENDENTE)).toHaveLength(13)
+    // `getChargesForStudent`, 13 com `listWorkoutLogs`.
+    expect(Object.keys(PAGINACAO_PENDENTE)).toHaveLength(12)
   })
 })
 

@@ -28,13 +28,19 @@ export async function getStudentHome(
 ): Promise<StudentHomeData> {
   const dataSource = await getDataSource()
 
-  const [student, assignments, plans, checkIns, nextCharge, logs] = await Promise.all([
+  const [student, assignments, plans, checkIns, nextCharge, cargas] = await Promise.all([
     dataSource.getStudent(organizationId, studentId),
     dataSource.listAssignmentsForStudent(organizationId, studentId),
     dataSource.listWorkoutPlans(organizationId),
     dataSource.listCheckInsForStudent(organizationId, studentId, 90),
     dataSource.getNextOpenCharge(organizationId, studentId),
-    dataSource.listWorkoutLogs(organizationId, studentId),
+    /*
+     * Duas linhas, e não o histórico inteiro. A home usava exatamente a
+     * primeira e a última carga — e como `listWorkoutLogs` vem em ordem
+     * crescente, o corte do PostgREST levava justamente a última: o "ganho de
+     * carga" congelava num valor antigo sem nada na tela indicando isso.
+     */
+    dataSource.getLoadProgress(organizationId, studentId),
   ])
 
   const planById = new Map(plans.map((plan) => [plan.id, plan]))
@@ -60,9 +66,16 @@ export async function getStudentHome(
   const monthlyCheckIns = checkIns.filter((c) => c.checkedInAt >= monthStart).length
   const checkedInToday = checkIns.some((c) => c.checkedInAt >= todayStart)
 
-  const loadLogs = logs.filter((log) => log.load != null)
-  const currentLoad = loadLogs.length > 0 ? (loadLogs[loadLogs.length - 1].load as number) : null
-  const firstLoad = loadLogs.length > 0 ? (loadLogs[0].load as number) : null
+  const currentLoad = cargas.ultima
+  const firstLoad = cargas.primeira
+  /*
+   * O mesmo cálculo de antes, agora sobre as cargas certas. Ele continua
+   * comparando a primeira carga registrada em **qualquer** exercício com a
+   * última em qualquer exercício — o que não é ganho de força, e está anotado
+   * em `docs/pre-producao.md` para decidir. Não mudei aqui de propósito:
+   * corrigir o corte e trocar o significado do número são duas coisas, e a
+   * segunda não é minha para escolher.
+   */
   const loadGain = currentLoad != null && firstLoad != null ? currentLoad - firstLoad : null
 
   // Programa Synse 30: derivado da data de matrícula, ciclo de 30 dias.

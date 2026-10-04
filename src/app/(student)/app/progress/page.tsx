@@ -32,9 +32,20 @@ export default async function StudentProgressPage() {
   const agora = new Date()
   const noventaDias = new Date(agora.getTime() - 90 * 86_400_000)
 
-  const [home, logs, assessments, recordes, totais] = await Promise.all([
+  const [home, logs, totalDeRegistros, assessments, recordes, totais] = await Promise.all([
     getStudentHome(session.organizationId, session.studentId),
-    dataSource.listWorkoutLogs(session.organizationId, session.studentId),
+    /*
+     * O gráfico pede a janela que a tela anuncia ao lado — noventa dias. Antes
+     * pedia a vida inteira: a leitura não tinha teto, a ordem é crescente, e o
+     * corte do PostgREST levava o fim da linha. O gráfico parava antes do
+     * presente sem nada indicando isso.
+     */
+    dataSource.listWorkoutLogs(session.organizationId, session.studentId, {
+      since: noventaDias.toISOString(),
+    }),
+    // O cartão conta tudo, e conta no banco: `logs.length` era o tamanho da
+    // resposta, que podia vir cortada.
+    dataSource.countWorkoutLogs(session.organizationId, session.studentId),
     dataSource.listAssessments(session.organizationId, session.studentId),
     /*
      * Recordes e totais vêm do Treino Ativo, que grava série a série. O
@@ -224,7 +235,7 @@ export default async function StudentProgressPage() {
         <StatTile
           icon={Flame}
           label="Treinos"
-          value={String(logs.length)}
+          value={formatNumber(totalDeRegistros)}
           caption="Séries registradas"
         />
       </section>

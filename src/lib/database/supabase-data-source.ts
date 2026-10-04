@@ -7,6 +7,8 @@ import { logger } from '@/lib/logger'
 import { daysBetween } from '@/lib/utils'
 import type {
   ChargeHistoryFilters,
+  LoadProgress,
+  WorkoutLogFilters,
   ChargeWithStudent,
   CrmSummary,
   LeadFilters,
@@ -1690,7 +1692,38 @@ export class SupabaseDataSource implements DataSource {
     )
   }
 
-  async listWorkoutLogs(organizationId: string, studentId: string) {
+  /** Noventa dias é o que as duas telas que leem isto já anunciam. */
+  private static readonly DIAS_DE_HISTORICO = 90
+  private static readonly TETO_DE_REGISTROS = 500
+
+  /**
+   * O histórico de treino de um aluno, recortado.
+   *
+   * ── Por que o recorte é obrigatório na prática ─────────────────────────────
+   *
+   * `workout_logs` cresce desde o primeiro dia do aluno, a leitura não tinha
+   * teto, e a ordem é **crescente** — então o corte do PostgREST descarta o
+   * registro mais recente. As três coisas que esta leitura alimentava erravam
+   * de jeitos diferentes:
+   *
+   *   o "ganho de carga" da home     usa a última carga: congelava num valor antigo
+   *   o cartão "Treinos"             conta as linhas: dizia menos do que é
+   *   os dois gráficos de carga      plotam um ponto por linha: sumiam no fim
+   *
+   * As duas primeiras saíram daqui (`getLoadProgress` e `countWorkoutLogs`).
+   * O gráfico fica, com janela e teto: ele mostra evolução recente, e noventa
+   * dias é o que a própria tela já anuncia ao lado.
+   */
+  async listWorkoutLogs(
+    organizationId: string,
+    studentId: string,
+    filters: WorkoutLogFilters = {},
+  ) {
+    const desde =
+      filters.since ??
+      new Date(Date.now() - SupabaseDataSource.DIAS_DE_HISTORICO * 86_400_000).toISOString()
+    const teto = Math.min(SupabaseDataSource.TETO_DE_REGISTROS, Math.max(1, filters.limit ?? 500))
+
     const rows =
       (await this.select<Row[]>(
         'listWorkoutLogs',
@@ -1699,7 +1732,9 @@ export class SupabaseDataSource implements DataSource {
           .select('*')
           .eq('organization_id', organizationId)
           .eq('student_id', studentId)
-          .order('performed_at', { ascending: true }),
+          .gte('performed_at', desde)
+          .order('performed_at', { ascending: true })
+          .limit(teto),
       )) ?? []
     return rows.map((row) => ({
       id: row.id,
@@ -1714,6 +1749,58 @@ export class SupabaseDataSource implements DataSource {
       rpe: row.rpe,
       notes: row.notes,
     })) satisfies WorkoutLog[]
+  }
+
+  /**
+   * Quantos registros o aluno tem.
+   *
+   * `head: true` não traz linha nenhuma: o Postgres conta. O cartão lia
+   * `logs.length` de uma leitura sem teto, então o número era o da resposta —
+   * e a resposta podia vir cortada.
+   */
+  async countWorkoutLogs(organizationId: string, studentId: string): Promise<number> {
+    const { count, error } = await this.client
+      .from('workout_logs')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', organizationId)
+      .eq('student_id', studentId)
+
+    if (error) this.fail('countWorkoutLogs', error)
+    return count ?? 0
+  }
+
+  /**
+   * A primeira e a última carga registradas.
+   *
+   * Duas linhas, uma por consulta, com `order` oposta. A home lia o histórico
+   * inteiro para usar exatamente estas duas — e como a ordem é crescente, o
+   * corte levava justamente a última.
+   *
+   * As duas podem ser de exercícios diferentes, como sempre foram. Isto
+   * conserta o corte e preserva o significado — trocar o significado é
+   * decisão de produto, anotada em `docs/pre-producao.md`.
+   */
+  async getLoadProgress(organizationId: string, studentId: string): Promise<LoadProgress> {
+    const umaCarga = (ascendente: boolean) =>
+      this.select<Row>(
+        'getLoadProgress',
+        this.client
+          .from('workout_logs')
+          .select('load')
+          .eq('organization_id', organizationId)
+          .eq('student_id', studentId)
+          .not('load', 'is', null)
+          .order('performed_at', { ascending: ascendente })
+          .limit(1)
+          .maybeSingle(),
+      )
+
+    const [primeiro, ultimo] = await Promise.all([umaCarga(true), umaCarga(false)])
+
+    return {
+      primeira: primeiro?.load != null ? Number(primeiro.load) : null,
+      ultima: ultimo?.load != null ? Number(ultimo.load) : null,
+    }
   }
 
   // ── Avaliações ─────────────────────────────────────────────────────────────

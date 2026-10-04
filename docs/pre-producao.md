@@ -831,6 +831,56 @@ Conferido no Chromium: a ficha de Ana Cardoso, a coluna "Próxima mensalidade"
 da lista de alunos (que vem da 0049) e `/app/finance` mostram a mesma cobrança,
 12/11/2026 por R$ 109,90.
 
+### O histórico de treino: janela, contagem e as duas pontas
+
+Sem migration. Fecha a terceira entrada da lista de dívida do guarda
+`tests/unit/leitura-sem-teto.test.ts` (13 → 12).
+
+`listWorkoutLogs` lia a tabela inteira de um aluno, sem teto, em ordem
+**crescente** de data. O corte do PostgREST descarta o fim da resposta — e numa
+ordem crescente o fim é o registro **mais recente**, o oposto do que se perde
+nas outras leituras deste projeto. Três coisas se alimentavam dela:
+
+| o que | usava | errava assim |
+| --- | --- | --- |
+| "Ganho de carga" na home do aluno | a primeira e a última carga | congelava num valor antigo |
+| cartão "Treinos" | `logs.length` | dizia menos do que é |
+| os dois gráficos de carga | um ponto por linha | paravam antes do presente |
+
+As duas primeiras saíram para consultas próprias: `getLoadProgress` (duas
+linhas, uma por consulta, com `order` oposta e `limit(1)`) e
+`countWorkoutLogs` (`head: true`, nenhuma linha viaja). O gráfico ficou com a
+janela de noventa dias — que é o que a própria tela anuncia ao lado, em
+"Últimos 90 dias" — e teto de 500.
+
+**Duas coisas que NÃO consertei, porque são decisão de produto:**
+
+- [ ] Os dois gráficos e o cartão "Carga atual" dizem **"Supino reto"** na
+      legenda, e plotam `load != null` de **qualquer** exercício. A legenda é
+      fixa no código, em três lugares. Conserto possível:
+      `getExerciseProgress(aluno, exercício, semanas)` já existe desde a 0027 e
+      faz a série de um exercício só — mas escolher *qual* exercício a tela
+      mostra é escolha de produto.
+- [ ] "Ganho de carga" compara a primeira carga registrada em qualquer
+      exercício com a última em qualquer exercício. Uma rosca de 20 kg seguida
+      de um agachamento de 100 aparece como "+80 kg de ganho". Trocar por
+      ganho no mesmo exercício muda o que o número significa.
+
+Deixei as duas como estavam de propósito: corrigir o corte e trocar o
+significado do número são coisas diferentes, e a segunda não é minha para
+escolher. Cheguei a mudar — fiz o ganho sumir quando os exercícios diferem — e
+desfiz antes de commitar, porque era mudar o produto por conta própria depois
+de ter dito que não mudaria.
+
+Verificação: 10 testes. Um deles documenta o que **não** prova: "a contagem
+conta tudo, não a janela" não é verificável na demonstração, porque nenhum
+aluno da semente tem registro além de noventa dias — a janela e o histórico
+inteiro são o mesmo conjunto, e a mutação que troca a contagem pela janela
+passa sem quebrar nada. Essa asserção vive no caminho do Supabase, onde dá
+para exigir que a consulta de contagem **não** leve filtro de data. Quatro
+mutações no data source, todas pegas depois de a primeira versão deixar duas
+escapar.
+
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona
 enquanto toda migration cria algo visível pela API. A 0018 não cria: ela troca

@@ -102,6 +102,7 @@ export default async function StudentProfilePage({ params }: { params: Params })
     checkIns,
     assignments,
     workoutLogs,
+    totalDeRegistros,
     assessments,
     workoutPlans,
     autorizacoesDoCorpo,
@@ -124,7 +125,13 @@ export default async function StudentProfilePage({ params }: { params: Params })
       : Promise.resolve(null),
     dataSource.listCheckInsForStudent(session.organizationId, student.id, 90),
     dataSource.listAssignmentsForStudent(session.organizationId, student.id),
-    dataSource.listWorkoutLogs(session.organizationId, student.id),
+    /*
+     * A janela que o gráfico de carga mostra. Antes pedia a vida inteira do
+     * aluno: a leitura não tinha teto, a ordem é crescente, e o corte do
+     * PostgREST levava o fim da linha — o gráfico parava antes do presente.
+     */
+    dataSource.listWorkoutLogs(session.organizationId, student.id, {}),
+    dataSource.countWorkoutLogs(session.organizationId, student.id),
     canSeeHealth
       ? dataSource.listAssessments(session.organizationId, student.id)
       : Promise.resolve([]),
@@ -321,7 +328,7 @@ export default async function StudentProfilePage({ params }: { params: Params })
             />
             <MetricCard
               label="Treinos registrados"
-              value={formatNumber(workoutLogs.length)}
+              value={formatNumber(totalDeRegistros)}
               icon={Dumbbell}
               accent="default"
               hint="Séries com carga anotada"

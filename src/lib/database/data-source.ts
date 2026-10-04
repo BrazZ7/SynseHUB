@@ -107,6 +107,32 @@ export type ChargeHistoryFilters = {
   pageSize?: number
 }
 
+/** O recorte do histórico de treino. */
+export type WorkoutLogFilters = {
+  /** ISO. Sem data, o gráfico pediria a vida inteira — e plotaria milhares de pontos. */
+  since?: string
+  limit?: number
+}
+
+/**
+ * A carga do primeiro e do último registro com peso.
+ *
+ * Duas linhas, decididas pelo banco. A home do aluno lia **todo** o histórico
+ * de treino para usar exatamente estas duas — e a leitura vem em ordem
+ * crescente, então o corte do PostgREST levava o registro mais **recente**: o
+ * "ganho de carga" congelava num valor antigo.
+ *
+ * As duas podem ser de exercícios **diferentes**: é como o número sempre foi
+ * calculado, e a diferença entre uma rosca de 20 kg e um agachamento de 100
+ * não é ganho de força. Isto aqui conserta o corte e nada mais — mudar o que o
+ * número significa é decisão de produto, e está anotada em
+ * `docs/pre-producao.md` em vez de resolvida escondida numa correção.
+ */
+export type LoadProgress = {
+  primeira: number | null
+  ultima: number | null
+}
+
 export type LeadFilters = {
   /** `true` traz matriculado e perdido; `false` ou ausente, quem está em negociação. */
   decided?: boolean
@@ -660,7 +686,21 @@ export interface DataSource {
     workoutPlanId: string,
   ): Promise<WorkoutAssignment[]>
   countAssignments(organizationId: string): Promise<Record<string, number>>
-  listWorkoutLogs(organizationId: string, studentId: string): Promise<WorkoutLog[]>
+  /**
+   * O histórico de treino de um aluno, recortado.
+   *
+   * O recorte é obrigatório na prática: a tabela cresce desde o primeiro dia
+   * do aluno, e os dois gráficos que a leem plotam um ponto por linha.
+   */
+  listWorkoutLogs(
+    organizationId: string,
+    studentId: string,
+    filters?: WorkoutLogFilters,
+  ): Promise<WorkoutLog[]>
+  /** Quantos registros o aluno tem, contados no banco. */
+  countWorkoutLogs(organizationId: string, studentId: string): Promise<number>
+  /** A primeira e a última carga registradas — duas linhas, não o histórico. */
+  getLoadProgress(organizationId: string, studentId: string): Promise<LoadProgress>
 
   // Avaliações
   listAssessments(organizationId: string, studentId: string): Promise<Assessment[]>

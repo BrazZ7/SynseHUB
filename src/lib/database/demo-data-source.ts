@@ -3,6 +3,8 @@ import { AppError } from '@/lib/errors'
 import { daysBetween } from '@/lib/utils'
 import type {
   ChargeHistoryFilters,
+  LoadProgress,
+  WorkoutLogFilters,
   ChargeWithStudent,
   CrmSummary,
   LeadFilters,
@@ -1354,10 +1356,40 @@ export class DemoDataSource implements DataSource {
     return counts
   }
 
-  async listWorkoutLogs(organizationId: string, studentId: string): Promise<WorkoutLog[]> {
+  /** Noventa dias, como na produção: é o que as duas telas anunciam. */
+  private static readonly DIAS_DE_HISTORICO = 90
+
+  private registrosDoAluno(organizationId: string, studentId: string) {
     return this.scoped(this.db.workoutLogs, organizationId)
       .filter((l) => l.studentId === studentId)
       .sort((a, b) => a.performedAt.localeCompare(b.performedAt))
+  }
+
+  async listWorkoutLogs(
+    organizationId: string,
+    studentId: string,
+    filters: WorkoutLogFilters = {},
+  ): Promise<WorkoutLog[]> {
+    const desde =
+      filters.since ??
+      new Date(Date.now() - DemoDataSource.DIAS_DE_HISTORICO * 86_400_000).toISOString()
+
+    return this.registrosDoAluno(organizationId, studentId)
+      .filter((l) => l.performedAt >= desde)
+      .slice(0, Math.max(1, filters.limit ?? 500))
+  }
+
+  async countWorkoutLogs(organizationId: string, studentId: string): Promise<number> {
+    // Conta tudo, não a janela: o cartão diz quantos registros o aluno tem.
+    return this.registrosDoAluno(organizationId, studentId).length
+  }
+
+  async getLoadProgress(organizationId: string, studentId: string): Promise<LoadProgress> {
+    const comCarga = this.registrosDoAluno(organizationId, studentId).filter((l) => l.load != null)
+    const primeiro = comCarga[0]
+    const ultimo = comCarga[comCarga.length - 1]
+
+    return { primeira: primeiro?.load ?? null, ultima: ultimo?.load ?? null }
   }
 
   // ── Avaliações ─────────────────────────────────────────────────────────────

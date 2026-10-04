@@ -192,6 +192,7 @@ const MIGRATIONS_ESPERADAS = [
   '0047_treino_fantasma.sql',
   '0048_fila_de_avaliacao.sql',
   '0049_alunos_sem_corte.sql',
+  '0050_numero_derivado_no_banco.sql',
 ]
 
 async function schemaReadiness() {
@@ -221,6 +222,7 @@ async function schemaReadiness() {
     auditoriaFechada,
     filaDeAvaliacao,
     listaDeAlunosSemCorte,
+    numeroDerivadoNoBanco,
   ] = await Promise.all([
     schemaCheck('user_profiles?select=tier&limit=1'),
     schemaCheck('baseline_challenges?select=code&limit=1'),
@@ -469,6 +471,21 @@ async function schemaReadiness() {
       p_organization_id: '00000000-0000-0000-0000-000000000000',
       p_student_ids: [],
     }),
+
+    /*
+     * A 0050 — contagem e soma feitas pelo banco.
+     *
+     * Sem ela as três voltam a contar sobre uma leitura sem teto, e o sintoma
+     * é um número menor que o verdadeiro: "34 alunos" num plano de 120, ou
+     * 180 km em quem correu 400. Número errado com cara de certo não aparece
+     * na tela como defeito, então a sonda precisa.
+     *
+     * As três entram na mesma migration; sondar uma basta, porque o registro
+     * é a última linha do arquivo.
+     */
+    rpcCheck('alunos_por_plano', {
+      p_organization_id: '00000000-0000-0000-0000-000000000000',
+    }),
   ])
 
   const registradas = await migracoesRegistradas()
@@ -524,6 +541,12 @@ async function schemaReadiness() {
     ) {
       faltando.push('0049_alunos_sem_corte.sql')
     }
+    if (
+      numeroDerivadoNoBanco.present === false &&
+      !faltando.includes('0050_numero_derivado_no_banco.sql')
+    ) {
+      faltando.push('0050_numero_derivado_no_banco.sql')
+    }
     return {
       synseRun: corridas,
       entradaSemVinculo,
@@ -550,6 +573,7 @@ async function schemaReadiness() {
       auditoriaFechada,
       filaDeAvaliacao,
       listaDeAlunosSemCorte,
+      numeroDerivadoNoBanco,
       appliedMigrations: registradas.length,
       pendingMigrations: faltando,
     }
@@ -598,6 +622,7 @@ async function schemaReadiness() {
     '0047_treino_fantasma.sql',
     '0048_fila_de_avaliacao.sql',
     '0049_alunos_sem_corte.sql',
+    '0050_numero_derivado_no_banco.sql',
   )
 
   return {
@@ -626,6 +651,7 @@ async function schemaReadiness() {
     auditoriaFechada,
     filaDeAvaliacao,
     listaDeAlunosSemCorte,
+    numeroDerivadoNoBanco,
     pendingMigrations: pendentes,
   }
 }

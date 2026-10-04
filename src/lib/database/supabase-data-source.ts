@@ -509,18 +509,61 @@ export class SupabaseDataSource implements DataSource {
     return this.mapPlan(row!)
   }
 
+  /**
+   * Quantos alunos ativos em cada plano — contados pelo banco (0050).
+   *
+   * Antes isto lia uma linha de `memberships` por matrícula e contava na
+   * aplicação. Sem teto: o PostgREST corta a resposta no teto do servidor sem
+   * dar erro, e somar sobre uma resposta cortada não devolve um número
+   * aproximado, devolve um número errado com cara de certo.
+   */
   async countStudentsByPlan(organizationId: string) {
-    const rows =
-      (await this.select<Row[]>(
-        'countStudentsByPlan',
+    return this.contagemPorChave(
+      'countStudentsByPlan',
+      'alunos_por_plano',
+      { p_organization_id: organizationId },
+      'plan_id',
+      () =>
         this.client
           .from('memberships')
           .select('plan_id')
           .eq('organization_id', organizationId)
           .eq('status', 'ACTIVE'),
-      )) ?? []
-    return rows.reduce<Record<string, number>>((acc, row) => {
-      acc[row.plan_id] = (acc[row.plan_id] ?? 0) + 1
+    )
+  }
+
+  /**
+   * A contagem agrupada, com volta ao caminho antigo sem a migration.
+   *
+   * O PostgREST não agrupa, então a contagem por chave precisa de função —
+   * `select(…, { count: 'exact', head: true })` resolve contagem simples, como
+   * em `countUnreadNotifications`, mas não "quantos por plano".
+   *
+   * Enquanto a 0050 não estiver colada, volta a contar na aplicação: publicar
+   * não é migrar, e um número que pode vir cortado é melhor que a tela inteira
+   * sem número. Erro que não é migration sobe.
+   */
+  private async contagemPorChave(
+    operacao: string,
+    funcao: string,
+    args: Record<string, unknown>,
+    chave: string,
+    comoEra: () => PromiseLike<{ data: Row[] | null; error: unknown }>,
+  ): Promise<Record<string, number>> {
+    const { data, error } = await this.client.rpc(funcao, args)
+
+    if (error) {
+      if (!isPendingMigration(error)) this.fail(operacao, error)
+      logger.warn(`${operacao}:sem_0050`, {})
+      const rows = (await this.select<Row[]>(operacao, comoEra())) ?? []
+      return rows.reduce<Record<string, number>>((acc, row) => {
+        acc[row[chave]] = (acc[row[chave]] ?? 0) + 1
+        return acc
+      }, {})
+    }
+
+    return ((data ?? []) as Row[]).reduce<Record<string, number>>((acc, row) => {
+      acc[row[chave]] = Number(row.total)
       return acc
     }, {})
   }
@@ -1530,19 +1573,25 @@ export class SupabaseDataSource implements DataSource {
     })) satisfies WorkoutAssignment[]
   }
 
+  /**
+   * Quantos alunos têm cada ficha atribuída — contados pelo banco (0050).
+   *
+   * `workout_assignments` cresce sem apagar: uma academia antiga tem mais
+   * atribuições que alunos. Era a mais perto de encostar no teto das três
+   * contagens que a aplicação fazia à mão.
+   */
   async countAssignments(organizationId: string) {
-    const rows =
-      (await this.select<Row[]>(
-        'countAssignments',
+    return this.contagemPorChave(
+      'countAssignments',
+      'treinos_por_plano',
+      { p_organization_id: organizationId },
+      'workout_plan_id',
+      () =>
         this.client
           .from('workout_assignments')
           .select('workout_plan_id')
           .eq('organization_id', organizationId),
-      )) ?? []
-    return rows.reduce<Record<string, number>>((acc, row) => {
-      acc[row.workout_plan_id] = (acc[row.workout_plan_id] ?? 0) + 1
-      return acc
-    }, {})
+    )
   }
 
   async listWorkoutLogs(organizationId: string, studentId: string) {
@@ -4372,16 +4421,61 @@ export class SupabaseDataSource implements DataSource {
     return row ? this.mapActivity(row) : null
   }
 
+  /**
+   * A rota de uma atividade, lida por páginas.
+   *
+   * ── Por que paginar aqui, e não pôr um teto ────────────────────────────────
+   *
+   * `saveActivity`, vinte linhas acima, grava os pontos em lotes de 500 e o
+   * comentário dele diz por quê: "uma corrida de uma hora tem milhares de
+   * pontos". A escrita sabia disso; a leitura pedia tudo numa requisição só.
+   *
+   * O PostgREST corta a resposta no teto configurado no servidor **sem dar
+   * erro**, então o mapa de uma corrida longa desenhava a linha até onde o
+   * corte alcançasse e parava no meio — sem aviso, parecendo uma corrida mais
+   * curta. Aqui um teto não serve: a rota inteira *é* o conteúdo da tela.
+   *
+   * O laço avança pelo que **veio**, não pelo que foi pedido, e para quando
+   * uma página volta vazia. É isso que o torna indiferente ao valor do teto do
+   * servidor: se ele for menor que `PAGINA`, a primeira resposta vem curta — e
+   * parar aí, achando que terminou, seria repetir o defeito com mais passos.
+   *
+   * `TETO_DE_PONTOS` existe só como freio de sanidade: 50 mil pontos são mais
+   * de treze horas a um ponto por segundo. Chegar lá é dado estranho, não
+   * corrida, e vale um aviso no log em vez de uma página que nunca fecha.
+   */
   async getActivityRoute(activityId: string) {
-    const rows =
-      (await this.select<Row[]>(
-        'getActivityRoute',
-        this.client
-          .from('activity_points')
-          .select('latitude, longitude, altitude, speed, recorded_at, total_distance')
-          .eq('activity_id', activityId)
-          .order('recorded_at', { ascending: true }),
-      )) ?? []
+    const PAGINA = 1_000
+    const TETO_DE_PONTOS = 50_000
+    const rows: Row[] = []
+
+    for (let inicio = 0; ;) {
+      const pagina =
+        (await this.select<Row[]>(
+          'getActivityRoute',
+          this.client
+            .from('activity_points')
+            .select('id, latitude, longitude, altitude, speed, recorded_at, total_distance')
+            .eq('activity_id', activityId)
+            .order('recorded_at', { ascending: true })
+            // Desempate estável: `id` é identidade, e sem ele dois pontos com
+            // o mesmo instante poderiam trocar de lugar entre duas páginas.
+            .order('id', { ascending: true })
+            .range(inicio, inicio + PAGINA - 1),
+        )) ?? []
+
+      if (pagina.length === 0) break
+      rows.push(...pagina)
+      inicio += pagina.length
+
+      if (rows.length >= TETO_DE_PONTOS) {
+        logger.warn('getActivityRoute:rota_longa_demais', {
+          activityId,
+          pontos: rows.length,
+        })
+        break
+      }
+    }
 
     return rows.map((row) => ({
       latitude: Number(row.latitude),
@@ -4441,7 +4535,51 @@ export class SupabaseDataSource implements DataSource {
    * sem uma view — e uma view a mais para somar cinco números de algumas
    * dezenas de linhas não se paga. Quando o volume crescer, vira função.
    */
+  /**
+   * O resumo de corridas — somado pelo banco (0050).
+   *
+   * Um dos chamadores passa `epoch` como data: é o total da vida da pessoa,
+   * que cresce para sempre. Era o pior lugar possível para uma soma feita
+   * sobre uma leitura sem teto — e o erro aparecia como quilometragem menor
+   * do que a pessoa correu, que é o número que ela conhece de cor.
+   */
   async summarizeActivities(userProfileId: string, since: string) {
+    const vazio: ActivitySummary = {
+      activities: 0,
+      distanceMeters: 0,
+      movingSeconds: 0,
+      calories: 0,
+      elevationGain: 0,
+    }
+
+    const { data, error } = await this.client.rpc('resumo_de_corridas', {
+      p_user_profile_id: userProfileId,
+      p_desde: since,
+    })
+
+    if (error) {
+      if (!isPendingMigration(error)) this.fail('summarizeActivities', error)
+      logger.warn('summarizeActivities:sem_0050', {})
+      return this.resumoPelaAplicacao(userProfileId, since, vazio)
+    }
+
+    const linha = ((data ?? []) as Row[])[0]
+    if (!linha) return vazio
+    return {
+      activities: Number(linha.atividades),
+      distanceMeters: Number(linha.metros),
+      movingSeconds: Number(linha.segundos),
+      calories: Number(linha.calorias),
+      elevationGain: Number(linha.ganho),
+    } satisfies ActivitySummary
+  }
+
+  /** O resumo como era antes da 0050. Só roda na janela entre publicar e migrar. */
+  private async resumoPelaAplicacao(
+    userProfileId: string,
+    since: string,
+    vazio: ActivitySummary,
+  ): Promise<ActivitySummary> {
     const rows =
       (await this.select<Row[]>(
         'summarizeActivities',
@@ -4461,7 +4599,7 @@ export class SupabaseDataSource implements DataSource {
         calories: total.calories + Number(row.calories),
         elevationGain: total.elevationGain + Number(row.elevation_gain),
       }),
-      { activities: 0, distanceMeters: 0, movingSeconds: 0, calories: 0, elevationGain: 0 },
+      vazio,
     )
   }
 

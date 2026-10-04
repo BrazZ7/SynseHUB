@@ -651,6 +651,59 @@ existem, não para conferir se subiram.
   fila reimposta, a volta ao caminho antigo sem a migration), e a semântica do
   SQL fica com os testes de banco.
 
+- **0050 (`0050_numero_derivado_no_banco.sql`)** — contagem e soma feitas pelo
+  banco, não sobre uma resposta que pode vir cortada.
+
+  Três números da tela eram calculados somando linhas na aplicação, sem teto
+  em nenhuma das leituras: `countStudentsByPlan` (alunos por plano),
+  `countAssignments` (fichas atribuídas) e `summarizeActivities` (distância,
+  tempo e calorias de corrida). Somar sobre uma resposta cortada não devolve um
+  número aproximado: devolve um número errado com cara de certo — "34 alunos"
+  num plano de 120, ou 180 km em quem correu 400. É a mesma família da 0049, e
+  a regra do projeto já dizia o que fazer com número derivado: quem calcula é
+  o banco. Faltava valer também para contagem.
+
+  `countUnreadNotifications` já fazia certo, com
+  `select('id', { count: 'exact', head: true })` — nenhuma linha viaja. Para
+  contagem simples é o que basta; estas três são agrupadas ou somadas em várias
+  colunas, e o PostgREST não agrupa. Daí as funções: `alunos_por_plano(org)`,
+  `treinos_por_plano(org)` e `resumo_de_corridas(perfil, desde)`, as três
+  `security invoker`.
+
+  No mesmo conserto, **a rota de uma corrida passou a ser lida por páginas**.
+  `saveActivity` já gravava os pontos em lotes de 500 e o comentário dele dizia
+  por quê — "uma corrida de uma hora tem milhares de pontos" —, mas a leitura
+  pedia tudo numa requisição só: o mapa desenhava a linha até onde o corte
+  alcançasse e parava no meio, parecendo uma corrida mais curta. Aqui um teto
+  não serve, porque a rota inteira *é* o conteúdo da tela. O laço avança pelo
+  que **veio** e não pelo que foi pedido, e para quando uma página volta vazia:
+  é isso que o torna indiferente ao valor do teto do servidor, que não foi
+  conferido.
+
+  Sem a migration, as três voltam a contar na aplicação (`isPendingMigration`).
+  Erro que não é migration continua subindo: engolir "permission denied" aqui
+  devolveria zero em todos os planos — número com cara de certo, o defeito
+  reaparecendo por outra porta.
+
+  Sonda: `numeroDerivadoNoBanco` em `/api/health?deep=1`, sobre
+  `alunos_por_plano`, e a 0050 volta a `pendingMigrations` se o registro disser
+  que subiu e a função não estiver lá.
+
+  `tests/db/numero-derivado.test.ts`: 10 testes contra Postgres (7 mutações na
+  migration). `tests/unit/synse-run/rota-paginada.test.ts`: 12 de unidade, o
+  principal provando que o laço avança pelo que veio — avançar pelo que pediu
+  faria a linha do mapa dar um salto por onde a pessoa não passou.
+
+  Entrou junto o guarda `tests/unit/leitura-sem-teto.test.ts`, que varre o data
+  source e exige **decisão registrada** para cada leitura de lista sem teto:
+  `LIMITADA_PELO_DOMINIO` (26 entradas, "não precisa"), `PAGINACAO_PENDENTE`
+  (15, "precisa e não foi feito") e `CAMINHO_ANTIGO` (4, os retornos ao
+  caminho de antes das migrations). Leitura nova sem entrada falha, e entrada
+  que não corresponde mais a nada também — lista de dívida que não encolhe
+  sozinha vira decoração. As 15 pendentes estão nomeadas no próprio arquivo,
+  com o motivo de cada uma; as de maior risco são o CRM (`listLeads`), o
+  histórico de treino e o de cobranças de um aluno, e os três acervos.
+
 A partir da 0018 a sonda para de adivinhar. Até aqui ela deduzia pelo formato
 do schema — "existe a coluna `tier`? então a 0014 subiu" —, o que só funciona
 enquanto toda migration cria algo visível pela API. A 0018 não cria: ela troca

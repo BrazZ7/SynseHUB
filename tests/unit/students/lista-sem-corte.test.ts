@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { SupabaseDataSource } from '@/lib/database/supabase-data-source'
+import { clienteFalso } from '../postgrest-falso'
 
 /**
  * ── A lista de alunos sem corte: o lado da aplicação (0049) ─────────────────
@@ -26,76 +26,6 @@ import { SupabaseDataSource } from '@/lib/database/supabase-data-source'
  * pior dos mundos, que é um dublê caprichado o bastante para o teste passar
  * provando as regras do dublê.
  */
-
-type Resposta = { data: unknown; error: unknown; count?: number | null }
-type Passo = { metodo: string; args: unknown[] }
-type Chamada = { nome: string; passos: Passo[] }
-
-/**
- * Um cliente que anota o que foi pedido e devolve o que o teste combinou.
- *
- * Cada método de construção devolve o próprio objeto, como no PostgREST, e o
- * `then` é o que resolve: é ele que registra a chamada, no momento em que ela
- * de fato acontece. `tabelas` aceita uma fila por tabela, porque o caminho dos
- * sumidos lê `students` depois da função.
- */
-function clienteFalso(combinado: {
-  tabelas?: Record<string, Resposta[]>
-  rpcs?: Record<string, Resposta>
-}) {
-  const chamadas: Chamada[] = []
-  const rpcs: Chamada[] = []
-  const filas = Object.fromEntries(
-    Object.entries(combinado.tabelas ?? {}).map(([tabela, fila]) => [tabela, [...fila]]),
-  )
-
-  const construtor = (tabela: string) => {
-    const passos: Passo[] = []
-    const alvo: Record<string, unknown> = {
-      then(resolve: (r: Resposta) => unknown, reject?: (e: unknown) => unknown) {
-        chamadas.push({ nome: tabela, passos })
-        const resposta = filas[tabela]?.shift() ?? { data: [], error: null, count: 0 }
-        return Promise.resolve(resposta).then(resolve, reject)
-      },
-    }
-    for (const metodo of [
-      'select',
-      'eq',
-      'in',
-      'gte',
-      'or',
-      'order',
-      'range',
-      'limit',
-      'maybeSingle',
-      'single',
-    ]) {
-      alvo[metodo] = (...args: unknown[]) => {
-        passos.push({ metodo, args })
-        return alvo
-      }
-    }
-    return alvo
-  }
-
-  const cliente = {
-    from: (tabela: string) => construtor(tabela),
-    rpc: (nome: string, args: Record<string, unknown>) => {
-      rpcs.push({ nome, passos: [{ metodo: 'rpc', args: [args] }] })
-      return Promise.resolve(combinado.rpcs?.[nome] ?? { data: [], error: null })
-    },
-  }
-
-  return {
-    // O data source só usa `from` e `rpc`; o resto do SupabaseClient não entra.
-    dataSource: new SupabaseDataSource(cliente as never),
-    chamadas,
-    rpcs,
-    paraTabela: (tabela: string) => chamadas.find((c) => c.nome === tabela),
-    argsDaRpc: (nome: string) =>
-      rpcs.find((c) => c.nome === nome)?.passos[0].args[0] as Record<string, unknown> | undefined,
-  }
-}
 
 /** Uma linha de `students` como o PostgREST a devolve, com os embutidos. */
 const linha = (id: string, nome: string, comPlano = true) => ({

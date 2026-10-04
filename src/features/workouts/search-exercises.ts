@@ -31,11 +31,7 @@ import type { Exercise } from '@/types/domain'
 
 /** Sem acento e em minúsculas — "abdução" e "abducao" viram a mesma coisa. */
 export function normalizar(texto: string): string {
-  return texto
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .trim()
+  return texto.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
 }
 
 /**
@@ -82,9 +78,7 @@ function nota(exercicio: Exercise, termo: string): number | null {
    * das palavras está no nome e a outra não.
    */
   const tudo = [campos.nome, ...campos.apelidos, ...campos.resto]
-  const todasCasam = palavras.every((palavra) =>
-    tudo.some((campo) => campo.includes(palavra)),
-  )
+  const todasCasam = palavras.every((palavra) => tudo.some((campo) => campo.includes(palavra)))
 
   return todasCasam ? 4 : null
 }

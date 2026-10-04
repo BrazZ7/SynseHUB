@@ -161,6 +161,21 @@ const config: Config = {
           '100%': { transform: 'translateX(100%)' },
         },
         /*
+         * ── O músculo aceso ─────────────────────────────────────────────────
+         *
+         * O mapa muscular da tela de treinos acende as regiões que o treino
+         * trabalha, e elas respiram. Só `opacity`: a GPU compõe sozinha, e um
+         * `scale` faria a mancha sair do lugar do músculo.
+         *
+         * A variação é curta de propósito — de 0.55 a 1, e não de 0 a 1. Uma
+         * região que apaga por completo lê como pisca-pisca de alerta; uma que
+         * só respira lê como corpo vivo, que é o que a figura quer dizer.
+         */
+        'pulso-do-musculo': {
+          '0%, 100%': { opacity: '0.55' },
+          '50%': { opacity: '1' },
+        },
+        /*
          * As fagulhas da muda do perfil. Só `transform` e `opacity`: as duas
          * são compostas na GPU, então elas não obrigam o navegador a refazer
          * layout nem pintura enquanto a página rola.
@@ -354,6 +369,12 @@ const config: Config = {
         respingo: 'respingo 900ms cubic-bezier(0.12, 0.7, 0.3, 1) both',
         /* A duração real vem de cada pedrinha, para elas não subirem em bloco. */
         evaporar: 'evaporar 7s linear infinite',
+        /*
+         * `--pulso` deixa a capa apressar a respiração no toque, como as
+         * folhas do vale do SynseRun aceleram no hover. Em linha o estilo
+         * ganharia da folha de estilos e o toque não conseguiria mudar nada.
+         */
+        'pulso-do-musculo': 'pulso-do-musculo var(--pulso, 2.6s) ease-in-out infinite',
       },
     },
   },

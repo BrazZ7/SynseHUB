@@ -1,15 +1,13 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
-import { Play, Timer } from 'lucide-react'
+import { Timer } from 'lucide-react'
 
-import { Button } from '@/components/ui/button'
-
-import { Badge } from '@/components/ui/badge'
 import { PendingWorkoutSync } from '@/features/active-workout/components/pending-workout-sync'
 import { BaselineWorkout } from '@/features/workouts/baseline-workout'
+import { CapaDoTreino } from '@/features/workouts/components/capa-do-treino'
+import { gruposTrabalhados } from '@/features/workouts/grupos-do-treino'
+import { MUSCLE_GROUP_LABELS } from '@/features/workouts/labels'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
-import { MUSCLE_GROUP_LABELS } from '@/features/workouts/labels'
 
 export const metadata: Metadata = { title: 'Treino' }
 
@@ -40,8 +38,8 @@ export default async function StudentWorkoutPage() {
       <header>
         <h1 className="text-2xl font-semibold text-synse-text">Seus treinos</h1>
         <p className="text-sm text-synse-muted">
-          Inicie o treino e o Synse acompanha série, carga e descanso — inclusive com a
-          tela bloqueada.
+          Inicie o treino e o Synse acompanha série, carga e descanso — inclusive com a tela
+          bloqueada.
         </p>
       </header>
 
@@ -65,23 +63,27 @@ export default async function StudentWorkoutPage() {
             key={plan.id}
             className="overflow-hidden rounded-2xl border border-synse-border bg-synse-surface shadow-synse-sm"
           >
-            <header className="bg-synse-surface-2/60 flex items-center justify-between gap-3 border-b border-synse-border px-5 py-4">
-              <div className="min-w-0">
-                <h2 className="truncate text-base font-semibold text-synse-text">
-                  {plan.name.replace(/^Treino [A-Z]+ — /, '')}
-                </h2>
-                <p className="text-xs text-synse-muted">
-                  {exercises.length} exercícios · {plan.goal ?? 'Sem objetivo definido'}
-                </p>
-              </div>
-              <Badge variant="primary">{plan.splitLabel}</Badge>
-            </header>
+            {/*
+              A capa substitui o cabeçalho de texto **e** o botão do rodapé: a
+              arte é o botão, como no vale do SynseRun. O que antes era uma
+              faixa com o nome em cima e um botão verde embaixo virou uma peça
+              só, e o mapa muscular diz qual treino é este antes de a pessoa
+              ler um nome de exercício.
+            */}
+            <CapaDoTreino
+              planoId={plan.id}
+              nome={plan.name.replace(/^Treino [A-Z]+ — /, '')}
+              divisao={plan.splitLabel}
+              objetivo={plan.goal}
+              exercicios={exercises.length}
+              grupos={gruposTrabalhados(exercises)}
+            />
 
             <ol className="divide-y divide-synse-border">
               {exercises.map((item) => (
                 <li key={item.id} className="flex items-center gap-3.5 px-5 py-3.5">
                   <span
-                    className="bg-synse-mint/50 flex size-9 shrink-0 items-center justify-center rounded-xl text-xs font-semibold tabular-nums text-synse-dark"
+                    className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-synse-mint/50 text-xs font-semibold tabular-nums text-synse-dark"
                     aria-hidden
                   >
                     {item.order}
@@ -108,20 +110,6 @@ export default async function StudentWorkoutPage() {
                 </li>
               ))}
             </ol>
-
-            {/*
-              O botão fica no rodapé de cada plano, e não num lugar só da tela:
-              quem tem treino A e B começa o que vai fazer hoje, sem escolher
-              antes numa lista.
-            */}
-            <div className="border-t border-synse-border p-4">
-              <Button asChild size="lg" className="h-14 w-full text-base font-semibold">
-                <Link href={`/app/workout/active?plano=${plan.id}`}>
-                  <Play className="size-5" aria-hidden />
-                  Iniciar treino
-                </Link>
-              </Button>
-            </div>
           </section>
         ))
       )}

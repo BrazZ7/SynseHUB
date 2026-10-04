@@ -1,24 +1,14 @@
 import type { Metadata } from 'next'
 
 import { BotaoCompartilhar } from '@/features/share/share-button'
-import Link from 'next/link'
-import {
-  Activity,
-  ChevronRight,
-  Dumbbell,
-  Flame,
-  LineChart,
-  Scale,
-  TrendingUp,
-  Trophy,
-  Users,
-} from 'lucide-react'
+import { Activity, Dumbbell, TrendingUp, Trophy } from 'lucide-react'
 
 import { ProgressLineChart } from '@/components/synse/charts/progress-line-chart'
 import { ChartCard } from '@/components/synse/chart-card'
 import { EmptyState } from '@/components/synse/empty-state'
 import { ProgressRing } from '@/components/synse/progress-ring'
 import { getStudentHome } from '@/features/students/app-service'
+import { PortasDoProgresso } from '@/features/students/components/portas-do-progresso'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 import { formatDate, formatNumber } from '@/lib/utils'
@@ -32,7 +22,7 @@ export default async function StudentProgressPage() {
   const agora = new Date()
   const noventaDias = new Date(agora.getTime() - 90 * 86_400_000)
 
-  const [home, logs, totalDeRegistros, assessments, recordes, totais] = await Promise.all([
+  const [home, logs, assessments, recordes, totais] = await Promise.all([
     getStudentHome(session.organizationId, session.studentId),
     /*
      * O gráfico pede a janela que a tela anuncia ao lado — noventa dias. Antes
@@ -43,9 +33,6 @@ export default async function StudentProgressPage() {
     dataSource.listWorkoutLogs(session.organizationId, session.studentId, {
       since: noventaDias.toISOString(),
     }),
-    // O cartão conta tudo, e conta no banco: `logs.length` era o tamanho da
-    // resposta, que podia vir cortada.
-    dataSource.countWorkoutLogs(session.organizationId, session.studentId),
     dataSource.listAssessments(session.organizationId, session.studentId),
     /*
      * Recordes e totais vêm do Treino Ativo, que grava série a série. O
@@ -79,62 +66,13 @@ export default async function StudentProgressPage() {
       </header>
 
       {/*
-        A porta dos amigos. Fica no Progresso, junto da análise e do Synse
-        Body, porque é a mesma família: acompanhar o que mudou. Ranking não é
-        atividade diária, e a barra de cinco itens já está cheia.
+        ── A semana primeiro ───────────────────────────────────────────────
+        A tela se chama "Seu progresso" e abria com três linhas de menu:
+        Amigos, Sua análise, Synse Body. O dado da pessoa só começava abaixo
+        da dobra. As portas desceram para o rodapé, menores, e o que sobe é o
+        número que responde "como estou indo" — que é a pergunta que traz
+        alguém aqui.
       */}
-      <Link
-        href="/app/friends"
-        className="flex items-center gap-4 rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm transition-colors hover:bg-synse-surface-2"
-      >
-        <Users className="size-5 shrink-0 text-synse-primary" aria-hidden />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-synse-text">Amigos</p>
-          <p className="text-xs text-synse-muted">
-            Adicione pelo Synse ID e comparem os treinos do mês.
-          </p>
-        </div>
-        <ChevronRight className="size-4 shrink-0 text-synse-muted" aria-hidden />
-      </Link>
-
-      {/*
-        A porta da análise. Vem antes do Synse Body porque fala do que esta
-        própria página mostra — é o aprofundamento dos números logo abaixo, e
-        não um aparelho à parte.
-      */}
-      <Link
-        href="/app/progress/analise"
-        className="flex items-center gap-4 rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm transition-colors hover:bg-synse-surface-2"
-      >
-        <LineChart className="size-5 shrink-0 text-synse-primary" aria-hidden />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-synse-text">Sua análise</p>
-          <p className="text-xs text-synse-muted">
-            Os últimos 30 dias contra os 30 anteriores: constância, aderência e força.
-          </p>
-        </div>
-        <ChevronRight className="size-4 shrink-0 text-synse-muted" aria-hidden />
-      </Link>
-
-      {/*
-        A porta do Synse Body. Fica no Progresso e não na navegação de baixo
-        porque peso e composição corporal são acompanhamento, não uma atividade
-        diária — e a barra de cinco itens já está cheia.
-      */}
-      <Link
-        href="/app/corpo"
-        className="flex items-center gap-4 rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm transition-colors hover:bg-synse-surface-2"
-      >
-        <Scale className="size-5 shrink-0 text-synse-primary" aria-hidden />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-synse-text">Synse Body</p>
-          <p className="text-xs text-synse-muted">
-            Peso e composição corporal, da sua balança Bluetooth.
-          </p>
-        </div>
-        <ChevronRight className="size-4 shrink-0 text-synse-muted" aria-hidden />
-      </Link>
-
       <section className="flex items-center gap-5 rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
         <ProgressRing value={home.weeklyGoal.percentage} size={96} caption="semana" />
         <div className="min-w-0 space-y-1">
@@ -185,16 +123,22 @@ export default async function StudentProgressPage() {
           <ul className="mt-3 divide-y divide-synse-border">
             {recordes.slice(0, 8).map((recorde) => (
               <li key={recorde.exerciseId} className="flex items-center gap-3 py-2.5">
-                <span className="min-w-0 flex-1 truncate text-sm text-synse-text">
-                  {recorde.exerciseName}
-                </span>
-                <span className="text-xs text-synse-muted">{formatDate(recorde.achievedAt)}</span>
-                <span className="text-sm font-semibold tabular-nums text-synse-primary">
-                  {recorde.maxWeight} kg
-                  <span className="ml-1 text-xs font-normal text-synse-muted">
-                    × {recorde.reps}
-                  </span>
-                </span>
+                {/*
+                  Nome em cima, números embaixo. Em linha única eram quatro
+                  colunas num telefone — nome, data, carga e botão —, e a
+                  primeira cedia: "Supino reto com…" cortava justamente o que
+                  identifica o recorde.
+                */}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm text-synse-text">{recorde.exerciseName}</p>
+                  <p className="text-xs text-synse-muted">
+                    <span className="font-semibold tabular-nums text-synse-primary">
+                      {formatNumber(recorde.maxWeight, { maximumFractionDigits: 1 })} kg
+                    </span>
+                    {' × '}
+                    {recorde.reps} · {formatDate(recorde.achievedAt)}
+                  </p>
+                </div>
                 <BotaoCompartilhar
                   formato="icone"
                   rotulo={`Compartilhar o recorde de ${recorde.exerciseName}`}
@@ -212,36 +156,55 @@ export default async function StudentProgressPage() {
         </section>
       )}
 
-      <section className="grid grid-cols-2 gap-3">
+      {/*
+        Três colunas, e não duas: com o cartão de "Treinos" removido sobraram
+        três, e numa grade de duas o terceiro ficava sozinho na segunda linha
+        ao lado de um buraco.
+      */}
+      <section className="grid grid-cols-3 gap-2.5">
         <StatTile
           icon={Dumbbell}
           label="Carga atual"
-          value={home.currentLoad != null ? `${home.currentLoad} kg` : '—'}
-          caption="Supino reto"
+          value={
+            home.currentLoad != null
+              ? `${formatNumber(home.currentLoad, { maximumFractionDigits: 1 })} kg`
+              : '—'
+          }
+          /*
+           * "Supino reto" era legenda fixa no código, e o número vem de
+           * qualquer exercício. Dizer o que é continua sendo o conserto;
+           * filtrar por um exercício é decisão de produto, anotada.
+           */
+          caption="Último registro"
         />
         <StatTile
           icon={TrendingUp}
           label="Ganho de carga"
-          value={home.loadGain != null ? `+${home.loadGain.toFixed(1)} kg` : '—'}
-          caption="Desde o início"
+          value={
+            home.loadGain != null
+              ? `+${formatNumber(home.loadGain, { maximumFractionDigits: 1 })} kg`
+              : '—'
+          }
+          caption="Da primeira à última"
           positive
         />
         <StatTile
           icon={Activity}
           label="Peso"
-          value={latest?.weight != null ? `${latest.weight} kg` : '—'}
+          value={
+            latest?.weight != null
+              ? `${formatNumber(latest.weight, { maximumFractionDigits: 1 })} kg`
+              : '—'
+          }
           caption={latest ? formatDate(latest.assessedAt) : 'Sem avaliação'}
-        />
-        <StatTile
-          icon={Flame}
-          label="Treinos"
-          value={formatNumber(totalDeRegistros)}
-          caption="Séries registradas"
         />
       </section>
 
       {loadSeries.length > 1 ? (
-        <ChartCard title="Evolução de carga" description="Supino reto, semana a semana.">
+        <ChartCard
+          title="Evolução de carga"
+          description="Todos os exercícios com carga anotada, nos últimos 90 dias."
+        >
           <ProgressLineChart data={loadSeries} unit=" kg" height={180} />
         </ChartCard>
       ) : (
@@ -257,6 +220,8 @@ export default async function StudentProgressPage() {
           <ProgressLineChart data={weightSeries} unit=" kg" height={180} />
         </ChartCard>
       )}
+
+      <PortasDoProgresso />
     </div>
   )
 }
@@ -275,19 +240,25 @@ function StatTile({
   positive?: boolean
 }) {
   return (
-    <div className="rounded-2xl border border-synse-border bg-synse-surface p-4 shadow-synse-sm">
+    <div className="rounded-2xl border border-synse-border bg-synse-surface p-3.5 shadow-synse-sm">
       <Icon className="size-4 text-synse-muted" aria-hidden />
-      <p className="mt-2.5 text-xs text-synse-muted">{label}</p>
+      <p className="mt-2 text-[11px] leading-tight text-synse-muted">{label}</p>
+      {/*
+        Sem `tabular-nums` aqui, de propósito: dígito de largura fixa alinha
+        coluna de tabela, e num número solto e grande ele abre espaços — "49,1"
+        sai frouxo. O alinhamento vertical que `tabular-nums` existe para dar
+        não é necessário entre três cartões lado a lado.
+      */}
       <p
         className={
           positive
-            ? 'text-xl font-semibold tabular-nums text-synse-success'
-            : 'text-xl font-semibold tabular-nums text-synse-text'
+            ? 'text-lg font-semibold text-synse-success'
+            : 'text-lg font-semibold text-synse-text'
         }
       >
         {value}
       </p>
-      <p className="text-[11px] text-synse-muted">{caption}</p>
+      <p className="text-[11px] leading-tight text-synse-muted">{caption}</p>
     </div>
   )
 }

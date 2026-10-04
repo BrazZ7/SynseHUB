@@ -49,6 +49,23 @@ export function Delta({
     maximumFractionDigits: casas,
   })
 
+  /*
+   * ── "Igual", e não "→ 0" ──────────────────────────────────────────────────
+   *
+   * Parado imprimia uma seta e um zero. Quatro números seguidos com "→ 0"
+   * embaixo leem como quatro zeros — e o que o cálculo está dizendo é o
+   * contrário: ficou **igual** ao período anterior. A palavra diz isso em um
+   * relance; a seta com zero obriga a interpretar.
+   */
+  if (parado) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-synse-muted">
+        <Seta className="size-3.5 shrink-0" aria-hidden />
+        igual ao anterior
+      </span>
+    )
+  }
+
   return (
     <span className={cn('inline-flex items-center gap-1 text-xs tabular-nums', cor)}>
       <Seta className="size-3.5 shrink-0" aria-hidden />
@@ -59,9 +76,10 @@ export function Delta({
       </span>
       {/*
         O percentual some para quem partiu do zero: `variacao` devolve `null` de
-        propósito ali, e imprimir "—%" no lugar não acrescenta nada.
+        propósito ali, e imprimir "—%" no lugar não acrescenta nada. O caso
+        parado saiu antes, no `if` acima.
       */}
-      {variacao.percentual != null && !parado && (
+      {variacao.percentual != null && (
         <span className="text-synse-muted">
           ({sinal}
           {formatNumber(variacao.percentual, { maximumFractionDigits: 1 })}%)

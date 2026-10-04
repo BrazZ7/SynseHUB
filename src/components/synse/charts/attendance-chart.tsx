@@ -18,7 +18,7 @@ export function AttendanceChart({ data }: { data: AttendancePoint[] }) {
     <div className="h-52 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 8, right: 4, bottom: 0, left: 0 }}>
-          <CartesianGrid vertical={false} stroke={palette.grid} strokeDasharray="3 3" />
+          <CartesianGrid vertical={false} stroke={palette.grid} />
           <XAxis
             dataKey="label"
             tickLine={false}

@@ -1,9 +1,18 @@
 'use client'
 
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 
 import { ChartTooltip } from '@/components/synse/charts/chart-tooltip'
 import { AXIS_TICK, useChartPalette } from '@/components/synse/charts/chart-theme'
+import { escalaAgradavel } from '@/components/synse/charts/escala'
 
 export type ProgressPoint = { label: string; value: number }
 
@@ -18,12 +27,21 @@ export function ProgressLineChart({
   height?: number
 }) {
   const palette = useChartPalette()
+  /*
+   * O eixo saía do dado cru e marcava 53,45 · 48,1 · 42,1. Número de eixo
+   * existe para localizar o valor de relance, e para isso precisa ser redondo.
+   */
+  const escala = escalaAgradavel(data.map((ponto) => ponto.value))
 
   return (
     <div style={{ height }} className="w-full">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-          <CartesianGrid vertical={false} stroke={palette.grid} strokeDasharray="3 3" />
+          {/*
+            Fio contínuo, e não tracejado: o tracejado soma ruído e lê como
+            "projeção" ou "limite" quando é só grade.
+          */}
+          <CartesianGrid vertical={false} stroke={palette.grid} />
           <XAxis
             dataKey="label"
             tickLine={false}
@@ -35,7 +53,8 @@ export function ProgressLineChart({
             tickLine={false}
             axisLine={false}
             width="auto"
-            domain={['dataMin - 2', 'dataMax + 2']}
+            domain={[escala.min, escala.max]}
+            ticks={escala.marcas}
             tick={{ ...AXIS_TICK, fill: palette.axis }}
           />
           <Tooltip

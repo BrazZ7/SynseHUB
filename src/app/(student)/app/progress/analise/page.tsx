@@ -43,8 +43,8 @@ export default async function AnalisePage() {
       <header>
         <h1 className="text-2xl font-semibold text-synse-text">Sua análise</h1>
         <p className="text-sm text-synse-muted">
-          Os últimos {analise.janela.dias} dias, comparados com os{' '}
-          {analise.janela.dias} anteriores. Fechado em {formatDate(analise.janela.ate)}.
+          Os últimos {analise.janela.dias} dias, comparados com os {analise.janela.dias} anteriores.
+          Fechado em {formatDate(analise.janela.ate)}.
         </p>
       </header>
 
@@ -111,8 +111,8 @@ export default async function AnalisePage() {
 
             {assinante && !analise.comparacao && (
               <p className="mt-4 text-xs text-synse-muted">
-                Ainda não há período anterior com treino para comparar. No mês que vem
-                esta tela ganha as setas.
+                Ainda não há período anterior com treino para comparar. No mês que vem esta tela
+                ganha as setas.
               </p>
             )}
           </section>
@@ -182,9 +182,8 @@ export default async function AnalisePage() {
 
                   {analise.aderencia.seriesAbaixo > 0 && (
                     <p className="mt-2 text-xs text-synse-muted">
-                      {analise.aderencia.seriesAbaixo} séries pararam antes do previsto.
-                      Costuma ser carga alta demais ou descanso curto — não falta de
-                      disposição.
+                      {analise.aderencia.seriesAbaixo} séries pararam antes do previsto. Costuma ser
+                      carga alta demais ou descanso curto — não falta de disposição.
                     </p>
                   )}
                 </section>
@@ -200,20 +199,23 @@ export default async function AnalisePage() {
                   <p className="mt-1 text-xs text-synse-muted">
                     Carga máxima no trimestre. Força não se move em trinta dias.
                   </p>
+                  {/*
+                    Nome em cima, números embaixo. Em linha única eram três
+                    colunas num telefone — nome, "de → para" e a variação —, e a
+                    primeira cedia: "Supino reto com b…" cortava justamente o
+                    que diz de que exercício é a curva.
+                  */}
                   <ul className="mt-3 divide-y divide-synse-border">
                     {analise.forca.map((linha) => (
-                      <li
-                        key={linha.exerciseId}
-                        className="flex items-center gap-3 py-2.5"
-                      >
-                        <span className="min-w-0 flex-1 truncate text-sm text-synse-text">
-                          {linha.exerciseName}
-                        </span>
-                        <span className="shrink-0 text-xs tabular-nums text-synse-muted">
-                          {formatNumber(linha.evolucao.de, { maximumFractionDigits: 1 })} →{' '}
-                          {formatNumber(linha.evolucao.para, { maximumFractionDigits: 1 })} kg
-                        </span>
-                        <Delta variacao={linha.evolucao} unidade=" kg" bomQuandoSobe casas={1} />
+                      <li key={linha.exerciseId} className="py-2.5">
+                        <p className="truncate text-sm text-synse-text">{linha.exerciseName}</p>
+                        <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                          <span className="text-xs tabular-nums text-synse-muted">
+                            {formatNumber(linha.evolucao.de, { maximumFractionDigits: 1 })} →{' '}
+                            {formatNumber(linha.evolucao.para, { maximumFractionDigits: 1 })} kg
+                          </span>
+                          <Delta variacao={linha.evolucao} unidade=" kg" bomQuandoSobe casas={1} />
+                        </p>
                       </li>
                     ))}
                   </ul>
@@ -227,9 +229,9 @@ export default async function AnalisePage() {
             >
               <Lock className="mt-0.5 size-4 shrink-0 text-synse-primary" aria-hidden />
               <span>
-                <strong className="font-medium">O Synse+ compara.</strong> Período contra
-                período, aderência dos últimos treinos contra os anteriores, e a curva de
-                força do trimestre — em cima destes mesmos números.
+                <strong className="font-medium">O Synse+ compara.</strong> Período contra período,
+                aderência dos últimos treinos contra os anteriores, e a curva de força do trimestre
+                — em cima destes mesmos números.
               </span>
             </Link>
           )}

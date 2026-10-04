@@ -46,7 +46,7 @@ export function RevenueChart({ data }: { data: MonthlyRevenuePoint[] }) {
               </linearGradient>
             </defs>
 
-            <CartesianGrid vertical={false} stroke={palette.grid} strokeDasharray="3 3" />
+            <CartesianGrid vertical={false} stroke={palette.grid} />
             <XAxis
               dataKey="label"
               tickLine={false}

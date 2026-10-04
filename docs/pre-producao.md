@@ -13,10 +13,33 @@ mostrar tela para pedir ajuda.
 - [ ] `SUPABASE_SERVICE_ROLE_KEY` — **a mais urgente, e não pode esperar o
       final.** Ela aponta para o projeto de produção, não para um ambiente de
       teste: quem a tem lê, altera e apaga os dados de todas as academias,
-      passando por cima de toda a RLS. Rotacionar em Supabase → Settings → API
-      Keys, atualizar `.env.local` e a Vercel (como **Sensitive**), e só então
-      revogar a antiga — nessa ordem, senão o webhook de pagamento fica sem
-      chave válida no intervalo.
+      passando por cima de toda a RLS.
+
+      **Não regenere o JWT secret.** Ele invalida `anon` e `service_role` no
+      mesmo instante, e tudo que está no ar cai junto — inclusive o webhook de
+      pagamento, que é onde cair dói. O Supabase hoje tem um caminho sem essa
+      janela: as chaves novas (`sb_publishable_…` e `sb_secret_…`) convivem com
+      as antigas, e dá para virar uma e depois desligar a outra.
+
+      Ordem segura, em Settings → API Keys:
+
+      1. *Create new API key* → **Secret key**. Copiar o `sb_secret_…` — ela
+         aparece uma vez.
+      2. Pôr em `SUPABASE_SERVICE_ROLE_KEY` na Vercel, nos três ambientes,
+         como **Sensitive**, e em `.env.local`.
+      3. Publicar de novo. Variável só entra em build nova.
+      4. Conferir `/api/health?deep=1` respondendo, e um pagamento de teste
+         passando pelo webhook — é ele que usa a chave de serviço.
+      5. **Só então** desligar as chaves antigas (*Disable legacy API keys*,
+         que é um botão separado: criar as novas não revoga nada).
+
+      A chave nova não exige mudança no código: ela vai nos mesmos cabeçalhos
+      `apikey`/`Authorization`, e nada aqui decodifica a chave como JWT —
+      conferido. O `NEXT_PUBLIC_SUPABASE_ANON_KEY` pode virar
+      `sb_publishable_…` pelo mesmo caminho, e as sondas de `/api/health`
+      continuam valendo (401 segue sendo "existe e recusa o anônimo").
+
+      Fonte: https://supabase.com/docs/guides/getting-started/migrating-to-new-api-keys
 - [x] `ASAAS_API_KEY` e `ASAAS_WEBHOOK_TOKEN` — não se aplicam mais. O adapter
       do Asaas foi removido. **Apagar as duas da Vercel**, junto com
       `ASAAS_API_URL`, `ASAAS_TEST_WALLET_ID` e `PAYMENT_PROVIDER` — variável

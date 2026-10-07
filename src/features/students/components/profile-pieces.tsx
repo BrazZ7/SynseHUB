@@ -16,7 +16,6 @@ import Image from 'next/image'
 
 import type { Conquista } from '@/features/students/achievements'
 import type { DiaDaSemana, RecordePessoal } from '@/features/students/profile-service'
-import type { NivelSynse } from '@/features/students/level'
 import { cn } from '@/lib/utils'
 
 /** As peças do perfil. Sem estado: tudo vem calculado do servidor. */
@@ -203,49 +202,18 @@ export function BarraDeTotais({ itens }: { itens: readonly TotalDoTopo[] }) {
 
 export const ICONES_DO_TOPO = { Dumbbell, Footprints, Trophy, Medal }
 
-// ── Nível ────────────────────────────────────────────────────────────────────
-/**
- * O nível é derivado do histórico, e a tela diz isso.
+/*
+ * ── O nível saiu daqui ──────────────────────────────────────────────────────
  *
- * Sem a frase, o número parece um saldo que alguém guardou — e a primeira
- * pergunta vira "por que meu XP mudou?". Dizer de onde ele vem transforma a
- * dúvida em algo que a pessoa consegue conferir sozinha.
+ * Havia um `NivelCard` que dividia a linha com o painel do jardim. Ele
+ * disputava a largura com a planta e deixava à arte menos de um terço da
+ * linha, na tela que existe para mostrá-la.
+ *
+ * O número e a frase "seu XP vem de treinos, quilômetros e medalhas" foram
+ * para dentro de `plant-panel.tsx`, como legenda do jardim: a planta **é** o
+ * nível desenhado, e ter os dois juntos diz isso melhor do que dois cartões
+ * lado a lado diziam.
  */
-export function NivelCard({ nivel }: { nivel: NivelSynse }) {
-  return (
-    <section className="vidro-led rounded-2xl border border-synse-border bg-synse-surface p-5">
-      <h2 className="text-sm font-semibold text-synse-text">Seu nível Synse</h2>
-
-      <div className="mt-3 flex items-end justify-between gap-3">
-        <p className="text-xl font-semibold text-synse-text">Nível {nivel.nivel}</p>
-        <p className="text-sm tabular-nums text-synse-muted">
-          {nivel.xpNoNivel.toLocaleString('pt-BR')} / {nivel.xpDoNivel.toLocaleString('pt-BR')} XP
-        </p>
-      </div>
-
-      <div
-        className="mt-3 h-2.5 overflow-hidden rounded-full bg-synse-bg"
-        role="progressbar"
-        aria-valuenow={Math.round(nivel.progresso * 100)}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-label={`Progresso do nível ${nivel.nivel}`}
-      >
-        <div
-          className="h-full rounded-full bg-gradient-to-r from-synse-primary to-synse-primary-light"
-          style={{ width: `${Math.round(nivel.progresso * 100)}%` }}
-        />
-      </div>
-
-      <p className="mt-2 text-xs text-synse-muted">
-        Faltam {nivel.falta.toLocaleString('pt-BR')} XP para o próximo nível.
-      </p>
-      <p className="mt-1 text-[11px] text-synse-muted">
-        Seu XP vem do que você fez: treinos, quilômetros e medalhas.
-      </p>
-    </section>
-  )
-}
 
 // ── Conquistas ───────────────────────────────────────────────────────────────
 const ICONE_DA_CONQUISTA: Record<Conquista['icone'], LucideIcon> = {

@@ -29,7 +29,6 @@ import {
   CapaPerfil,
   ConquistaHex,
   ICONES_DO_TOPO,
-  NivelCard,
   RecordeRow,
   SemanaChart,
   BarraDeTotais,
@@ -181,24 +180,42 @@ export default async function StudentProfilePage({
       {/* ── Os quatro números, numa barra só ─────────────────────────────── */}
       <BarraDeTotais
         itens={[
-          { icone: ICONES_DO_TOPO.Dumbbell, valor: String(perfil.totais.treinos), rotulo: 'Treinos' },
-          { icone: ICONES_DO_TOPO.Footprints, valor: km(perfil.totais.quilometros), rotulo: 'Corrida' },
-          { icone: ICONES_DO_TOPO.Trophy, valor: String(perfil.totais.desafios), rotulo: 'Desafios' },
-          { icone: ICONES_DO_TOPO.Medal, valor: String(perfil.totais.medalhas), rotulo: 'Medalhas' },
+          {
+            icone: ICONES_DO_TOPO.Dumbbell,
+            valor: String(perfil.totais.treinos),
+            rotulo: 'Treinos',
+          },
+          {
+            icone: ICONES_DO_TOPO.Footprints,
+            valor: km(perfil.totais.quilometros),
+            rotulo: 'Corrida',
+          },
+          {
+            icone: ICONES_DO_TOPO.Trophy,
+            valor: String(perfil.totais.desafios),
+            rotulo: 'Desafios',
+          },
+          {
+            icone: ICONES_DO_TOPO.Medal,
+            valor: String(perfil.totais.medalhas),
+            rotulo: 'Medalhas',
+          },
         ]}
       />
 
-      {/* O nível e a muda dividem a linha, como no desenho. No celular a muda
-          vira uma faixa abaixo: a barra de XP com "1.840 / 2.000 XP" na mesma
-          linha não cabe em dois terços de 360px sem quebrar. */}
-      <section className="grid gap-3 sm:grid-cols-[1.7fr_1fr]">
-        <NivelCard nivel={perfil.nivel} />
-        <PainelPlanta
-          planta={plantaDoNivel(perfil.nivel)}
-          nivel={perfil.nivel}
-          previa={jardim === 'previa'}
-        />
-      </section>
+      {/*
+        O jardim ocupa a linha inteira.
+
+        Dividia-a com um cartão de nível, e a conta não fechava: sobrava menos
+        de um terço da largura para a arte, e a muda ficava espremida na tela
+        que existe para mostrá-la. O nível virou legenda dentro do painel — ele
+        não perdeu nada, e a planta ganhou o espaço todo.
+      */}
+      <PainelPlanta
+        planta={plantaDoNivel(perfil.nivel)}
+        nivel={perfil.nivel}
+        previa={jardim === 'previa'}
+      />
 
       {/* ── Três marcadores ──────────────────────────────────────────────── */}
       <section className="grid grid-cols-3 gap-3">

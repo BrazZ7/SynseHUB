@@ -346,17 +346,25 @@ export function PainelPlanta({
         />
       ))}
 
-      {/* Sem o véu, as palavras caem em cima das folhas acesas. */}
+      {/*
+       * Sem o véu, as palavras caem em cima das folhas acesas.
+       *
+       * O ponto do meio subiu de 35% para 55% quando o nível veio morar aqui
+       * dentro: duas linhas a mais desceram o texto até a altura das folhas
+       * soltas, e `white/55` sobre folha acesa some. O véu começa transparente
+       * na borda esquerda, então a planta não perde nada — o que escurece é a
+       * metade direita, que é onde estão as palavras.
+       */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-[#04100e]/35 to-[#04100e]"
+        className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-[#04100e]/55 to-[#04100e]"
       />
 
       {/*
        * O texto manda na altura do painel, e a arte acompanha. Assim uma
        * legenda mais longa nunca corta a planta pela metade.
        */}
-      <div className="relative ml-auto flex min-h-44 w-[54%] flex-col justify-center gap-1 py-4 pr-4 text-right">
+      <div className="relative ml-auto flex min-h-44 w-[54%] flex-col justify-center gap-1 py-4 pr-4 text-right sm:min-h-52 sm:w-[48%]">
         <p className="text-[10px] uppercase tracking-[0.22em] text-white/50">Seu jardim</p>
         <p className="text-lg font-semibold leading-tight text-synse-primary-light">
           {estagio.nome}
@@ -388,6 +396,42 @@ export function PainelPlanta({
           <p className="mt-2 text-[11px] leading-snug text-white/55">
             Ela cresceu tudo o que tinha para crescer.
           </p>
+        )}
+
+        {/*
+         * ── O nível, aqui dentro ───────────────────────────────────────────
+         *
+         * Era um cartão separado ao lado, e ele disputava a linha com a
+         * planta: sobrava menos de um terço da largura para a arte, e a muda
+         * aparecia espremida num canto justamente na tela que existe para
+         * mostrá-la.
+         *
+         * O nível não perdeu nada vindo para cá — ganhou lugar. A planta
+         * **é** o nível desenhado: é ele que faz a semente virar broto. Ter o
+         * número como legenda do jardim diz essa relação, enquanto dois
+         * cartões lado a lado faziam parecer que eram duas coisas.
+         *
+         * Duas barras seriam uma a mais: a de cima mede o caminho até o
+         * próximo **estágio**, que leva vários níveis. Por isso aqui o nível
+         * vem em texto, e cada linha diz de qual das duas contas está falando.
+         */}
+        {nivel && (
+          <div className="mt-3 border-t border-white/10 pt-2.5">
+            <p className="text-[11px] font-medium leading-snug text-white/80">
+              Nível {nivel.nivel} · {nivel.xpNoNivel.toLocaleString('pt-BR')} /{' '}
+              {nivel.xpDoNivel.toLocaleString('pt-BR')} XP
+            </p>
+            {/*
+             * Sem esta frase o número parece um saldo que alguém guardou, e a
+             * primeira pergunta vira "por que meu XP mudou?". Dizer de onde
+             * ele vem transforma a dúvida em algo que a pessoa confere
+             * sozinha. Veio junto do cartão que saiu daqui.
+             */}
+            <p className="mt-0.5 text-[11px] leading-snug text-white/55">
+              Faltam {nivel.falta.toLocaleString('pt-BR')} XP para o nível {nivel.nivel + 1}. Ele
+              vem de treinos, quilômetros e medalhas.
+            </p>
+          </div>
         )}
 
         {previa && nivel && (

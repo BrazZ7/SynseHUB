@@ -16,6 +16,7 @@ import {
   SPORT_LABELS,
 } from '@/features/synse-run/format'
 import { getRunDashboard } from '@/features/synse-run/service'
+import { LinhaInteira, PilhaDoApp } from '@/components/synse/duas-colunas'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { firstName, greeting } from '@/lib/utils'
 
@@ -26,22 +27,25 @@ export default async function SynseRunPage() {
   const painel = await getRunDashboard(session)
 
   return (
-    <div className="animate-fade-in-up space-y-5">
+    <PilhaDoApp className="animate-fade-in-up">
       {/*
        * A capa é o primeiro filho, e tem de ser: ela sangra para fora com
-       * `-mt-6`, e o `space-y-5` deste contêiner aplica `margin-top` a partir
-       * do segundo filho com especificidade maior — bastaria um cabeçalho
-       * acima dela para a arte descer e deixar uma faixa da cor da página no
-       * topo.
+       * `-mt-6`. O espaçamento da pilha é `margin-bottom` em cada filho (ver
+       * `PilhaDoApp`), então não há mais margem de topo competindo com a
+       * sangria — mas um cabeçalho acima dela ainda desceria a arte e deixaria
+       * uma faixa da cor da página no topo, e por isso ela segue sendo a
+       * primeira.
        *
        * A saudação, o `h1` e os três esportes moram dentro dela. O elo de
        * voltar saiu: a barra de baixo já leva ao Hoje, e uma seta sobre a arte
        * reabriria a moldura que a capa sem borda veio justamente desfazer.
        */}
-      <RunHero
-        saudacao={`${greeting()}, ${firstName(session.name)}`}
-        chamada="Movimento é evolução"
-      />
+      <LinhaInteira>
+        <RunHero
+          saudacao={`${greeting()}, ${firstName(session.name)}`}
+          chamada="Movimento é evolução"
+        />
+      </LinhaInteira>
 
       <WeekChart
         byDay={painel.byDay}
@@ -138,6 +142,6 @@ export default async function SynseRunPage() {
           </ul>
         </section>
       )}
-    </div>
+    </PilhaDoApp>
   )
 }

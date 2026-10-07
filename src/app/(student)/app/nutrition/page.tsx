@@ -8,6 +8,7 @@ import { QuadroDasRefeicoes } from '@/features/nutrition/components/quadro-das-r
 import { PrescribedPlan } from '@/features/nutrition/prescribed-plan'
 import { BASELINE_MEAL_PLAN } from '@/lib/baseline/meal-plan'
 import { getDataSource } from '@/lib/database'
+import { LinhaInteira, PilhaDoApp } from '@/components/synse/duas-colunas'
 import { requireStudentSession } from '@/lib/auth/require-session'
 
 export const metadata: Metadata = { title: 'Alimentação' }
@@ -45,15 +46,17 @@ export default async function StudentNutritionPage() {
   const plano = BASELINE_MEAL_PLAN
 
   return (
-    <div className="animate-fade-in-up space-y-5">
-      <header className="space-y-1">
-        <BackLink href="/app" label="Hoje" />
-        <div className="flex items-center gap-2">
-          <h1 className="text-2xl font-semibold text-synse-text">{plano.name}</h1>
-          <Badge variant="outline">Grátis</Badge>
-        </div>
-        <p className="text-sm text-synse-muted">{plano.summary}</p>
-      </header>
+    <PilhaDoApp className="animate-fade-in-up">
+      <LinhaInteira className="space-y-5">
+        <header className="space-y-1">
+          <BackLink href="/app" label="Hoje" />
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-semibold text-synse-text">{plano.name}</h1>
+            <Badge variant="outline">Grátis</Badge>
+          </div>
+          <p className="text-sm text-synse-muted">{plano.summary}</p>
+        </header>
+      </LinhaInteira>
 
       <QuadroDasRefeicoes
         refeicoes={plano.meals.map((meal) => ({
@@ -128,6 +131,6 @@ export default async function StudentNutritionPage() {
         <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
         {plano.disclaimer}
       </p>
-    </div>
+    </PilhaDoApp>
   )
 }

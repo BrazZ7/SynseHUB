@@ -6,6 +6,7 @@ import { ActiveWorkoutScreen } from '@/features/active-workout/active-workout-sc
 import type { PlannedExercise } from '@/features/active-workout/engine/types'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
+import { ColunaDeLeitura } from '@/components/synse/duas-colunas'
 
 export const metadata: Metadata = { title: 'Treino Ativo' }
 
@@ -59,7 +60,7 @@ export default async function ActiveWorkoutPage({ searchParams }: { searchParams
   }))
 
   return (
-    <div className="animate-fade-in-up space-y-4">
+    <ColunaDeLeitura className="animate-fade-in-up space-y-4">
       <BackLink href="/app/workout" label="Treinos" />
       <ActiveWorkoutScreen
         planName={plan.name.replace(/^Treino [A-Z]+ — /, '')}
@@ -67,6 +68,6 @@ export default async function ActiveWorkoutPage({ searchParams }: { searchParams
         exercises={planejados}
         preferencias={preferencias}
       />
-    </div>
+    </ColunaDeLeitura>
   )
 }

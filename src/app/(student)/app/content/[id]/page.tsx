@@ -9,6 +9,7 @@ import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 import { TIPOS, type TipoConteudo } from '@/lib/validations/content'
 import { formatDate } from '@/lib/utils'
+import { ColunaDeLeitura } from '@/components/synse/duas-colunas'
 
 export const metadata: Metadata = { title: 'Conteúdo' }
 
@@ -47,7 +48,7 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
     if (!trancado) notFound()
 
     return (
-      <article className="animate-fade-in-up space-y-5">
+      <ColunaDeLeitura como="article" className="animate-fade-in-up space-y-5">
         <BackLink href="/app/content" label="Conteúdos" />
 
         <header className="space-y-3">
@@ -88,7 +89,7 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
         </div>
 
         <ChamadaDoPlus />
-      </article>
+      </ColunaDeLeitura>
     )
   }
 
@@ -111,7 +112,7 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
     .filter(Boolean)
 
   return (
-    <article className="animate-fade-in-up space-y-5">
+    <ColunaDeLeitura como="article" className="animate-fade-in-up space-y-5">
       <BackLink href="/app/content" label="Conteúdos" />
 
       <header className="space-y-3">
@@ -180,6 +181,6 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
          */
         <p className="text-sm text-synse-muted">Este item não tem texto nem material anexado.</p>
       )}
-    </article>
+    </ColunaDeLeitura>
   )
 }

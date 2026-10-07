@@ -8,6 +8,7 @@ import { ChamadaDoPlus } from '@/features/content/vitrine'
 import { FotoDoPrato, TabelaDeMacros, rotuloDaCategoria } from '@/features/recipes/recipe-pieces'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
+import { ColunaDeLeitura } from '@/components/synse/duas-colunas'
 
 export const metadata: Metadata = { title: 'Receita' }
 
@@ -57,7 +58,7 @@ export default async function RecipeDetailPage({ params }: { params: Promise<{ i
     if (!trancada) notFound()
 
     return (
-      <article className="animate-fade-in-up space-y-5">
+      <ColunaDeLeitura como="article" className="animate-fade-in-up space-y-5">
         <BackLink href="/app/nutrition/receitas" label="Receitas" />
 
         <header className="space-y-3">
@@ -91,7 +92,7 @@ export default async function RecipeDetailPage({ params }: { params: Promise<{ i
         </div>
 
         <ChamadaDoPlus />
-      </article>
+      </ColunaDeLeitura>
     )
   }
 
@@ -106,7 +107,7 @@ export default async function RecipeDetailPage({ params }: { params: Promise<{ i
     .filter(Boolean)
 
   return (
-    <article className="animate-fade-in-up space-y-5">
+    <ColunaDeLeitura como="article" className="animate-fade-in-up space-y-5">
       <BackLink href="/app/nutrition/receitas" label="Receitas" />
 
       <header className="space-y-3">
@@ -180,6 +181,6 @@ export default async function RecipeDetailPage({ params }: { params: Promise<{ i
           Esta receita ainda não tem ingredientes nem modo de preparo.
         </p>
       )}
-    </article>
+    </ColunaDeLeitura>
   )
 }

@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/synse/empty-state'
 import { ProgressRing } from '@/components/synse/progress-ring'
 import { getStudentHome } from '@/features/students/app-service'
 import { PortasDoProgresso } from '@/features/students/components/portas-do-progresso'
+import { LinhaInteira, PilhaDoApp } from '@/components/synse/duas-colunas'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 import { formatDate, formatNumber } from '@/lib/utils'
@@ -57,13 +58,15 @@ export default async function StudentProgressPage() {
   const latest = assessments[assessments.length - 1]
 
   return (
-    <div className="animate-fade-in-up space-y-5">
-      <header>
-        <h1 className="text-2xl font-semibold text-synse-text">Seu progresso</h1>
-        <p className="text-sm text-synse-muted">
-          O que mudou desde que você começou — carga, frequência e medidas.
-        </p>
-      </header>
+    <PilhaDoApp className="animate-fade-in-up">
+      <LinhaInteira className="space-y-5">
+        <header>
+          <h1 className="text-2xl font-semibold text-synse-text">Seu progresso</h1>
+          <p className="text-sm text-synse-muted">
+            O que mudou desde que você começou — carga, frequência e medidas.
+          </p>
+        </header>
+      </LinhaInteira>
 
       {/*
         ── A semana primeiro ───────────────────────────────────────────────
@@ -222,7 +225,7 @@ export default async function StudentProgressPage() {
       )}
 
       <PortasDoProgresso />
-    </div>
+    </PilhaDoApp>
   )
 }
 

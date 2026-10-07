@@ -10,6 +10,7 @@ import { DiaToggle } from '@/features/programs/dia-toggle'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 import { cn } from '@/lib/utils'
+import { ColunaDeLeitura } from '@/components/synse/duas-colunas'
 
 export const metadata: Metadata = { title: 'Programa' }
 
@@ -40,7 +41,7 @@ export default async function ProgramaPage({ params }: { params: Promise<{ id: s
   const concluido = matricula?.status === 'COMPLETED'
 
   return (
-    <div className="animate-fade-in-up space-y-5">
+    <ColunaDeLeitura className="animate-fade-in-up space-y-5">
       <BackLink href="/app/programs" label="Programas" />
 
       <div className="space-y-3">
@@ -168,6 +169,6 @@ export default async function ProgramaPage({ params }: { params: Promise<{ id: s
       )}
 
       {emAndamento && <AbandonarPrograma programId={programa.id} />}
-    </div>
+    </ColunaDeLeitura>
   )
 }

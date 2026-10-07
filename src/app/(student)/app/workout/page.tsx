@@ -6,6 +6,7 @@ import { BaselineWorkout } from '@/features/workouts/baseline-workout'
 import { CapaDoTreino } from '@/features/workouts/components/capa-do-treino'
 import { gruposTrabalhados } from '@/features/workouts/grupos-do-treino'
 import { MUSCLE_GROUP_LABELS } from '@/features/workouts/labels'
+import { LinhaInteira, PilhaDoApp } from '@/components/synse/duas-colunas'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 
@@ -34,14 +35,16 @@ export default async function StudentWorkoutPage() {
   )
 
   return (
-    <div className="animate-fade-in-up space-y-5">
-      <header>
-        <h1 className="text-2xl font-semibold text-synse-text">Seus treinos</h1>
-        <p className="text-sm text-synse-muted">
-          Inicie o treino e o Synse acompanha série, carga e descanso — inclusive com a tela
-          bloqueada.
-        </p>
-      </header>
+    <PilhaDoApp className="animate-fade-in-up">
+      <LinhaInteira className="space-y-5">
+        <header>
+          <h1 className="text-2xl font-semibold text-synse-text">Seus treinos</h1>
+          <p className="text-sm text-synse-muted">
+            Inicie o treino e o Synse acompanha série, carga e descanso — inclusive com a tela
+            bloqueada.
+          </p>
+        </header>
+      </LinhaInteira>
 
       {/*
         O treino feito sem rede. Fica aqui, e não na tela do treino ativo,
@@ -113,6 +116,6 @@ export default async function StudentWorkoutPage() {
           </section>
         ))
       )}
-    </div>
+    </PilhaDoApp>
   )
 }

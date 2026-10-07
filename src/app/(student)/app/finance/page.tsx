@@ -5,6 +5,7 @@ import { BackLink } from '@/components/synse/back-link'
 import { EmptyState } from '@/components/synse/empty-state'
 import { PaymentStatus } from '@/components/synse/status-badge'
 import { StudentPixPanel, type Impedimento } from '@/features/payments/student-pix-panel'
+import { LinhaInteira, PilhaDoApp } from '@/components/synse/duas-colunas'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 import { cobrancaIndisponivel, getPaymentProvider } from '@/lib/payments'
@@ -43,14 +44,16 @@ export default async function StudentFinancePage() {
       : 'sem-pix'
 
   return (
-    <div className="animate-fade-in-up space-y-5">
-      <header>
-        <BackLink href="/app" label="Hoje" />
-        <h1 className="text-2xl font-semibold text-synse-text">Financeiro</h1>
-        <p className="text-sm text-synse-muted">
-          Seu plano, vencimentos e histórico de pagamentos.
-        </p>
-      </header>
+    <PilhaDoApp className="animate-fade-in-up">
+      <LinhaInteira className="space-y-5">
+        <header>
+          <BackLink href="/app" label="Hoje" />
+          <h1 className="text-2xl font-semibold text-synse-text">Financeiro</h1>
+          <p className="text-sm text-synse-muted">
+            Seu plano, vencimentos e histórico de pagamentos.
+          </p>
+        </header>
+      </LinhaInteira>
 
       <section className="rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-synse-primary">
@@ -108,6 +111,6 @@ export default async function StudentFinancePage() {
           </ul>
         )}
       </section>
-    </div>
+    </PilhaDoApp>
   )
 }

@@ -5,6 +5,7 @@ import { RunTracker } from '@/features/synse-run/components/run-tracker'
 import { SPORT_LABELS } from '@/features/synse-run/format'
 import type { SportType } from '@/features/synse-run/engine/types'
 import { requireStudentSession } from '@/lib/auth/require-session'
+import { ColunaDeLeitura } from '@/components/synse/duas-colunas'
 
 export const metadata: Metadata = { title: 'Atividade' }
 
@@ -24,13 +25,13 @@ export default async function StartActivityPage({
   const esporte = parseSport((await searchParams).esporte)
 
   return (
-    <div className="animate-fade-in-up space-y-5">
+    <ColunaDeLeitura className="animate-fade-in-up space-y-5">
       <header>
         <BackLink href="/app/run" label="SynseRun" />
         <h1 className="text-2xl font-semibold text-synse-text">{SPORT_LABELS[esporte]}</h1>
       </header>
 
       <RunTracker sport={esporte} />
-    </div>
+    </ColunaDeLeitura>
   )
 }

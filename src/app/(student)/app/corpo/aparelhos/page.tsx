@@ -6,6 +6,7 @@ import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 import { isPendingMigration } from '@/lib/database/pending-migration'
 import type { UserDevice } from '@/types/domain'
+import { ColunaDeLeitura } from '@/components/synse/duas-colunas'
 
 export const metadata: Metadata = { title: 'Aparelhos' }
 
@@ -21,7 +22,7 @@ export default async function AparelhosPage() {
   }
 
   return (
-    <div className="animate-fade-in-up space-y-5">
+    <ColunaDeLeitura className="animate-fade-in-up space-y-5">
       <header>
         <BackLink href="/app/corpo" label="Synse Body" />
         <h1 className="mt-1 text-2xl font-semibold text-synse-text">Aparelhos</h1>
@@ -31,6 +32,6 @@ export default async function AparelhosPage() {
       </header>
 
       <DevicesScreen aparelhos={aparelhos} modoDemonstracao={dataSource.kind === 'demo'} />
-    </div>
+    </ColunaDeLeitura>
   )
 }

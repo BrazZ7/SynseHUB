@@ -10,6 +10,8 @@ import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 import { isPendingMigration } from '@/lib/database/pending-migration'
 import type { ProgramaNaLista, ProgramaTrancado as Trancado } from '@/types/domain'
+import { cn } from '@/lib/utils'
+import { GRADE_DE_ITENS } from '@/components/synse/duas-colunas'
 
 export const metadata: Metadata = { title: 'Programas' }
 
@@ -61,7 +63,7 @@ export default async function ProgramsPage() {
           description="Quando o Synse publicar um programa, ele aparece aqui."
         />
       ) : (
-        <div className="space-y-3">
+        <div className={cn('space-y-3', GRADE_DE_ITENS)}>
           {programas.map((programa) => (
             <ProgramCard key={programa.id} programa={programa} />
           ))}
@@ -77,9 +79,11 @@ export default async function ProgramsPage() {
             </p>
           </div>
 
-          {trancados.map((p) => (
-            <ProgramaTrancado key={p.id} titulo={p.title} dias={p.durationDays} />
-          ))}
+          <div className={cn('space-y-3', GRADE_DE_ITENS)}>
+            {trancados.map((p) => (
+              <ProgramaTrancado key={p.id} titulo={p.title} dias={p.durationDays} />
+            ))}
+          </div>
 
           <ChamadaDoPlus titulo="Abra os programas com o Synse+" />
         </section>

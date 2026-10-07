@@ -16,6 +16,7 @@ import { PeriodSelector } from '@/features/synse-body/components/period-selector
 import { PERIODOS } from '@/features/synse-body/state'
 import { janelaBloqueada } from '@/lib/plans/history'
 import { HISTORY_MONTHS } from '@/lib/plans/tiers'
+import { LinhaInteira, PilhaDoApp } from '@/components/synse/duas-colunas'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 import { isPendingMigration } from '@/lib/database/pending-migration'
@@ -110,54 +111,56 @@ export default async function SynseBodyPage({
   const pesagensNoGrafico = pontos.reduce((soma, p) => soma + p.medicoes, 0)
 
   return (
-    <div className="animate-fade-in-up space-y-5">
-      <header>
-        <BackLink href="/app" label="Hoje" />
-        <h1 className="mt-1 text-2xl font-semibold text-synse-text">Synse Body</h1>
-        <p className="text-sm text-synse-muted">
-          Seu peso e sua composição corporal, medidos pela balança e guardados por você.
-        </p>
-      </header>
+    <PilhaDoApp className="animate-fade-in-up">
+      <LinhaInteira className="space-y-5">
+        <header>
+          <BackLink href="/app" label="Hoje" />
+          <h1 className="mt-1 text-2xl font-semibold text-synse-text">Synse Body</h1>
+          <p className="text-sm text-synse-muted">
+            Seu peso e sua composição corporal, medidos pela balança e guardados por você.
+          </p>
+        </header>
 
-      <div className="flex flex-wrap gap-2">
-        <Button asChild size="sm">
-          <Link href={aparelhos.length ? '/app/corpo/pesar' : '/app/corpo/aparelhos'}>
-            <Scale className="size-4" aria-hidden />
-            {aparelhos.length ? 'Pesar agora' : 'Vincular balança'}
-          </Link>
-        </Button>
-        <Button asChild size="sm" variant="outline">
-          <Link href="/app/corpo/manual">
-            <Pencil className="size-4" aria-hidden />
-            Digitar peso
-          </Link>
-        </Button>
-        <Button asChild size="sm" variant="ghost">
-          <Link href="/app/corpo/aparelhos">
-            <Bluetooth className="size-4" aria-hidden />
-            Aparelhos
-          </Link>
-        </Button>
-        {/*
+        <div className="flex flex-wrap gap-2">
+          <Button asChild size="sm">
+            <Link href={aparelhos.length ? '/app/corpo/pesar' : '/app/corpo/aparelhos'}>
+              <Scale className="size-4" aria-hidden />
+              {aparelhos.length ? 'Pesar agora' : 'Vincular balança'}
+            </Link>
+          </Button>
+          <Button asChild size="sm" variant="outline">
+            <Link href="/app/corpo/manual">
+              <Pencil className="size-4" aria-hidden />
+              Digitar peso
+            </Link>
+          </Button>
+          <Button asChild size="sm" variant="ghost">
+            <Link href="/app/corpo/aparelhos">
+              <Bluetooth className="size-4" aria-hidden />
+              Aparelhos
+            </Link>
+          </Button>
+          {/*
           A porta do controle de privacidade. A 0032 criou a autorização
           nominal e revogável; a tela que a opera só chegou agora, e sem este
           elo ela continuaria existindo sem ninguém alcançar.
         */}
-        <Button asChild size="sm" variant="ghost">
-          <Link href="/app/corpo/compartilhamento">
-            <ShieldCheck className="size-4" aria-hidden />
-            Quem vê
-          </Link>
-        </Button>
-      </div>
+          <Button asChild size="sm" variant="ghost">
+            <Link href="/app/corpo/compartilhamento">
+              <ShieldCheck className="size-4" aria-hidden />
+              Quem vê
+            </Link>
+          </Button>
+        </div>
 
-      {/*
+        {/*
         As pesagens feitas sem rede. Só aparece quando há o que dizer, e é ele
         que efetivamente sobe a fila — não basta gravá-la.
       */}
-      <PendingBodySync />
+        <PendingBodySync />
 
-      <PeriodSelector atual={janela} tier={session.tier} />
+        <PeriodSelector atual={janela} tier={session.tier} />
+      </LinhaInteira>
 
       {recortado && (
         <Link
@@ -300,6 +303,6 @@ export default async function SynseBodyPage({
           </section>
         </>
       )}
-    </div>
+    </PilhaDoApp>
   )
 }

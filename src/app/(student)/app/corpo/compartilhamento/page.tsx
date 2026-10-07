@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/synse/page-header'
 import { Compartilhamento } from '@/features/synse-body/compartilhamento'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
+import { ColunaDeLeitura } from '@/components/synse/duas-colunas'
 
 export const metadata: Metadata = { title: 'Quem vê o seu corpo' }
 
@@ -25,7 +26,7 @@ export default async function CompartilhamentoPage() {
   ])
 
   return (
-    <div className="animate-fade-in-up space-y-5">
+    <ColunaDeLeitura className="animate-fade-in-up space-y-5">
       <BackLink href="/app/corpo" label="Corpo" />
       <PageHeader
         title="Quem vê o seu corpo"
@@ -33,6 +34,6 @@ export default async function CompartilhamentoPage() {
       />
 
       <Compartilhamento autorizados={autorizados} equipe={equipe} />
-    </div>
+    </ColunaDeLeitura>
   )
 }

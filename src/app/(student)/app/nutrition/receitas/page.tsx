@@ -14,6 +14,8 @@ import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 import { ordemDaCategoria } from '@/lib/validations/recipe'
 import type { Recipe } from '@/types/domain'
+import { cn } from '@/lib/utils'
+import { GRADE_DE_ITENS } from '@/components/synse/duas-colunas'
 
 export const metadata: Metadata = { title: 'Receitas' }
 
@@ -84,9 +86,11 @@ export default async function RecipesPage() {
             <h2 className="text-sm font-semibold text-synse-text">
               {rotuloDaCategoria(categoria)}
             </h2>
-            {itens.map((receita) => (
-              <CartaoDeReceita key={receita.id} receita={receita} />
-            ))}
+            <div className={cn('space-y-3', GRADE_DE_ITENS)}>
+              {itens.map((receita) => (
+                <CartaoDeReceita key={receita.id} receita={receita} />
+              ))}
+            </div>
           </section>
         ))
       )}
@@ -102,9 +106,11 @@ export default async function RecipesPage() {
             </p>
           </div>
 
-          {trancadas.map((receita) => (
-            <CartaoDeReceitaTrancada key={receita.id} receita={receita} />
-          ))}
+          <div className={cn('space-y-3', GRADE_DE_ITENS)}>
+            {trancadas.map((receita) => (
+              <CartaoDeReceitaTrancada key={receita.id} receita={receita} />
+            ))}
+          </div>
 
           <ChamadaDoPlus titulo="Abra as receitas com o Synse+" />
         </section>

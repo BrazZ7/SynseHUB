@@ -10,6 +10,7 @@ import { SESSOES_RECENTES } from '@/features/analysis/metrics'
 import { getAnaliseMensal } from '@/features/analysis/service'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { formatDate, formatNumber } from '@/lib/utils'
+import { ColunaDeLeitura } from '@/components/synse/duas-colunas'
 
 export const metadata: Metadata = { title: 'Sua análise' }
 
@@ -37,7 +38,7 @@ export default async function AnalisePage() {
   const semTreino = analise.totais.workouts === 0
 
   return (
-    <div className="animate-fade-in-up space-y-5">
+    <ColunaDeLeitura className="animate-fade-in-up space-y-5">
       <BackLink href="/app/progress" label="Progresso" />
 
       <header>
@@ -264,7 +265,7 @@ export default async function AnalisePage() {
           )}
         </>
       )}
-    </div>
+    </ColunaDeLeitura>
   )
 }
 

@@ -14,6 +14,7 @@ import {
   Wallet,
 } from 'lucide-react'
 
+import { LinhaInteira, PilhaDoApp } from '@/components/synse/duas-colunas'
 import { ProgressRing } from '@/components/synse/progress-ring'
 import { ListLink } from '@/components/synse/list-link'
 import { SynseLogo } from '@/components/synse/synse-logo'
@@ -85,80 +86,91 @@ export default async function StudentHomePage() {
   const proximaDaGrade = aulas.find((aula) => aula.status === 'SCHEDULED')
 
   return (
-    <div className="animate-fade-in-up space-y-5">
-      <header className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-sm text-synse-muted">{greeting()},</p>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold text-synse-text">
-            {firstName(home.name)}
-            <StreakFlame sequencia={sequencia} />
-          </h1>
-        </div>
-        <div className="flex items-center gap-1">
-          <NotificationsBell allHref="/app/notifications" />
-          <SynseLogo variant="symbol" size="md" />
-        </div>
-      </header>
+    <PilhaDoApp className="animate-fade-in-up">
+      {/*
+       * ── O topo atravessa as duas colunas ──────────────────────────────────
+       *
+       * O nome de quem abriu o app e o treino de hoje não são um cartão entre
+       * outros: são o motivo de a pessoa ter aberto. Ficam inteiros no alto, e
+       * só o que vem depois deles se divide em duas colunas.
+       */}
+      <LinhaInteira className="space-y-5">
+        <header className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm text-synse-muted">{greeting()},</p>
+            <h1 className="flex items-center gap-2 text-2xl font-semibold text-synse-text">
+              {firstName(home.name)}
+              <StreakFlame sequencia={sequencia} />
+            </h1>
+          </div>
+          <div className="flex items-center gap-1">
+            <NotificationsBell allHref="/app/notifications" />
+            <SynseLogo variant="symbol" size="md" />
+          </div>
+        </header>
 
-      {/* Cartão principal: o treino de hoje */}
-      <section className="relative overflow-hidden rounded-2xl bg-synse-gradient-deep p-6 text-white shadow-synse-lg">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -right-16 -top-16 size-52 rounded-full bg-synse-primary/25 blur-3xl"
-        />
+        {/* Cartão principal: o treino de hoje */}
+        <section className="relative overflow-hidden rounded-2xl bg-synse-gradient-deep p-6 text-white shadow-synse-lg">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -right-16 -top-16 size-52 rounded-full bg-synse-primary/25 blur-3xl"
+          />
 
-        <div className="relative">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/50">Seu dia</p>
+          <div className="relative">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/50">
+              Seu dia
+            </p>
 
-          {home.todayWorkout ? (
-            <>
-              <h2 className="mt-2 text-2xl font-semibold leading-tight text-white">
-                {home.todayWorkout.name.replace(/^Treino [A-Z]+ — /, '')}
-              </h2>
-              <p className="mt-1 text-sm text-white/60">
-                Divisão {home.todayWorkout.splitLabel} · {home.todayWorkout.exerciseCount}{' '}
-                exercícios
-              </p>
-              <Button
-                asChild
-                variant="ghost"
-                className="mt-4 bg-white/15 text-white hover:bg-white/25"
-              >
-                <Link href="/app/workout">
-                  Ver treino
-                  <ArrowRight className="size-4" />
-                </Link>
-              </Button>
-            </>
-          ) : (
-            /*
+            {home.todayWorkout ? (
+              <>
+                <h2 className="mt-2 text-2xl font-semibold leading-tight text-white">
+                  {home.todayWorkout.name.replace(/^Treino [A-Z]+ — /, '')}
+                </h2>
+                <p className="mt-1 text-sm text-white/60">
+                  Divisão {home.todayWorkout.splitLabel} · {home.todayWorkout.exerciseCount}{' '}
+                  exercícios
+                </p>
+                <Button
+                  asChild
+                  variant="ghost"
+                  className="mt-4 bg-white/15 text-white hover:bg-white/25"
+                >
+                  <Link href="/app/workout">
+                    Ver treino
+                    <ArrowRight className="size-4" />
+                  </Link>
+                </Button>
+              </>
+            ) : (
+              /*
               Antes aqui dizia "nenhum treino atribuído, fale com o professor".
               Deixava de pé quem não tem academia — e mandava quem tem esperar.
               O treino base existe desde o primeiro minuto.
             */
-            <>
-              <h2 className="mt-2 text-2xl font-semibold leading-tight text-white">
-                Treino base Synse
-              </h2>
-              <p className="mt-1 text-sm text-white/60">
-                Corpo inteiro, 3× por semana. Vale até sua academia montar o seu.
-              </p>
-              <Button
-                asChild
-                variant="ghost"
-                className="mt-4 bg-white/15 text-white hover:bg-white/25"
-              >
-                <Link href="/app/workout">
-                  Ver treino base
-                  <ArrowRight className="size-4" />
-                </Link>
-              </Button>
-            </>
-          )}
-        </div>
-      </section>
+              <>
+                <h2 className="mt-2 text-2xl font-semibold leading-tight text-white">
+                  Treino base Synse
+                </h2>
+                <p className="mt-1 text-sm text-white/60">
+                  Corpo inteiro, 3× por semana. Vale até sua academia montar o seu.
+                </p>
+                <Button
+                  asChild
+                  variant="ghost"
+                  className="mt-4 bg-white/15 text-white hover:bg-white/25"
+                >
+                  <Link href="/app/workout">
+                    Ver treino base
+                    <ArrowRight className="size-4" />
+                  </Link>
+                </Button>
+              </>
+            )}
+          </div>
+        </section>
 
-      <AppCheckInButton alreadyCheckedIn={home.checkedInToday} />
+        <AppCheckInButton alreadyCheckedIn={home.checkedInToday} />
+      </LinhaInteira>
 
       {/* Indicadores da semana */}
       <section className="grid grid-cols-2 gap-3">
@@ -487,7 +499,7 @@ export default async function StudentHomePage() {
         </span>
         <ArrowRight className="size-4 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5" />
       </Link>
-    </div>
+    </PilhaDoApp>
   )
 }
 

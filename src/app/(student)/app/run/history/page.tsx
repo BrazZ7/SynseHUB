@@ -19,6 +19,8 @@ import { isPendingMigration } from '@/lib/database/pending-migration'
 import { janelaBloqueada, recortarDias } from '@/lib/plans/history'
 import { HISTORY_MONTHS } from '@/lib/plans/tiers'
 import type { Activity } from '@/types/domain'
+import { cn } from '@/lib/utils'
+import { GRADE_DE_ITENS } from '@/components/synse/duas-colunas'
 
 export const metadata: Metadata = { title: 'Minhas atividades' }
 
@@ -177,7 +179,7 @@ export default async function RunHistoryPage({
           description="Quando você correr, caminhar ou pedalar com o SynseRun, tudo aparece aqui."
         />
       ) : (
-        <ul className="space-y-2">
+        <ul className={cn('space-y-2', GRADE_DE_ITENS)}>
           {atividades.map((atividade) => (
             <li key={atividade.id}>
               <ListLink

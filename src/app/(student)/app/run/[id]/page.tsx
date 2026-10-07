@@ -19,6 +19,7 @@ import {
 } from '@/features/synse-run/format'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
+import { ColunaDeLeitura } from '@/components/synse/duas-colunas'
 
 export const metadata: Metadata = { title: 'Atividade' }
 
@@ -41,7 +42,7 @@ export default async function ActivityDetailPage({ params }: { params: Promise<{
   const quando = new Date(atividade.startedAt)
 
   return (
-    <div className="animate-fade-in-up space-y-5">
+    <ColunaDeLeitura className="animate-fade-in-up space-y-5">
       <header>
         <BackLink href="/app/run" label="SynseRun" />
         <div className="mt-1 flex items-center gap-2">
@@ -202,7 +203,7 @@ export default async function ActivityDetailPage({ params }: { params: Promise<{
         Distância, pace e elevação são recalculados no servidor a partir do percurso. Calorias são
         estimativa por esforço, não medição.
       </p>
-    </div>
+    </ColunaDeLeitura>
   )
 }
 

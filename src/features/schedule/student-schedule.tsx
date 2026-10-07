@@ -12,6 +12,7 @@ import { initialScheduleState } from '@/features/schedule/state'
 import { horaLocal, ocupacao } from '@/features/schedule/week'
 import { cn } from '@/lib/utils'
 import type { ClassSessionForStudent } from '@/types/domain'
+import { GRADE_DE_ITENS } from '@/components/synse/duas-colunas'
 
 /**
  * A agenda do aluno.
@@ -20,7 +21,11 @@ import type { ClassSessionForStudent } from '@/types/domain'
  * vaga ou fila é do banco — a tela nunca promete "tem vaga" a partir de uma
  * contagem que pode estar velha na mão de quem abriu antes.
  */
-export function StudentSchedule({ dias }: { dias: Array<{ rotulo: string; aulas: ClassSessionForStudent[] }> }) {
+export function StudentSchedule({
+  dias,
+}: {
+  dias: Array<{ rotulo: string; aulas: ClassSessionForStudent[] }>
+}) {
   return (
     <div className="space-y-5">
       {dias.map((dia) => (
@@ -28,9 +33,20 @@ export function StudentSchedule({ dias }: { dias: Array<{ rotulo: string; aulas:
           <h2 className="text-xs font-semibold uppercase tracking-wide text-synse-muted">
             {dia.rotulo}
           </h2>
-          {dia.aulas.map((aula) => (
-            <CartaoDeAula key={aula.id} aula={aula} />
-          ))}
+          {/*
+            As aulas do dia lado a lado no tablet. O rótulo do dia continua
+            inteiro em cima — é ele que separa um dia do outro, e reparti-lo
+            faria "SÁBADO" aparecer no meio da grade de sexta.
+
+            Cada cartão tem um botão de largura total: numa coluna de 1024px
+            esse botão vira uma faixa atravessando a tela para dizer "Reservar
+            vaga". Em duas colunas ele volta a ter tamanho de botão.
+          */}
+          <div className={cn('space-y-2', GRADE_DE_ITENS)}>
+            {dia.aulas.map((aula) => (
+              <CartaoDeAula key={aula.id} aula={aula} />
+            ))}
+          </div>
         </section>
       ))}
     </div>

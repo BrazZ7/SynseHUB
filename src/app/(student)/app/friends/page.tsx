@@ -6,6 +6,7 @@ import { BackLink } from '@/components/synse/back-link'
 import { ConsentList } from '@/features/consents/consent-list'
 import { DIAS_DO_RANKING } from '@/features/friends/state'
 import { FriendsPanel } from '@/features/friends/friends-panel'
+import { LinhaInteira, PilhaDoApp } from '@/components/synse/duas-colunas'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 import { isPendingMigration } from '@/lib/database/pending-migration'
@@ -46,8 +47,8 @@ export default async function FriendsPage() {
           <Lock className="mt-0.5 size-4 shrink-0 text-synse-primary" aria-hidden />
           <span>
             <strong className="font-medium">O ranking entre amigos é do Synse+.</strong> Você
-            adiciona quem quiser pelo Synse ID e compara os treinos do mês — e ninguém aparece
-            sem autorizar.
+            adiciona quem quiser pelo Synse ID e compara os treinos do mês — e ninguém aparece sem
+            autorizar.
           </span>
         </Link>
       </div>
@@ -82,18 +83,20 @@ export default async function FriendsPage() {
   const rankingDaPrivacidade = consents.filter((item) => item.consentType === 'RANKING_VISIBILITY')
 
   return (
-    <div className="animate-fade-in-up space-y-5">
-      <BackLink href="/app/progress" label="Progresso" />
+    <PilhaDoApp className="animate-fade-in-up">
+      <LinhaInteira className="space-y-5">
+        <BackLink href="/app/progress" label="Progresso" />
 
-      <header>
-        <h1 className="flex items-center gap-2 text-2xl font-semibold text-synse-text">
-          <Users className="size-6 text-synse-primary" aria-hidden />
-          Amigos
-        </h1>
-        <p className="text-sm text-synse-muted">
-          Adicione pelo Synse ID e comparem os treinos. Ninguém aparece sem autorizar.
-        </p>
-      </header>
+        <header>
+          <h1 className="flex items-center gap-2 text-2xl font-semibold text-synse-text">
+            <Users className="size-6 text-synse-primary" aria-hidden />
+            Amigos
+          </h1>
+          <p className="text-sm text-synse-muted">
+            Adicione pelo Synse ID e comparem os treinos. Ninguém aparece sem autorizar.
+          </p>
+        </header>
+      </LinhaInteira>
 
       {indisponivel ? (
         <p className="rounded-2xl border border-dashed border-synse-border p-5 text-center text-sm text-synse-muted">
@@ -112,11 +115,9 @@ export default async function FriendsPage() {
             O controle da própria autorização, aqui e não só em Perfil: quem
             abriu esta tela é exatamente quem precisa decidir se quer aparecer.
           */}
-          {rankingDaPrivacidade.length > 0 && (
-            <ConsentList consents={rankingDaPrivacidade} />
-          )}
+          {rankingDaPrivacidade.length > 0 && <ConsentList consents={rankingDaPrivacidade} />}
         </>
       )}
-    </div>
+    </PilhaDoApp>
   )
 }

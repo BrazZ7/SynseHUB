@@ -11,6 +11,7 @@ import { ProgressForm } from '@/features/challenges/progress-form'
 import { cycleLabel, getChallengeBoard } from '@/features/challenges/service'
 import { GymChallengeList } from '@/features/gym-challenges/gym-challenge-list'
 import { getDataSource } from '@/lib/database'
+import { LinhaInteira, PilhaDoApp } from '@/components/synse/duas-colunas'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { CHALLENGES_PER_CYCLE } from '@/lib/plans/tiers'
 
@@ -69,14 +70,16 @@ export default async function ChallengesPage() {
   }
 
   return (
-    <div className="animate-fade-in-up space-y-6">
-      <header>
-        <BackLink href="/app" label="Hoje" />
-        <h1 className="text-2xl font-semibold text-synse-text">Desafios</h1>
-        <p className="text-sm text-synse-muted">
-          Um objetivo por mês. No fim de {cicloAtual} você recebe a análise e a medalha.
-        </p>
-      </header>
+    <PilhaDoApp className="animate-fade-in-up">
+      <LinhaInteira>
+        <header>
+          <BackLink href="/app" label="Hoje" />
+          <h1 className="text-2xl font-semibold text-synse-text">Desafios</h1>
+          <p className="text-sm text-synse-muted">
+            Um objetivo por mês. No fim de {cicloAtual} você recebe a análise e a medalha.
+          </p>
+        </header>
+      </LinhaInteira>
 
       {/* Análise do mês fechado: é o que a pessoa volta para ver */}
       {board.lastReport && (
@@ -201,6 +204,6 @@ export default async function ChallengesPage() {
       )}
 
       <GymChallengeList desafios={abertos} />
-    </div>
+    </PilhaDoApp>
   )
 }

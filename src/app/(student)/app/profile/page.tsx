@@ -33,6 +33,7 @@ import {
   SemanaChart,
   BarraDeTotais,
 } from '@/features/students/components/profile-pieces'
+import { LinhaInteira, PilhaDoApp } from '@/components/synse/duas-colunas'
 import { PainelPlanta } from '@/features/students/components/plant-panel'
 import { plantaDoNivel } from '@/features/students/plant'
 import { getPerfilCompleto } from '@/features/students/profile-service'
@@ -81,129 +82,140 @@ export default async function StudentProfilePage({
   const km = (valor: number) => `${valor.toFixed(1).replace('.', ',')} km`
 
   return (
-    <div className="animate-fade-in-up space-y-5">
-      <CapaPerfil
-        acao={
-          <MenuDaConta
-            resumo={`${session.isSoloStudent ? 'Sem vínculo' : (organization?.name ?? 'Academia')} · ${student?.planName ?? 'Sem plano'} · ${student?.trainerName ?? 'Professor a definir'}`}
-          >
-            {session.isSoloStudent && (
-              <SecaoRecolhivel titulo="Vincular a uma academia" icone={Building2}>
-                <LinkGymCard semMoldura />
+    <PilhaDoApp className="animate-fade-in-up">
+      {/*
+       * ── O que atravessa as duas colunas ───────────────────────────────────
+       *
+       * A capa, os quatro totais e o jardim. São a identidade de quem abriu a
+       * tela, e o jardim acabou de ganhar a linha inteira justamente para a
+       * planta ter espaço — cortá-lo ao meio agora desfaria isso. O que vem
+       * depois são cartões independentes, e esses se dividem.
+       */}
+      <LinhaInteira className="space-y-5">
+        <CapaPerfil
+          acao={
+            <MenuDaConta
+              resumo={`${session.isSoloStudent ? 'Sem vínculo' : (organization?.name ?? 'Academia')} · ${student?.planName ?? 'Sem plano'} · ${student?.trainerName ?? 'Professor a definir'}`}
+            >
+              {session.isSoloStudent && (
+                <SecaoRecolhivel titulo="Vincular a uma academia" icone={Building2}>
+                  <LinkGymCard semMoldura />
+                </SecaoRecolhivel>
+              )}
+
+              <SecaoRecolhivel titulo="Perfil profissional" icone={Briefcase}>
+                <ProfessionalCard
+                  ativo={session.professionalPlan}
+                  defaultName={session.name}
+                  semMoldura
+                />
               </SecaoRecolhivel>
-            )}
 
-            <SecaoRecolhivel titulo="Perfil profissional" icone={Briefcase}>
-              <ProfessionalCard
-                ativo={session.professionalPlan}
-                defaultName={session.name}
-                semMoldura
-              />
-            </SecaoRecolhivel>
+              <SecaoRecolhivel titulo="Privacidade" icone={ShieldCheck}>
+                <ConsentList consents={consents} semMoldura />
+              </SecaoRecolhivel>
 
-            <SecaoRecolhivel titulo="Privacidade" icone={ShieldCheck}>
-              <ConsentList consents={consents} semMoldura />
-            </SecaoRecolhivel>
+              <SecaoRecolhivel titulo="Encerrar minha conta" icone={TriangleAlert} perigo>
+                <CloseAccountCard semMoldura />
+              </SecaoRecolhivel>
 
-            <SecaoRecolhivel titulo="Encerrar minha conta" icone={TriangleAlert} perigo>
-              <CloseAccountCard semMoldura />
-            </SecaoRecolhivel>
+              <div className="flex items-center justify-between gap-3 border-t border-synse-border pt-4">
+                <span className="text-xs text-synse-muted">Tema do aplicativo</span>
+                <ThemeToggle />
+              </div>
 
-            <div className="flex items-center justify-between gap-3 border-t border-synse-border pt-4">
-              <span className="text-xs text-synse-muted">Tema do aplicativo</span>
-              <ThemeToggle />
-            </div>
-
-            {/*
+              {/*
               O aviso com o app fechado. O cartão some sozinho em navegador
               que não suporta e em instalação sem chave VAPID — em vez de
               oferecer um botão que falha no clique.
             */}
-            <PushCard chavePublica={VAPID_PUBLIC_KEY} />
+              <PushCard chavePublica={VAPID_PUBLIC_KEY} />
 
-            {/*
+              {/*
               Trocar a senha estando logado pede a senha atual — é o que
               impede que um celular deixado desbloqueado vire uma conta
               perdida. Quem esqueceu a senha entra pelo link do e-mail, na
               tela de entrada, e chega na mesma tela sem precisar da atual.
             */}
-            <Button variant="outline" className="w-full" asChild>
-              <Link href="/nova-senha">
-                <KeyRound className="size-4" />
-                Trocar minha senha
-              </Link>
-            </Button>
-
-            <form action={signOut}>
-              <Button type="submit" variant="outline" className="w-full">
-                <LogOut className="size-4" />
-                Sair
+              <Button variant="outline" className="w-full" asChild>
+                <Link href="/nova-senha">
+                  <KeyRound className="size-4" />
+                  Trocar minha senha
+                </Link>
               </Button>
-            </form>
-          </MenuDaConta>
-        }
-      >
-        {/*
-         * O título "Perfil" saiu da tela: a barra de baixo já diz em qual aba
-         * a pessoa está, e repetir isso custava a primeira dobra inteira. Ele
-         * continua aqui para leitor de tela e para a estrutura de cabeçalhos,
-         * que não pode começar sem um `h1`.
-         *
-         * Dentro da capa, e não antes dela: como primeiro filho do
-         * `space-y-5`, ele fazia a capa virar o segundo — e aí o `space-y`
-         * ganha do `-mt-6` por especificidade e devolve os 20px que a margem
-         * negativa tinha tirado. A capa descolava do topo por causa de um
-         * elemento invisível.
-         */}
-        <h1 className="sr-only">Perfil</h1>
 
-        <AvatarPicker nome={session.name} fotoAtual={fotoAssinada} />
+              <form action={signOut}>
+                <Button type="submit" variant="outline" className="w-full">
+                  <LogOut className="size-4" />
+                  Sair
+                </Button>
+              </form>
+            </MenuDaConta>
+          }
+        >
+          {/*
+           * O título "Perfil" saiu da tela: a barra de baixo já diz em qual aba
+           * a pessoa está, e repetir isso custava a primeira dobra inteira. Ele
+           * continua aqui para leitor de tela e para a estrutura de cabeçalhos,
+           * que não pode começar sem um `h1`.
+           *
+           * Dentro da capa, e não antes dela: como primeiro filho do
+           * `space-y-5`, ele fazia a capa virar o segundo — e aí o `space-y`
+           * ganha do `-mt-6` por especificidade e devolve os 20px que a margem
+           * negativa tinha tirado. A capa descolava do topo por causa de um
+           * elemento invisível.
+           */}
+          <h1 className="sr-only">Perfil</h1>
 
-        <div className="min-w-0 border-t border-synse-border pt-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="truncate text-lg font-semibold text-synse-text">{session.name}</p>
-            <span className="inline-flex items-center gap-1 rounded-full border border-synse-primary/40 bg-synse-primary/10 px-2.5 py-0.5 text-xs font-medium text-synse-primary">
-              Nível {perfil.nivel.nivel}
-            </span>
-            {perfil.sequencia.hoje && (
-              <span className="inline-flex items-center gap-1 text-xs text-synse-muted">
-                <span className="size-1.5 rounded-full bg-synse-success" aria-hidden />
-                Ativo hoje
+          <AvatarPicker nome={session.name} fotoAtual={fotoAssinada} />
+
+          <div className="min-w-0 border-t border-synse-border pt-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="truncate text-lg font-semibold text-synse-text">{session.name}</p>
+              <span className="inline-flex items-center gap-1 rounded-full border border-synse-primary/40 bg-synse-primary/10 px-2.5 py-0.5 text-xs font-medium text-synse-primary">
+                Nível {perfil.nivel.nivel}
               </span>
-            )}
+              {perfil.sequencia.hoje && (
+                <span className="inline-flex items-center gap-1 text-xs text-synse-muted">
+                  <span className="size-1.5 rounded-full bg-synse-success" aria-hidden />
+                  Ativo hoje
+                </span>
+              )}
+            </div>
+            <p className="truncate text-sm text-synse-muted">{session.email}</p>
+            <p className="mt-1 font-mono text-xs tracking-wide text-synse-muted">
+              {session.synseId}
+            </p>
           </div>
-          <p className="truncate text-sm text-synse-muted">{session.email}</p>
-          <p className="mt-1 font-mono text-xs tracking-wide text-synse-muted">{session.synseId}</p>
-        </div>
-      </CapaPerfil>
+        </CapaPerfil>
 
-      {/* ── Os quatro números, numa barra só ─────────────────────────────── */}
-      <BarraDeTotais
-        itens={[
-          {
-            icone: ICONES_DO_TOPO.Dumbbell,
-            valor: String(perfil.totais.treinos),
-            rotulo: 'Treinos',
-          },
-          {
-            icone: ICONES_DO_TOPO.Footprints,
-            valor: km(perfil.totais.quilometros),
-            rotulo: 'Corrida',
-          },
-          {
-            icone: ICONES_DO_TOPO.Trophy,
-            valor: String(perfil.totais.desafios),
-            rotulo: 'Desafios',
-          },
-          {
-            icone: ICONES_DO_TOPO.Medal,
-            valor: String(perfil.totais.medalhas),
-            rotulo: 'Medalhas',
-          },
-        ]}
-      />
+        {/* ── Os quatro números, numa barra só ─────────────────────────────── */}
+        <BarraDeTotais
+          itens={[
+            {
+              icone: ICONES_DO_TOPO.Dumbbell,
+              valor: String(perfil.totais.treinos),
+              rotulo: 'Treinos',
+            },
+            {
+              icone: ICONES_DO_TOPO.Footprints,
+              valor: km(perfil.totais.quilometros),
+              rotulo: 'Corrida',
+            },
+            {
+              icone: ICONES_DO_TOPO.Trophy,
+              valor: String(perfil.totais.desafios),
+              rotulo: 'Desafios',
+            },
+            {
+              icone: ICONES_DO_TOPO.Medal,
+              valor: String(perfil.totais.medalhas),
+              rotulo: 'Medalhas',
+            },
+          ]}
+        />
 
-      {/*
+        {/*
         O jardim ocupa a linha inteira.
 
         Dividia-a com um cartão de nível, e a conta não fechava: sobrava menos
@@ -211,11 +223,12 @@ export default async function StudentProfilePage({
         que existe para mostrá-la. O nível virou legenda dentro do painel — ele
         não perdeu nada, e a planta ganhou o espaço todo.
       */}
-      <PainelPlanta
-        planta={plantaDoNivel(perfil.nivel)}
-        nivel={perfil.nivel}
-        previa={jardim === 'previa'}
-      />
+        <PainelPlanta
+          planta={plantaDoNivel(perfil.nivel)}
+          nivel={perfil.nivel}
+          previa={jardim === 'previa'}
+        />
+      </LinhaInteira>
 
       {/* ── Três marcadores ──────────────────────────────────────────────── */}
       <section className="grid grid-cols-3 gap-3">
@@ -306,7 +319,7 @@ export default async function StudentProfilePage({
           Synse · mais que resultados
         </p>
       </section>
-    </div>
+    </PilhaDoApp>
   )
 }
 

@@ -11,6 +11,8 @@ import { getDataSource } from '@/lib/database'
 import { CartaoTrancado, ChamadaDoPlus } from '@/features/content/vitrine'
 import { TIPOS, type TipoConteudo } from '@/lib/validations/content'
 import { formatDate } from '@/lib/utils'
+import { cn } from '@/lib/utils'
+import { GRADE_DE_ITENS } from '@/components/synse/duas-colunas'
 
 export const metadata: Metadata = { title: 'Conteúdos' }
 
@@ -48,7 +50,7 @@ export default async function StudentContentPage() {
           description="Quando a academia publicar um aviso ou conteúdo, ele aparece aqui."
         />
       ) : (
-        <div className="space-y-3">
+        <div className={cn('space-y-3', GRADE_DE_ITENS)}>
           {itens.map((item) => {
             // O acervo da plataforma não tem staff autor: a origem se lê pelo
             // dono nulo, e não por um `authorName` que vem vazio dele.
@@ -116,9 +118,11 @@ export default async function StudentContentPage() {
             </p>
           </div>
 
-          {trancados.map((item) => (
-            <CartaoTrancado key={item.id} item={item} />
-          ))}
+          <div className={cn('space-y-3', GRADE_DE_ITENS)}>
+            {trancados.map((item) => (
+              <CartaoTrancado key={item.id} item={item} />
+            ))}
+          </div>
 
           <ChamadaDoPlus titulo="Abra o acervo com o Synse+" />
         </section>

@@ -4,6 +4,8 @@ import { Bluetooth, Lock, Pencil, Scale, ShieldCheck, Trash2 } from 'lucide-reac
 
 import { ApagarMedicao } from '@/features/synse-body/apagar-medicao'
 import { BackLink } from '@/components/synse/back-link'
+import { Pagination } from '@/components/synse/pagination'
+import { estadoDaPaginacao } from '@/components/synse/pagination-state'
 import { ChartCard } from '@/components/synse/chart-card'
 import { EmptyState } from '@/components/synse/empty-state'
 import { ProgressLineChart } from '@/components/synse/charts/progress-line-chart'
@@ -19,6 +21,8 @@ import { getDataSource } from '@/lib/database'
 import { isPendingMigration } from '@/lib/database/pending-migration'
 import { bodyPeriodSchema } from '@/lib/validations/body'
 import { formatDate } from '@/lib/utils'
+import type { BodySeriesPoint } from '@/features/synse-body/baldes-da-serie'
+import type { Paginated } from '@/lib/database/data-source'
 import type { BodyMeasurement, BodyPeriod } from '@/types/domain'
 
 /** A maior janela que o plano gratuito cobre. */
@@ -35,13 +39,17 @@ const CAMPOS = [
   'bmrKcal',
 ] as const
 
+/** Quantas pesagens o histórico mostra por página. */
+const POR_PAGINA = 30
+
 export default async function SynseBodyPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string }>
+  searchParams: Promise<{ periodo?: string; page?: string }>
 }) {
   const session = await requireStudentSession()
-  const { periodo } = await searchParams
+  const { periodo, page } = await searchParams
+  const pagina = Math.max(1, Number(page ?? 1) || 1)
   const pedida: BodyPeriod = bodyPeriodSchema.safeParse(periodo).data ?? '30d'
 
   /*
@@ -63,13 +71,21 @@ export default async function SynseBodyPage({
    * aparece vazia em vez de quebrar, e `/api/health?deep=1` é quem denuncia a
    * migration pendente.
    */
-  let medicoes: BodyMeasurement[] = []
+  let historico: Paginated<BodyMeasurement> = { rows: [], total: 0, page: 1, pageSize: POR_PAGINA }
+  let pontos: BodySeriesPoint[] = []
   let aparelhos: Awaited<ReturnType<typeof dataSource.listUserDevices>> = []
   let indisponivel = false
 
   try {
-    ;[medicoes, aparelhos] = await Promise.all([
-      dataSource.listBodyMeasurements(janela),
+    ;[historico, pontos, aparelhos] = await Promise.all([
+      dataSource.listBodyMeasurements(janela, { page: pagina, pageSize: POR_PAGINA }),
+      /*
+       * O gráfico vem agrupado pelo banco (0052) e **não** da lista: lista tem
+       * página, gráfico não. Antes os dois saíam da mesma leitura sem teto, e
+       * o corte silencioso do PostgREST — que descarta o mais antigo — fazia a
+       * linha nascer no meio do caminho sem nada dizer que faltava começo.
+       */
+      dataSource.getBodySeries(janela),
       dataSource.listUserDevices(),
     ])
   } catch (erro) {
@@ -77,14 +93,21 @@ export default async function SynseBodyPage({
     indisponivel = true
   }
 
+  const medicoes = historico.rows
   const ultima = medicoes[0]
   const anterior = medicoes[1]
   const variacao = ultima && anterior ? ultima.weightKg - anterior.weightKg : null
 
   // Do mais antigo para o mais recente: o gráfico lê da esquerda para a direita.
-  const serie = [...medicoes]
-    .reverse()
-    .map((m) => ({ label: formatDate(m.measuredAt), value: m.weightKg }))
+  const serie = pontos.map((p) => ({ label: formatDate(p.instante), value: p.pesoKg }))
+  const paginacao = estadoDaPaginacao(pagina, POR_PAGINA, historico.total)
+
+  /*
+   * O resumo do gráfico conta pesagens, não pontos: um ponto pode agrupar as
+   * três do mesmo dia, e dizer "7 pontos" para quem pesou 21 vezes seria
+   * trocar um número honesto por um detalhe de implementação.
+   */
+  const pesagensNoGrafico = pontos.reduce((soma, p) => soma + p.medicoes, 0)
 
   return (
     <div className="animate-fade-in-up space-y-5">
@@ -156,11 +179,20 @@ export default async function SynseBodyPage({
           description="A atualização do banco ainda não foi aplicada nesta instalação."
         />
       ) : medicoes.length === 0 ? (
-        <EmptyState
-          icon={Scale}
-          title="Nenhuma medição neste período"
-          description="Vincule uma balança Bluetooth ou digite seu peso para começar o histórico."
-        />
+        /*
+          Vazio por página inexistente não é vazio por nunca ter pesado: quem
+          digitou `?page=9` numa lista de duas páginas não precisa de convite
+          para vincular balança. O total e o botão de voltar ficam com a barra.
+        */
+        paginacao.tipo === 'fora_da_faixa' ? (
+          <EmptyState icon={Scale} title="Esta página do histórico não existe mais" />
+        ) : (
+          <EmptyState
+            icon={Scale}
+            title="Nenhuma medição neste período"
+            description="Vincule uma balança Bluetooth ou digite seu peso para começar o histórico."
+          />
+        )
       ) : (
         <>
           <section className="grid grid-cols-2 gap-3">
@@ -190,12 +222,26 @@ export default async function SynseBodyPage({
             </p>
           )}
 
-          <ChartCard title="Peso" description={`Últimas ${medicoes.length} medições`}>
-            <ProgressLineChart data={serie} unit="kg" />
-          </ChartCard>
+          {serie.length > 1 && (
+            <ChartCard
+              title="Peso"
+              description={
+                pesagensNoGrafico > serie.length
+                  ? `${pesagensNoGrafico} medições, resumidas em ${serie.length} pontos`
+                  : `${pesagensNoGrafico} ${pesagensNoGrafico === 1 ? 'medição' : 'medições'}`
+              }
+            >
+              <ProgressLineChart data={serie} unit="kg" />
+            </ChartCard>
+          )}
 
           <section>
-            <h2 className="mb-3 text-sm font-semibold text-synse-text">Histórico</h2>
+            <h2 className="mb-3 text-sm font-semibold text-synse-text">
+              Histórico
+              <span className="ml-2 font-normal text-synse-muted">
+                {historico.total} {historico.total === 1 ? 'pesagem' : 'pesagens'}
+              </span>
+            </h2>
             <ul className="space-y-2">
               {medicoes.map((medicao) => (
                 <li
@@ -232,6 +278,16 @@ export default async function SynseBodyPage({
                 </li>
               ))}
             </ul>
+
+            {/*
+              A primeira paginação do app do aluno. Entra aqui porque pesagem
+              não se apaga: quem pesa todo dia tem centenas por ano, e a lista
+              inteira numa tela de celular não é histórico, é rolagem.
+            */}
+            <div className="mt-4">
+              <Pagination page={pagina} pageSize={POR_PAGINA} total={historico.total} />
+            </div>
+
             {/*
               Apagar uma medição é da pessoa: dado corporal que não se apaga é
               dado que prende. Fica na tela de detalhe para não virar um toque

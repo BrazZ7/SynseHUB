@@ -90,18 +90,28 @@ describe('a demonstração reproduz a regra, e não uma aproximação', () => {
   it('sem autorização o professor não lê nada', async () => {
     const fonte = comoRafael()
     const perfil = perfilDoAlunoDoApp()
-    expect(await fonte.listSharedBodyMeasurements(perfil, '1a')).toEqual([])
+    expect((await fonte.listSharedBodyMeasurements(perfil, '1a')).rows).toEqual([])
   })
 
   it('depois que o aluno autoriza, o professor lê o histórico', async () => {
     const fonte = comoRafael(AUTORIZOU_RAFAEL)
     const perfil = perfilDoAlunoDoApp()
 
-    const medicoes = await fonte.listSharedBodyMeasurements(perfil, '1a')
+    const pagina = await fonte.listSharedBodyMeasurements(perfil, '1a')
+    const medicoes = pagina.rows
     expect(medicoes.length).toBeGreaterThan(0)
     expect(medicoes[0].weightKg).toBeGreaterThan(0)
     // Mais recente primeiro, como a tela desenha.
     expect(medicoes[0].measuredAt >= medicoes[medicoes.length - 1].measuredAt).toBe(true)
+
+    /*
+     * O total é do conjunto, não da página: é ele que a ficha mostra para o
+     * professor não concluir que o histórico acaba onde a tabela acaba.
+     */
+    expect(pagina.total).toBeGreaterThanOrEqual(medicoes.length)
+
+    /* E a série do gráfico respeita a mesma autorização que a lista. */
+    expect((await fonte.getBodySeries('1a', perfil)).length).toBeGreaterThan(0)
   })
 
   it('a autorização guarda o perfil do aluno, não a matrícula dele', async () => {
@@ -120,7 +130,7 @@ describe('a demonstração reproduz a regra, e não uma aproximação', () => {
     // Mesmo diário, outro perfil olhando: a autorização é nominal.
     const marina = new DemoDataSource(AUTORIZOU_RAFAEL, { perfilAtual: 'prof_staff_0002' })
     const perfil = perfilDoAlunoDoApp()
-    expect(await marina.listSharedBodyMeasurements(perfil, '1a')).toEqual([])
+    expect((await marina.listSharedBodyMeasurements(perfil, '1a')).rows).toEqual([])
   })
 
   it('autorização revogada fecha de novo', async () => {
@@ -129,11 +139,21 @@ describe('a demonstração reproduz a regra, e não uma aproximação', () => {
       { t: 'share', id: 'prof_staff_0003', a: 'revoke' },
     ])
     const perfil = perfilDoAlunoDoApp()
-    expect(await fonte.listSharedBodyMeasurements(perfil, '1a')).toEqual([])
+    expect((await fonte.listSharedBodyMeasurements(perfil, '1a')).rows).toEqual([])
   })
 
   it('e o histórico de outro aluno não vaza pela autorização deste', async () => {
     const fonte = comoRafael(AUTORIZOU_RAFAEL)
-    expect(await fonte.listSharedBodyMeasurements('prof_0099', '1a')).toEqual([])
+    expect((await fonte.listSharedBodyMeasurements('prof_0099', '1a')).rows).toEqual([])
+  })
+
+  it('a série do gráfico fecha com a mesma tranca da lista', async () => {
+    /*
+     * Se uma recusasse e a outra não, o painel mostraria gráfico sem tabela —
+     * um estado que a produção não tem, porque lá a RLS vale para as duas.
+     */
+    const semAutorizacao = comoRafael()
+    const perfil = perfilDoAlunoDoApp()
+    expect(await semAutorizacao.getBodySeries('1a', perfil)).toEqual([])
   })
 })

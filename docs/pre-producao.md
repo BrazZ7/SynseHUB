@@ -779,12 +779,82 @@ existem, não para conferir se subiram.
   direção certa, que o total vem da contagem e não do tamanho da página, e que
   os cortes e o dia que vão para a função são os mesmos que a tela usa.
 
-  Com esta, restam **11** entradas em `PAGINACAO_PENDENTE`. As de maior peso
-  hoje são as pesagens de um aluno (`listBodyMeasurements` e a versão
-  compartilhada — o período "tudo" não recorta nada, e é dado de saúde virando
-  gráfico), o histórico de avaliações, e os três acervos que crescem com o
-  catálogo (`listExercises`, `listContent`/`listSynseContent`, `listRecipes`).
-  As onze estão nomeadas no próprio arquivo do guarda, com o motivo de cada uma.
+  Com esta, restavam **11** entradas em `PAGINACAO_PENDENTE`; a 0052 levou duas
+  e o número está em **9**. As de maior peso hoje são o histórico de avaliações
+  de um aluno e os três acervos que crescem com o catálogo (`listExercises`,
+  `listContent`/`listSynseContent`, `listRecipes`). As nove estão nomeadas no
+  próprio arquivo do guarda, com o motivo de cada uma.
+
+- **0052 (`0052_serie_de_peso.sql`)** — o gráfico de peso agrupado pelo banco,
+  e o histórico de pesagens por página. Fecha a quinta e a sexta entradas da
+  lista de dívida do guarda `tests/unit/leitura-sem-teto.test.ts` (11 → 9).
+
+  `listBodyMeasurements` e `listSharedBodyMeasurements` liam a janela inteira
+  sem teto. Aqui o corte do PostgREST dói diferente do resto do projeto: a
+  ordem é **decrescente**, então o que ele descarta é o **mais antigo**. O peso
+  de hoje e a variação desde a anterior continuavam certos — a parte que a
+  pessoa confere — enquanto o gráfico nascia no meio do caminho, "Últimas N
+  medições" dizia um N menor que o real, e o histórico ficava incompleto em
+  silêncio. Era o defeito invisível justamente onde se olha.
+
+  **Paginar resolve a lista e não resolve o gráfico.** Gráfico não tem página:
+  mostra a janela inteira. E mandar duas mil linhas para desenhar trezentos
+  pixels é o que fazia o teto ficar perto — quem pesa três vezes ao dia gera
+  três pontos onde cabe um, e a diferença entre eles é hidratação, não
+  progresso. Então a série virou valor derivado como qualquer outro:
+  `serie_de_peso(perfil, desde, balde)` devolve **um ponto por balde**, e o
+  número de pontos passa a depender do tamanho da janela em vez da frequência
+  de quem pesa — no máximo ~92 num trimestre e ~53 por ano daí para cima.
+
+  **"Tudo" ficou em semana, e não em mês.** Mês dá o melhor teto para quem tem
+  anos de casa e um gráfico ruim para quem não tem: alguém com quinze pesagens
+  em quatro meses via **quatro pontos**, pior que o gráfico de antes. Seria
+  trocar um defeito que aparece em muito dado por outro que aparece em pouco,
+  que é o caso de quase todo mundo agora. Semana dá dezessete pontos para
+  esses quatro meses e 520 para dez anos — muito ponto para a largura de um
+  gráfico, mas um teto que **não cresce com a frequência de quem pesa**, que
+  era o problema. Quem pesa três vezes ao dia por dez anos tem onze mil
+  pesagens e continua com 520 pontos.
+
+  **A última pesagem do balde, nunca a média.** `distinct on` com ordem
+  decrescente dentro do balde. Média seria um número que ninguém viu na
+  balança, num gráfico cujo ponto inteiro é mostrar o que a balança disse.
+  `medicoes` acompanha cada ponto, e é o que deixa a tela dizer "21 medições,
+  resumidas em 7 pontos" em vez de fingir que houve sete.
+
+  **O balde vem por argumento**, de `src/features/synse-body/baldes-da-serie.ts`
+  — mesma razão dos cortes da 0051: régua repetida em SQL envelhece calada.
+
+  `security invoker`: `body_measurements_self` (0032) já diz quem lê o quê numa
+  regra só — `user_profile_id = auth_profile_id() or body_shared_with_me(…)` —
+  e cobre os dois casos, a própria pessoa e o professor autorizado. Perfil nulo
+  é "o meu", resolvido por `auth_profile_id()` como `record_body_measurement`
+  faz. Nenhum índice novo: `body_measurements (user_profile_id, measured_at desc)`
+  (0032) serve à função e à lista paginada.
+
+  **As duas telas ficaram diferentes de propósito.** `/app/corpo` ganhou a
+  primeira paginação do app do aluno. A ficha em `/students/[id]` **não**: ela
+  não tem nenhum `searchParams` e as abas são de cliente, então um `?page=`
+  atravessaria todas elas. Lá a tabela mostra as 30 mais recentes e **diz o
+  total** — "As 30 mais recentes de 412 no último ano" —, que é o que impede o
+  professor de concluir que o histórico acaba onde a tabela acaba.
+
+  Sem a migration, a série volta a ser agrupada na aplicação, sobre uma leitura
+  com teto **escrito** (1000) em vez de herdado do servidor: o corte deixa de
+  ser silencioso e vira um número que o código conhece. Erro que não é
+  migration continua subindo.
+
+  Sonda: `serieDePeso` em `/api/health?deep=1`, que também reinsere a 0052 em
+  `pendingMigrations` se o registro disser que ela subiu e a função não estiver
+  lá.
+
+  `tests/db/serie-de-peso.test.ts`: 11 testes contra Postgres, 7 mutações na
+  migration. Uma delas "passou" com o banco fora do ar — 11 pulados em verde,
+  que é exatamente a armadilha que o `CLAUDE.md` descreve; refeita com SQL
+  válido, pegou. `tests/unit/serie-de-peso-sem-corte.test.ts`: 11 de unidade
+  com o cliente de mentira, 7 mutações, provando que o total vem da contagem,
+  que desenhar o gráfico não lê linha nenhuma da tabela, e que o balde que vai
+  para a função é o mesmo que a tela usa.
 
 ### O CRM paginado, sem migration
 

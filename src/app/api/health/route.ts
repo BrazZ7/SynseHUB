@@ -194,6 +194,7 @@ const MIGRATIONS_ESPERADAS = [
   '0049_alunos_sem_corte.sql',
   '0050_numero_derivado_no_banco.sql',
   '0051_inadimplencia_sem_corte.sql',
+  '0052_serie_de_peso.sql',
 ]
 
 async function schemaReadiness() {
@@ -225,6 +226,7 @@ async function schemaReadiness() {
     listaDeAlunosSemCorte,
     numeroDerivadoNoBanco,
     inadimplenciaSemCorte,
+    serieDePeso,
   ] = await Promise.all([
     schemaCheck('user_profiles?select=tier&limit=1'),
     schemaCheck('baseline_challenges?select=code&limit=1'),
@@ -503,6 +505,20 @@ async function schemaReadiness() {
       p_hoje: '2000-01-01',
       p_cortes: [1],
     }),
+
+    /*
+     * A 0052 — a série do gráfico de peso agrupada no banco.
+     *
+     * Sem ela o gráfico volta a sair de uma leitura crua. O caminho antigo tem
+     * teto escrito, então não há corte silencioso — mas há corte: quem tem
+     * mais de mil pesagens na janela perde o começo da linha, e um gráfico que
+     * nasce tarde não parece defeito nenhum na tela. A sonda avisa.
+     */
+    rpcCheck('serie_de_peso', {
+      p_user_profile_id: '00000000-0000-0000-0000-000000000000',
+      p_desde: null,
+      p_balde: 'day',
+    }),
   ])
 
   const registradas = await migracoesRegistradas()
@@ -570,6 +586,9 @@ async function schemaReadiness() {
     ) {
       faltando.push('0051_inadimplencia_sem_corte.sql')
     }
+    if (serieDePeso.present === false && !faltando.includes('0052_serie_de_peso.sql')) {
+      faltando.push('0052_serie_de_peso.sql')
+    }
     return {
       synseRun: corridas,
       entradaSemVinculo,
@@ -598,6 +617,7 @@ async function schemaReadiness() {
       listaDeAlunosSemCorte,
       numeroDerivadoNoBanco,
       inadimplenciaSemCorte,
+      serieDePeso,
       appliedMigrations: registradas.length,
       pendingMigrations: faltando,
     }
@@ -648,6 +668,7 @@ async function schemaReadiness() {
     '0049_alunos_sem_corte.sql',
     '0050_numero_derivado_no_banco.sql',
     '0051_inadimplencia_sem_corte.sql',
+    '0052_serie_de_peso.sql',
   )
 
   return {
@@ -678,6 +699,7 @@ async function schemaReadiness() {
     listaDeAlunosSemCorte,
     numeroDerivadoNoBanco,
     inadimplenciaSemCorte,
+    serieDePeso,
     pendingMigrations: pendentes,
   }
 }

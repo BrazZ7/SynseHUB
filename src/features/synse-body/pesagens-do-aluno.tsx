@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/synse/empty-state'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { MeasurementField } from '@/features/synse-body/components/measurement-field'
 import { formatDate } from '@/lib/utils'
+import type { BodySeriesPoint } from '@/features/synse-body/baldes-da-serie'
 import type { BodyMeasurement, BodyMeasurementShare } from '@/types/domain'
 
 /**
@@ -44,10 +45,17 @@ export function PesagensDoAluno({
   nome,
   autorizacao,
   medicoes,
+  total,
+  serie: pontos,
 }: {
   nome: string
   autorizacao: BodyMeasurementShare | null
+  /** As mais recentes, não todas: a ficha lista uma página. */
   medicoes: BodyMeasurement[]
+  /** Quantas existem na janela. É o que impede a tabela de parecer o fim. */
+  total: number
+  /** O gráfico, agrupado pelo banco (0052) — um ponto por semana no ano. */
+  serie: BodySeriesPoint[]
 }) {
   const primeiroNome = nome.split(' ')[0]
 
@@ -65,10 +73,8 @@ export function PesagensDoAluno({
   const anterior = medicoes[1]
   const variacao = ultima && anterior ? ultima.weightKg - anterior.weightKg : null
 
-  // Do mais antigo para o mais recente: o gráfico lê da esquerda para a direita.
-  const serie = [...medicoes]
-    .reverse()
-    .map((m) => ({ label: formatDate(m.measuredAt), value: m.weightKg }))
+  const serie = pontos.map((p) => ({ label: formatDate(p.instante), value: p.pesoKg }))
+  const pesagensNoGrafico = pontos.reduce((soma, p) => soma + p.medicoes, 0)
 
   return (
     <section className="space-y-4">
@@ -120,7 +126,14 @@ export function PesagensDoAluno({
           </p>
 
           {serie.length > 1 && (
-            <ChartCard title="Peso pela balança" description={`${medicoes.length} pesagens`}>
+            <ChartCard
+              title="Peso pela balança"
+              description={
+                pesagensNoGrafico > serie.length
+                  ? `${pesagensNoGrafico} pesagens, resumidas em ${serie.length} pontos`
+                  : `${pesagensNoGrafico} ${pesagensNoGrafico === 1 ? 'pesagem' : 'pesagens'}`
+              }
+            >
               <ProgressLineChart data={serie} unit=" kg" />
             </ChartCard>
           )}
@@ -128,6 +141,11 @@ export function PesagensDoAluno({
           <Card>
             <CardHeader>
               <CardTitle>Histórico da balança</CardTitle>
+              {total > medicoes.length && (
+                <p className="text-xs text-synse-muted">
+                  As {medicoes.length} mais recentes de {total} no último ano.
+                </p>
+              )}
             </CardHeader>
             <CardContent>
               <div className="synse-scroll overflow-x-auto">

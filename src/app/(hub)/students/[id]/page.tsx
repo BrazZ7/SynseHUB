@@ -55,6 +55,16 @@ type Params = Promise<{ id: string }>
  */
 const JANELA_DA_BALANCA = '1a' as const
 
+/**
+ * Quantas pesagens a ficha lista.
+ *
+ * Sem paginador: esta página não tem nenhum `searchParams`, e as abas são de
+ * cliente — um `?page=` atravessaria todas elas. A ficha mostra as mais
+ * recentes e **diz o total**, que é o que o professor precisa saber para não
+ * concluir que o histórico acaba onde a tabela acaba.
+ */
+const PESAGENS_NA_FICHA = 30
+
 /** Depois disso não é mais "agora". O mesmo corte da 0047. */
 const OITO_HORAS = 8 * 60 * 60 * 1000
 
@@ -107,6 +117,7 @@ export default async function StudentProfilePage({ params }: { params: Params })
     workoutPlans,
     autorizacoesDoCorpo,
     pesagens,
+    seriePesagens,
     treinoEmAndamento,
     dietas,
   ] = await Promise.all([
@@ -152,7 +163,19 @@ export default async function StudentProfilePage({ params }: { params: Params })
     canSeeHealth ? dataSource.listBodyShares().catch(seAindaNaoMigrou([])) : Promise.resolve([]),
     canSeeHealth
       ? dataSource
-          .listSharedBodyMeasurements(student.userProfileId, JANELA_DA_BALANCA)
+          .listSharedBodyMeasurements(student.userProfileId, JANELA_DA_BALANCA, {
+            pageSize: PESAGENS_NA_FICHA,
+          })
+          .catch(seAindaNaoMigrou({ rows: [], total: 0, page: 1, pageSize: PESAGENS_NA_FICHA }))
+      : Promise.resolve({ rows: [], total: 0, page: 1, pageSize: PESAGENS_NA_FICHA }),
+    /*
+     * O gráfico vem agrupado pelo banco (0052), e não da lista: a ficha mostra
+     * só as mais recentes, e montar a linha com elas faria o gráfico terminar
+     * onde a página termina — um ano de evolução virando um mês.
+     */
+    canSeeHealth
+      ? dataSource
+          .getBodySeries(JANELA_DA_BALANCA, student.userProfileId)
           .catch(seAindaNaoMigrou([]))
       : Promise.resolve([]),
     /*
@@ -599,7 +622,9 @@ export default async function StudentProfilePage({ params }: { params: Params })
               <PesagensDoAluno
                 nome={student.name}
                 autorizacao={autorizacaoDoCorpo}
-                medicoes={pesagens}
+                medicoes={pesagens.rows}
+                total={pesagens.total}
+                serie={seriePesagens}
               />
             </div>
           </TabsContent>

@@ -92,8 +92,6 @@ const PAGINACAO_PENDENTE: Record<string, string> = {
   listContent: 'o acervo de uma academia',
   listSynseContent: 'o acervo da Synse, que cresce com o catálogo',
   listRecipes: 'a biblioteca de receitas, que cresce com o catálogo',
-  listBodyMeasurements: 'as pesagens de um aluno; o período "tudo" não recorta nada',
-  listSharedBodyMeasurements: 'as pesagens compartilhadas, mesmo caso',
 }
 
 /**
@@ -208,8 +206,8 @@ describe('leitura de lista sem teto no data source', () => {
     // aqui — que é onde a conversa sobre paginar acontece. E para a lista
     // encolher **de propósito**: foi 15 com `listLeads` dentro, 14 com
     // `getChargesForStudent`, 13 com `listWorkoutLogs`, 12 com
-    // `listOverdueCharges`.
-    expect(Object.keys(PAGINACAO_PENDENTE)).toHaveLength(11)
+    // `listOverdueCharges`, e 11 com as duas leituras de pesagem.
+    expect(Object.keys(PAGINACAO_PENDENTE)).toHaveLength(9)
   })
 })
 

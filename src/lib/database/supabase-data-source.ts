@@ -3,6 +3,11 @@ import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import {
+  baldeDoPeriodo,
+  type BaldeDaSerie,
+  type BodySeriesPoint,
+} from '@/features/synse-body/baldes-da-serie'
+import {
   comoData,
   CORTES_DAS_FAIXAS,
   FAIXAS,
@@ -20,6 +25,7 @@ import type {
   WorkoutLogFilters,
   ChargeWithStudent,
   CrmSummary,
+  BodyHistoryFilters,
   LeadFilters,
   OverdueFilters,
   OverdueSummary,
@@ -3732,39 +3738,115 @@ export class SupabaseDataSource implements DataSource {
     }
   }
 
-  async listBodyMeasurements(period: BodyPeriod): Promise<BodyMeasurement[]> {
+  async listBodyMeasurements(
+    period: BodyPeriod,
+    filters: BodyHistoryFilters = {},
+  ): Promise<Paginated<BodyMeasurement>> {
     /*
      * Sem `user_profile_id` no filtro: a RLS já devolve só o que é da pessoa.
      * Filtrar aqui exigiria descobrir o perfil antes, numa ida a mais ao banco,
      * para chegar no mesmo lugar.
      */
-    let query = this.client
-      .from('body_measurements')
-      .select(SupabaseDataSource.BODY_SELECT)
-      .order('measured_at', { ascending: false })
-
-    const desde = inicioDoPeriodo(period)
-    if (desde) query = query.gte('measured_at', desde)
-
-    const rows = (await this.select<Row[]>('listBodyMeasurements', query)) ?? []
-    return rows.map((row) => this.mapBodyMeasurement(row))
+    return this.pesagensPorPagina('listBodyMeasurements', period, filters)
   }
 
   async listSharedBodyMeasurements(
     userProfileId: string,
     period: BodyPeriod,
-  ): Promise<BodyMeasurement[]> {
+    filters: BodyHistoryFilters = {},
+  ): Promise<Paginated<BodyMeasurement>> {
+    return this.pesagensPorPagina('listSharedBodyMeasurements', period, filters, userProfileId)
+  }
+
+  /**
+   * Uma página do histórico de pesagens, com o total vindo do banco.
+   *
+   * `count: 'exact'` na mesma consulta: o total é do conjunto inteiro, e as
+   * linhas são só as da página. Antes a tela contava `medicoes.length` de uma
+   * leitura sem teto — e dizia "Últimas 500 medições" para quem tinha 900.
+   */
+  private async pesagensPorPagina(
+    operacao: string,
+    period: BodyPeriod,
+    filters: BodyHistoryFilters,
+    userProfileId?: string,
+  ): Promise<Paginated<BodyMeasurement>> {
+    const page = Math.max(1, filters.page ?? 1)
+    const pageSize = Math.min(200, Math.max(5, filters.pageSize ?? 30))
+    const de = (page - 1) * pageSize
+
     let query = this.client
       .from('body_measurements')
-      .select(SupabaseDataSource.BODY_SELECT)
-      .eq('user_profile_id', userProfileId)
-      .order('measured_at', { ascending: false })
+      .select(SupabaseDataSource.BODY_SELECT, { count: 'exact' })
 
+    if (userProfileId) query = query.eq('user_profile_id', userProfileId)
     const desde = inicioDoPeriodo(period)
     if (desde) query = query.gte('measured_at', desde)
 
-    const rows = (await this.select<Row[]>('listSharedBodyMeasurements', query)) ?? []
-    return rows.map((row) => this.mapBodyMeasurement(row))
+    const { data, error, count } = await query
+      .order('measured_at', { ascending: false })
+      .range(de, de + pageSize - 1)
+
+    if (error) this.fail(operacao, error)
+
+    return {
+      rows: ((data ?? []) as Row[]).map((row) => this.mapBodyMeasurement(row)),
+      total: count ?? 0,
+      page,
+      pageSize,
+    }
+  }
+
+  /**
+   * A série do gráfico de peso, agrupada pelo banco (0052).
+   *
+   * ── Sem a 0052 ─────────────────────────────────────────────────────────────
+   *
+   * Volta a ler as pesagens cruas e a agrupar aqui, com um teto explícito.
+   * Publicar não é migrar, e um gráfico que pode vir curto é melhor que tela
+   * sem gráfico — mas o teto é escrito, e não herdado do servidor: assim o
+   * corte deixa de ser silencioso e vira um número que esta função conhece.
+   */
+  async getBodySeries(period: BodyPeriod, userProfileId?: string): Promise<BodySeriesPoint[]> {
+    const { data, error } = await this.client.rpc('serie_de_peso', {
+      p_user_profile_id: userProfileId ?? null,
+      p_desde: inicioDoPeriodo(period),
+      p_balde: baldeDoPeriodo(period),
+    })
+
+    if (error) {
+      if (!isPendingMigration(error)) this.fail('getBodySeries', error)
+      logger.warn('getBodySeries:sem_0052', {})
+      return this.seriePelaAplicacao(period, userProfileId)
+    }
+
+    return ((data ?? []) as Row[]).map((linha) => ({
+      instante: String(linha.instante),
+      pesoKg: Number(linha.peso),
+      medicoes: Number(linha.medicoes),
+    }))
+  }
+
+  /** Quantas pesagens cruas a volta ao caminho antigo aceita ler de uma vez. */
+  private static readonly TETO_DA_SERIE_ANTIGA = 1000
+
+  /** A série como era antes da 0052: lida crua e agrupada na aplicação. */
+  private async seriePelaAplicacao(
+    period: BodyPeriod,
+    userProfileId?: string,
+  ): Promise<BodySeriesPoint[]> {
+    let query = this.client
+      .from('body_measurements')
+      .select('measured_at, weight_kg')
+      .order('measured_at', { ascending: false })
+      .limit(SupabaseDataSource.TETO_DA_SERIE_ANTIGA)
+
+    if (userProfileId) query = query.eq('user_profile_id', userProfileId)
+    const desde = inicioDoPeriodo(period)
+    if (desde) query = query.gte('measured_at', desde)
+
+    const rows = (await this.select<Row[]>('getBodySeries', query)) ?? []
+    return agruparSerie(rows, baldeDoPeriodo(period))
   }
 
   /**
@@ -5046,6 +5128,53 @@ function numero(v: unknown): number | null {
  * Meses contados em meses de calendário, e não em blocos de 30 dias: quem
  * escolhe "3 meses" espera desde o mesmo dia três meses atrás.
  */
+/**
+ * Agrupa pesagens cruas em pontos de gráfico — a série como era antes da 0052.
+ *
+ * Só roda na janela entre publicar e migrar. O recorte do balde usa o fuso de
+ * quem está rodando a aplicação, e o `date_trunc` da função usa o do banco:
+ * na virada do dia os dois podem discordar de um ponto. Alinhar isso exigiria
+ * repetir aqui a regra de fuso do Postgres, para um caminho que existe para
+ * desaparecer.
+ *
+ * Recebe em ordem decrescente, que é como a consulta pede, então a **primeira**
+ * linha de cada balde é a última pesagem dele — a mesma escolha do
+ * `distinct on` lá.
+ */
+function agruparSerie(rows: Row[], balde: BaldeDaSerie): BodySeriesPoint[] {
+  const pontos = new Map<string, BodySeriesPoint>()
+
+  for (const row of rows) {
+    const quando = new Date(row.measured_at)
+    const chave = chaveDoBalde(quando, balde)
+    const ponto = pontos.get(chave)
+    if (ponto) {
+      ponto.medicoes += 1
+      continue
+    }
+    pontos.set(chave, {
+      instante: row.measured_at,
+      pesoKg: Number(row.weight_kg),
+      medicoes: 1,
+    })
+  }
+
+  return [...pontos.values()].sort((a, b) => a.instante.localeCompare(b.instante))
+}
+
+function chaveDoBalde(data: Date, balde: BaldeDaSerie): string {
+  const ano = data.getFullYear()
+  const mes = String(data.getMonth() + 1).padStart(2, '0')
+  if (balde === 'month') return `${ano}-${mes}`
+  if (balde === 'week') {
+    /* Segunda-feira da semana, como o `date_trunc('week', …)` do Postgres. */
+    const segunda = new Date(data.getFullYear(), data.getMonth(), data.getDate())
+    segunda.setDate(segunda.getDate() - ((segunda.getDay() + 6) % 7))
+    return comoData(segunda)
+  }
+  return `${ano}-${mes}-${String(data.getDate()).padStart(2, '0')}`
+}
+
 function inicioDoPeriodo(period: BodyPeriod, agora = new Date()): string | null {
   const data = new Date(agora)
   switch (period) {

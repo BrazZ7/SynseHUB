@@ -1,6 +1,11 @@
 import { generateSynseId } from '@/lib/synse-id'
 import { AppError } from '@/lib/errors'
 import { FAIXAS, faixaDeDias, type OverdueBucket } from '@/features/payments/faixas-de-atraso'
+import {
+  baldeDoPeriodo,
+  type BaldeDaSerie,
+  type BodySeriesPoint,
+} from '@/features/synse-body/baldes-da-serie'
 import { daysBetween } from '@/lib/utils'
 import type {
   ChargeHistoryFilters,
@@ -8,6 +13,7 @@ import type {
   WorkoutLogFilters,
   ChargeWithStudent,
   CrmSummary,
+  BodyHistoryFilters,
   LeadFilters,
   OverdueFilters,
   OverdueSummary,
@@ -4155,11 +4161,25 @@ export class DemoDataSource implements DataSource {
     return desde === null || new Date(medida.measuredAt).getTime() >= desde
   }
 
-  async listBodyMeasurements(period: BodyPeriod): Promise<BodyMeasurement[]> {
+  async listBodyMeasurements(
+    period: BodyPeriod,
+    filters: BodyHistoryFilters = {},
+  ): Promise<Paginated<BodyMeasurement>> {
+    return paginarPesagens(this.pesagensDaJanela(period), filters)
+  }
+
+  /** As pesagens da janela, da mais nova para trás — como a consulta pede. */
+  private pesagensDaJanela(period: BodyPeriod): BodyMeasurement[] {
     this.semearPesagens()
     return [...DemoDataSource.pesagens.values()]
       .filter((m) => this.dentroDoPeriodo(m, period))
       .sort((a, b) => b.measuredAt.localeCompare(a.measuredAt))
+  }
+
+  /** A série do gráfico, agrupada como a 0052 agrupa. */
+  async getBodySeries(period: BodyPeriod, userProfileId?: string): Promise<BodySeriesPoint[]> {
+    if (userProfileId && !this.podeVerPesagensDe(userProfileId)) return []
+    return agruparSerieDemo(this.pesagensDaJanela(period), baldeDoPeriodo(period))
   }
 
   /**
@@ -4191,22 +4211,32 @@ export class DemoDataSource implements DataSource {
   async listSharedBodyMeasurements(
     userProfileId: string,
     period: BodyPeriod,
-  ): Promise<BodyMeasurement[]> {
+    filters: BodyHistoryFilters = {},
+  ): Promise<Paginated<BodyMeasurement>> {
+    if (!this.podeVerPesagensDe(userProfileId)) {
+      return { rows: [], total: 0, page: 1, pageSize: 30 }
+    }
+    return paginarPesagens(this.pesagensDaJanela(period), filters)
+  }
+
+  /**
+   * A mesma tranca da RLS, nos dois caminhos.
+   *
+   * Mora num lugar só porque a série e o histórico precisam concordar: se um
+   * recusasse e o outro não, a demonstração mostraria gráfico sem lista — um
+   * estado que a produção não tem.
+   */
+  private podeVerPesagensDe(userProfileId: string): boolean {
     const autorizado = [...this.autorizacoesDaSessao.values()].some(
       (a) =>
         a.userProfileId === userProfileId &&
         a.sharedWithProfileId === this.perfilAtual &&
         a.revokedAt === null,
     )
-    if (!autorizado) return []
+    if (!autorizado) return false
 
     // Só o aluno do app tem histórico semeado; os outros 519 não pesam.
-    if (userProfileId !== this.perfilDoAlunoDoApp()) return []
-
-    this.semearPesagens()
-    return [...DemoDataSource.pesagens.values()]
-      .filter((m) => this.dentroDoPeriodo(m, period))
-      .sort((a, b) => b.measuredAt.localeCompare(a.measuredAt))
+    return userProfileId === this.perfilDoAlunoDoApp()
   }
 
   async recordBodyMeasurement(measurement: BodyMeasurement): Promise<string> {
@@ -4529,4 +4559,44 @@ function inicioDoPeriodoDemo(period: BodyPeriod, agora = new Date()): number | n
       return null
   }
   return data.getTime()
+}
+
+/** Uma página do histórico de pesagens, sobre a lista já recortada e ordenada. */
+function paginarPesagens(
+  todas: BodyMeasurement[],
+  filters: BodyHistoryFilters,
+): Paginated<BodyMeasurement> {
+  const page = Math.max(1, filters.page ?? 1)
+  const pageSize = Math.min(200, Math.max(5, filters.pageSize ?? 30))
+  const de = (page - 1) * pageSize
+  return { rows: todas.slice(de, de + pageSize), total: todas.length, page, pageSize }
+}
+
+/**
+ * O que a `serie_de_peso` faz, na demonstração.
+ *
+ * Recebe em ordem decrescente, então a **primeira** de cada balde é a última
+ * pesagem dele — a mesma escolha do `distinct on` da 0052. Média aqui faria a
+ * demonstração ensinar um número que a produção não mostra.
+ */
+function agruparSerieDemo(todas: BodyMeasurement[], balde: BaldeDaSerie): BodySeriesPoint[] {
+  const pontos = new Map<string, BodySeriesPoint>()
+  for (const m of todas) {
+    const d = new Date(m.measuredAt)
+    const mes = String(d.getMonth() + 1).padStart(2, '0')
+    let chave = `${d.getFullYear()}-${mes}-${String(d.getDate()).padStart(2, '0')}`
+    if (balde === 'month') chave = `${d.getFullYear()}-${mes}`
+    if (balde === 'week') {
+      const segunda = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+      segunda.setDate(segunda.getDate() - ((segunda.getDay() + 6) % 7))
+      chave = segunda.toISOString().slice(0, 10)
+    }
+    const ponto = pontos.get(chave)
+    if (ponto) {
+      ponto.medicoes += 1
+      continue
+    }
+    pontos.set(chave, { instante: m.measuredAt, pesoKg: m.weightKg, medicoes: 1 })
+  }
+  return [...pontos.values()].sort((a, b) => a.instante.localeCompare(b.instante))
 }

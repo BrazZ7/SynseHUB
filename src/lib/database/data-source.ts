@@ -1,4 +1,5 @@
 import type { OverdueBucket } from '@/features/payments/faixas-de-atraso'
+import type { BodySeriesPoint } from '@/features/synse-body/baldes-da-serie'
 import type {
   Activity,
   BodyMeasurement,
@@ -371,6 +372,12 @@ export type SaveSynseContentInput = {
   pinned: boolean
   /** Nulo mantém como rascunho. Data no futuro agenda. */
   publishedAt: string | null
+}
+
+/** O recorte do histórico de pesagens. */
+export type BodyHistoryFilters = {
+  page?: number
+  pageSize?: number
 }
 
 /** O recorte da tela de inadimplentes. */
@@ -919,13 +926,38 @@ export interface DataSource {
    * pertence à academia, e um parâmetro de academia nesta assinatura
    * convidaria alguém a montar uma listagem por academia mais tarde.
    */
-  /** O histórico da própria pessoa, do mais recente para trás. */
-  listBodyMeasurements(period: BodyPeriod): Promise<BodyMeasurement[]>
+  /**
+   * O histórico da própria pessoa, do mais recente para trás, por página.
+   *
+   * Paginado porque pesagem não se apaga e quem pesa todo dia acumula centenas
+   * por ano. A ordem é decrescente, então o corte silencioso do PostgREST
+   * descartava o **mais antigo**: o peso de hoje continuava certo — a parte
+   * que a pessoa confere — enquanto o começo do histórico sumia sem aviso.
+   */
+  listBodyMeasurements(
+    period: BodyPeriod,
+    filters?: BodyHistoryFilters,
+  ): Promise<Paginated<BodyMeasurement>>
   /**
    * O histórico de outra pessoa — que só volta com linha se ela autorizou.
    * A tranca é a RLS, não esta consulta.
    */
-  listSharedBodyMeasurements(userProfileId: string, period: BodyPeriod): Promise<BodyMeasurement[]>
+  listSharedBodyMeasurements(
+    userProfileId: string,
+    period: BodyPeriod,
+    filters?: BodyHistoryFilters,
+  ): Promise<Paginated<BodyMeasurement>>
+  /**
+   * A série do gráfico de peso, agrupada pelo banco (0052).
+   *
+   * Um ponto por dia, semana ou mês conforme a janela — não um por pesagem.
+   * Gráfico não tem página: ele mostra a janela inteira, e mandar duas mil
+   * linhas para desenhar trezentos pixels é o que deixava o corte perto.
+   *
+   * `userProfileId` ausente é a própria pessoa. Passar o de outra é o caso do
+   * professor autorizado, e quem decide se ele enxerga é a RLS.
+   */
+  getBodySeries(period: BodyPeriod, userProfileId?: string): Promise<BodySeriesPoint[]>
   /**
    * Grava a pesagem. Devolve o id, o mesmo no reenvio: é o que permite a fila
    * offline parar de tentar sem duplicar linha.

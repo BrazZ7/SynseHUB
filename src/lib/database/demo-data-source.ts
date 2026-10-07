@@ -1,5 +1,6 @@
 import { generateSynseId } from '@/lib/synse-id'
 import { AppError } from '@/lib/errors'
+import { FAIXAS, faixaDeDias, type OverdueBucket } from '@/features/payments/faixas-de-atraso'
 import { daysBetween } from '@/lib/utils'
 import type {
   ChargeHistoryFilters,
@@ -8,6 +9,8 @@ import type {
   ChargeWithStudent,
   CrmSummary,
   LeadFilters,
+  OverdueFilters,
+  OverdueSummary,
   PairUserDeviceInput,
   CheckInWithStudent,
   DataSource,
@@ -1013,11 +1016,64 @@ export class DemoDataSource implements DataSource {
     return rows.slice(0, filters.limit ?? 100).map((c) => this.toChargeWithStudent(c))
   }
 
-  async listOverdueCharges(organizationId: string): Promise<ChargeWithStudent[]> {
-    return this.scoped(this.charges(), organizationId)
-      .filter((c) => c.status === 'OVERDUE')
-      .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
-      .map((c) => this.toChargeWithStudent(c))
+  /**
+   * As vencidas de uma academia, por página e por faixa — como na produção.
+   *
+   * A faixa recorta **antes** de paginar, e não depois, porque é isso que a
+   * consulta do Supabase faz: filtrar a página já lida daria um total certo
+   * com linhas de menos, e a demonstração deixaria passar o defeito que a
+   * produção não tem.
+   */
+  async listOverdueCharges(
+    organizationId: string,
+    filters: OverdueFilters = {},
+  ): Promise<Paginated<ChargeWithStudent>> {
+    const hoje = filters.hoje ?? new Date()
+    const page = Math.max(1, filters.page ?? 1)
+    const pageSize = Math.min(200, Math.max(5, filters.pageSize ?? 50))
+
+    let vencidas = this.vencidas(organizationId).sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+
+    if (filters.faixa && filters.faixa !== 'ALL') {
+      const alvo = filters.faixa
+      vencidas = vencidas.filter(
+        (c) => faixaDeDias(Math.max(0, daysBetween(c.dueDate, hoje))) === alvo,
+      )
+    }
+
+    const de = (page - 1) * pageSize
+    return {
+      rows: vencidas.slice(de, de + pageSize).map((c) => this.toChargeWithStudent(c)),
+      total: vencidas.length,
+      page,
+      pageSize,
+    }
+  }
+
+  /** Os números da tela de inadimplentes, como a 0051 os devolve. */
+  async getOverdueSummary(organizationId: string, hoje = new Date()): Promise<OverdueSummary> {
+    const porFaixa = Object.fromEntries(FAIXAS.map((nome) => [nome, 0])) as Record<
+      OverdueBucket,
+      number
+    >
+    const alunos = new Set<string>()
+    let valor = 0
+    let dias = 0
+
+    const vencidas = this.vencidas(organizationId)
+    for (const cobranca of vencidas) {
+      const atraso = Math.max(0, daysBetween(cobranca.dueDate, hoje))
+      porFaixa[faixaDeDias(atraso)] += 1
+      alunos.add(cobranca.studentId)
+      valor += cobranca.amount
+      dias += atraso
+    }
+
+    return { cobrancas: vencidas.length, alunos: alunos.size, valor, dias, porFaixa }
+  }
+
+  private vencidas(organizationId: string) {
+    return this.scoped(this.charges(), organizationId).filter((c) => c.status === 'OVERDUE')
   }
 
   /** As cobranças que ainda esperam pagamento, como na produção. */

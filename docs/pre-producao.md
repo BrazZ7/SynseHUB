@@ -727,6 +727,65 @@ existem, não para conferir se subiram.
   com o motivo de cada uma; as de maior risco são o CRM (`listLeads`), o
   histórico de treino e o de cobranças de um aluno, e os três acervos.
 
+- **0051 (`0051_inadimplencia_sem_corte.sql`)** — o resumo de inadimplência
+  contado no banco, e a lista de vencidas por página. Fecha a quarta entrada da
+  lista de dívida do guarda `tests/unit/leitura-sem-teto.test.ts` (12 → 11).
+
+  `/finance/inadimplentes` lia **todas** as cobranças vencidas da academia, sem
+  teto, e calculava cinco números em cima da lista: alunos em atraso
+  (distintos), valor em aberto, atraso médio, acima de 30 dias e a contagem de
+  cada faixa do filtro. Cobrança vencida acumula mês a mês e ninguém apaga —
+  era a leitura mais perto de encostar no corte silencioso do PostgREST, e a
+  que erra na direção mais cara: os cinco números vêm **menores**. A academia
+  vê "R$ 8.400 em aberto" quando tem R$ 23.000 a receber, e nada na tela diz
+  que falta linha.
+
+  `resumo_de_inadimplencia(org, hoje, cortes)` devolve uma linha por faixa
+  presente mais uma de total (`faixa = 0`), com `grouping sets`. Total não é a
+  soma das faixas: um aluno com dois meses atrasados conta duas vezes em
+  "cobranças" e uma só em "alunos", e é essa diferença que os dois cartões da
+  tela existem para mostrar. A função devolve `dias_total`, não a média — quem
+  divide é a tela, com o mesmo arredondamento de antes.
+
+  **Os cortes vêm por argumento, e nenhuma faixa aparece em SQL.** As faixas
+  são régua de produto e já moram em `src/features/payments/faixas-de-atraso.ts`
+  — a tela rotula por elas, e o data source as traduz em janela de vencimento
+  para o Postgres filtrar a lista. Repeti-las no SQL criaria uma segunda
+  definição da mesma régua, que envelheceria em silêncio: a tela diria "7 dias"
+  numa linha que a contagem pôs na faixa de 1 a 5. Pelo mesmo motivo `p_hoje`
+  vem de fora: o selo de cada linha é desenhado com o relógio da aplicação, e
+  `current_date` poderia discordar dele na virada.
+
+  A lista passou a ser paginada com `count: 'exact'`, e o filtro de faixa vai
+  para a consulta — filtrar a página já lida devolveria três linhas dizendo
+  "de 60". O tamanho da página é preso entre 5 e 200: `?pageSize=100000` traria
+  a leitura sem corte de volta pela porta dos fundos.
+
+  Sem a migration, o resumo volta a somar na aplicação
+  (`inadimplenciaPelaAplicacao`, registrada em `CAMINHO_ANTIGO`). Erro que não é
+  migration continua subindo.
+
+  Sonda: `inadimplenciaSemCorte` em `/api/health?deep=1`, sobre
+  `resumo_de_inadimplencia` — revogada do anônimo, então 401/403 é "existe" e
+  404 é "não existe". Como a migration só cria função, a sonda também reinsere
+  a 0051 em `pendingMigrations` quando o registro diz que ela subiu e a função
+  não está lá.
+
+  `tests/db/inadimplencia.test.ts`: 8 testes contra Postgres (5 mutações na
+  migration, uma delas cega na primeira volta — o piso em zero do atraso não
+  muda a faixa, só a soma dos dias, e foi lá que a asserção teve de ir).
+  `tests/unit/inadimplencia-sem-corte.test.ts`: 11 de unidade com o cliente de
+  mentira (5 mutações), provando que o filtro de faixa sai para o servidor na
+  direção certa, que o total vem da contagem e não do tamanho da página, e que
+  os cortes e o dia que vão para a função são os mesmos que a tela usa.
+
+  Com esta, restam **11** entradas em `PAGINACAO_PENDENTE`. As de maior peso
+  hoje são as pesagens de um aluno (`listBodyMeasurements` e a versão
+  compartilhada — o período "tudo" não recorta nada, e é dado de saúde virando
+  gráfico), o histórico de avaliações, e os três acervos que crescem com o
+  catálogo (`listExercises`, `listContent`/`listSynseContent`, `listRecipes`).
+  As onze estão nomeadas no próprio arquivo do guarda, com o motivo de cada uma.
+
 ### O CRM paginado, sem migration
 
 Não é migration — entra aqui porque fecha a primeira entrada da lista de

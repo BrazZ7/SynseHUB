@@ -2,8 +2,7 @@ import 'server-only'
 
 import { getDataSource } from '@/lib/database'
 import { calculateSplit, DEFAULT_BILLING_SETTINGS } from '@/lib/payments/split'
-import { daysOverdue, roundMoney } from '@/lib/utils'
-import type { ChargeWithStudent } from '@/lib/database/data-source'
+import { roundMoney } from '@/lib/utils'
 
 /** Consolidado do Synse Pay para a organização. */
 export type PaySummary = {
@@ -70,25 +69,9 @@ export async function getPaySummary(organizationId: string): Promise<PaySummary>
   }
 }
 
-export type OverdueBucket = '1-5' | '6-15' | '16-30' | '30+'
-
-export const OVERDUE_BUCKETS: Array<{ value: OverdueBucket | 'ALL'; label: string }> = [
-  { value: 'ALL', label: 'Todos' },
-  { value: '1-5', label: '1 a 5 dias' },
-  { value: '6-15', label: '6 a 15 dias' },
-  { value: '16-30', label: '16 a 30 dias' },
-  { value: '30+', label: 'Mais de 30 dias' },
-]
-
-export function bucketOf(dueDate: string): OverdueBucket {
-  const days = daysOverdue(dueDate)
-  if (days <= 5) return '1-5'
-  if (days <= 15) return '6-15'
-  if (days <= 30) return '16-30'
-  return '30+'
-}
-
-export function filterByBucket(charges: ChargeWithStudent[], bucket: string) {
-  if (!bucket || bucket === 'ALL') return charges
-  return charges.filter((charge) => bucketOf(charge.dueDate) === bucket)
-}
+/*
+ * As faixas de atraso moram em `faixas-de-atraso.ts`, fora deste arquivo.
+ * Este é `server-only`, e os limites precisam ser lidos pelo data source
+ * (que os traduz em janela de datas para o Postgres filtrar) e pelos testes
+ * de banco — ver o cabeçalho de lá.
+ */

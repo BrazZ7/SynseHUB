@@ -84,7 +84,6 @@ const LIMITADA_PELO_DOMINIO: Record<string, string> = {
  */
 const PAGINACAO_PENDENTE: Record<string, string> = {
   listOrganizations: 'a lista de academias da plataforma, em /synse-admin: cresce com o negócio',
-  listOverdueCharges: 'as cobranças vencidas de uma academia: acumulam mês a mês',
   listExercises: 'a biblioteca Synse mais a da academia: cresce a cada exercício publicado',
   listWorkoutPlans: 'as fichas de uma academia: professores criam e não apagam',
   listAssignmentsForPlan: 'os alunos de uma ficha: pode ser a academia inteira',
@@ -112,6 +111,7 @@ const CAMINHO_ANTIGO: Record<string, string> = {
   resumoPelaAplicacao: 'o resumo de corridas como era antes da 0050',
   countStudentsByPlan: 'o `comoEra` da contagem por plano, antes da 0050',
   countAssignments: 'o `comoEra` da contagem por ficha, antes da 0050',
+  inadimplenciaPelaAplicacao: 'o resumo de inadimplência como era antes da 0051',
 }
 
 /**
@@ -207,8 +207,9 @@ describe('leitura de lista sem teto no data source', () => {
     // O número no teste existe para a próxima adição exigir uma linha a mais
     // aqui — que é onde a conversa sobre paginar acontece. E para a lista
     // encolher **de propósito**: foi 15 com `listLeads` dentro, 14 com
-    // `getChargesForStudent`, 13 com `listWorkoutLogs`.
-    expect(Object.keys(PAGINACAO_PENDENTE)).toHaveLength(12)
+    // `getChargesForStudent`, 13 com `listWorkoutLogs`, 12 com
+    // `listOverdueCharges`.
+    expect(Object.keys(PAGINACAO_PENDENTE)).toHaveLength(11)
   })
 })
 

@@ -2,6 +2,15 @@ import 'server-only'
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import {
+  comoData,
+  CORTES_DAS_FAIXAS,
+  FAIXAS,
+  faixaDeDias,
+  faixaDoIndice,
+  janelaDaFaixa,
+  type OverdueBucket,
+} from '@/features/payments/faixas-de-atraso'
 import { isPendingMigration } from '@/lib/database/pending-migration'
 import { logger } from '@/lib/logger'
 import { daysBetween } from '@/lib/utils'
@@ -12,6 +21,8 @@ import type {
   ChargeWithStudent,
   CrmSummary,
   LeadFilters,
+  OverdueFilters,
+  OverdueSummary,
   CheckInWithStudent,
   DataSource,
   Paginated,
@@ -1061,18 +1072,148 @@ export class SupabaseDataSource implements DataSource {
     return rows.map((row) => this.mapChargeWithStudent(row))
   }
 
-  async listOverdueCharges(organizationId: string) {
+  /**
+   * As cobranças vencidas, por página e por faixa de atraso.
+   *
+   * A faixa vira janela de vencimento (`janelaDaFaixa`) e vai para a
+   * consulta, em vez de filtrar a página depois de lida: filtrar no fim
+   * devolveria três linhas dizendo "de 60", porque o total viria do conjunto
+   * inteiro e as linhas de um recorte já cortado.
+   *
+   * Mais antiga primeiro, como antes — é a ordem de quem cobra, e agora é a
+   * ordem da paginação em vez de uma aposta de que tudo coube na resposta.
+   */
+  async listOverdueCharges(
+    organizationId: string,
+    filters: OverdueFilters = {},
+  ): Promise<Paginated<ChargeWithStudent>> {
+    const page = Math.max(1, filters.page ?? 1)
+    const pageSize = Math.min(200, Math.max(5, filters.pageSize ?? 50))
+    const de = (page - 1) * pageSize
+
+    let query = this.client
+      .from('charges')
+      .select(this.chargeSelect, { count: 'exact' })
+      .eq('organization_id', organizationId)
+      .eq('status', 'OVERDUE')
+
+    const faixa = filters.faixa
+    if (faixa && faixa !== 'ALL') {
+      const janela = janelaDaFaixa(faixa, filters.hoje ?? new Date())
+      if (janela.de) query = query.gte('due_date', janela.de)
+      if (janela.ate) query = query.lte('due_date', janela.ate)
+    }
+
+    const { data, error, count } = await query
+      .order('due_date', { ascending: true })
+      .range(de, de + pageSize - 1)
+
+    if (error) this.fail('listOverdueCharges', error)
+
+    return {
+      rows: ((data ?? []) as Row[]).map((row) => this.mapChargeWithStudent(row)),
+      total: count ?? 0,
+      page,
+      pageSize,
+    }
+  }
+
+  /**
+   * Os números da tela de inadimplentes, contados no banco (0051).
+   *
+   * ── O que isto conserta ────────────────────────────────────────────────────
+   *
+   * Cinco números eram somados na aplicação sobre a lista inteira de vencidas,
+   * lida sem teto. O PostgREST corta a resposta no teto do servidor sem dar
+   * erro, e cobrança vencida é justamente o conjunto que mais cresce sem
+   * ninguém apagar. Todos os cinco vinham **menores** — "R$ 8.400 em aberto"
+   * numa academia que tem R$ 23.000 a receber, e nada na tela avisando.
+   *
+   * ── Sem a 0051 ─────────────────────────────────────────────────────────────
+   *
+   * Volta a somar na aplicação, que é como sempre foi. Publicar não é migrar:
+   * entre o push e o SQL colado à mão, número que pode vir cortado ainda é
+   * melhor que a tela inteira sem número. Erro que não é migration sobe.
+   */
+  async getOverdueSummary(organizationId: string, hoje = new Date()): Promise<OverdueSummary> {
+    const { data, error } = await this.client.rpc('resumo_de_inadimplencia', {
+      p_organization_id: organizationId,
+      p_hoje: comoData(hoje),
+      p_cortes: [...CORTES_DAS_FAIXAS],
+    })
+
+    if (error) {
+      if (!isPendingMigration(error)) this.fail('getOverdueSummary', error)
+      logger.warn('getOverdueSummary:sem_0051', {})
+      return this.inadimplenciaPelaAplicacao(organizationId, hoje)
+    }
+
+    const vazio = { cobrancas: 0, alunos: 0, valor: 0, dias: 0 }
+    const porFaixa = Object.fromEntries(FAIXAS.map((nome) => [nome, 0])) as Record<
+      OverdueBucket,
+      number
+    >
+    let total = vazio
+
+    for (const linha of (data ?? []) as Row[]) {
+      const numeros = {
+        cobrancas: Number(linha.cobrancas),
+        alunos: Number(linha.alunos),
+        valor: Number(linha.valor),
+        dias: Number(linha.dias_total),
+      }
+      const nome = faixaDoIndice(Number(linha.faixa))
+      if (nome) porFaixa[nome] = numeros.cobrancas
+      else total = numeros
+    }
+
+    return { ...total, porFaixa }
+  }
+
+  /**
+   * O resumo de inadimplência como era antes da 0051.
+   *
+   * Lê a lista sem teto e soma na aplicação — exatamente o defeito que a
+   * migration conserta, mantido só para a janela entre publicar e migrar. Dar
+   * teto aqui não melhoraria nada: seria o mesmo número errado com outro
+   * corte, e sem nem o aviso de que cortou.
+   */
+  private async inadimplenciaPelaAplicacao(
+    organizationId: string,
+    hoje: Date,
+  ): Promise<OverdueSummary> {
     const rows =
       (await this.select<Row[]>(
-        'listOverdueCharges',
+        'getOverdueSummary',
         this.client
           .from('charges')
-          .select(this.chargeSelect)
+          .select('student_id, amount, due_date')
           .eq('organization_id', organizationId)
-          .eq('status', 'OVERDUE')
-          .order('due_date', { ascending: true }),
+          .eq('status', 'OVERDUE'),
       )) ?? []
-    return rows.map((row) => this.mapChargeWithStudent(row))
+
+    const porFaixa = Object.fromEntries(FAIXAS.map((nome) => [nome, 0])) as Record<
+      OverdueBucket,
+      number
+    >
+    const alunos = new Set<string>()
+    let valor = 0
+    let dias = 0
+
+    for (const row of rows) {
+      /*
+       * `hoje` entra na conta aqui também, e não só no caminho da 0051: os
+       * dois precisam contar do mesmo dia, senão a volta ao caminho antigo
+       * mudaria os números na virada da meia-noite sem ninguém pedir.
+       */
+      const atraso = Math.max(0, daysBetween(row.due_date, hoje))
+      porFaixa[faixaDeDias(atraso)] += 1
+      alunos.add(row.student_id)
+      valor += Number(row.amount)
+      dias += atraso
+    }
+
+    return { cobrancas: rows.length, alunos: alunos.size, valor, dias, porFaixa }
   }
 
   /** As cobranças que ainda esperam pagamento. */

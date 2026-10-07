@@ -193,6 +193,7 @@ const MIGRATIONS_ESPERADAS = [
   '0048_fila_de_avaliacao.sql',
   '0049_alunos_sem_corte.sql',
   '0050_numero_derivado_no_banco.sql',
+  '0051_inadimplencia_sem_corte.sql',
 ]
 
 async function schemaReadiness() {
@@ -223,6 +224,7 @@ async function schemaReadiness() {
     filaDeAvaliacao,
     listaDeAlunosSemCorte,
     numeroDerivadoNoBanco,
+    inadimplenciaSemCorte,
   ] = await Promise.all([
     schemaCheck('user_profiles?select=tier&limit=1'),
     schemaCheck('baseline_challenges?select=code&limit=1'),
@@ -486,6 +488,21 @@ async function schemaReadiness() {
     rpcCheck('alunos_por_plano', {
       p_organization_id: '00000000-0000-0000-0000-000000000000',
     }),
+
+    /*
+     * A 0051 — o resumo de inadimplência contado no banco.
+     *
+     * Sem ela a tela volta a somar cinco números sobre a lista inteira de
+     * cobranças vencidas, lida sem teto — e cobrança vencida é o conjunto que
+     * mais cresce sem ninguém apagar. Os cinco vêm **menores**: a academia vê
+     * menos dinheiro a receber do que tem, e não há nada na tela dizendo que
+     * falta linha. A sonda existe porque o defeito é mudo e caro.
+     */
+    rpcCheck('resumo_de_inadimplencia', {
+      p_organization_id: '00000000-0000-0000-0000-000000000000',
+      p_hoje: '2000-01-01',
+      p_cortes: [1],
+    }),
   ])
 
   const registradas = await migracoesRegistradas()
@@ -547,6 +564,12 @@ async function schemaReadiness() {
     ) {
       faltando.push('0050_numero_derivado_no_banco.sql')
     }
+    if (
+      inadimplenciaSemCorte.present === false &&
+      !faltando.includes('0051_inadimplencia_sem_corte.sql')
+    ) {
+      faltando.push('0051_inadimplencia_sem_corte.sql')
+    }
     return {
       synseRun: corridas,
       entradaSemVinculo,
@@ -574,6 +597,7 @@ async function schemaReadiness() {
       filaDeAvaliacao,
       listaDeAlunosSemCorte,
       numeroDerivadoNoBanco,
+      inadimplenciaSemCorte,
       appliedMigrations: registradas.length,
       pendingMigrations: faltando,
     }
@@ -623,6 +647,7 @@ async function schemaReadiness() {
     '0048_fila_de_avaliacao.sql',
     '0049_alunos_sem_corte.sql',
     '0050_numero_derivado_no_banco.sql',
+    '0051_inadimplencia_sem_corte.sql',
   )
 
   return {
@@ -652,6 +677,7 @@ async function schemaReadiness() {
     filaDeAvaliacao,
     listaDeAlunosSemCorte,
     numeroDerivadoNoBanco,
+    inadimplenciaSemCorte,
     pendingMigrations: pendentes,
   }
 }

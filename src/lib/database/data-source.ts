@@ -1,3 +1,4 @@
+import type { OverdueBucket } from '@/features/payments/faixas-de-atraso'
 import type {
   Activity,
   BodyMeasurement,
@@ -372,6 +373,32 @@ export type SaveSynseContentInput = {
   publishedAt: string | null
 }
 
+/** O recorte da tela de inadimplentes. */
+export type OverdueFilters = {
+  /** A faixa de atraso, ou `'ALL'`. Vira janela de vencimento na consulta. */
+  faixa?: OverdueBucket | 'ALL'
+  /** O dia de referência do atraso. A tela e o banco precisam usar o mesmo. */
+  hoje?: Date
+  page?: number
+  pageSize?: number
+}
+
+/**
+ * O consolidado das cobranças vencidas.
+ *
+ * `cobrancas` e `alunos` são grandezas diferentes de propósito: um aluno pode
+ * dever dois meses, e a tela mostra as duas lado a lado justamente para não
+ * deixar confundir uma com a outra.
+ */
+export type OverdueSummary = {
+  cobrancas: number
+  alunos: number
+  valor: number
+  /** A soma dos dias de atraso. A média é `dias / cobrancas`, na tela. */
+  dias: number
+  porFaixa: Record<OverdueBucket, number>
+}
+
 export type Paginated<T> = {
   rows: T[]
   total: number
@@ -521,7 +548,30 @@ export interface DataSource {
     organizationId: string,
     filters: { status?: Charge['status'] | 'ALL'; studentId?: string; limit?: number },
   ): Promise<ChargeWithStudent[]>
-  listOverdueCharges(organizationId: string): Promise<ChargeWithStudent[]>
+  /**
+   * As cobranças vencidas de uma academia, por página e por faixa de atraso.
+   *
+   * Cobrança vencida acumula mês a mês e ninguém apaga, então era a leitura
+   * sem teto mais perto de encostar no corte silencioso do PostgREST — e a
+   * que erra na direção mais cara: a tela somava cinco números em cima dela,
+   * e todos os cinco vinham **menores** que a realidade.
+   *
+   * A faixa é recortada no servidor, por janela de vencimento, e não sobre a
+   * página já lida: filtrar depois de paginar devolveria uma página quase
+   * vazia dizendo que há sessenta.
+   */
+  listOverdueCharges(
+    organizationId: string,
+    filters?: OverdueFilters,
+  ): Promise<Paginated<ChargeWithStudent>>
+  /**
+   * Os números da tela de inadimplentes, contados no banco (0051).
+   *
+   * `porFaixa` traz a contagem de cada faixa para o filtro, e `dias` é a
+   * **soma** dos dias de atraso, não a média: quem divide é a tela, com o
+   * mesmo arredondamento de sempre.
+   */
+  getOverdueSummary(organizationId: string, hoje?: Date): Promise<OverdueSummary>
   /**
    * O histórico de cobranças de um aluno, por página.
    *

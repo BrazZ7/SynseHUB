@@ -437,6 +437,63 @@ export class DemoDataSource implements DataSource {
         }
         break
       }
+      case 'body': {
+        /*
+         * A origem chega como letra e o `fieldOrigin` é derivado: ver o
+         * comentário do tipo em `demo-journal.ts`. A derivação reproduz o que
+         * os dois normalizadores produzem — peso medido, bioimpedância
+         * estimada, e o que o Synse divide marcado como calculado.
+         */
+        const origemPorLetra = {
+          B: 'BLUETOOTH_SCALE',
+          M: 'MANUAL',
+          A: 'APPLE_HEALTH',
+          H: 'HEALTH_CONNECT',
+        } as const
+
+        const medida: BodyMeasurement = {
+          id: `bm_${mutation.cid}`,
+          clientId: mutation.cid,
+          measuredAt: mutation.at,
+          source: origemPorLetra[mutation.s],
+          deviceId: null,
+          weightKg: mutation.kg,
+          fieldOrigin: { weightKg: 'MEASURED' },
+        }
+        if (mutation.fat != null) {
+          medida.bodyFatPercent = mutation.fat
+          medida.fieldOrigin.bodyFatPercent = 'ESTIMATED'
+        }
+        if (mutation.lean != null) {
+          medida.leanMassKg = mutation.lean
+          medida.fieldOrigin.leanMassKg = 'ESTIMATED'
+        }
+        if (mutation.mus != null) {
+          medida.muscleMassKg = mutation.mus
+          medida.fieldOrigin.muscleMassKg = 'ESTIMATED'
+        }
+        if (mutation.water != null) {
+          medida.bodyWaterPercent = mutation.water
+          medida.fieldOrigin.bodyWaterPercent = 'CALCULATED'
+        }
+        if (mutation.bmi != null) {
+          medida.bmi = mutation.bmi
+          medida.fieldOrigin.bmi = 'CALCULATED'
+        }
+        if (mutation.bmr != null) {
+          medida.bmrKcal = mutation.bmr
+          medida.fieldOrigin.bmrKcal = 'ESTIMATED'
+        }
+
+        this.pesagensDaSessao.set(mutation.cid, medida)
+        this.pesagensApagadas.delete(mutation.cid)
+        break
+      }
+      case 'bodydel': {
+        this.pesagensApagadas.add(mutation.cid)
+        this.pesagensDaSessao.delete(mutation.cid)
+        break
+      }
       case 'actpriv': {
         /*
          * Sem `p` é apagada. Guardadas em campos de instância, nunca nos
@@ -4057,10 +4114,18 @@ export class DemoDataSource implements DataSource {
 
   // ── Synse Body ─────────────────────────────────────────────────────────────
   /*
-   * Mesma escolha das corridas: memória do processo, e não o diário. Uma
-   * pesagem carrega o pacote bruto do aparelho, e o orçamento do cookie é de
-   * 4 KB. Some ao recarregar, e é o comportamento honesto numa demonstração —
-   * melhor sumir do que fingir um histórico que ninguém pesou.
+   * A **semente** de pesagens, e só ela.
+   *
+   * Estática porque é determinística: a mesma em qualquer cópia do módulo,
+   * então não precisa viajar no cookie. O que o visitante grava vai para o
+   * diário — ver `pesagensDaSessao`.
+   *
+   * O comentário que estava aqui dizia que as pesagens do visitante também
+   * moravam neste mapa, "sumindo ao recarregar", e que isso era o
+   * comportamento honesto. Estava errado em duas frentes: elas sumiam antes
+   * disso, já na navegação seguinte, e sumir em silêncio depois de a tela
+   * dizer "Medição salva." não é honesto — é a demonstração ensinando o
+   * contrário do produto.
    */
   private static readonly pesagens = new Map<string, BodyMeasurement>()
   private static readonly aparelhos = new Map<string, UserDevice>()
@@ -4073,6 +4138,17 @@ export class DemoDataSource implements DataSource {
    * de visitante na demonstração é o cookie, não a memória do servidor.
    */
   private readonly autorizacoesDaSessao = new Map<string, BodyMeasurementShare>()
+  /**
+   * As pesagens que o visitante gravou nesta sessão, vindas do diário.
+   *
+   * Instância, e não `static`, pelo mesmo motivo das autorizações logo acima —
+   * e aqui havia prova medida: uma sonda mostrou a escrita caindo na cópia
+   * `vcfg8c` do módulo e a leitura na `5saahq`, cada uma com o próprio mapa
+   * estático. A tela dizia "Medição salva." e o número nunca aparecia.
+   */
+  private readonly pesagensDaSessao = new Map<string, BodyMeasurement>()
+  /** As pesagens que o visitante apagou — inclusive semeadas. */
+  private readonly pesagensApagadas = new Set<string>()
 
   /**
    * O perfil de quem está vendo, quando a pergunta depende disso.
@@ -4169,10 +4245,28 @@ export class DemoDataSource implements DataSource {
     return paginarPesagens(this.pesagensDaJanela(period), filters)
   }
 
+  /**
+   * Todas as pesagens desta sessão: a semente mais o que o visitante gravou.
+   *
+   * A semente fica no mapa estático porque é determinística — idêntica em
+   * qualquer cópia do módulo, então não precisa viajar. O que o visitante faz
+   * vem do diário, no cookie, e é isso que faz a gravação sobreviver até a
+   * leitura seguinte.
+   *
+   * O que o visitante gravou vence a semente no mesmo `clientId`, e o que ele
+   * apagou sai dos dois — apagar precisa alcançar a pesagem semeada também.
+   */
+  private todasAsPesagens(): BodyMeasurement[] {
+    this.semearPesagens()
+    const porCliente = new Map(DemoDataSource.pesagens)
+    for (const [cid, medida] of this.pesagensDaSessao) porCliente.set(cid, medida)
+    for (const cid of this.pesagensApagadas) porCliente.delete(cid)
+    return [...porCliente.values()]
+  }
+
   /** As pesagens da janela, da mais nova para trás — como a consulta pede. */
   private pesagensDaJanela(period: BodyPeriod): BodyMeasurement[] {
-    this.semearPesagens()
-    return [...DemoDataSource.pesagens.values()]
+    return this.todasAsPesagens()
       .filter((m) => this.dentroDoPeriodo(m, period))
       .sort((a, b) => b.measuredAt.localeCompare(a.measuredAt))
   }
@@ -4243,7 +4337,9 @@ export class DemoDataSource implements DataSource {
   async recordBodyMeasurement(measurement: BodyMeasurement): Promise<string> {
     this.semearPesagens()
     // Idempotente pelo clientId, como o banco: reenviar não cria linha nova.
-    const existente = DemoDataSource.pesagens.get(measurement.clientId)
+    const existente =
+      this.pesagensDaSessao.get(measurement.clientId) ??
+      DemoDataSource.pesagens.get(measurement.clientId)
     const id = existente?.id ?? `bm_${measurement.clientId}`
 
     /*
@@ -4265,13 +4361,48 @@ export class DemoDataSource implements DataSource {
     const atualizaValores =
       !existente || (existente.source === measurement.source && deSaude(measurement.source))
 
-    DemoDataSource.pesagens.set(measurement.clientId, {
+    const gravada: BodyMeasurement = {
       ...(atualizaValores ? measurement : existente),
       source: existente?.source ?? measurement.source,
       measuredAt: measurement.measuredAt,
       id,
       createdAt: existente?.createdAt ?? new Date().toISOString(),
+    }
+
+    /*
+     * Vai para o diário, e não para o mapa estático.
+     *
+     * O mapa estático está nesta mesma classe e **não funciona** para isto:
+     * medido, a escrita cai numa cópia do módulo e a leitura em outra. O
+     * comentário que estava aqui dizia que a pesagem "some ao recarregar";
+     * na verdade ela sumia antes disso, na navegação seguinte. Ver o tipo
+     * `body` em `demo-journal.ts`.
+     */
+    const letraDaOrigem = {
+      BLUETOOTH_SCALE: 'B',
+      MANUAL: 'M',
+      APPLE_HEALTH: 'A',
+      HEALTH_CONNECT: 'H',
+      VENDOR_CLOUD: 'A',
+    } as const
+
+    await appendDemoMutation({
+      t: 'body',
+      cid: gravada.clientId,
+      at: gravada.measuredAt,
+      kg: gravada.weightKg,
+      s: letraDaOrigem[gravada.source],
+      ...(gravada.bodyFatPercent == null ? {} : { fat: gravada.bodyFatPercent }),
+      ...(gravada.leanMassKg == null ? {} : { lean: gravada.leanMassKg }),
+      ...(gravada.muscleMassKg == null ? {} : { mus: gravada.muscleMassKg }),
+      ...(gravada.bodyWaterPercent == null ? {} : { water: gravada.bodyWaterPercent }),
+      ...(gravada.bmi == null ? {} : { bmi: gravada.bmi }),
+      ...(gravada.bmrKcal == null ? {} : { bmr: gravada.bmrKcal }),
     })
+
+    // Também em memória, para quem ler dentro desta mesma requisição.
+    this.pesagensDaSessao.set(gravada.clientId, gravada)
+    this.pesagensApagadas.delete(gravada.clientId)
     return id
   }
 
@@ -4282,10 +4413,9 @@ export class DemoDataSource implements DataSource {
    * `null` para quem nunca importou.
    */
   async getLastHealthMeasurementAt(source: BodyMeasurementSource): Promise<string | null> {
-    this.semearPesagens()
     let maisRecente: string | null = null
 
-    for (const medida of DemoDataSource.pesagens.values()) {
+    for (const medida of this.todasAsPesagens()) {
       if (medida.source !== source) continue
       if (!maisRecente || medida.measuredAt > maisRecente) maisRecente = medida.measuredAt
     }
@@ -4294,9 +4424,18 @@ export class DemoDataSource implements DataSource {
   }
 
   async deleteBodyMeasurement(measurementId: string): Promise<void> {
-    for (const [chave, medida] of DemoDataSource.pesagens) {
-      if (medida.id === measurementId) DemoDataSource.pesagens.delete(chave)
-    }
+    /*
+     * Pelo diário, porque precisa alcançar a pesagem **semeada** também — e
+     * essa não tem entrada de criação para desfazer. Apagar do mapa estático
+     * não teria efeito nenhum na leitura seguinte, que é outra cópia do
+     * módulo.
+     */
+    const alvo = this.todasAsPesagens().find((m) => m.id === measurementId)
+    if (!alvo) return
+
+    await appendDemoMutation({ t: 'bodydel', cid: alvo.clientId })
+    this.pesagensApagadas.add(alvo.clientId)
+    this.pesagensDaSessao.delete(alvo.clientId)
   }
 
   async listUserDevices(): Promise<UserDevice[]> {

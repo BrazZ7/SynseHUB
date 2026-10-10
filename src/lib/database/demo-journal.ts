@@ -131,6 +131,56 @@ export type DemoMutation =
     }
   | {
       /**
+       * Uma pesagem feita pelo visitante — digitada, lida da balança ou
+       * importada do Apple Saúde / Health Connect.
+       *
+       * O quarto caso do mesmo defeito que `share`, `actpriv` e `wpref`
+       * existem para corrigir, e o pior deles em um aspecto: as pesagens
+       * moravam num mapa `static`, e o comentário no data source dizia que
+       * elas sobreviviam "dentro do processo, sumindo ao recarregar". Medido,
+       * não sobreviviam **nada**: a escrita caía numa cópia do módulo e a
+       * leitura em outra. A tela dizia "Medição salva." e o número nunca
+       * aparecia no histórico.
+       *
+       * ── O que não vem junto, e por quê ───────────────────────────────────
+       *
+       * O `rawPayload` fica de fora. Era ele que justificava o mapa estático
+       * — um pacote BLE em hexadecimal não cabe num orçamento de 4 KB —, e na
+       * demonstração ele não serve para nada: nenhuma tela o mostra.
+       *
+       * O `fieldOrigin` também não vem, e é **derivado** na leitura. Ele é
+       * função de quais campos existem, e guardar dez chaves para recalcular o
+       * que já se sabe gastaria o orçamento do cookie à toa.
+       *
+       * Chaves de uma a duas letras pelo mesmo motivo. `s` é a origem:
+       * B(luetooth), M(anual), A(pple Saúde), H(ealth Connect).
+       */
+      t: 'body'
+      cid: string
+      at: string
+      kg: number
+      s: 'B' | 'M' | 'A' | 'H'
+      fat?: number
+      lean?: number
+      mus?: number
+      water?: number
+      bmi?: number
+      bmr?: number
+    }
+  | {
+      /**
+       * Uma pesagem apagada pelo visitante.
+       *
+       * Separada de `body` porque as formas não se parecem, e porque apagar
+       * precisa alcançar também as pesagens **semeadas** — que não têm entrada
+       * no diário. A chave é o `clientId`, que na demonstração é o que gera o
+       * id (`bm_${clientId}`).
+       */
+      t: 'bodydel'
+      cid: string
+    }
+  | {
+      /**
        * A privacidade de uma corrida, ou o apagar dela.
        *
        * Pelo mesmo motivo do `share`: estava em variável de módulo e voltava
@@ -329,6 +379,8 @@ const TIPOS_ACEITOS: Record<DemoMutation['t'], true> = {
   chalprog: true,
   prog: true,
   share: true,
+  body: true,
+  bodydel: true,
   actpriv: true,
   wpref: true,
   lead: true,

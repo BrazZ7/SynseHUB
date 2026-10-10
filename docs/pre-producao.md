@@ -895,6 +895,45 @@ existem, não para conferir se subiram.
   mudar) — as três pegas. Cinco dos nove testes existem só para provar o que a
   migration **não** pode quebrar.
 
+### A demonstração parou de mentir sobre o que foi salvo
+
+Duas correções sem migration, as duas encontradas construindo a importação de
+saúde.
+
+**A pesagem gravada não voltava na leitura.** O mapa era `static` no
+`DemoDataSource`, e o comentário dizia que as pesagens sobreviviam "dentro do
+processo, sumindo ao recarregar". Medido com uma sonda, não sobreviviam nada: a
+escrita caía numa cópia do módulo (`vcfg8c`) e a leitura em outra (`5saahq`),
+cada uma com o próprio mapa — o Next carrega o mesmo módulo na camada da server
+action e na do componente de servidor. Na tela: "Medição salva." e o número
+nunca aparecia.
+
+É o quarto caso do mesmo defeito, e o diário já documenta os outros três
+(`share`, `actpriv`, `wpref`) — mais o cache do dataset, que usa
+`Symbol.for` pelo mesmo motivo. Agora as pesagens do visitante também vão para
+o diário: tipos `body` e `bodydel`, com chaves curtas, sem o `rawPayload` (que
+era o que justificava o mapa estático e não serve a nenhuma tela) e com o
+`fieldOrigin` **derivado** na leitura em vez de transportado.
+
+`tests/unit/synse-body/demo-pesagem-persiste.test.ts`: 9 testes, 3 mutações. O
+teste principal nunca reutiliza a instância para gravar e ler — monta uma
+segunda, como faria a requisição seguinte.
+
+**A semente dependia da hora do dia.** O laço de check-ins calcula quantos
+registros criar hoje a partir de `elapsedDayFraction`, que depende da hora, e
+sorteava do mesmo gerador que todo o resto. O número de sorteios consumidos
+mudava ao longo do dia, e com ele a sequência de **tudo que é semeado depois**.
+
+Isso não é teoria: dois testes do CRM falharam às 13h41 e passaram às 14h15,
+sem ninguém tocar no código. A mutação do teste novo mostrou que as corridas
+oscilavam junto, não só os leads.
+
+O laço de check-ins ganhou gerador próprio. A sequência principal volta a ser
+função só da semente, e os check-ins continuam crescendo com o dia — que é a
+única coisa aqui que o relógio deve mudar, porque não se inventa presença no
+futuro. `tests/unit/semente-independe-do-relogio.test.ts`: 4 testes, com o
+controle que falharia se o desacoplamento tivesse congelado os check-ins.
+
 ### O CRM paginado, sem migration
 
 Não é migration — entra aqui porque fecha a primeira entrada da lista de

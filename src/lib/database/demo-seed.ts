@@ -721,6 +721,30 @@ function buildDemoDataset() {
     return Math.max(0.08, (minutes - opening) / (closing - opening))
   }
 
+  /**
+   * ── O gerador dos check-ins é separado, e isto não é estilo ───────────────
+   *
+   * `count` do dia corrente sai de `elapsedDayFraction(DEMO_NOW)`, que depende
+   * da **hora**. O laço de baixo sorteia uma vez por check-in, então o número
+   * de sorteios consumidos mudava conforme a hora em que a semente rodasse — e
+   * com ele toda a sequência de **tudo que vem depois**, porque o gerador era
+   * um só.
+   *
+   * O efeito foi medido: dois testes do CRM falharam às 13h41 e passaram às
+   * 14h15, sem ninguém tocar no código. Eles afirmam coisas sobre os leads,
+   * que são semeados depois daqui e recebiam offsets diferentes a cada hora.
+   * Teste que muda de resultado sozinho não protege nada — e ainda ensina a
+   * ignorar vermelho.
+   *
+   * Com um gerador próprio, o consumo variável fica contido: a sequência
+   * principal volta a ser função só da semente, e quem vem depois dos
+   * check-ins para de oscilar.
+   */
+  const randCheckIn = mulberry32(20260911)
+  const pickCheckIn = <T>(items: readonly T[]): T => items[Math.floor(randCheckIn() * items.length)]
+  const betweenCheckIn = (min: number, max: number) => min + randCheckIn() * (max - min)
+  const intBetweenCheckIn = (min: number, max: number) => Math.floor(betweenCheckIn(min, max + 1))
+
   let checkInSeq = 0
   for (let dayOffset = 34; dayOffset >= 0; dayOffset -= 1) {
     const day = dayStart(addDays(DEMO_NOW, -dayOffset))
@@ -732,7 +756,7 @@ function buildDemoDataset() {
 
     const count = isToday
       ? Math.round(FULL_DAY_CHECKINS * elapsedDayFraction(DEMO_NOW))
-      : Math.round(126 * factor * between(0.9, 1.1))
+      : Math.round(126 * factor * betweenCheckIn(0.9, 1.1))
 
     // No dia corrente nada pode cair no futuro.
     const nowMinute = DEMO_NOW.getHours() * 60 + DEMO_NOW.getMinutes()
@@ -740,18 +764,22 @@ function buildDemoDataset() {
 
     for (let i = 0; i < count; i += 1) {
       checkInSeq += 1
-      const student = pick(activeStudents)
+      const student = pickCheckIn(activeStudents)
 
       // Três picos: manhã, almoço e fim de tarde.
       const preferred =
-        rand() < 0.45 ? intBetween(6, 9) : rand() < 0.7 ? intBetween(12, 14) : intBetween(17, 21)
-      const preferredMinute = preferred * 60 + intBetween(0, 59)
+        randCheckIn() < 0.45
+          ? intBetweenCheckIn(6, 9)
+          : randCheckIn() < 0.7
+            ? intBetweenCheckIn(12, 14)
+            : intBetweenCheckIn(17, 21)
+      const preferredMinute = preferred * 60 + intBetweenCheckIn(0, 59)
 
       // Se o pico ainda não chegou hoje, o registro vai para as horas já vividas.
       const minute =
         preferredMinute <= latestMinute
           ? preferredMinute
-          : intBetween(Math.max(0, latestMinute - 180), Math.max(0, latestMinute - 1))
+          : intBetweenCheckIn(Math.max(0, latestMinute - 180), Math.max(0, latestMinute - 1))
 
       const at = new Date(
         day.getFullYear(),
@@ -767,7 +795,7 @@ function buildDemoDataset() {
         organizationId: DEMO_ORG_ID,
         studentId: student.id,
         checkedInAt: at.toISOString(),
-        method: rand() < 0.8 ? 'QR_CODE' : 'MANUAL',
+        method: randCheckIn() < 0.8 ? 'QR_CODE' : 'MANUAL',
         deviceId: null,
       })
     }

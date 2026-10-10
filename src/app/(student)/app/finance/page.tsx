@@ -1,0 +1,116 @@
+import type { Metadata } from 'next'
+import { Receipt, Wallet } from 'lucide-react'
+
+import { BackLink } from '@/components/synse/back-link'
+import { EmptyState } from '@/components/synse/empty-state'
+import { PaymentStatus } from '@/components/synse/status-badge'
+import { StudentPixPanel, type Impedimento } from '@/features/payments/student-pix-panel'
+import { LinhaInteira, PilhaDoApp } from '@/components/synse/duas-colunas'
+import { requireStudentSession } from '@/lib/auth/require-session'
+import { getDataSource } from '@/lib/database'
+import { cobrancaIndisponivel, getPaymentProvider } from '@/lib/payments'
+import { formatCurrency, formatDate } from '@/lib/utils'
+
+export const metadata: Metadata = { title: 'Financeiro' }
+
+export default async function StudentFinancePage() {
+  const session = await requireStudentSession()
+  const dataSource = await getDataSource()
+
+  /*
+   * Três consultas no lugar de uma leitura do histórico inteiro, cada uma
+   * respondendo a sua pergunta. A leitura antiga não tinha teto e vinha do
+   * vencimento mais novo para o mais antigo: o corte do PostgREST levava
+   * justamente o mais antigo, que é a cobrança que a tela oferece para pagar.
+   */
+  const [student, openCharge, history] = await Promise.all([
+    dataSource.getStudent(session.organizationId, session.studentId),
+    dataSource.getNextOpenCharge(session.organizationId, session.studentId),
+    dataSource.getChargesForStudent(session.organizationId, session.studentId, {
+      status: 'PAID',
+      pageSize: 12,
+    }),
+  ])
+  /*
+   * Dois impedimentos diferentes, e a ordem importa: "o Synse está sem
+   * provedor" vem antes de "o provedor da academia não faz PIX", porque sem
+   * provedor a segunda frase mandaria a pessoa reclamar na recepção de algo
+   * que a academia não pode resolver.
+   */
+  const impedimento: Impedimento = cobrancaIndisponivel()
+    ? 'sem-provedor'
+    : getPaymentProvider().supportedMethods.includes('PIX')
+      ? null
+      : 'sem-pix'
+
+  return (
+    <PilhaDoApp className="animate-fade-in-up">
+      <LinhaInteira className="space-y-5">
+        <header>
+          <BackLink href="/app" label="Hoje" />
+          <h1 className="text-2xl font-semibold text-synse-text">Financeiro</h1>
+          <p className="text-sm text-synse-muted">
+            Seu plano, vencimentos e histórico de pagamentos.
+          </p>
+        </header>
+      </LinhaInteira>
+
+      <section className="rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-synse-primary">
+          Plano atual
+        </p>
+        <p className="mt-1.5 text-lg font-semibold text-synse-text">
+          {student?.planName ?? 'Sem plano ativo'}
+        </p>
+        {student?.planPrice != null && (
+          <p className="text-sm text-synse-muted">{formatCurrency(student.planPrice)} por mês</p>
+        )}
+      </section>
+
+      {openCharge ? (
+        <StudentPixPanel
+          chargeId={openCharge.id}
+          amount={openCharge.amount}
+          dueDate={openCharge.dueDate}
+          description={openCharge.description}
+          status={openCharge.status}
+          impedimento={impedimento}
+        />
+      ) : (
+        <EmptyState
+          tone="positive"
+          icon={Wallet}
+          title="Tudo em dia"
+          description="Você não tem nenhuma mensalidade em aberto."
+          className="rounded-2xl border border-synse-border bg-synse-surface"
+        />
+      )}
+
+      <section className="rounded-2xl border border-synse-border bg-synse-surface shadow-synse-sm">
+        <h2 className="border-b border-synse-border px-5 py-4 text-sm font-semibold text-synse-text">
+          Histórico
+        </h2>
+        {history.total === 0 ? (
+          <EmptyState icon={Receipt} title="Nenhum pagamento ainda" className="py-8" />
+        ) : (
+          <ul className="divide-y divide-synse-border">
+            {history.rows.map((charge) => (
+              <li key={charge.id} className="flex items-center gap-3 px-5 py-3.5">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium capitalize text-synse-text">
+                    {charge.description}
+                  </p>
+                  <p className="text-xs text-synse-muted">Pago em {formatDate(charge.paidAt)}</p>
+                </div>
+                <span className="text-sm font-semibold tabular-nums text-synse-text">
+                  {formatCurrency(charge.amount)}
+                </span>
+                <PaymentStatus status={charge.status} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </PilhaDoApp>
+  )
+}

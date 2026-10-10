@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Símbolo Synse">
+  <defs>
+    <linearGradient id="synseMark" x1="12" y1="108" x2="108" y2="12" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#00A98F"/>
+      <stop offset="0.5" stop-color="#22C7D8"/>
+      <stop offset="1" stop-color="#5BE3B9"/>
+    </linearGradient>
+    <linearGradient id="synseLeafTop" x1="76" y1="44" x2="110" y2="8" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22C7D8"/>
+      <stop offset="1" stop-color="#7BE8A8"/>
+    </linearGradient>
+    <linearGradient id="synseLeafBottom" x1="44" y1="76" x2="10" y2="112" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#00A98F"/>
+      <stop offset="1" stop-color="#6FE0A6"/>
+    </linearGradient>
+  </defs>
+  <path d="M108 10 Q103 41 77 43 Q80 15 108 10 Z" fill="url(#synseLeafTop)"/>
+  <path d="M12 110 Q17 79 43 77 Q40 105 12 110 Z" fill="url(#synseLeafBottom)"/>
+  <path
+    d="M84 34 C84 20 60 17 48 26 C33 36 36 52 55 59 C74 66 78 82 64 92 C52 101 34 98 30 87"
+    fill="none"
+    stroke="url(#synseMark)"
+    stroke-width="14"
+    stroke-linecap="round"
+  />
+</svg>

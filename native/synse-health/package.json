@@ -1,0 +1,27 @@
+{
+  "name": "@synse/health",
+  "version": "0.1.0",
+  "description": "Leitura de peso e composição corporal do Apple Saúde (HealthKit) e do Health Connect",
+  "main": "dist/plugin.cjs.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
+  "private": true,
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    },
+    "android": {
+      "src": "android"
+    }
+  },
+  "peerDependencies": {
+    "@capacitor/core": ">=6.0.0"
+  },
+  "files": [
+    "dist/",
+    "ios/",
+    "android/",
+    "Package.swift",
+    "SynseHealth.podspec"
+  ]
+}

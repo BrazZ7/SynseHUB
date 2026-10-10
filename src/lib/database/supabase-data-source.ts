@@ -1,0 +1,5235 @@
+import 'server-only'
+
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+import {
+  baldeDoPeriodo,
+  type BaldeDaSerie,
+  type BodySeriesPoint,
+} from '@/features/synse-body/baldes-da-serie'
+import {
+  comoData,
+  CORTES_DAS_FAIXAS,
+  FAIXAS,
+  faixaDeDias,
+  faixaDoIndice,
+  janelaDaFaixa,
+  type OverdueBucket,
+} from '@/features/payments/faixas-de-atraso'
+import { isPendingMigration } from '@/lib/database/pending-migration'
+import { logger } from '@/lib/logger'
+import { daysBetween } from '@/lib/utils'
+import type {
+  ChargeHistoryFilters,
+  LoadProgress,
+  WorkoutLogFilters,
+  ChargeWithStudent,
+  CrmSummary,
+  BodyHistoryFilters,
+  LeadFilters,
+  OverdueFilters,
+  OverdueSummary,
+  CheckInWithStudent,
+  DataSource,
+  Paginated,
+  PairUserDeviceInput,
+  SaveActivityInput,
+  SaveAssessmentInput,
+  LogWorkoutSetInput,
+  SaveClassScheduleInput,
+  SaveContentInput,
+  SaveSynseContentInput,
+  SaveGymChallengeInput,
+  SaveLeadInput,
+  SaveNutritionPlanInput,
+  ScheduleWindow,
+  StudentFilters,
+  StudentListItem,
+  FiscalData,
+} from '@/lib/database/data-source'
+import type { DemoStaff } from '@/lib/database/demo-seed'
+import { DEFAULT_WORKOUT_PREFERENCES } from '@/types/domain'
+import type {
+  Activity,
+  BodyMeasurement,
+  BodyMeasurementSource,
+  BodyMeasurementShare,
+  BodyPeriod,
+  UserDevice,
+  ActivityPrivacy,
+  ActivityRoutePoint,
+  ActivitySplit,
+  ActivitySummary,
+  AppNotification,
+  Assessment,
+  BaselineChallenge,
+  ChallengeEntry,
+  ChallengeMedal,
+  Charge,
+  ConsentState,
+  ContentItem,
+  ItemTrancado,
+  Program,
+  ProgramEnrollment,
+  ProgramaNaLista,
+  ProgramaTrancado as ProgramaTrancadoTipo,
+  Recipe,
+  ReceitaTrancada as ReceitaTrancadaTipo,
+  EquipeParaAutorizar,
+  ConsentType,
+  StaffInvite,
+  UserRole,
+  PersonalRecord,
+  SportType,
+  CheckIn,
+  ClassBooking,
+  ClassBookingStatus,
+  ClassSchedule,
+  ClassSession,
+  ClassSessionForStudent,
+  CollectionRule,
+  ClassOccupancyRow,
+  ExerciseProgressPoint,
+  GymChallenge,
+  GymChallengeForStudent,
+  GymChallengeRankRow,
+  GymTrainingReport,
+  NutritionPlan,
+  NutritionPlanWithMeals,
+  ExercisePersonalRecord,
+  StudentAtRisk,
+  OngoingWorkout,
+  WorkoutPreferences,
+  WorkoutSessionSummary,
+  Friend,
+  FriendRankRow,
+  WorkoutAdherenceRow,
+  WorkoutTotals,
+  Exercise,
+  Lead,
+  LeadEvent,
+  LeadEventKind,
+  LeadStage,
+  Meal,
+  Membership,
+  MembershipPlan,
+  Organization,
+  OrganizationBillingSettings,
+  PaymentAccount,
+  Student,
+  WorkoutAssignment,
+  WorkoutExercise,
+  WorkoutLog,
+  WorkoutPlan,
+  StudentStatus,
+} from '@/types/domain'
+
+/**
+ * Data source Postgres/Supabase.
+ *
+ * Cada consulta filtra por `organization_id` explicitamente — redundante em
+ * relação à Row Level Security, e essa redundância é intencional: se uma
+ * policy for afrouxada por engano, a aplicação continua isolada.
+ *
+ * ESTADO: as 26 consultas distintas deste arquivo já foram exercitadas contra
+ * um Supabase real e respondem 200 sobre o schema de `src/db/migrations`. O que
+ * ainda não foi verificado com dado real é o resultado delas — em especial os
+ * joins aninhados e o filtro de "sem frequência", que passam sintaticamente
+ * mas nunca foram conferidos contra uma academia em uso.
+ */
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+type Row = Record<string, any>
+
+const ATTENDANCE_INACTIVE_DAYS = 21
+
+export class SupabaseDataSource implements DataSource {
+  readonly kind = 'supabase' as const
+
+  constructor(private readonly client: SupabaseClient) {}
+
+  private fail(operation: string, error: unknown): never {
+    logger.error('supabase:query_failed', { operation, error: String(error) })
+    /*
+     * O erro original viaja em `cause`.
+     *
+     * Sem ele, quem pega esta exceção lá em cima só recebe "supabase query
+     * failed: X" e não tem como distinguir uma tabela que ainda não existe
+     * (migration pendente, contornável) de uma consulta errada (defeito).
+     */
+    throw new Error(`supabase query failed: ${operation}`, { cause: error })
+  }
+
+  private async select<T>(
+    operation: string,
+    query: PromiseLike<{ data: T | null; error: unknown }>,
+  ) {
+    const { data, error } = await query
+    if (error) this.fail(operation, error)
+    return data
+  }
+
+  // ── Organização ────────────────────────────────────────────────────────────
+  private mapOrganization(row: Row): Organization {
+    return {
+      id: row.id,
+      name: row.name,
+      slug: row.slug,
+      type: row.type,
+      legalName: row.legal_name,
+      taxId: row.tax_id,
+      logoUrl: row.logo_url,
+      city: row.city,
+      state: row.state,
+      postalCode: row.postal_code ?? null,
+      address: row.address ?? null,
+      addressNumber: row.address_number ?? null,
+      district: row.district ?? null,
+      phone: row.phone ?? null,
+      companyType: row.company_type ?? null,
+      monthlyRevenue: row.monthly_revenue != null ? Number(row.monthly_revenue) : null,
+      inviteCode: row.invite_code ?? null,
+      timezone: row.timezone,
+      hubPlan: row.hub_plan,
+      status: row.status,
+      onboardingCompleted: row.onboarding_completed,
+      createdAt: row.created_at,
+    }
+  }
+
+  async getOrganization(organizationId: string) {
+    const row = await this.select<Row>(
+      'getOrganization',
+      this.client.from('organizations').select('*').eq('id', organizationId).maybeSingle(),
+    )
+    return row ? this.mapOrganization(row) : null
+  }
+
+  async listOrganizations() {
+    const rows =
+      (await this.select<Row[]>(
+        'listOrganizations',
+        this.client.from('organizations').select('*').order('created_at', { ascending: false }),
+      )) ?? []
+    return rows.map((row) => this.mapOrganization(row))
+  }
+
+  async getBillingSettings(organizationId: string): Promise<OrganizationBillingSettings | null> {
+    const row = await this.select<Row>(
+      'getBillingSettings',
+      this.client
+        .from('organization_billing_settings')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .maybeSingle(),
+    )
+    if (!row) return null
+    return {
+      organizationId: row.organization_id,
+      platformFeePercentage: Number(row.platform_fee_percentage),
+      platformFixedFee: Number(row.platform_fixed_fee),
+      paymentProviderFeeStrategy: row.payment_provider_fee_strategy,
+    }
+  }
+
+  async updateFiscalData(input: FiscalData & { organizationId: string }): Promise<void> {
+    const { error } = await this.client
+      .from('organizations')
+      .update({
+        legal_name: input.legalName,
+        tax_id: input.taxId,
+        company_type: input.companyType,
+        postal_code: input.postalCode,
+        address: input.address,
+        address_number: input.addressNumber,
+        district: input.district,
+        city: input.city,
+        state: input.state,
+        phone: input.phone,
+        monthly_revenue: input.monthlyRevenue,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', input.organizationId)
+    if (error) this.fail('updateFiscalData', error)
+  }
+
+  async getPaymentAccount(organizationId: string): Promise<PaymentAccount | null> {
+    const row = await this.select<Row>(
+      'getPaymentAccount',
+      this.client
+        .from('payment_accounts')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    )
+    if (!row) return null
+    return {
+      id: row.id,
+      organizationId: row.organization_id,
+      provider: row.provider,
+      providerAccountId: row.provider_account_id,
+      status: row.status,
+      onboardingStatus: row.onboarding_status,
+      createdAt: row.created_at,
+    }
+  }
+
+  async listStaff(organizationId: string): Promise<DemoStaff[]> {
+    const rows =
+      (await this.select<Row[]>(
+        'listStaff',
+        this.client
+          .from('staff')
+          .select(
+            'id, organization_id, user_profile_id, role, registration_number, status, user_profiles(name, email)',
+          )
+          .eq('organization_id', organizationId)
+          .eq('status', 'ACTIVE'),
+      )) ?? []
+
+    return rows.map((row) => ({
+      id: row.id,
+      organizationId: row.organization_id,
+      userProfileId: row.user_profile_id,
+      name: row.user_profiles?.name ?? '—',
+      email: row.user_profiles?.email ?? '',
+      role: row.role,
+      jobTitle: row.role,
+      registrationNumber: row.registration_number,
+      status: 'ACTIVE' as const,
+    }))
+  }
+
+  // ── Planos ─────────────────────────────────────────────────────────────────
+  private mapPlan(row: Row): MembershipPlan {
+    return {
+      id: row.id,
+      organizationId: row.organization_id,
+      name: row.name,
+      description: row.description,
+      price: Number(row.price),
+      billingCycle: row.billing_cycle,
+      enrollmentFee: Number(row.enrollment_fee),
+      weeklyAccessDays: row.weekly_access_days,
+      benefits: row.benefits ?? [],
+      autoCharge: row.auto_charge,
+      status: row.status,
+      createdAt: row.created_at,
+    }
+  }
+
+  async joinOrganizationAsStudent(input: {
+    inviteCode: string
+    studentName: string
+  }): Promise<string> {
+    /*
+     * Função com `security definer` no banco: o aluno não tem — e não deve ter
+     * — permissão de inserir em `students` de uma academia à qual ainda não
+     * pertence. A função valida o código e é a única porta.
+     */
+    const { data, error } = await this.client.rpc('join_organization_as_student', {
+      p_invite_code: input.inviteCode,
+      p_student_name: input.studentName,
+    })
+    if (error) this.fail('joinOrganizationAsStudent', error)
+    return String(data)
+  }
+
+  async joinSynseAsSoloStudent(input: { studentName: string }): Promise<string> {
+    const { data, error } = await this.client.rpc('join_synse_as_solo_student', {
+      p_student_name: input.studentName,
+    })
+    if (error) this.fail('joinSynseAsSoloStudent', error)
+    return String(data)
+  }
+
+  async openProfessionalSpace(input: { name: string; slug: string; ownerName: string }) {
+    const { data, error } = await this.client.rpc('open_professional_space', {
+      p_name: input.name,
+      p_slug: input.slug,
+      p_owner_name: input.ownerName,
+    })
+    if (error) this.fail('openProfessionalSpace', error)
+    return String(data)
+  }
+
+  async updateStudent(input: {
+    organizationId: string
+    studentId: string
+    name: string
+    phone: string | null
+    taxId: string | null
+    goal: string | null
+    trainerId: string | null
+    planId: string | null
+    billingDay: number
+  }): Promise<void> {
+    const aluno = await this.getStudent(input.organizationId, input.studentId)
+    if (!aluno) this.fail('updateStudent', { message: 'Aluno não encontrado.' })
+
+    /*
+     * Nome e telefone vivem no perfil, que é da pessoa e atravessa academias.
+     * O CPF só é preenchido quando está vazio: trocar documento de alguém é
+     * operação de correção de cadastro, não de edição de aluno — e um erro de
+     * digitação aqui apontaria a cobrança para outra pessoa.
+     */
+    const perfil: Record<string, unknown> = { name: input.name, phone: input.phone }
+    if (input.taxId && !aluno!.taxId) perfil.tax_id = input.taxId
+
+    const { error: erroPerfil } = await this.client
+      .from('user_profiles')
+      .update(perfil)
+      .eq('id', aluno!.userProfileId)
+    if (erroPerfil) this.fail('updateStudent:profile', erroPerfil)
+
+    const { error: erroAluno } = await this.client
+      .from('students')
+      .update({
+        goal: input.goal,
+        trainer_id: input.trainerId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('organization_id', input.organizationId)
+      .eq('id', input.studentId)
+    if (erroAluno) this.fail('updateStudent:student', erroAluno)
+
+    if (!input.planId) return
+
+    const plano = await this.getPlan(input.organizationId, input.planId)
+    if (!plano) return
+
+    const atual = await this.getActiveMembership(input.organizationId, input.studentId)
+
+    if (atual) {
+      /*
+       * O preço é copiado do plano no momento da troca, e não lido do plano na
+       * hora de cobrar: quem já estava matriculado não deve ser surpreendido
+       * por um reajuste feito na tela de planos. A matrícula guarda o valor
+       * combinado.
+       */
+      const { error } = await this.client
+        .from('memberships')
+        .update({
+          plan_id: plano.id,
+          price: plano.price,
+          billing_day: input.billingDay,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', atual.id)
+      if (error) this.fail('updateStudent:membership', error)
+      return
+    }
+
+    const { error } = await this.client.from('memberships').insert({
+      organization_id: input.organizationId,
+      student_id: input.studentId,
+      plan_id: plano.id,
+      price: plano.price,
+      billing_day: input.billingDay,
+    })
+    if (error) this.fail('updateStudent:newMembership', error)
+  }
+
+  async updateStudentStatus(input: {
+    organizationId: string
+    studentId: string
+    status: StudentStatus
+  }): Promise<void> {
+    const { error } = await this.client
+      .from('students')
+      .update({ status: input.status, updated_at: new Date().toISOString() })
+      .eq('organization_id', input.organizationId)
+      .eq('id', input.studentId)
+    if (error) this.fail('updateStudentStatus', error)
+  }
+
+  async listPlans(organizationId: string) {
+    const rows =
+      (await this.select<Row[]>(
+        'listPlans',
+        this.client
+          .from('membership_plans')
+          .select('*')
+          .eq('organization_id', organizationId)
+          .order('price', { ascending: false }),
+      )) ?? []
+    return rows.map((row) => this.mapPlan(row))
+  }
+
+  /**
+   * O plano, para montar a matrícula com o preço certo.
+   *
+   * `private`, e isso é o conserto de um engano meu: ela estava na interface
+   * `DataSource`, e o guarda `metodo-sem-chamador` a listou como "nenhuma
+   * tela alcança" — o que era verdade. Eu li isso como "código morto" e quase
+   * a apaguei. Ela é usada duas vezes aqui dentro, em `createStudent` e
+   * `updateStudent`, por `this.getPlan`: o guarda não enxerga chamada interna
+   * porque exclui os próprios data sources da busca, de propósito.
+   *
+   * O achado estava certo e o rótulo estava errado. Método que só a
+   * implementação usa não pertence ao contrato — obrigava o data source de
+   * demonstração a implementar uma função que ele nunca chamava.
+   */
+  private async getPlan(organizationId: string, planId: string) {
+    const row = await this.select<Row>(
+      'getPlan',
+      this.client
+        .from('membership_plans')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .eq('id', planId)
+        .maybeSingle(),
+    )
+    return row ? this.mapPlan(row) : null
+  }
+
+  async createOrganization(input: {
+    name: string
+    slug: string
+    ownerName: string
+    legalName: string | null
+    taxId: string | null
+    city: string | null
+    state: string | null
+    type?: 'GYM' | 'STUDIO'
+  }): Promise<string> {
+    const { data, error } = await this.client.rpc('create_organization_with_owner', {
+      p_org_name: input.name,
+      p_org_slug: input.slug,
+      p_owner_name: input.ownerName,
+      p_legal_name: input.legalName,
+      p_tax_id: input.taxId,
+      p_city: input.city,
+      p_state: input.state,
+      p_type: input.type ?? 'GYM',
+    })
+    if (error) this.fail('createOrganization', error)
+    return data as string
+  }
+
+  async createPlan(input: Omit<MembershipPlan, 'id' | 'createdAt'>) {
+    const row = await this.select<Row>(
+      'createPlan',
+      this.client
+        .from('membership_plans')
+        .insert({
+          organization_id: input.organizationId,
+          name: input.name,
+          description: input.description,
+          price: input.price,
+          billing_cycle: input.billingCycle,
+          enrollment_fee: input.enrollmentFee,
+          weekly_access_days: input.weeklyAccessDays,
+          benefits: input.benefits,
+          auto_charge: input.autoCharge,
+          status: input.status,
+        })
+        .select('*')
+        .single(),
+    )
+    return this.mapPlan(row!)
+  }
+
+  /**
+   * Quantos alunos ativos em cada plano — contados pelo banco (0050).
+   *
+   * Antes isto lia uma linha de `memberships` por matrícula e contava na
+   * aplicação. Sem teto: o PostgREST corta a resposta no teto do servidor sem
+   * dar erro, e somar sobre uma resposta cortada não devolve um número
+   * aproximado, devolve um número errado com cara de certo.
+   */
+  async countStudentsByPlan(organizationId: string) {
+    return this.contagemPorChave(
+      'countStudentsByPlan',
+      'alunos_por_plano',
+      { p_organization_id: organizationId },
+      'plan_id',
+      () =>
+        this.client
+          .from('memberships')
+          .select('plan_id')
+          .eq('organization_id', organizationId)
+          .eq('status', 'ACTIVE'),
+    )
+  }
+
+  /**
+   * A contagem agrupada, com volta ao caminho antigo sem a migration.
+   *
+   * O PostgREST não agrupa, então a contagem por chave precisa de função —
+   * `select(…, { count: 'exact', head: true })` resolve contagem simples, como
+   * em `countUnreadNotifications`, mas não "quantos por plano".
+   *
+   * Enquanto a 0050 não estiver colada, volta a contar na aplicação: publicar
+   * não é migrar, e um número que pode vir cortado é melhor que a tela inteira
+   * sem número. Erro que não é migration sobe.
+   */
+  private async contagemPorChave(
+    operacao: string,
+    funcao: string,
+    args: Record<string, unknown>,
+    chave: string,
+    comoEra: () => PromiseLike<{ data: Row[] | null; error: unknown }>,
+  ): Promise<Record<string, number>> {
+    const { data, error } = await this.client.rpc(funcao, args)
+
+    if (error) {
+      if (!isPendingMigration(error)) this.fail(operacao, error)
+      logger.warn(`${operacao}:sem_0050`, {})
+      const rows = (await this.select<Row[]>(operacao, comoEra())) ?? []
+      return rows.reduce<Record<string, number>>((acc, row) => {
+        acc[row[chave]] = (acc[row[chave]] ?? 0) + 1
+        return acc
+      }, {})
+    }
+
+    return ((data ?? []) as Row[]).reduce<Record<string, number>>((acc, row) => {
+      acc[row[chave]] = Number(row.total)
+      return acc
+    }, {})
+  }
+
+  async getActiveMembership(organizationId: string, studentId: string): Promise<Membership | null> {
+    const row = await this.select<Row>(
+      'getActiveMembership',
+      this.client
+        .from('memberships')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .eq('student_id', studentId)
+        .eq('status', 'ACTIVE')
+        .order('started_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    )
+    if (!row) return null
+    return {
+      id: row.id,
+      organizationId: row.organization_id,
+      studentId: row.student_id,
+      planId: row.plan_id,
+      startedAt: row.started_at,
+      endsAt: row.ends_at,
+      billingDay: row.billing_day,
+      status: row.status,
+      price: Number(row.price),
+    }
+  }
+
+  // ── Alunos ─────────────────────────────────────────────────────────────────
+  /**
+   * O `select` do aluno na lista.
+   *
+   * `planoObrigatorio` troca a matrícula embutida por `memberships!inner`, e é
+   * o que permite filtrar por plano **no servidor**. Sem o `!inner` o
+   * PostgREST aceita o `.eq('memberships.plan_id', …)` mas ele não recorta
+   * nada: a junção é à esquerda, então o aluno de outro plano continua vindo,
+   * só com a matrícula de fora. Era por isso que o filtro de plano precisava
+   * de um remendo na aplicação — e o remendo olhava se havia *algum* plano,
+   * não se era *aquele*.
+   */
+  private studentSelect(planoObrigatorio = false) {
+    return `
+      id, organization_id, user_profile_id, status, goal, enrolled_at, cancelled_at, trainer_id, notes,
+      user_profiles ( synse_id, name, email, phone, tax_id, avatar_url, birth_date ),
+      memberships${planoObrigatorio ? '!inner' : ''} ( id, plan_id, price, status, membership_plans ( name ) ),
+      staff:trainer_id ( user_profiles ( name ) )
+    `
+  }
+
+  private mapStudent(row: Row): StudentListItem {
+    const profile = row.user_profiles ?? {}
+    const membership = (Array.isArray(row.memberships) ? row.memberships : [row.memberships])
+      .filter(Boolean)
+      .find((m: Row) => m?.status === 'ACTIVE')
+
+    return {
+      id: row.id,
+      organizationId: row.organization_id,
+      userProfileId: row.user_profile_id,
+      synseId: profile.synse_id ?? '',
+      name: profile.name ?? '—',
+      email: profile.email ?? '',
+      phone: profile.phone ?? null,
+      taxId: profile.tax_id ?? null,
+      avatarUrl: profile.avatar_url ?? null,
+      birthDate: profile.birth_date ?? null,
+      status: row.status,
+      goal: row.goal,
+      enrolledAt: row.enrolled_at,
+      cancelledAt: row.cancelled_at ?? null,
+      trainerId: row.trainer_id,
+      membershipId: membership?.id ?? null,
+      notes: row.notes,
+      planName: membership?.membership_plans?.name ?? null,
+      planPrice: membership?.price != null ? Number(membership.price) : null,
+      trainerName: row.staff?.user_profiles?.name ?? null,
+      nextChargeDueDate: null,
+      nextChargeAmount: null,
+      lastCheckInAt: null,
+    }
+  }
+
+  /**
+   * Enriquece a página corrente com próxima cobrança e última presença.
+   *
+   * ── Por que isto virou uma função de banco (0049) ──────────────────────────
+   *
+   * As duas colunas não vêm de `students`, e antes eram montadas lendo
+   * `charges` e `check_ins` **sem teto** para os alunos da página, guardando a
+   * primeira linha de cada um na aplicação. Cem alunos com um ano de
+   * frequência são quinze mil linhas pela rede para preencher cem células —
+   * mas o desperdício não é o defeito.
+   *
+   * O PostgREST corta a resposta no teto configurado no servidor **sem dar
+   * erro**. Como os check-ins vinham do mais recente para o mais antigo, o
+   * corte descartava justamente a presença mais velha: o aluno que não aparece
+   * há meses chegava à tela com "Última presença: —", como se nunca tivesse
+   * entrado. E esse valor alimenta a aba "Sumidos", que existe para telefonar
+   * para quem parou de vir.
+   *
+   * `decoracao_dos_alunos` devolve uma linha por aluno pedido. Não há o que
+   * cortar.
+   */
+  private async decorateStudents(organizationId: string, students: StudentListItem[]) {
+    if (students.length === 0) return students
+    const ids = students.map((s) => s.id)
+
+    const { data, error } = await this.client.rpc('decoracao_dos_alunos', {
+      p_organization_id: organizationId,
+      p_student_ids: ids,
+    })
+
+    /*
+     * Sem a 0049 aplicada, volta ao caminho antigo em vez de devolver vazio:
+     * publicar não é migrar, e nessa janela a tela com as colunas em branco
+     * mentiria mais do que a leitura que pode cortar. Qualquer outro erro
+     * sobe — permissão negada não pode virar coluna vazia.
+     */
+    if (error) {
+      if (!isPendingMigration(error)) this.fail('decorateStudents', error)
+      logger.warn('decorateStudents:sem_0049', {})
+      return this.decoracaoPelaAplicacao(organizationId, students)
+    }
+
+    const porAluno = new Map<string, Row>()
+    for (const row of (data ?? []) as Row[]) porAluno.set(row.student_id, row)
+
+    return students.map((student) => {
+      const linha = porAluno.get(student.id)
+      return {
+        ...student,
+        nextChargeDueDate: linha?.next_charge_due_date ?? null,
+        nextChargeAmount:
+          linha?.next_charge_amount != null ? Number(linha.next_charge_amount) : null,
+        lastCheckInAt: linha?.last_check_in_at ?? null,
+      }
+    })
+  }
+
+  /** A decoração como era antes da 0049. Só roda na janela entre publicar e migrar. */
+  private async decoracaoPelaAplicacao(organizationId: string, students: StudentListItem[]) {
+    const ids = students.map((s) => s.id)
+
+    const [charges, checkIns] = await Promise.all([
+      this.select<Row[]>(
+        'decorate:charges',
+        this.client
+          .from('charges')
+          .select('student_id, due_date, amount')
+          .eq('organization_id', organizationId)
+          .in('student_id', ids)
+          .in('status', ['PENDING', 'OVERDUE'])
+          .order('due_date', { ascending: true }),
+      ),
+      this.select<Row[]>(
+        'decorate:check_ins',
+        this.client
+          .from('check_ins')
+          .select('student_id, checked_in_at')
+          .eq('organization_id', organizationId)
+          .in('student_id', ids)
+          .order('checked_in_at', { ascending: false }),
+      ),
+    ])
+
+    const nextCharge = new Map<string, Row>()
+    for (const row of charges ?? [])
+      if (!nextCharge.has(row.student_id)) nextCharge.set(row.student_id, row)
+
+    const lastCheckIn = new Map<string, string>()
+    for (const row of checkIns ?? [])
+      if (!lastCheckIn.has(row.student_id)) lastCheckIn.set(row.student_id, row.checked_in_at)
+
+    return students.map((student) => ({
+      ...student,
+      nextChargeDueDate: nextCharge.get(student.id)?.due_date ?? null,
+      nextChargeAmount: nextCharge.get(student.id)
+        ? Number(nextCharge.get(student.id)!.amount)
+        : null,
+      lastCheckInAt: lastCheckIn.get(student.id) ?? null,
+    }))
+  }
+
+  async listStudents(
+    organizationId: string,
+    filters: StudentFilters,
+  ): Promise<Paginated<StudentListItem>> {
+    const page = Math.max(1, filters.page ?? 1)
+    const pageSize = Math.min(100, Math.max(5, filters.pageSize ?? 20))
+    const from = (page - 1) * pageSize
+    const busca = filters.search?.trim() || null
+    const planId = filters.planId?.trim() || null
+
+    /*
+     * A aba "Sumidos" é decidida no banco (0049). Não é otimização: o critério
+     * é "não aparece há 21 dias", e a última presença não está em `students`.
+     * Filtrar na aplicação só podia olhar a página já lida — então a aba
+     * listava quem treinou ontem e o rodapé contava a academia inteira.
+     *
+     * Devolve `null` enquanto a 0049 não estiver aplicada, e aí o filtro
+     * antigo lá embaixo assume: errado como sempre foi, mas de pé.
+     */
+    if (filters.inactiveAttendance && !filters.newcomers) {
+      const sumidos = await this.listarSumidos(organizationId, {
+        busca,
+        planId,
+        trainerId: filters.trainerId ?? null,
+        limite: pageSize,
+        deslocamento: from,
+      })
+      if (sumidos) return { ...sumidos, page, pageSize }
+    }
+
+    let query = this.client
+      .from('students')
+      .select(this.studentSelect(planId != null), { count: 'exact' })
+      .eq('organization_id', organizationId)
+
+    if (filters.status && filters.status !== 'ALL') query = query.eq('status', filters.status)
+    if (filters.trainerId) query = query.eq('trainer_id', filters.trainerId)
+    /*
+     * O plano recorta no servidor, com a junção obrigatória do `studentSelect`.
+     * Antes recortava depois de paginar, e olhando se o aluno tinha *algum*
+     * plano em vez de *aquele*: escolher "Mensal" no seletor trazia quem
+     * estava no trimestral também, e o total do rodapé ignorava o filtro.
+     */
+    if (planId) {
+      query = query.eq('memberships.plan_id', planId).eq('memberships.status', 'ACTIVE')
+    }
+    if (filters.newcomers) {
+      const since = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10)
+      query = query.gte('enrolled_at', since)
+    }
+    if (busca) {
+      // Busca no perfil relacionado — requer o join declarado acima.
+      query = query.or(`name.ilike.%${busca}%,email.ilike.%${busca}%,synse_id.ilike.%${busca}%`, {
+        referencedTable: 'user_profiles',
+      })
+    }
+
+    const { data, error, count } = await query
+      .order('enrolled_at', { ascending: false })
+      .range(from, from + pageSize - 1)
+
+    if (error) this.fail('listStudents', error)
+
+    let rows = ((data as Row[]) ?? []).map((row) => this.mapStudent(row))
+    rows = await this.decorateStudents(organizationId, rows)
+
+    if (filters.inactiveAttendance) {
+      rows = rows.filter(
+        (r) => !r.lastCheckInAt || daysBetween(r.lastCheckInAt) >= ATTENDANCE_INACTIVE_DAYS,
+      )
+    }
+
+    return { rows, total: count ?? rows.length, page, pageSize }
+  }
+
+  /**
+   * A aba "Sumidos", paginada e contada pelo banco.
+   *
+   * A função devolve só ids, de propósito: o `select` grande do aluno e o
+   * `mapStudent` continuam num lugar só. Depois dela o `.in('id', …)` lê no
+   * máximo `pageSize` alunos — nada a cortar — e a ordem da fila é reimposta
+   * aqui, porque o `.in` devolve na ordem que o Postgres quiser.
+   */
+  private async listarSumidos(
+    organizationId: string,
+    p: {
+      busca: string | null
+      planId: string | null
+      trainerId: string | null
+      limite: number
+      deslocamento: number
+    },
+  ): Promise<{ rows: StudentListItem[]; total: number } | null> {
+    const { data, error } = await this.client.rpc('alunos_dormentes', {
+      p_organization_id: organizationId,
+      p_dias: ATTENDANCE_INACTIVE_DAYS,
+      p_busca: p.busca,
+      p_trainer_id: p.trainerId,
+      p_plan_id: p.planId,
+      p_limit: p.limite,
+      p_offset: p.deslocamento,
+    })
+
+    if (error) {
+      if (!isPendingMigration(error)) this.fail('listStudents:sumidos', error)
+      logger.warn('listStudents:sem_0049', {})
+      return null
+    }
+
+    const linhas = (data ?? []) as Row[]
+    // Sem linha nenhuma não há `count(*) over ()` para ler: zero é o total.
+    const total = linhas.length > 0 ? Number(linhas[0].total_geral) : 0
+    if (linhas.length === 0) return { rows: [], total }
+
+    const ids = linhas.map((linha) => linha.student_id as string)
+    const brutos =
+      (await this.select<Row[]>(
+        'listStudents:sumidos',
+        this.client
+          .from('students')
+          .select(this.studentSelect())
+          .eq('organization_id', organizationId)
+          .in('id', ids),
+      )) ?? []
+
+    const porId = new Map(brutos.map((row) => [row.id as string, this.mapStudent(row)]))
+    const naOrdem = ids
+      .map((id) => porId.get(id))
+      .filter((aluno): aluno is StudentListItem => aluno != null)
+
+    return { rows: await this.decorateStudents(organizationId, naOrdem), total }
+  }
+
+  async getStudent(organizationId: string, studentId: string) {
+    const row = await this.select<Row>(
+      'getStudent',
+      this.client
+        .from('students')
+        .select(this.studentSelect())
+        .eq('organization_id', organizationId)
+        .eq('id', studentId)
+        .maybeSingle(),
+    )
+    if (!row) return null
+    const [decorated] = await this.decorateStudents(organizationId, [this.mapStudent(row)])
+    return decorated
+  }
+
+  async createStudent(input: {
+    organizationId: string
+    name: string
+    email: string
+    phone: string | null
+    taxId: string | null
+    goal: string | null
+    planId: string | null
+    trainerId: string | null
+    billingDay: number
+  }): Promise<Student> {
+    // O perfil é do usuário e sobrevive ao vínculo: reaproveita se já existir.
+    const existing = await this.select<Row>(
+      'createStudent:findProfile',
+      this.client.from('user_profiles').select('*').eq('email', input.email).maybeSingle(),
+    )
+
+    let profile =
+      existing ??
+      (await this.select<Row>(
+        'createStudent:insertProfile',
+        this.client
+          .from('user_profiles')
+          .insert({
+            name: input.name,
+            email: input.email,
+            phone: input.phone,
+            tax_id: input.taxId,
+          })
+          .select('*')
+          .single(),
+      ))!
+
+    /*
+     * Perfil que já existia e ainda não tinha CPF recebe o informado agora.
+     *
+     * Sem isso, matricular numa segunda academia alguém já cadastrado descartaria
+     * o documento em silêncio — e a cobrança falharia lá na frente, sem que
+     * ninguém ligasse uma coisa à outra. Um CPF já gravado nunca é sobrescrito
+     * por aqui: trocar documento de pessoa é operação de correção, não de
+     * matrícula.
+     */
+    if (existing && input.taxId && !existing.tax_id) {
+      profile =
+        (await this.select<Row>(
+          'createStudent:fillTaxId',
+          this.client
+            .from('user_profiles')
+            .update({ tax_id: input.taxId })
+            .eq('id', existing.id)
+            .select('*')
+            .single(),
+        )) ?? profile
+    }
+
+    const student = (await this.select<Row>(
+      'createStudent:insertStudent',
+      this.client
+        .from('students')
+        .insert({
+          organization_id: input.organizationId,
+          user_profile_id: profile.id,
+          goal: input.goal,
+          trainer_id: input.trainerId,
+          status: 'ACTIVE',
+        })
+        .select('*')
+        .single(),
+    ))!
+
+    if (input.planId) {
+      const plan = await this.getPlan(input.organizationId, input.planId)
+      if (plan) {
+        await this.client.from('memberships').insert({
+          organization_id: input.organizationId,
+          student_id: student.id,
+          plan_id: plan.id,
+          price: plan.price,
+          billing_day: input.billingDay,
+        })
+      }
+    }
+
+    return {
+      id: student.id,
+      organizationId: student.organization_id,
+      userProfileId: profile.id,
+      synseId: profile.synse_id,
+      name: profile.name,
+      email: profile.email,
+      phone: profile.phone,
+      taxId: profile.tax_id ?? null,
+      avatarUrl: profile.avatar_url,
+      birthDate: profile.birth_date,
+      status: student.status,
+      goal: student.goal,
+      enrolledAt: student.enrolled_at,
+      cancelledAt: student.cancelled_at ?? null,
+      trainerId: student.trainer_id,
+      membershipId: null,
+      notes: student.notes,
+    }
+  }
+
+  // ── Synse Pay ──────────────────────────────────────────────────────────────
+  private mapCharge(row: Row): Charge {
+    return {
+      id: row.id,
+      organizationId: row.organization_id,
+      studentId: row.student_id,
+      membershipId: row.membership_id,
+      providerChargeId: row.provider_charge_id,
+      description: row.description,
+      amount: Number(row.amount),
+      dueDate: row.due_date,
+      paymentMethod: row.payment_method,
+      status: row.status,
+      paidAt: row.paid_at,
+      billingReference: row.billing_reference ?? null,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }
+  }
+
+  private mapChargeWithStudent(row: Row): ChargeWithStudent {
+    return {
+      ...this.mapCharge(row),
+      studentName: row.students?.user_profiles?.name ?? '—',
+      studentPhone: row.students?.user_profiles?.phone ?? null,
+      planName: row.memberships?.membership_plans?.name ?? null,
+    }
+  }
+
+  private readonly chargeSelect = `
+    *, students ( user_profiles ( name, phone ) ),
+    memberships ( membership_plans ( name ) )
+  `
+
+  async listCharges(
+    organizationId: string,
+    filters: { status?: Charge['status'] | 'ALL'; studentId?: string; limit?: number },
+  ) {
+    let query = this.client
+      .from('charges')
+      .select(this.chargeSelect)
+      .eq('organization_id', organizationId)
+
+    if (filters.status && filters.status !== 'ALL') query = query.eq('status', filters.status)
+    if (filters.studentId) query = query.eq('student_id', filters.studentId)
+
+    const rows =
+      (await this.select<Row[]>(
+        'listCharges',
+        query.order('due_date', { ascending: false }).limit(filters.limit ?? 100),
+      )) ?? []
+    return rows.map((row) => this.mapChargeWithStudent(row))
+  }
+
+  /**
+   * As cobranças vencidas, por página e por faixa de atraso.
+   *
+   * A faixa vira janela de vencimento (`janelaDaFaixa`) e vai para a
+   * consulta, em vez de filtrar a página depois de lida: filtrar no fim
+   * devolveria três linhas dizendo "de 60", porque o total viria do conjunto
+   * inteiro e as linhas de um recorte já cortado.
+   *
+   * Mais antiga primeiro, como antes — é a ordem de quem cobra, e agora é a
+   * ordem da paginação em vez de uma aposta de que tudo coube na resposta.
+   */
+  async listOverdueCharges(
+    organizationId: string,
+    filters: OverdueFilters = {},
+  ): Promise<Paginated<ChargeWithStudent>> {
+    const page = Math.max(1, filters.page ?? 1)
+    const pageSize = Math.min(200, Math.max(5, filters.pageSize ?? 50))
+    const de = (page - 1) * pageSize
+
+    let query = this.client
+      .from('charges')
+      .select(this.chargeSelect, { count: 'exact' })
+      .eq('organization_id', organizationId)
+      .eq('status', 'OVERDUE')
+
+    const faixa = filters.faixa
+    if (faixa && faixa !== 'ALL') {
+      const janela = janelaDaFaixa(faixa, filters.hoje ?? new Date())
+      if (janela.de) query = query.gte('due_date', janela.de)
+      if (janela.ate) query = query.lte('due_date', janela.ate)
+    }
+
+    const { data, error, count } = await query
+      .order('due_date', { ascending: true })
+      .range(de, de + pageSize - 1)
+
+    if (error) this.fail('listOverdueCharges', error)
+
+    return {
+      rows: ((data ?? []) as Row[]).map((row) => this.mapChargeWithStudent(row)),
+      total: count ?? 0,
+      page,
+      pageSize,
+    }
+  }
+
+  /**
+   * Os números da tela de inadimplentes, contados no banco (0051).
+   *
+   * ── O que isto conserta ────────────────────────────────────────────────────
+   *
+   * Cinco números eram somados na aplicação sobre a lista inteira de vencidas,
+   * lida sem teto. O PostgREST corta a resposta no teto do servidor sem dar
+   * erro, e cobrança vencida é justamente o conjunto que mais cresce sem
+   * ninguém apagar. Todos os cinco vinham **menores** — "R$ 8.400 em aberto"
+   * numa academia que tem R$ 23.000 a receber, e nada na tela avisando.
+   *
+   * ── Sem a 0051 ─────────────────────────────────────────────────────────────
+   *
+   * Volta a somar na aplicação, que é como sempre foi. Publicar não é migrar:
+   * entre o push e o SQL colado à mão, número que pode vir cortado ainda é
+   * melhor que a tela inteira sem número. Erro que não é migration sobe.
+   */
+  async getOverdueSummary(organizationId: string, hoje = new Date()): Promise<OverdueSummary> {
+    const { data, error } = await this.client.rpc('resumo_de_inadimplencia', {
+      p_organization_id: organizationId,
+      p_hoje: comoData(hoje),
+      p_cortes: [...CORTES_DAS_FAIXAS],
+    })
+
+    if (error) {
+      if (!isPendingMigration(error)) this.fail('getOverdueSummary', error)
+      logger.warn('getOverdueSummary:sem_0051', {})
+      return this.inadimplenciaPelaAplicacao(organizationId, hoje)
+    }
+
+    const vazio = { cobrancas: 0, alunos: 0, valor: 0, dias: 0 }
+    const porFaixa = Object.fromEntries(FAIXAS.map((nome) => [nome, 0])) as Record<
+      OverdueBucket,
+      number
+    >
+    let total = vazio
+
+    for (const linha of (data ?? []) as Row[]) {
+      const numeros = {
+        cobrancas: Number(linha.cobrancas),
+        alunos: Number(linha.alunos),
+        valor: Number(linha.valor),
+        dias: Number(linha.dias_total),
+      }
+      const nome = faixaDoIndice(Number(linha.faixa))
+      if (nome) porFaixa[nome] = numeros.cobrancas
+      else total = numeros
+    }
+
+    return { ...total, porFaixa }
+  }
+
+  /**
+   * O resumo de inadimplência como era antes da 0051.
+   *
+   * Lê a lista sem teto e soma na aplicação — exatamente o defeito que a
+   * migration conserta, mantido só para a janela entre publicar e migrar. Dar
+   * teto aqui não melhoraria nada: seria o mesmo número errado com outro
+   * corte, e sem nem o aviso de que cortou.
+   */
+  private async inadimplenciaPelaAplicacao(
+    organizationId: string,
+    hoje: Date,
+  ): Promise<OverdueSummary> {
+    const rows =
+      (await this.select<Row[]>(
+        'getOverdueSummary',
+        this.client
+          .from('charges')
+          .select('student_id, amount, due_date')
+          .eq('organization_id', organizationId)
+          .eq('status', 'OVERDUE'),
+      )) ?? []
+
+    const porFaixa = Object.fromEntries(FAIXAS.map((nome) => [nome, 0])) as Record<
+      OverdueBucket,
+      number
+    >
+    const alunos = new Set<string>()
+    let valor = 0
+    let dias = 0
+
+    for (const row of rows) {
+      /*
+       * `hoje` entra na conta aqui também, e não só no caminho da 0051: os
+       * dois precisam contar do mesmo dia, senão a volta ao caminho antigo
+       * mudaria os números na virada da meia-noite sem ninguém pedir.
+       */
+      const atraso = Math.max(0, daysBetween(row.due_date, hoje))
+      porFaixa[faixaDeDias(atraso)] += 1
+      alunos.add(row.student_id)
+      valor += Number(row.amount)
+      dias += atraso
+    }
+
+    return { cobrancas: rows.length, alunos: alunos.size, valor, dias, porFaixa }
+  }
+
+  /** As cobranças que ainda esperam pagamento. */
+  private static readonly STATUS_EM_ABERTO = ['PENDING', 'OVERDUE'] as const
+
+  /**
+   * O histórico de cobranças de um aluno, por página.
+   *
+   * ── O que esta leitura alimentava ──────────────────────────────────────────
+   *
+   * Sem teto, e ordenada do vencimento mais novo para o mais antigo, ela
+   * respondia por três perguntas diferentes:
+   *
+   *   qual cobrança o aluno paga agora        (a mais antiga em aberto)
+   *   esta cobrança de id X existe e é dele?  (a action do PIX, por varredura)
+   *   o que já foi pago                       (as últimas doze)
+   *
+   * O PostgREST corta a resposta no teto do servidor sem dar erro, e o corte
+   * descarta o **fim** da ordem — ou seja, o vencimento mais antigo. As duas
+   * primeiras perguntas são justamente sobre o mais antigo: o aluno quitando
+   * uma dívida velha recebia "cobrança não encontrada", e a tela oferecia para
+   * pagar a cobrança errada. Só a terceira sobrevivia ao corte, por sorte da
+   * ordem.
+   *
+   * Agora cada pergunta tem a sua consulta: `getNextOpenCharge`,
+   * `getStudentCharge` e esta, que é só histórico.
+   */
+  async getChargesForStudent(
+    organizationId: string,
+    studentId: string,
+    filters: ChargeHistoryFilters = {},
+  ): Promise<Paginated<Charge>> {
+    const page = Math.max(1, filters.page ?? 1)
+    const pageSize = Math.min(200, Math.max(5, filters.pageSize ?? 24))
+    const from = (page - 1) * pageSize
+
+    let query = this.client
+      .from('charges')
+      .select('*', { count: 'exact' })
+      .eq('organization_id', organizationId)
+      .eq('student_id', studentId)
+
+    if (filters.status && filters.status !== 'ALL') query = query.eq('status', filters.status)
+
+    const { data, error, count } = await query
+      .order('due_date', { ascending: false })
+      .range(from, from + pageSize - 1)
+
+    if (error) this.fail('getChargesForStudent', error)
+
+    const rows = ((data as Row[]) ?? []).map((row) => this.mapCharge(row))
+    return { rows, total: count ?? rows.length, page, pageSize }
+  }
+
+  /**
+   * A cobrança em aberto mais próxima de vencer.
+   *
+   * Uma linha, decidida pelo banco. Antes a mesma pergunta era respondida de
+   * dois jeitos sobre a mesma lista: a ficha do aluno pegava a **primeira** de
+   * uma ordem decrescente — a mais nova — e o app ordenava de novo para pegar
+   * a mais antiga. Aluno com dois meses atrasados ouvia um valor na recepção e
+   * via outro no celular.
+   *
+   * A mais antiga é a certa: é a que está vencendo há mais tempo, e quitar na
+   * ordem é o que zera a dívida.
+   */
+  async getNextOpenCharge(organizationId: string, studentId: string): Promise<Charge | null> {
+    const row = await this.select<Row>(
+      'getNextOpenCharge',
+      this.client
+        .from('charges')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .eq('student_id', studentId)
+        .in('status', [...SupabaseDataSource.STATUS_EM_ABERTO])
+        .order('due_date', { ascending: true })
+        .limit(1)
+        .maybeSingle(),
+    )
+    return row ? this.mapCharge(row) : null
+  }
+
+  /**
+   * Uma cobrança do aluno, por id.
+   *
+   * `organization_id` **e** `student_id` na consulta: é a conferência de dono,
+   * feita pelo banco em vez de por varredura de lista na aplicação. A RLS
+   * confere de novo por cima — duas camadas sobre a mesma regra não é
+   * desperdício aqui, porque esta consulta decide se alguém pode gerar um PIX
+   * no valor de uma cobrança.
+   */
+  async getStudentCharge(
+    organizationId: string,
+    studentId: string,
+    chargeId: string,
+  ): Promise<Charge | null> {
+    const row = await this.select<Row>(
+      'getStudentCharge',
+      this.client
+        .from('charges')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .eq('student_id', studentId)
+        .eq('id', chargeId)
+        .maybeSingle(),
+    )
+    return row ? this.mapCharge(row) : null
+  }
+
+  async markChargeAsPaid(
+    organizationId: string,
+    chargeId: string,
+    input: { method: Charge['paymentMethod']; paidAt: string },
+  ) {
+    const row = await this.select<Row>(
+      'markChargeAsPaid',
+      this.client
+        .from('charges')
+        .update({ status: 'PAID', paid_at: input.paidAt, payment_method: input.method })
+        .eq('organization_id', organizationId)
+        .eq('id', chargeId)
+        .select('*')
+        .maybeSingle(),
+    )
+    return row ? this.mapCharge(row) : null
+  }
+
+  /*
+   * Referências do provedor.
+   *
+   * `provider_charge_id` é o que liga a cobrança do Synse à do gateway. É por
+   * ele que o webhook encontra a cobrança para dar baixa; sem gravá-lo, o
+   * pagamento chega e não acha o que confirmar.
+   */
+  async getProviderCustomerId(
+    organizationId: string,
+    studentId: string,
+    provider: string,
+  ): Promise<string | null> {
+    const row = await this.select<Row>(
+      'getProviderCustomerId',
+      this.client
+        .from('payment_customers')
+        .select('provider_customer_id')
+        .eq('organization_id', organizationId)
+        .eq('student_id', studentId)
+        .eq('provider', provider)
+        .maybeSingle(),
+    )
+    return row ? row.provider_customer_id : null
+  }
+
+  async saveProviderCustomerId(input: {
+    organizationId: string
+    studentId: string
+    provider: string
+    providerCustomerId: string
+  }): Promise<void> {
+    const { error } = await this.client.from('payment_customers').upsert(
+      {
+        organization_id: input.organizationId,
+        student_id: input.studentId,
+        provider: input.provider,
+        provider_customer_id: input.providerCustomerId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'student_id,provider' },
+    )
+    if (error) this.fail('saveProviderCustomerId', error)
+  }
+
+  async attachProviderCharge(input: {
+    organizationId: string
+    chargeId: string
+    provider: string
+    providerChargeId: string
+  }): Promise<void> {
+    const { error } = await this.client
+      .from('charges')
+      .update({
+        provider: input.provider,
+        provider_charge_id: input.providerChargeId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('organization_id', input.organizationId)
+      .eq('id', input.chargeId)
+    if (error) this.fail('attachProviderCharge', error)
+  }
+
+  async listCollectionRules(organizationId: string): Promise<CollectionRule[]> {
+    const rows =
+      (await this.select<Row[]>(
+        'listCollectionRules',
+        this.client
+          .from('collection_rules')
+          .select('*')
+          .eq('organization_id', organizationId)
+          .order('offset_days', { ascending: true }),
+      )) ?? []
+    return rows.map((row) => ({
+      id: row.id,
+      organizationId: row.organization_id,
+      offsetDays: row.offset_days,
+      channels: row.channels,
+      template: row.template,
+      enabled: row.enabled,
+    }))
+  }
+
+  // ── Check-in ───────────────────────────────────────────────────────────────
+  async listCheckIns(
+    organizationId: string,
+    options: { since?: Date; limit?: number },
+  ): Promise<CheckInWithStudent[]> {
+    let query = this.client
+      .from('check_ins')
+      // Sem espaço em volta dos parênteses: o parser do PostgREST recusa
+      // `a ( b ( c ) )` numa linha só, embora aceite o mesmo texto quebrado
+      // em várias linhas. Aninhamento colado é a forma que sempre funciona.
+      .select('*,students(user_profiles(name))')
+      .eq('organization_id', organizationId)
+
+    if (options.since) query = query.gte('checked_in_at', options.since.toISOString())
+
+    const rows =
+      (await this.select<Row[]>(
+        'listCheckIns',
+        query.order('checked_in_at', { ascending: false }).limit(options.limit ?? 1000),
+      )) ?? []
+
+    return rows.map((row) => ({
+      id: row.id,
+      organizationId: row.organization_id,
+      studentId: row.student_id,
+      checkedInAt: row.checked_in_at,
+      method: row.method,
+      deviceId: row.device_id,
+      studentName: row.students?.user_profiles?.name ?? 'Aluno',
+    }))
+  }
+
+  async listCheckInsForStudent(organizationId: string, studentId: string, limit = 60) {
+    const rows =
+      (await this.select<Row[]>(
+        'listCheckInsForStudent',
+        this.client
+          .from('check_ins')
+          .select('*')
+          .eq('organization_id', organizationId)
+          .eq('student_id', studentId)
+          .order('checked_in_at', { ascending: false })
+          .limit(limit),
+      )) ?? []
+    return rows.map((row) => ({
+      id: row.id,
+      organizationId: row.organization_id,
+      studentId: row.student_id,
+      checkedInAt: row.checked_in_at,
+      method: row.method,
+      deviceId: row.device_id,
+    }))
+  }
+
+  async createCheckIn(input: {
+    organizationId: string
+    studentId: string
+    method: CheckIn['method']
+  }): Promise<CheckIn> {
+    const row = (await this.select<Row>(
+      'createCheckIn',
+      this.client
+        .from('check_ins')
+        .insert({
+          organization_id: input.organizationId,
+          student_id: input.studentId,
+          method: input.method,
+        })
+        .select('*')
+        .single(),
+    ))!
+    return {
+      id: row.id,
+      organizationId: row.organization_id,
+      studentId: row.student_id,
+      checkedInAt: row.checked_in_at,
+      method: row.method,
+      deviceId: row.device_id,
+    }
+  }
+
+  // ── Treinos ────────────────────────────────────────────────────────────────
+  private mapExercise(row: Row): Exercise {
+    return {
+      id: row.id,
+      organizationId: row.organization_id,
+      name: row.name,
+      muscleGroup: row.muscle_group,
+      equipment: row.equipment,
+      description: row.description,
+      videoUrl: row.video_url,
+      imageUrl: row.image_url,
+      slug: row.slug ?? null,
+      primaryMuscle: row.primary_muscle ?? null,
+      secondaryMuscles: row.secondary_muscles ?? [],
+      region: row.region ?? null,
+      pattern: row.pattern ?? null,
+      mechanics: row.mechanics ?? null,
+      utility: row.utility ?? null,
+      equipmentType: row.equipment_type ?? null,
+      unilateral: Boolean(row.unilateral),
+      level: row.level ?? null,
+      aliases: row.aliases ?? [],
+    }
+  }
+
+  async listExercises(organizationId: string) {
+    const rows =
+      (await this.select<Row[]>(
+        'listExercises',
+        this.client
+          .from('exercises')
+          .select('*')
+          .or(`organization_id.is.null,organization_id.eq.${organizationId}`)
+          .order('name'),
+      )) ?? []
+    return rows.map((row) => this.mapExercise(row))
+  }
+
+  private mapWorkoutPlan(row: Row): WorkoutPlan {
+    return {
+      id: row.id,
+      organizationId: row.organization_id,
+      name: row.name,
+      goal: row.goal,
+      splitLabel: row.split_label,
+      createdByStaffId: row.created_by_staff_id,
+      status: row.status,
+      createdAt: row.created_at,
+    }
+  }
+
+  async listWorkoutPlans(organizationId: string) {
+    const rows =
+      (await this.select<Row[]>(
+        'listWorkoutPlans',
+        this.client
+          .from('workout_plans')
+          .select('*')
+          .eq('organization_id', organizationId)
+          .order('split_label'),
+      )) ?? []
+    return rows.map((row) => this.mapWorkoutPlan(row))
+  }
+
+  async getWorkoutPlan(organizationId: string, planId: string) {
+    const row = await this.select<Row>(
+      'getWorkoutPlan',
+      this.client
+        .from('workout_plans')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .eq('id', planId)
+        .maybeSingle(),
+    )
+    return row ? this.mapWorkoutPlan(row) : null
+  }
+
+  async listWorkoutExercises(workoutPlanId: string) {
+    const rows =
+      (await this.select<Row[]>(
+        'listWorkoutExercises',
+        this.client
+          .from('workout_exercises')
+          .select('*, exercises (*)')
+          .eq('workout_plan_id', workoutPlanId)
+          .order('position'),
+      )) ?? []
+
+    return rows.map((row) => ({
+      id: row.id,
+      workoutPlanId: row.workout_plan_id,
+      exerciseId: row.exercise_id,
+      order: row.position,
+      sets: row.sets,
+      reps: row.reps,
+      restSeconds: row.rest_seconds,
+      suggestedLoad: row.suggested_load != null ? Number(row.suggested_load) : null,
+      notes: row.notes,
+      exercise: this.mapExercise(row.exercises),
+    })) satisfies Array<WorkoutExercise & { exercise: Exercise }>
+  }
+
+  async createWorkoutPlan(input: {
+    organizationId: string
+    name: string
+    goal: string | null
+    splitLabel: string
+    createdByStaffId: string | null
+    exercises: Array<{
+      exerciseId: string
+      sets: number
+      reps: string
+      restSeconds: number
+      suggestedLoad: number | null
+      notes: string | null
+    }>
+  }): Promise<WorkoutPlan> {
+    const row = await this.select<Row>(
+      'createWorkoutPlan',
+      this.client
+        .from('workout_plans')
+        .insert({
+          organization_id: input.organizationId,
+          name: input.name,
+          goal: input.goal,
+          split_label: input.splitLabel,
+          created_by_staff_id: input.createdByStaffId,
+          status: 'PUBLISHED',
+        })
+        .select('*')
+        .single(),
+    )
+    const plan = this.mapWorkoutPlan(row!)
+
+    /*
+     * Duas escritas sem transação, porque o PostgREST não oferece uma. O que
+     * fica no lugar dela é a limpeza abaixo: se os exercícios falharem, o plano
+     * vazio é removido em vez de ficar na lista como um treino que abre em
+     * branco. Um plano órfão é pior que um erro — o erro a pessoa refaz.
+     */
+    try {
+      const { error } = await this.client.from('workout_exercises').insert(
+        input.exercises.map((exercicio, indice) => ({
+          workout_plan_id: plan.id,
+          exercise_id: exercicio.exerciseId,
+          position: indice + 1,
+          sets: exercicio.sets,
+          reps: exercicio.reps,
+          rest_seconds: exercicio.restSeconds,
+          suggested_load: exercicio.suggestedLoad,
+          notes: exercicio.notes,
+        })),
+      )
+      if (error) this.fail('createWorkoutPlan:exercises', error)
+    } catch (erro) {
+      await this.client.from('workout_plans').delete().eq('id', plan.id)
+      throw erro
+    }
+
+    return plan
+  }
+
+  async updateWorkoutPlan(input: {
+    organizationId: string
+    planId: string
+    name: string
+    goal: string | null
+    splitLabel: string
+    exercises: Array<{
+      exerciseId: string
+      sets: number
+      reps: string
+      restSeconds: number
+      suggestedLoad: number | null
+      notes: string | null
+    }>
+  }): Promise<WorkoutPlan> {
+    /*
+     * O `eq('organization_id')` no update é a trava de inquilino desta camada.
+     * A RLS barra de qualquer jeito, mas sem ele um id de outra academia
+     * voltaria como "nenhuma linha atingida" — e o `single()` transformaria
+     * isso num erro de banco em vez de uma recusa que a tela sabe explicar.
+     */
+    const row = await this.select<Row>(
+      'updateWorkoutPlan',
+      this.client
+        .from('workout_plans')
+        .update({ name: input.name, goal: input.goal, split_label: input.splitLabel })
+        .eq('id', input.planId)
+        .eq('organization_id', input.organizationId)
+        .select('*')
+        .single(),
+    )
+    const plan = this.mapWorkoutPlan(row!)
+
+    /*
+     * Apaga e reinsere, nesta ordem, sem transação — o PostgREST não oferece
+     * uma. A janela entre as duas escritas existe: se a inserção falhar, o
+     * treino fica sem exercícios.
+     *
+     * É pior do que na criação, onde dava para remover o plano órfão, porque
+     * aqui não há o que desfazer: a lista antiga já se foi. O que sobra é
+     * avisar com clareza — o erro sobe, a tela diz que a edição falhou, e o
+     * professor reabre o treino e vê o que restou. Transação de verdade só
+     * vindo por uma função no banco, que é a saída quando isso incomodar.
+     */
+    const { error: erroApagar } = await this.client
+      .from('workout_exercises')
+      .delete()
+      .eq('workout_plan_id', plan.id)
+    if (erroApagar) this.fail('updateWorkoutPlan:limpar', erroApagar)
+
+    const { error } = await this.client.from('workout_exercises').insert(
+      input.exercises.map((exercicio, indice) => ({
+        workout_plan_id: plan.id,
+        exercise_id: exercicio.exerciseId,
+        position: indice + 1,
+        sets: exercicio.sets,
+        reps: exercicio.reps,
+        rest_seconds: exercicio.restSeconds,
+        suggested_load: exercicio.suggestedLoad,
+        notes: exercicio.notes,
+      })),
+    )
+    if (error) this.fail('updateWorkoutPlan:exercicios', error)
+
+    return plan
+  }
+
+  async assignWorkoutPlan(input: {
+    organizationId: string
+    workoutPlanId: string
+    studentId: string
+    validUntil: string | null
+  }): Promise<WorkoutAssignment> {
+    /*
+     * `onConflict` porque a tabela tem uma única atribuição por par
+     * (treino, aluno): reatribuir o mesmo treino é renovar a validade, não um
+     * erro para mostrar na tela de quem só quis estender o prazo.
+     */
+    const row = await this.select<Row>(
+      'assignWorkoutPlan',
+      this.client
+        .from('workout_assignments')
+        .upsert(
+          {
+            organization_id: input.organizationId,
+            workout_plan_id: input.workoutPlanId,
+            student_id: input.studentId,
+            valid_until: input.validUntil,
+            assigned_at: new Date().toISOString(),
+          },
+          { onConflict: 'workout_plan_id,student_id' },
+        )
+        .select('*')
+        .single(),
+    )
+
+    return {
+      id: row!.id,
+      organizationId: row!.organization_id,
+      workoutPlanId: row!.workout_plan_id,
+      studentId: row!.student_id,
+      assignedAt: row!.assigned_at,
+      validUntil: row!.valid_until,
+    }
+  }
+
+  async listAssignmentsForStudent(organizationId: string, studentId: string) {
+    const rows =
+      (await this.select<Row[]>(
+        'listAssignmentsForStudent',
+        this.client
+          .from('workout_assignments')
+          .select('*')
+          .eq('organization_id', organizationId)
+          .eq('student_id', studentId),
+      )) ?? []
+    return rows.map((row) => ({
+      id: row.id,
+      organizationId: row.organization_id,
+      workoutPlanId: row.workout_plan_id,
+      studentId: row.student_id,
+      assignedAt: row.assigned_at,
+      validUntil: row.valid_until,
+    })) satisfies WorkoutAssignment[]
+  }
+
+  async listAssignmentsForPlan(organizationId: string, workoutPlanId: string) {
+    const rows =
+      (await this.select<Row[]>(
+        'listAssignmentsForPlan',
+        this.client
+          .from('workout_assignments')
+          .select('*')
+          .eq('organization_id', organizationId)
+          .eq('workout_plan_id', workoutPlanId),
+      )) ?? []
+    return rows.map((row) => ({
+      id: row.id,
+      organizationId: row.organization_id,
+      workoutPlanId: row.workout_plan_id,
+      studentId: row.student_id,
+      assignedAt: row.assigned_at,
+      validUntil: row.valid_until,
+    })) satisfies WorkoutAssignment[]
+  }
+
+  /**
+   * Quantos alunos têm cada ficha atribuída — contados pelo banco (0050).
+   *
+   * `workout_assignments` cresce sem apagar: uma academia antiga tem mais
+   * atribuições que alunos. Era a mais perto de encostar no teto das três
+   * contagens que a aplicação fazia à mão.
+   */
+  async countAssignments(organizationId: string) {
+    return this.contagemPorChave(
+      'countAssignments',
+      'treinos_por_plano',
+      { p_organization_id: organizationId },
+      'workout_plan_id',
+      () =>
+        this.client
+          .from('workout_assignments')
+          .select('workout_plan_id')
+          .eq('organization_id', organizationId),
+    )
+  }
+
+  /** Noventa dias é o que as duas telas que leem isto já anunciam. */
+  private static readonly DIAS_DE_HISTORICO = 90
+  private static readonly TETO_DE_REGISTROS = 500
+
+  /**
+   * O histórico de treino de um aluno, recortado.
+   *
+   * ── Por que o recorte é obrigatório na prática ─────────────────────────────
+   *
+   * `workout_logs` cresce desde o primeiro dia do aluno, a leitura não tinha
+   * teto, e a ordem é **crescente** — então o corte do PostgREST descarta o
+   * registro mais recente. As três coisas que esta leitura alimentava erravam
+   * de jeitos diferentes:
+   *
+   *   o "ganho de carga" da home     usa a última carga: congelava num valor antigo
+   *   o cartão "Treinos"             conta as linhas: dizia menos do que é
+   *   os dois gráficos de carga      plotam um ponto por linha: sumiam no fim
+   *
+   * As duas primeiras saíram daqui (`getLoadProgress` e `countWorkoutLogs`).
+   * O gráfico fica, com janela e teto: ele mostra evolução recente, e noventa
+   * dias é o que a própria tela já anuncia ao lado.
+   */
+  async listWorkoutLogs(
+    organizationId: string,
+    studentId: string,
+    filters: WorkoutLogFilters = {},
+  ) {
+    const desde =
+      filters.since ??
+      new Date(Date.now() - SupabaseDataSource.DIAS_DE_HISTORICO * 86_400_000).toISOString()
+    const teto = Math.min(SupabaseDataSource.TETO_DE_REGISTROS, Math.max(1, filters.limit ?? 500))
+
+    const rows =
+      (await this.select<Row[]>(
+        'listWorkoutLogs',
+        this.client
+          .from('workout_logs')
+          .select('*')
+          .eq('organization_id', organizationId)
+          .eq('student_id', studentId)
+          .gte('performed_at', desde)
+          .order('performed_at', { ascending: true })
+          .limit(teto),
+      )) ?? []
+    return rows.map((row) => ({
+      id: row.id,
+      organizationId: row.organization_id,
+      studentId: row.student_id,
+      workoutPlanId: row.workout_plan_id,
+      workoutExerciseId: row.workout_exercise_id,
+      performedAt: row.performed_at,
+      load: row.load != null ? Number(row.load) : null,
+      reps: row.reps,
+      sets: row.sets,
+      rpe: row.rpe,
+      notes: row.notes,
+    })) satisfies WorkoutLog[]
+  }
+
+  /**
+   * Quantos registros o aluno tem.
+   *
+   * `head: true` não traz linha nenhuma: o Postgres conta. O cartão lia
+   * `logs.length` de uma leitura sem teto, então o número era o da resposta —
+   * e a resposta podia vir cortada.
+   */
+  async countWorkoutLogs(organizationId: string, studentId: string): Promise<number> {
+    const { count, error } = await this.client
+      .from('workout_logs')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', organizationId)
+      .eq('student_id', studentId)
+
+    if (error) this.fail('countWorkoutLogs', error)
+    return count ?? 0
+  }
+
+  /**
+   * A primeira e a última carga registradas.
+   *
+   * Duas linhas, uma por consulta, com `order` oposta. A home lia o histórico
+   * inteiro para usar exatamente estas duas — e como a ordem é crescente, o
+   * corte levava justamente a última.
+   *
+   * As duas podem ser de exercícios diferentes, como sempre foram. Isto
+   * conserta o corte e preserva o significado — trocar o significado é
+   * decisão de produto, anotada em `docs/pre-producao.md`.
+   */
+  async getLoadProgress(organizationId: string, studentId: string): Promise<LoadProgress> {
+    const umaCarga = (ascendente: boolean) =>
+      this.select<Row>(
+        'getLoadProgress',
+        this.client
+          .from('workout_logs')
+          .select('load')
+          .eq('organization_id', organizationId)
+          .eq('student_id', studentId)
+          .not('load', 'is', null)
+          .order('performed_at', { ascending: ascendente })
+          .limit(1)
+          .maybeSingle(),
+      )
+
+    const [primeiro, ultimo] = await Promise.all([umaCarga(true), umaCarga(false)])
+
+    return {
+      primeira: primeiro?.load != null ? Number(primeiro.load) : null,
+      ultima: ultimo?.load != null ? Number(ultimo.load) : null,
+    }
+  }
+
+  // ── Avaliações ─────────────────────────────────────────────────────────────
+  private mapAssessment(row: Row): Assessment {
+    const num = (v: unknown) => (v != null ? Number(v) : null)
+    return {
+      id: row.id,
+      organizationId: row.organization_id,
+      studentId: row.student_id,
+      assessedByStaffId: row.assessed_by_staff_id,
+      assessedAt: row.assessed_at,
+      weight: num(row.weight),
+      height: num(row.height),
+      bmi: num(row.bmi),
+      bodyFatPercentage: num(row.body_fat_percentage),
+      chest: num(row.chest),
+      arm: num(row.arm),
+      waist: num(row.waist),
+      abdomen: num(row.abdomen),
+      hip: num(row.hip),
+      thigh: num(row.thigh),
+      calf: num(row.calf),
+      notes: row.notes,
+      protocol: row.protocol ?? 'MANUAL',
+      protocolSex: row.protocol_sex ?? null,
+      ageYears: num(row.age_years),
+      bodyDensity: num(row.body_density),
+      skinfoldChest: num(row.sf_chest),
+      skinfoldAxilla: num(row.sf_axilla),
+      skinfoldTriceps: num(row.sf_triceps),
+      skinfoldSubscapular: num(row.sf_subscapular),
+      skinfoldAbdominal: num(row.sf_abdominal),
+      skinfoldSuprailiac: num(row.sf_suprailiac),
+      skinfoldThigh: num(row.sf_thigh),
+    }
+  }
+
+  async listAssessments(organizationId: string, studentId: string) {
+    const rows =
+      (await this.select<Row[]>(
+        'listAssessments',
+        this.client
+          .from('assessments')
+          .select('*')
+          .eq('organization_id', organizationId)
+          .eq('student_id', studentId)
+          .order('assessed_at', { ascending: true }),
+      )) ?? []
+
+    return rows.map((row) => this.mapAssessment(row))
+  }
+
+  async getAssessment(organizationId: string, assessmentId: string): Promise<Assessment | null> {
+    const row = await this.select<Row>(
+      'getAssessment',
+      this.client
+        .from('assessments')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .eq('id', assessmentId)
+        .maybeSingle(),
+    )
+    return row ? this.mapAssessment(row) : null
+  }
+
+  /**
+   * A fila de avaliação, ordenada pelo banco.
+   *
+   * Uma chamada no lugar de duas leituras que cortavam em silêncio — 100
+   * alunos de `listStudents`, 500 avaliações de `listLatestAssessments` — e
+   * de uma ordenação feita sobre o pedaço. `count(*) over ()` traz o total
+   * junto, então a tela sabe quantos são sem uma segunda consulta.
+   */
+  async listAssessmentQueue(organizationId: string, limite: number, deslocamento: number) {
+    const { data, error } = await this.client.rpc('fila_de_avaliacao', {
+      p_organization_id: organizationId,
+      p_limit: limite,
+      p_offset: deslocamento,
+    })
+    if (error) this.fail('listAssessmentQueue', error)
+
+    const rows = (data ?? []) as Row[]
+    return {
+      linhas: rows.map((row) => ({
+        studentId: row.student_id,
+        studentName: row.student_name,
+        avatarUrl: row.avatar_url ?? null,
+        assessedAt: row.assessed_at ?? null,
+        weight: row.weight === null ? null : Number(row.weight),
+        bmi: row.bmi === null ? null : Number(row.bmi),
+        bodyFatPercentage: row.body_fat === null ? null : Number(row.body_fat),
+        diasSemAvaliar: row.dias_sem === null ? null : Number(row.dias_sem),
+      })),
+      // Sem linha nenhuma não há `count(*) over ()` para ler: zero é o total.
+      total: rows.length > 0 ? Number(rows[0].total_geral) : 0,
+    }
+  }
+
+  async getAssessmentQueueSummary(organizationId: string, diasAteReavaliar: number) {
+    const { data, error } = await this.client.rpc('resumo_das_avaliacoes', {
+      p_organization_id: organizationId,
+      p_dias_ate_reavaliar: diasAteReavaliar,
+    })
+    if (error) this.fail('getAssessmentQueueSummary', error)
+
+    const linha = ((data ?? []) as Row[])[0]
+    return {
+      ativos: Number(linha?.ativos ?? 0),
+      nuncaAvaliados: Number(linha?.nunca_avaliados ?? 0),
+      vencidas: Number(linha?.vencidas ?? 0),
+    }
+  }
+
+  async saveAssessment(input: SaveAssessmentInput): Promise<Assessment> {
+    const linha = {
+      organization_id: input.organizationId,
+      student_id: input.studentId,
+      assessed_by_staff_id: input.assessedByStaffId,
+      assessed_at: input.assessedAt,
+      weight: input.weight,
+      height: input.height,
+      chest: input.chest,
+      arm: input.arm,
+      waist: input.waist,
+      abdomen: input.abdomen,
+      hip: input.hip,
+      thigh: input.thigh,
+      calf: input.calf,
+      notes: input.notes,
+      protocol: input.protocol,
+      protocol_sex: input.protocolSex,
+      age_years: input.ageYears,
+      sf_chest: input.skinfoldChest,
+      sf_axilla: input.skinfoldAxilla,
+      sf_triceps: input.skinfoldTriceps,
+      sf_subscapular: input.skinfoldSubscapular,
+      sf_abdominal: input.skinfoldAbdominal,
+      sf_suprailiac: input.skinfoldSuprailiac,
+      sf_thigh: input.skinfoldThigh,
+      /* Só vale quando o protocolo é manual; o gatilho ignora nos demais. */
+      body_fat_percentage: input.protocol === 'MANUAL' ? input.bodyFatPercentage : null,
+    }
+
+    const row = input.id
+      ? await this.select<Row>(
+          'saveAssessment:update',
+          this.client
+            .from('assessments')
+            .update(linha)
+            .eq('organization_id', input.organizationId)
+            .eq('id', input.id)
+            .select('*')
+            .single(),
+        )
+      : await this.select<Row>(
+          'saveAssessment:insert',
+          this.client.from('assessments').insert(linha).select('*').single(),
+        )
+
+    return this.mapAssessment(row!)
+  }
+
+  // ── Agenda ─────────────────────────────────────────────────────────────────
+  private mapSchedule(row: Row): ClassSchedule {
+    return {
+      id: row.id,
+      organizationId: row.organization_id,
+      name: row.name,
+      description: row.description ?? null,
+      staffId: row.staff_id ?? null,
+      staffName: row.staff?.user_profiles?.name ?? null,
+      weekday: Number(row.weekday),
+      // `time` volta como 'HH:MM:SS'; a tela e o formulário falam 'HH:MM'.
+      startTime: String(row.start_time ?? '').slice(0, 5),
+      durationMinutes: Number(row.duration_minutes),
+      capacity: Number(row.capacity),
+      room: row.room ?? null,
+      startsOn: row.starts_on,
+      endsOn: row.ends_on ?? null,
+      status: row.status ?? 'ACTIVE',
+    }
+  }
+
+  private mapSession(row: Row): ClassSession {
+    return {
+      id: row.id,
+      organizationId: row.organization_id,
+      scheduleId: row.schedule_id ?? null,
+      name: row.name,
+      staffId: row.staff_id ?? null,
+      staffName: row.staff?.user_profiles?.name ?? null,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+      capacity: Number(row.capacity),
+      room: row.room ?? null,
+      status: row.status ?? 'SCHEDULED',
+      cancellationReason: row.cancellation_reason ?? null,
+      bookedCount: Number(row.booked_count ?? 0),
+    }
+  }
+
+  /** O professor vem por join aninhado: staff → user_profiles → name. */
+  private static readonly SESSAO_SELECT = '*, staff:staff_id(user_profiles:user_profile_id(name))'
+
+  async listClassSchedules(organizationId: string): Promise<ClassSchedule[]> {
+    const rows =
+      (await this.select<Row[]>(
+        'listClassSchedules',
+        this.client
+          .from('class_schedules')
+          .select(SupabaseDataSource.SESSAO_SELECT)
+          .eq('organization_id', organizationId)
+          .order('weekday')
+          .order('start_time'),
+      )) ?? []
+    return rows.map((row) => this.mapSchedule(row))
+  }
+
+  async getClassSchedule(organizationId: string, scheduleId: string) {
+    const row = await this.select<Row>(
+      'getClassSchedule',
+      this.client
+        .from('class_schedules')
+        .select(SupabaseDataSource.SESSAO_SELECT)
+        .eq('organization_id', organizationId)
+        .eq('id', scheduleId)
+        .maybeSingle(),
+    )
+    return row ? this.mapSchedule(row) : null
+  }
+
+  async saveClassSchedule(input: SaveClassScheduleInput): Promise<ClassSchedule> {
+    const linha = {
+      organization_id: input.organizationId,
+      name: input.name,
+      description: input.description,
+      staff_id: input.staffId,
+      weekday: input.weekday,
+      start_time: input.startTime,
+      duration_minutes: input.durationMinutes,
+      capacity: input.capacity,
+      room: input.room,
+      starts_on: input.startsOn,
+      ends_on: input.endsOn,
+      status: input.status,
+      updated_at: new Date().toISOString(),
+    }
+
+    const row = input.id
+      ? await this.select<Row>(
+          'saveClassSchedule:update',
+          this.client
+            .from('class_schedules')
+            .update(linha)
+            .eq('organization_id', input.organizationId)
+            .eq('id', input.id)
+            .select(SupabaseDataSource.SESSAO_SELECT)
+            .single(),
+        )
+      : await this.select<Row>(
+          'saveClassSchedule:insert',
+          this.client
+            .from('class_schedules')
+            .insert(linha)
+            .select(SupabaseDataSource.SESSAO_SELECT)
+            .single(),
+        )
+
+    return this.mapSchedule(row!)
+  }
+
+  async listClassSessions(organizationId: string, window: ScheduleWindow) {
+    const rows =
+      (await this.select<Row[]>(
+        'listClassSessions',
+        this.client
+          .from('class_sessions')
+          .select(SupabaseDataSource.SESSAO_SELECT)
+          .eq('organization_id', organizationId)
+          .gte('starts_at', window.from)
+          .lt('starts_at', window.to)
+          .order('starts_at'),
+      )) ?? []
+    return rows.map((row) => this.mapSession(row))
+  }
+
+  async getClassSession(organizationId: string, sessionId: string) {
+    const row = await this.select<Row>(
+      'getClassSession',
+      this.client
+        .from('class_sessions')
+        .select(SupabaseDataSource.SESSAO_SELECT)
+        .eq('organization_id', organizationId)
+        .eq('id', sessionId)
+        .maybeSingle(),
+    )
+    return row ? this.mapSession(row) : null
+  }
+
+  async listClassBookings(organizationId: string, sessionId: string): Promise<ClassBooking[]> {
+    const rows =
+      (await this.select<Row[]>(
+        'listClassBookings',
+        this.client
+          .from('class_bookings')
+          .select('*, students:student_id(user_profiles:user_profile_id(name))')
+          .eq('organization_id', organizationId)
+          .eq('session_id', sessionId)
+          // Ordem de chegada: é ela que define a fila de espera.
+          .order('created_at'),
+      )) ?? []
+
+    return rows.map((row) => ({
+      id: row.id,
+      organizationId: row.organization_id,
+      sessionId: row.session_id,
+      studentId: row.student_id,
+      studentName: row.students?.user_profiles?.name ?? null,
+      status: row.status,
+      createdAt: row.created_at,
+      cancelledAt: row.cancelled_at ?? null,
+      attendedAt: row.attended_at ?? null,
+    }))
+  }
+
+  async cancelClassSession(organizationId: string, sessionId: string, reason: string | null) {
+    /*
+     * Só marca o status. Avisar quem ia e desfazer as reservas é do gatilho da
+     * 0024 — fazer aqui deixaria o aluno sem aviso quando a aula fosse
+     * cancelada por qualquer outro caminho.
+     */
+    const { error } = await this.client
+      .from('class_sessions')
+      .update({
+        status: 'CANCELLED',
+        cancellation_reason: reason,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('organization_id', organizationId)
+      .eq('id', sessionId)
+    if (error) this.fail('cancelClassSession', error)
+  }
+
+  async generateClassSessions(organizationId: string, daysAhead: number): Promise<number> {
+    const { data, error } = await this.client.rpc('generate_org_class_sessions', {
+      p_organization_id: organizationId,
+      p_days_ahead: daysAhead,
+    })
+    if (error) this.fail('generateClassSessions', error)
+    return Number(data ?? 0)
+  }
+
+  async ensureClassSessions(organizationId: string, daysAhead: number): Promise<number> {
+    const { data, error } = await this.client.rpc('ensure_org_class_sessions', {
+      p_organization_id: organizationId,
+      p_days_ahead: daysAhead,
+    })
+    /*
+     * Falha aqui não derruba a tela. A agenda que já existe continua legível, e
+     * uma academia sem a 0024 aplicada veria erro numa página que deveria
+     * apenas mostrar o que tem.
+     */
+    if (error) {
+      logger.warn('ensureClassSessions:ignorado', { erro: String((error as Error).message) })
+      return 0
+    }
+    return Number(data ?? 0)
+  }
+
+  async generateAllClassSessions(daysAhead: number): Promise<number> {
+    const { data, error } = await this.client.rpc('generate_class_sessions', {
+      p_days_ahead: daysAhead,
+    })
+    if (error) this.fail('generateAllClassSessions', error)
+    return Number(data ?? 0)
+  }
+
+  async markAttendance(
+    organizationId: string,
+    bookingId: string,
+    status: 'ATTENDED' | 'NO_SHOW' | 'BOOKED',
+  ) {
+    const { error } = await this.client
+      .from('class_bookings')
+      .update({ status, attended_at: status === 'ATTENDED' ? new Date().toISOString() : null })
+      .eq('organization_id', organizationId)
+      .eq('id', bookingId)
+    if (error) this.fail('markAttendance', error)
+  }
+
+  async bookClass(sessionId: string, studentId?: string): Promise<ClassBookingStatus> {
+    /*
+     * A vaga é decidida no banco, sob trava. Contar aqui e inserir depois é a
+     * corrida que coloca duas pessoas na última vaga.
+     */
+    const { data, error } = await this.client.rpc('book_class', {
+      p_session_id: sessionId,
+      p_student_id: studentId ?? null,
+    })
+    if (error) this.fail('bookClass', error)
+    return data as ClassBookingStatus
+  }
+
+  async cancelClassBooking(bookingId: string): Promise<void> {
+    const { error } = await this.client.rpc('cancel_class_booking', { p_booking_id: bookingId })
+    if (error) this.fail('cancelClassBooking', error)
+  }
+
+  async listClassSessionsForStudent(
+    organizationId: string,
+    studentId: string,
+    window: ScheduleWindow,
+  ): Promise<ClassSessionForStudent[]> {
+    const [sessoes, minhas] = await Promise.all([
+      this.listClassSessions(organizationId, window),
+      this.select<Row[]>(
+        'listClassSessionsForStudent:bookings',
+        this.client
+          .from('class_bookings')
+          .select('id, session_id, student_id, status, created_at')
+          .eq('organization_id', organizationId)
+          .in('status', ['BOOKED', 'WAITLIST', 'ATTENDED'])
+          .order('created_at'),
+      ),
+    ])
+
+    const todas = minhas ?? []
+    const minhasPorSessao = new Map(
+      todas.filter((linha) => linha.student_id === studentId).map((l) => [l.session_id, l]),
+    )
+
+    /*
+     * A posição na fila é contada entre as esperas anteriores da mesma aula.
+     * "Você está na lista" sem dizer em que lugar não ajuda ninguém a decidir
+     * se vale esperar.
+     */
+    const esperaPorSessao = new Map<string, string[]>()
+    for (const linha of todas) {
+      if (linha.status !== 'WAITLIST') continue
+      const fila = esperaPorSessao.get(linha.session_id) ?? []
+      fila.push(linha.student_id)
+      esperaPorSessao.set(linha.session_id, fila)
+    }
+
+    return sessoes.map((sessao) => {
+      const minha = minhasPorSessao.get(sessao.id)
+      const fila = esperaPorSessao.get(sessao.id) ?? []
+      const posicao = minha?.status === 'WAITLIST' ? fila.indexOf(studentId) + 1 : 0
+
+      return {
+        ...sessao,
+        myBookingId: minha?.id ?? null,
+        myBookingStatus: (minha?.status as ClassBookingStatus | undefined) ?? null,
+        waitlistPosition: posicao > 0 ? posicao : null,
+      }
+    })
+  }
+
+  // ── Treino Ativo ───────────────────────────────────────────────────────────
+  async startWorkoutSession(clientId: string, workoutPlanId: string | null): Promise<string> {
+    /*
+     * A regra de quem é o aluno vive no banco, em `start_workout_session`.
+     * Mandar `student_id` daqui deixaria a aplicação decidir em nome de quem o
+     * treino é gravado — e é exatamente isso que não pode.
+     */
+    const { data, error } = await this.client.rpc('start_workout_session', {
+      p_client_id: clientId,
+      p_workout_plan_id: workoutPlanId,
+    })
+    if (error) this.fail('startWorkoutSession', error)
+    return String(data)
+  }
+
+  async logWorkoutSet(input: LogWorkoutSetInput): Promise<string> {
+    const { data, error } = await this.client.rpc('log_workout_set', {
+      p_session_id: input.sessionId,
+      p_exercise_id: input.exerciseId,
+      p_set_number: input.setNumber,
+      p_reps_completed: input.repsCompleted,
+      p_client_id: input.clientId,
+      p_weight: input.weight,
+      p_reps_planned: input.repsPlanned,
+      p_rest_seconds: input.restSeconds,
+      p_started_at: input.startedAt,
+      p_completed_at: input.completedAt,
+    })
+    if (error) this.fail('logWorkoutSet', error)
+    return String(data)
+  }
+
+  async finishWorkoutSession(
+    sessionId: string,
+    durationSeconds: number,
+    status: 'COMPLETED' | 'ABANDONED',
+  ): Promise<void> {
+    const { error } = await this.client.rpc('finish_workout_session', {
+      p_session_id: sessionId,
+      p_duration_seconds: durationSeconds,
+      p_status: status,
+    })
+    if (error) this.fail('finishWorkoutSession', error)
+  }
+
+  private mapWorkoutSession(row: Row): WorkoutSessionSummary {
+    const series = (row.workout_set_logs ?? []) as Row[]
+    return {
+      id: row.id,
+      organizationId: row.organization_id,
+      studentId: row.student_id,
+      workoutPlanId: row.workout_plan_id ?? null,
+      planName: row.workout_plans?.name ?? null,
+      clientId: row.client_id,
+      status: row.status,
+      startedAt: row.started_at,
+      completedAt: row.completed_at ?? null,
+      durationSeconds: row.duration_seconds ?? null,
+      totalSets: series.length,
+      totalReps: series.reduce((soma, s) => soma + Number(s.reps_completed ?? 0), 0),
+      volumeKg: Math.round(
+        series.reduce((soma, s) => soma + Number(s.weight ?? 0) * Number(s.reps_completed ?? 0), 0),
+      ),
+    }
+  }
+
+  private static readonly SESSAO_TREINO_SELECT =
+    '*, workout_plans:workout_plan_id(name), workout_set_logs(reps_completed, weight)'
+
+  async getActiveWorkoutSession(studentId: string): Promise<WorkoutSessionSummary | null> {
+    const row = await this.select<Row>(
+      'getActiveWorkoutSession',
+      this.client
+        .from('workout_sessions')
+        .select(SupabaseDataSource.SESSAO_TREINO_SELECT)
+        .eq('student_id', studentId)
+        .in('status', ['IN_PROGRESS', 'PAUSED'])
+        .maybeSingle(),
+    )
+    return row ? this.mapWorkoutSession(row) : null
+  }
+
+  /**
+   * Quem está treinando agora.
+   *
+   * A janela de oito horas é a mesma da 0047, e ela está nos dois lugares de
+   * propósito. A migration fecha a sessão esquecida **quando o aluno abre a
+   * próxima** — quem nunca mais voltou continua com a linha pendurada até lá,
+   * e o painel mostraria alguém que foi embora na semana passada como se
+   * estivesse no supino. Aqui o filtro é de leitura; lá é de verdade.
+   *
+   * `workout_set_logs(id)` só para contar: trazer reps e carga de toda sessão
+   * aberta seria pagar transferência por um número que a tela não mostra.
+   */
+  async listActiveWorkoutSessions(organizationId: string): Promise<OngoingWorkout[]> {
+    const desde = new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString()
+
+    const rows =
+      (await this.select<Row[]>(
+        'listActiveWorkoutSessions',
+        this.client
+          .from('workout_sessions')
+          // Aninhamento colado: o parser do PostgREST recusa `a ( b ( c ) )`.
+          .select(
+            'id, student_id, status, started_at, workout_plans:workout_plan_id(name), students(user_profiles(name)), workout_set_logs(id)',
+          )
+          .eq('organization_id', organizationId)
+          .in('status', ['IN_PROGRESS', 'PAUSED'])
+          .gte('started_at', desde)
+          .order('started_at', { ascending: true }),
+      )) ?? []
+
+    return rows.map((row) => ({
+      sessionId: row.id,
+      studentId: row.student_id,
+      studentName: row.students?.user_profiles?.name ?? 'Aluno',
+      planName: row.workout_plans?.name ?? null,
+      startedAt: row.started_at,
+      status: row.status,
+      totalSets: (row.workout_set_logs ?? []).length,
+    }))
+  }
+
+  async listWorkoutSessions(studentId: string, limite: number): Promise<WorkoutSessionSummary[]> {
+    const rows =
+      (await this.select<Row[]>(
+        'listWorkoutSessions',
+        this.client
+          .from('workout_sessions')
+          .select(SupabaseDataSource.SESSAO_TREINO_SELECT)
+          .eq('student_id', studentId)
+          .eq('status', 'COMPLETED')
+          .order('started_at', { ascending: false })
+          .limit(limite),
+      )) ?? []
+    return rows.map((row) => this.mapWorkoutSession(row))
+  }
+
+  async getWorkoutPreferences(userProfileId: string): Promise<WorkoutPreferences> {
+    const row = await this.select<Row>(
+      'getWorkoutPreferences',
+      this.client
+        .from('workout_preferences')
+        .select('*')
+        .eq('user_profile_id', userProfileId)
+        .maybeSingle(),
+    )
+    // Sem linha é quem nunca mexeu nas preferências: o padrão serve.
+    if (!row) return DEFAULT_WORKOUT_PREFERENCES
+    return {
+      autoRest: row.auto_rest,
+      sound: row.sound_enabled,
+      vibration: row.vibration_enabled,
+      autoAdvance: row.auto_advance,
+      keepScreenAwake: row.keep_screen_awake,
+      defaultRestSeconds: Number(row.default_rest_seconds),
+    }
+  }
+
+  async saveWorkoutPreferences(userProfileId: string, p: WorkoutPreferences) {
+    const { error } = await this.client.from('workout_preferences').upsert({
+      user_profile_id: userProfileId,
+      auto_rest: p.autoRest,
+      sound_enabled: p.sound,
+      vibration_enabled: p.vibration,
+      auto_advance: p.autoAdvance,
+      keep_screen_awake: p.keepScreenAwake,
+      default_rest_seconds: p.defaultRestSeconds,
+      updated_at: new Date().toISOString(),
+    })
+    if (error) this.fail('saveWorkoutPreferences', error)
+    return p
+  }
+
+  // ── Relatórios ─────────────────────────────────────────────────────────────
+  /**
+   * As funções da 0027 são SECURITY INVOKER: rodam com o privilégio de quem
+   * chama, e a RLS filtra sozinha. Por isso não há checagem de academia aqui —
+   * duplicá-la criaria um segundo lugar para a regra divergir.
+   */
+  private async rpc<T>(nome: string, args: Record<string, unknown>, padrao: T): Promise<T> {
+    const { data, error } = await this.client.rpc(nome, args)
+    if (error) {
+      /*
+       * Relatório é leitura: falhar aqui não pode derrubar a página. Uma
+       * academia sem a 0027 aplicada veria erro numa tela que deveria mostrar
+       * o que tem.
+       */
+      logger.warn(`report:${nome}`, { erro: String((error as Error).message) })
+      return padrao
+    }
+    return (data as T) ?? padrao
+  }
+
+  async getExerciseProgress(studentId: string, exerciseId: string, weeks: number) {
+    const rows = await this.rpc<Row[]>(
+      'exercise_progress',
+      { p_student_id: studentId, p_exercise_id: exerciseId, p_weeks: weeks },
+      [],
+    )
+    return rows.map((row) => ({
+      week: row.semana,
+      maxWeight: row.carga_max === null ? null : Number(row.carga_max),
+      volumeKg: Number(row.volume_kg ?? 0),
+      sets: Number(row.series ?? 0),
+      reps: Number(row.reps ?? 0),
+    })) satisfies ExerciseProgressPoint[]
+  }
+
+  async getPersonalRecords(studentId: string) {
+    const rows = await this.rpc<Row[]>('personal_records', { p_student_id: studentId }, [])
+    return rows.map((row) => ({
+      exerciseId: row.exercise_id,
+      exerciseName: row.exercise_name,
+      maxWeight: Number(row.carga_max),
+      reps: Number(row.reps),
+      achievedAt: row.alcancado_em,
+    })) satisfies ExercisePersonalRecord[]
+  }
+
+  async getWorkoutTotals(studentId: string, from: string, to: string): Promise<WorkoutTotals> {
+    const rows = await this.rpc<Row[]>(
+      'workout_totals',
+      { p_student_id: studentId, p_from: from, p_to: to },
+      [],
+    )
+    return mapTotals(rows[0])
+  }
+
+  async getWorkoutAdherence(
+    studentId: string,
+    from: string,
+    to: string,
+  ): Promise<WorkoutAdherenceRow[]> {
+    const rows = await this.rpc<Row[]>(
+      'workout_adherence',
+      { p_student_id: studentId, p_from: from, p_to: to },
+      [],
+    )
+    return rows.map((row) => ({
+      sessionId: String(row.sessao_id),
+      startedAt: String(row.iniciado_em),
+      plannedSets: Number(row.series_planejadas),
+      plannedReps: Number(row.reps_planejadas),
+      completedReps: Number(row.reps_feitas),
+      setsBelowPlan: Number(row.series_abaixo),
+    })) satisfies WorkoutAdherenceRow[]
+  }
+
+  async getGymTrainingReport(organizationId: string, from: string, to: string) {
+    const rows = await this.rpc<Row[]>(
+      'gym_training_report',
+      { p_organization_id: organizationId, p_from: from, p_to: to },
+      [],
+    )
+    const row = rows[0]
+    return {
+      workouts: Number(row?.treinos ?? 0),
+      studentsTraining: Number(row?.alunos_treinando ?? 0),
+      sets: Number(row?.series ?? 0),
+      volumeKg: Number(row?.volume_kg ?? 0),
+      averageDurationSeconds: row?.duracao_media_seg == null ? null : Number(row.duracao_media_seg),
+    } satisfies GymTrainingReport
+  }
+
+  async listStudentsAtRisk(organizationId: string, dias: number) {
+    const rows = await this.rpc<Row[]>(
+      'students_at_risk',
+      { p_organization_id: organizationId, p_dias: dias },
+      [],
+    )
+    return rows.map((row) => ({
+      studentId: row.student_id,
+      name: row.nome,
+      lastVisitAt: row.ultima_visita ?? null,
+      daysAbsent: Number(row.dias_ausente ?? 0),
+    })) satisfies StudentAtRisk[]
+  }
+
+  async getClassOccupancyReport(organizationId: string, from: string, to: string) {
+    const rows = await this.rpc<Row[]>(
+      'class_occupancy_report',
+      { p_organization_id: organizationId, p_from: from, p_to: to },
+      [],
+    )
+    return rows.map((row) => ({
+      className: row.aula,
+      occurrences: Number(row.ocorrencias ?? 0),
+      capacityOffered: Number(row.vagas_ofertadas ?? 0),
+      bookings: Number(row.reservas ?? 0),
+      attended: Number(row.presencas ?? 0),
+      noShows: Number(row.faltas ?? 0),
+    })) satisfies ClassOccupancyRow[]
+  }
+
+  // ── Conteúdos ──────────────────────────────────────────────────────────────
+  private mapContent(row: Row): ContentItem {
+    return {
+      id: row.id,
+      organizationId: row.organization_id ?? null,
+      type: row.type,
+      title: row.title,
+      summary: row.summary ?? null,
+      body: row.body ?? null,
+      coverUrl: row.cover_url ?? null,
+      mediaUrl: row.media_url ?? null,
+      visibility: row.visibility,
+      publishedAt: row.published_at ?? null,
+      pinned: Boolean(row.pinned),
+      authorStaffId: row.author_staff_id ?? null,
+      authorName: row.staff?.user_profiles?.name ?? null,
+      createdAt: row.created_at,
+    }
+  }
+
+  private static readonly CONTEUDO_SELECT =
+    '*, staff:author_staff_id(user_profiles:user_profile_id(name))'
+
+  async listContent(organizationId: string): Promise<ContentItem[]> {
+    const rows =
+      (await this.select<Row[]>(
+        'listContent',
+        this.client
+          .from('content_library')
+          .select(SupabaseDataSource.CONTEUDO_SELECT)
+          .eq('organization_id', organizationId)
+          .order('pinned', { ascending: false })
+          .order('created_at', { ascending: false }),
+      )) ?? []
+    return rows.map((row) => this.mapContent(row))
+  }
+
+  async getContent(organizationId: string, contentId: string) {
+    const row = await this.select<Row>(
+      'getContent',
+      this.client
+        .from('content_library')
+        .select(SupabaseDataSource.CONTEUDO_SELECT)
+        .eq('organization_id', organizationId)
+        .eq('id', contentId)
+        .maybeSingle(),
+    )
+    return row ? this.mapContent(row) : null
+  }
+
+  async saveContent(input: SaveContentInput): Promise<ContentItem> {
+    const linha = {
+      organization_id: input.organizationId,
+      type: input.type,
+      title: input.title,
+      summary: input.summary,
+      body: input.body,
+      cover_url: input.coverUrl,
+      media_url: input.mediaUrl,
+      /*
+       * Sempre ORGANIZATION. FREE é da plataforma, e a 0031 recusa a combinação
+       * com academia dona — a tela nem oferece a escolha, para ninguém publicar
+       * para a internet achando que publicou para os alunos.
+       */
+      visibility: 'ORGANIZATION',
+      pinned: input.pinned,
+      published_at: input.publishedAt,
+      author_staff_id: input.authorStaffId,
+      updated_at: new Date().toISOString(),
+    }
+
+    const row = input.id
+      ? await this.select<Row>(
+          'saveContent:update',
+          this.client
+            .from('content_library')
+            .update(linha)
+            .eq('organization_id', input.organizationId)
+            .eq('id', input.id)
+            .select(SupabaseDataSource.CONTEUDO_SELECT)
+            .single(),
+        )
+      : await this.select<Row>(
+          'saveContent:insert',
+          this.client
+            .from('content_library')
+            .insert(linha)
+            .select(SupabaseDataSource.CONTEUDO_SELECT)
+            .single(),
+        )
+
+    return this.mapContent(row!)
+  }
+
+  async deleteContent(organizationId: string, contentId: string): Promise<void> {
+    const { error } = await this.client
+      .from('content_library')
+      .delete()
+      .eq('organization_id', organizationId)
+      .eq('id', contentId)
+    if (error) this.fail('deleteContent', error)
+  }
+
+  async listPublishedContent(organizationId: string, limite: number): Promise<ContentItem[]> {
+    const { data, error } = await this.client.rpc('published_content', {
+      p_organization_id: organizationId,
+      p_limite: limite,
+    })
+    if (error) {
+      // Leitura: falhar aqui não derruba a tela do aluno.
+      logger.warn('listPublishedContent', { erro: String((error as Error).message) })
+      return []
+    }
+
+    return ((data as Row[]) ?? []).map((row) => ({
+      id: row.id,
+      organizationId,
+      type: row.tipo,
+      title: row.titulo,
+      summary: row.resumo ?? null,
+      body: null,
+      coverUrl: row.capa_url ?? null,
+      mediaUrl: row.midia_url ?? null,
+      visibility: 'ORGANIZATION' as const,
+      publishedAt: row.publicado_em ?? null,
+      pinned: Boolean(row.fixado),
+      authorStaffId: null,
+      authorName: row.autor ?? null,
+      createdAt: row.publicado_em ?? new Date().toISOString(),
+    }))
+  }
+
+  /**
+   * Um item publicado, com o corpo.
+   *
+   * ── Pela tabela, e não por uma função ──────────────────────────────────────
+   *
+   * `published_content` é uma função de lista e não devolve `body`. Trazer o
+   * corpo por ela pediria uma migration nova — e não há o que a função faria
+   * aqui que a política não faça: `content_read` já resolve academia, acervo
+   * da plataforma e o cadeado do Synse+, e a leitura direta passa por ela.
+   *
+   * ── Por que filtrar de novo o que a RLS já filtra ──────────────────────────
+   *
+   * A política é mais larga que esta tela em dois pontos, e os dois importam.
+   * Ela deixa a **equipe** ler o rascunho da própria academia: quem é
+   * professor numa e aluno noutra abriria pelo app um texto que ainda não foi
+   * publicado. E ela não conhece a academia da sessão: quem é aluno em duas
+   * leria, pelo app de uma, o mural da outra.
+   *
+   * O recorte repete a regra da lista — o que é da academia da sessão ou o que
+   * é da plataforma — e a data corta o rascunho e o agendado. A RLS continua
+   * por cima; isto é o recorte da tela, não a tranca.
+   *
+   * A conferência da academia é feita aqui e não no filtro `or` do PostgREST
+   * porque aquele filtro se escreve concatenando texto na consulta. O id vem
+   * da sessão e é confiável hoje; concatenar mesmo assim deixa uma arma
+   * carregada para o dia em que alguém reaproveitar este método com um valor
+   * que veio da URL. A busca é por chave primária e traz no máximo uma linha,
+   * então conferir depois custa nada.
+   */
+  async getPublishedContent(
+    organizationId: string,
+    contentId: string,
+  ): Promise<ContentItem | null> {
+    const row = await this.select<Row>(
+      'getPublishedContent',
+      this.client
+        .from('content_library')
+        .select(SupabaseDataSource.CONTEUDO_SELECT)
+        .eq('id', contentId)
+        .not('published_at', 'is', null)
+        .lte('published_at', new Date().toISOString())
+        .maybeSingle(),
+    )
+    if (!row) return null
+
+    const dono = (row.organization_id as string | null) ?? null
+    if (dono !== null && dono !== organizationId) return null
+
+    return this.mapContent(row)
+  }
+
+  /**
+   * ── A vitrine do cadeado ───────────────────────────────────────────────────
+   *
+   * Pela função, e não pela tabela, porque aqui a RLS é o obstáculo e não a
+   * guarda: são justamente as linhas que ela esconde desta conta. A
+   * `acervo_trancado` (0041) é `security definer` e devolve uma projeção
+   * estreita — sem `body`, sem `media_url` —, que é o que separa o anúncio do
+   * produto.
+   *
+   * Ela também decide sozinha quando devolver nada: quem assina recebe lista
+   * vazia, porque já vê esses itens pela lista normal. A tela não informa se
+   * assina, e isso é de propósito — um parâmetro desses seria o cliente
+   * declarando o próprio direito.
+   */
+  private mapTrancado(row: Row): ItemTrancado {
+    return {
+      id: row.id,
+      type: row.tipo,
+      title: row.titulo,
+      summary: row.resumo ?? null,
+      coverUrl: row.capa_url ?? null,
+      publishedAt: row.publicado_em,
+      pinned: Boolean(row.fixado),
+    }
+  }
+
+  private async vitrine(operacao: string, p_id: string | null): Promise<ItemTrancado[]> {
+    const { data, error } = await this.client.rpc('acervo_trancado', { p_id })
+    if (error) {
+      /*
+       * Vitrine que falha vira prateleira vazia, nunca tela quebrada. Cobre
+       * também a janela entre publicar e migrar, em que a função ainda não
+       * existe: perder o anúncio é aborrecimento, derrubar a tela de
+       * conteúdos por causa dele seria o defeito maior.
+       */
+      logger.warn(operacao, { erro: String((error as Error).message) })
+      return []
+    }
+    return ((data as Row[]) ?? []).map((row) => this.mapTrancado(row))
+  }
+
+  async listLockedShowcase(): Promise<ItemTrancado[]> {
+    return this.vitrine('listLockedShowcase', null)
+  }
+
+  async getLockedShowcase(contentId: string): Promise<ItemTrancado | null> {
+    return (await this.vitrine('getLockedShowcase', contentId))[0] ?? null
+  }
+
+  // ── Programas guiados ──────────────────────────────────────────────────────
+  /**
+   * ── Pelas tabelas na leitura, por função na escrita ───────────────────────
+   *
+   * Ler é direto: `programs_read` e `program_steps_read` (0038, ajustadas na
+   * 0043) já decidem quem enxerga o quê, e `program_enrollments_self` entrega
+   * só a linha de quem pergunta.
+   *
+   * Escrever não: a 0043 tirou `insert/update/delete` do alcance do cliente,
+   * porque a política não conferia se a pessoa pode **ler** o programa em que
+   * se matricula, e porque `current_day` e `completed_days` precisam andar
+   * juntos. As quatro escritas passam por função.
+   */
+  private mapPrograma(row: Row): Program {
+    return {
+      id: row.id,
+      code: row.code,
+      title: row.title,
+      description: row.description ?? null,
+      durationDays: Number(row.duration_days),
+      coverUrl: row.cover_url ?? null,
+      visibility: row.visibility,
+    }
+  }
+
+  /**
+   * `tasks` é `jsonb` e pode ser qualquer coisa.
+   *
+   * A coluna aceita o que puserem nela, e a tela espera uma lista de textos.
+   * Converter aqui — e descartar o que não for texto — é o que impede um
+   * `[{...}]` gravado à mão de virar "[object Object]" na tela do aluno.
+   */
+  private static tarefas(bruto: unknown): string[] {
+    if (!Array.isArray(bruto)) return []
+    return bruto.filter((t): t is string => typeof t === 'string')
+  }
+
+  private mapMatricula(row: Row | null | undefined): ProgramEnrollment | null {
+    if (!row) return null
+    return {
+      startedAt: row.started_at,
+      currentDay: Number(row.current_day),
+      completedDays: Array.isArray(row.completed_days)
+        ? (row.completed_days as unknown[]).map(Number)
+        : [],
+      status: row.status,
+    }
+  }
+
+  async listPrograms(): Promise<ProgramaNaLista[]> {
+    const programas =
+      (await this.select<Row[]>(
+        'listPrograms',
+        this.client.from('programs').select('*').order('duration_days', { ascending: true }),
+      )) ?? []
+
+    /*
+     * As matrículas numa consulta só, e não uma por programa: a lista tem
+     * poucos itens hoje, mas N+1 escondido numa tela de assinante é o tipo de
+     * custo que só aparece quando há gente usando.
+     */
+    const matriculas =
+      (await this.select<Row[]>(
+        'listPrograms:matriculas',
+        this.client.from('program_enrollments').select('*'),
+      )) ?? []
+
+    const porPrograma = new Map(matriculas.map((m) => [m.program_id as string, m]))
+
+    return programas.map((p) => ({
+      ...this.mapPrograma(p),
+      matricula: this.mapMatricula(porPrograma.get(p.id as string)),
+    }))
+  }
+
+  async getProgram(programId: string) {
+    const programa = await this.select<Row>(
+      'getProgram',
+      this.client.from('programs').select('*').eq('id', programId).maybeSingle(),
+    )
+    if (!programa) return null
+
+    const [passos, matricula] = await Promise.all([
+      this.select<Row[]>(
+        'getProgram:passos',
+        this.client
+          .from('program_steps')
+          .select('*')
+          .eq('program_id', programId)
+          .order('day_number', { ascending: true }),
+      ),
+      this.select<Row>(
+        'getProgram:matricula',
+        this.client
+          .from('program_enrollments')
+          .select('*')
+          .eq('program_id', programId)
+          .maybeSingle(),
+      ),
+    ])
+
+    return {
+      programa: this.mapPrograma(programa),
+      passos: (passos ?? []).map((p) => ({
+        id: p.id,
+        dayNumber: Number(p.day_number),
+        title: p.title,
+        tasks: SupabaseDataSource.tarefas(p.tasks),
+      })),
+      matricula: this.mapMatricula(matricula),
+    }
+  }
+
+  /**
+   * Chama uma função e **falha alto**.
+   *
+   * Não reaproveita o `rpc` logo acima de propósito: aquele devolve um valor
+   * padrão quando dá erro, porque serve a relatório — tela de leitura não
+   * pode cair por causa de uma migration que faltou. Aqui é escrita: matrícula
+   * recusada ou dia não gravado precisa chegar à pessoa, não virar silêncio
+   * com a tela dizendo que deu certo.
+   */
+  private async chamarFuncao(operacao: string, nome: string, args: Record<string, unknown>) {
+    const { error } = await this.client.rpc(nome, args)
+    if (error) this.fail(operacao, error)
+  }
+
+  async startProgram(programId: string): Promise<void> {
+    await this.chamarFuncao('startProgram', 'iniciar_programa', { p_program_id: programId })
+  }
+
+  async completeProgramDay(programId: string, dia: number): Promise<void> {
+    await this.chamarFuncao('completeProgramDay', 'concluir_dia', {
+      p_program_id: programId,
+      p_dia: dia,
+    })
+  }
+
+  async undoProgramDay(programId: string, dia: number): Promise<void> {
+    await this.chamarFuncao('undoProgramDay', 'desfazer_dia', {
+      p_program_id: programId,
+      p_dia: dia,
+    })
+  }
+
+  async abandonProgram(programId: string): Promise<void> {
+    await this.chamarFuncao('abandonProgram', 'abandonar_programa', { p_program_id: programId })
+  }
+
+  async listLockedPrograms(): Promise<ProgramaTrancadoTipo[]> {
+    const { data, error } = await this.client.rpc('programas_trancados')
+    if (error) {
+      // Vitrine que falha vira prateleira vazia, nunca tela quebrada — e
+      // cobre a janela entre publicar e migrar, em que a função não existe.
+      logger.warn('listLockedPrograms', { erro: String((error as Error).message) })
+      return []
+    }
+
+    return ((data as Row[]) ?? []).map((row) => ({
+      id: row.id,
+      title: row.titulo,
+      description: row.descricao ?? null,
+      durationDays: Number(row.dias),
+    }))
+  }
+
+  async saveProgram(input: {
+    id?: string
+    code: string
+    title: string
+    description: string | null
+    durationDays: number
+    coverUrl: string | null
+    visibility: 'FREE' | 'SYNSE_PLUS'
+  }): Promise<string> {
+    const { data, error } = await this.client.rpc('save_program', {
+      p_id: input.id ?? null,
+      p_code: input.code,
+      p_title: input.title,
+      p_description: input.description,
+      p_duration_days: input.durationDays,
+      p_cover_url: input.coverUrl,
+      p_visibility: input.visibility,
+    })
+    if (error) this.fail('saveProgram', error)
+    return String(data)
+  }
+
+  async saveProgramStep(input: {
+    programId: string
+    dayNumber: number
+    title: string
+    tasks: string[]
+  }): Promise<void> {
+    await this.chamarFuncao('saveProgramStep', 'save_program_step', {
+      p_program_id: input.programId,
+      p_day_number: input.dayNumber,
+      p_title: input.title,
+      p_tasks: input.tasks,
+    })
+  }
+
+  async deleteProgram(programId: string): Promise<void> {
+    await this.chamarFuncao('deleteProgram', 'delete_program', { p_id: programId })
+  }
+
+  // ── Biblioteca de receitas (0003, 0044) ────────────────────────────────────
+
+  private mapReceita(row: Row): Recipe {
+    return {
+      id: row.id,
+      title: row.title,
+      description: row.description ?? null,
+      category: row.category,
+      ingredients: SupabaseDataSource.listaDeTexto(row.ingredients),
+      instructions: row.instructions ?? null,
+      prepMinutes: row.prep_minutes == null ? null : Number(row.prep_minutes),
+      servings: row.servings == null ? null : Number(row.servings),
+      imageUrl: row.image_url ?? null,
+      tags: SupabaseDataSource.listaDeTexto(row.tags),
+      nutritionFacts: SupabaseDataSource.macros(row.nutrition_facts),
+      visibility: row.visibility,
+    }
+  }
+
+  /**
+   * `text[]` do Postgres chega como array, mas nem sempre.
+   *
+   * Mesmo cuidado de `tarefas` com o `jsonb`: a coluna aceita o que puserem
+   * nela — inclusive por um `insert` colado à mão no SQL Editor — e a tela
+   * espera lista de texto. Descartar o que não for texto aqui é o que impede
+   * um `[object Object]` aparecer no meio dos ingredientes.
+   */
+  private static listaDeTexto(bruto: unknown): string[] {
+    if (!Array.isArray(bruto)) return []
+    return bruto.filter((t): t is string => typeof t === 'string')
+  }
+
+  /**
+   * `nutrition_facts` é `jsonb` livre, e aqui vira mapa de número.
+   *
+   * Nulo quando não há nada aproveitável, e não `{}`: a tela decide mostrar a
+   * tabela de macros pela existência do objeto, e um objeto vazio faria
+   * aparecer um quadro sem nada dentro.
+   */
+  private static macros(bruto: unknown): Record<string, number> | null {
+    if (!bruto || typeof bruto !== 'object' || Array.isArray(bruto)) return null
+    const limpo: Record<string, number> = {}
+    for (const [chave, valor] of Object.entries(bruto as Record<string, unknown>)) {
+      if (typeof valor === 'number' && Number.isFinite(valor)) limpo[chave] = valor
+    }
+    return Object.keys(limpo).length > 0 ? limpo : null
+  }
+
+  async listRecipes(): Promise<Recipe[]> {
+    const linhas =
+      (await this.select<Row[]>(
+        'listRecipes',
+        this.client
+          .from('recipes')
+          .select('*')
+          .order('category', { ascending: true })
+          .order('title', { ascending: true }),
+      )) ?? []
+    return linhas.map((r) => this.mapReceita(r))
+  }
+
+  async getRecipe(recipeId: string): Promise<Recipe | null> {
+    const linha = await this.select<Row>(
+      'getRecipe',
+      this.client.from('recipes').select('*').eq('id', recipeId).maybeSingle(),
+    )
+    return linha ? this.mapReceita(linha) : null
+  }
+
+  async listLockedRecipes(): Promise<ReceitaTrancadaTipo[]> {
+    const { data, error } = await this.client.rpc('receitas_trancadas')
+    if (error) {
+      // Vitrine que falha vira prateleira vazia, nunca tela quebrada — e
+      // cobre a janela entre publicar e migrar, em que a função não existe.
+      logger.warn('listLockedRecipes', { erro: String((error as Error).message) })
+      return []
+    }
+    return ((data as Row[]) ?? []).map((row) => SupabaseDataSource.mapTrancada(row))
+  }
+
+  async getLockedRecipe(recipeId: string): Promise<ReceitaTrancadaTipo | null> {
+    /*
+     * A função não recebe id, e o filtro é feito aqui.
+     *
+     * Deliberado: `receitas_trancadas()` já aplica a regra inteira — é do
+     * Synse+, esta conta não assina, não é conta de plataforma — e dar a ela
+     * um parâmetro de id criaria uma segunda porta com a mesma regra escrita
+     * de novo. A lista é pequena, e o custo de filtrar aqui é menor que o de
+     * manter duas cópias da condição que protege o conteúdo pago.
+     */
+    const todas = await this.listLockedRecipes()
+    return todas.find((r) => r.id === recipeId) ?? null
+  }
+
+  private static mapTrancada(row: Row): ReceitaTrancadaTipo {
+    return {
+      id: row.id,
+      title: row.titulo,
+      description: row.descricao ?? null,
+      category: row.categoria,
+      prepMinutes: row.minutos == null ? null : Number(row.minutos),
+      servings: row.porcoes == null ? null : Number(row.porcoes),
+      imageUrl: row.imagem ?? null,
+    }
+  }
+
+  async saveRecipe(input: {
+    id?: string
+    title: string
+    description: string | null
+    category: string
+    ingredients: string[]
+    instructions: string | null
+    prepMinutes: number | null
+    servings: number | null
+    imageUrl: string | null
+    tags: string[]
+    nutritionFacts: Record<string, number> | null
+    visibility: 'FREE' | 'SYNSE_PLUS'
+  }): Promise<string> {
+    const { data, error } = await this.client.rpc('save_recipe', {
+      p_id: input.id ?? null,
+      p_title: input.title,
+      p_description: input.description,
+      p_category: input.category,
+      p_ingredients: input.ingredients,
+      p_instructions: input.instructions,
+      p_prep_minutes: input.prepMinutes,
+      p_servings: input.servings,
+      p_image_url: input.imageUrl,
+      p_tags: input.tags,
+      p_nutrition_facts: input.nutritionFacts,
+      p_visibility: input.visibility,
+    })
+    if (error) this.fail('saveRecipe', error)
+    return String(data)
+  }
+
+  async deleteRecipe(recipeId: string): Promise<void> {
+    await this.chamarFuncao('deleteRecipe', 'delete_recipe', { p_id: recipeId })
+  }
+
+  // ── Push ───────────────────────────────────────────────────────────────────
+
+  /*
+   * Pelas funções, e não pela tabela: `push_subscriptions` não tem política
+   * nenhuma, então nem o insert nem o delete passam pelo cliente autenticado.
+   */
+  async registerPushSubscription(input: {
+    endpoint: string
+    p256dh: string
+    auth: string
+    userAgent: string | null
+  }): Promise<void> {
+    const { error } = await this.client.rpc('register_push_subscription', {
+      p_endpoint: input.endpoint,
+      p_p256dh: input.p256dh,
+      p_auth: input.auth,
+      p_user_agent: input.userAgent,
+    })
+    if (error) throw new Error(error.message)
+  }
+
+  async removePushSubscription(endpoint: string): Promise<void> {
+    const { error } = await this.client.rpc('remove_push_subscription', { p_endpoint: endpoint })
+    if (error) throw new Error(error.message)
+  }
+
+  // ── Acervo Synse ───────────────────────────────────────────────────────────
+
+  /**
+   * O acervo, rascunho incluído.
+   *
+   * A leitura é direta na tabela, e não por função: a política da 0039 já dá o
+   * conteúdo sem dono à conta de plataforma, incluindo o que ainda não foi
+   * publicado. Quem não é plataforma recebe lista vazia pela RLS — é o banco
+   * negando, não esta consulta.
+   */
+  async listSynseContent(): Promise<ContentItem[]> {
+    const rows =
+      (await this.select<Row[]>(
+        'listSynseContent',
+        this.client
+          .from('content_library')
+          .select(SupabaseDataSource.CONTEUDO_SELECT)
+          .is('organization_id', null)
+          .order('pinned', { ascending: false })
+          .order('created_at', { ascending: false }),
+      )) ?? []
+    return rows.map((row) => this.mapContent(row))
+  }
+
+  /**
+   * Um item do acervo, para a tela de edição.
+   *
+   * `organization_id is null` na cláusula, e não só o id: sem isso a tela de
+   * edição do acervo abriria conteúdo de academia se alguém passasse o id
+   * dele na barra de endereços. A RLS já daria a linha — a conta de plataforma
+   * enxerga tudo —, e a tela ofereceria um formulário que a função recusa.
+   * Melhor não achar do que achar e frustrar no envio.
+   */
+  async getSynseContent(contentId: string): Promise<ContentItem | null> {
+    const row = await this.select<Row>(
+      'getSynseContent',
+      this.client
+        .from('content_library')
+        .select(SupabaseDataSource.CONTEUDO_SELECT)
+        .is('organization_id', null)
+        .eq('id', contentId)
+        .maybeSingle(),
+    )
+    return row ? this.mapContent(row) : null
+  }
+
+  /**
+   * Escreve pela função, e não pela tabela.
+   *
+   * A política de escrita exige dono desde a 0004, e conteúdo de plataforma é
+   * o que não tem. `save_synse_content` é a porta — e é ela que confere o
+   * super admin, recusa visibilidade sem sentido e grava a trilha.
+   */
+  async saveSynseContent(input: SaveSynseContentInput): Promise<string> {
+    const { data, error } = await this.client.rpc('save_synse_content', {
+      p_id: input.id ?? null,
+      p_type: input.type,
+      p_title: input.title,
+      p_summary: input.summary,
+      p_body: input.body,
+      p_cover_url: input.coverUrl,
+      p_media_url: input.mediaUrl,
+      p_visibility: input.visibility,
+      p_published_at: input.publishedAt,
+      p_pinned: input.pinned,
+    })
+    if (error) throw new Error(error.message)
+    return data as string
+  }
+
+  async deleteSynseContent(contentId: string): Promise<void> {
+    const { error } = await this.client.rpc('delete_synse_content', { p_id: contentId })
+    if (error) throw new Error(error.message)
+  }
+
+  // ── Nutrição ───────────────────────────────────────────────────────────────
+  private mapNutritionPlan(row: Row): NutritionPlan {
+    return {
+      id: row.id,
+      organizationId: row.organization_id,
+      studentId: row.student_id,
+      studentName: row.students?.user_profiles?.name ?? null,
+      authorStaffId: row.author_staff_id,
+      authorName: row.staff?.user_profiles?.name ?? null,
+      title: row.title,
+      version: Number(row.version),
+      status: row.status,
+      publishedAt: row.published_at ?? null,
+      notes: row.notes ?? null,
+      targetCalories: numero(row.target_calories),
+      targetProteinG: numero(row.target_protein_g),
+      targetCarbsG: numero(row.target_carbs_g),
+      targetFatG: numero(row.target_fat_g),
+      createdAt: row.created_at,
+    }
+  }
+
+  private static readonly NUTRICAO_SELECT =
+    '*, students:student_id(user_profiles:user_profile_id(name)), staff:author_staff_id(user_profiles:user_profile_id(name))'
+
+  async listNutritionPlans(organizationId: string): Promise<NutritionPlan[]> {
+    const rows =
+      (await this.select<Row[]>(
+        'listNutritionPlans',
+        this.client
+          .from('nutrition_plans')
+          .select(SupabaseDataSource.NUTRICAO_SELECT)
+          .eq('organization_id', organizationId)
+          .order('created_at', { ascending: false }),
+      )) ?? []
+    return rows.map((row) => this.mapNutritionPlan(row))
+  }
+
+  async listNutritionPlansForStudent(organizationId: string, studentId: string) {
+    const rows =
+      (await this.select<Row[]>(
+        'listNutritionPlansForStudent',
+        this.client
+          .from('nutrition_plans')
+          .select(SupabaseDataSource.NUTRICAO_SELECT)
+          .eq('organization_id', organizationId)
+          .eq('student_id', studentId)
+          .order('version', { ascending: false }),
+      )) ?? []
+    return rows.map((row) => this.mapNutritionPlan(row))
+  }
+
+  /** Monta o plano com refeições, itens e totais numa leitura só. */
+  private async montarPlano(row: Row): Promise<NutritionPlanWithMeals> {
+    const plano = this.mapNutritionPlan(row)
+
+    const refeicoes =
+      (await this.select<Row[]>(
+        'getNutritionPlan:meals',
+        this.client
+          .from('meals')
+          .select('*, meal_items(*)')
+          .eq('nutrition_plan_id', plano.id)
+          .order('position'),
+      )) ?? []
+
+    const meals: Meal[] = refeicoes.map((refeicao) => ({
+      id: refeicao.id,
+      nutritionPlanId: refeicao.nutrition_plan_id,
+      name: refeicao.name,
+      // `time` volta como 'HH:MM:SS'; a tela fala 'HH:MM'.
+      timeOfDay: refeicao.time_of_day ? String(refeicao.time_of_day).slice(0, 5) : null,
+      position: Number(refeicao.position),
+      items: ((refeicao.meal_items ?? []) as Row[])
+        .map((item) => ({
+          id: item.id,
+          mealId: item.meal_id,
+          description: item.description,
+          quantity: item.quantity ?? null,
+          calories: numero(item.calories),
+          proteinG: numero(item.protein_g),
+          carbsG: numero(item.carbs_g),
+          fatG: numero(item.fat_g),
+          position: Number(item.position ?? 1),
+        }))
+        .sort((a, b) => a.position - b.position),
+    }))
+
+    /*
+     * Os totais vêm da função da 0030, e não de uma soma aqui: a tela do aluno
+     * e a do profissional mostram o mesmo número, e duas contas em lugares
+     * diferentes divergem.
+     */
+    const { data } = await this.client.rpc('nutrition_plan_totals', { p_plan_id: plano.id })
+    const t = (data as Row[] | null)?.[0]
+
+    return {
+      ...plano,
+      meals,
+      totals: {
+        calories: Number(t?.calories ?? 0),
+        proteinG: Number(t?.protein_g ?? 0),
+        carbsG: Number(t?.carbs_g ?? 0),
+        fatG: Number(t?.fat_g ?? 0),
+        items: Number(t?.itens ?? 0),
+      },
+    }
+  }
+
+  async getNutritionPlan(organizationId: string, planId: string) {
+    const row = await this.select<Row>(
+      'getNutritionPlan',
+      this.client
+        .from('nutrition_plans')
+        .select(SupabaseDataSource.NUTRICAO_SELECT)
+        .eq('organization_id', organizationId)
+        .eq('id', planId)
+        .maybeSingle(),
+    )
+    return row ? this.montarPlano(row) : null
+  }
+
+  async getPublishedNutritionPlan(organizationId: string, studentId: string) {
+    const row = await this.select<Row>(
+      'getPublishedNutritionPlan',
+      this.client
+        .from('nutrition_plans')
+        .select(SupabaseDataSource.NUTRICAO_SELECT)
+        .eq('organization_id', organizationId)
+        .eq('student_id', studentId)
+        .eq('status', 'PUBLISHED')
+        .maybeSingle(),
+    )
+    return row ? this.montarPlano(row) : null
+  }
+
+  async saveNutritionPlan(input: SaveNutritionPlanInput): Promise<NutritionPlan> {
+    const cabecalho = {
+      organization_id: input.organizationId,
+      student_id: input.studentId,
+      author_staff_id: input.authorStaffId,
+      title: input.title,
+      notes: input.notes,
+      target_calories: input.targetCalories,
+      target_protein_g: input.targetProteinG,
+      target_carbs_g: input.targetCarbsG,
+      target_fat_g: input.targetFatG,
+      updated_at: new Date().toISOString(),
+    }
+
+    let planoId = input.id
+    let row: Row | null
+
+    if (planoId) {
+      row = await this.select<Row>(
+        'saveNutritionPlan:update',
+        this.client
+          .from('nutrition_plans')
+          .update(cabecalho)
+          .eq('organization_id', input.organizationId)
+          .eq('id', planoId)
+          .select(SupabaseDataSource.NUTRICAO_SELECT)
+          .single(),
+      )
+    } else {
+      /*
+       * A próxima versão livre deste aluno. `unique (student_id, version)` é o
+       * que garante de fato — se duas abas salvarem ao mesmo tempo, a segunda
+       * falha em vez de sobrescrever.
+       */
+      const existentes =
+        (await this.select<Row[]>(
+          'saveNutritionPlan:versions',
+          this.client
+            .from('nutrition_plans')
+            .select('version')
+            .eq('student_id', input.studentId)
+            .order('version', { ascending: false })
+            .limit(1),
+        )) ?? []
+
+      row = await this.select<Row>(
+        'saveNutritionPlan:insert',
+        this.client
+          .from('nutrition_plans')
+          .insert({ ...cabecalho, version: Number(existentes[0]?.version ?? 0) + 1 })
+          .select(SupabaseDataSource.NUTRICAO_SELECT)
+          .single(),
+      )
+      planoId = row!.id
+    }
+
+    /*
+     * Refeições são reescritas por inteiro a cada salvamento. Casar linha a
+     * linha exigiria id estável na tela e produziria diffs errados quando o
+     * nutricionista reordena as refeições — e o `on delete cascade` dos itens
+     * torna a troca barata. Isto só acontece em rascunho: plano publicado é
+     * editado abrindo uma versão nova.
+     */
+    await this.client.from('meals').delete().eq('nutrition_plan_id', planoId)
+
+    for (const [indice, refeicao] of input.meals.entries()) {
+      const criada = await this.select<Row>(
+        'saveNutritionPlan:meal',
+        this.client
+          .from('meals')
+          .insert({
+            nutrition_plan_id: planoId,
+            name: refeicao.name,
+            time_of_day: refeicao.timeOfDay,
+            position: indice + 1,
+          })
+          .select('id')
+          .single(),
+      )
+
+      if (refeicao.items.length === 0) continue
+      const { error } = await this.client.from('meal_items').insert(
+        refeicao.items.map((item, ordem) => ({
+          meal_id: criada!.id,
+          description: item.description,
+          quantity: item.quantity,
+          calories: item.calories,
+          protein_g: item.proteinG,
+          carbs_g: item.carbsG,
+          fat_g: item.fatG,
+          position: ordem + 1,
+        })),
+      )
+      if (error) this.fail('saveNutritionPlan:items', error)
+    }
+
+    return this.mapNutritionPlan(row!)
+  }
+
+  async publishNutritionPlan(planId: string): Promise<void> {
+    const { error } = await this.client.rpc('publish_nutrition_plan', { p_plan_id: planId })
+    if (error) this.fail('publishNutritionPlan', error)
+  }
+
+  async newNutritionPlanVersion(planId: string): Promise<string> {
+    const { data, error } = await this.client.rpc('new_nutrition_plan_version', {
+      p_plan_id: planId,
+    })
+    if (error) this.fail('newNutritionPlanVersion', error)
+    return String(data)
+  }
+
+  // ── Foto de perfil ─────────────────────────────────────────────────────────
+  private static readonly AVATAR_BUCKET = 'avatars'
+  /*
+   * Uma hora. Curto o bastante para uma URL vazada não valer muito, longo o
+   * bastante para a pessoa navegar pelo app sem a foto sumir no meio.
+   */
+  private static readonly AVATAR_TTL_SEGUNDOS = 3600
+
+  async uploadAvatar(file: { bytes: ArrayBuffer; contentType: string }): Promise<string> {
+    const { data: usuario } = await this.client.auth.getUser()
+    const authId = usuario.user?.id
+    if (!authId) this.fail('uploadAvatar', new Error('sessão não identificada'))
+
+    /*
+     * A pasta é o `auth.uid()` porque é nela que a política do balde se apoia.
+     * O nome tem um sufixo aleatório para a troca de foto não esbarrar no
+     * cache do navegador nem do CDN, que guardariam a anterior.
+     */
+    const caminho = `${authId}/${crypto.randomUUID()}.webp`
+
+    const { error: erroUpload } = await this.client.storage
+      .from(SupabaseDataSource.AVATAR_BUCKET)
+      .upload(caminho, file.bytes, { contentType: file.contentType, upsert: false })
+    if (erroUpload) this.fail('uploadAvatar', erroUpload)
+
+    // A foto anterior sai do balde: guardar histórico de rosto que ninguém pede
+    // é acumular dado pessoal sem finalidade.
+    await this.apagarAvataresAntigos(authId, caminho)
+
+    const { error } = await this.client.rpc('set_profile_avatar', { p_caminho: caminho })
+    if (error) this.fail('uploadAvatar:registro', error)
+
+    return caminho
+  }
+
+  private async apagarAvataresAntigos(authId: string, manter: string) {
+    const { data } = await this.client.storage.from(SupabaseDataSource.AVATAR_BUCKET).list(authId)
+    const antigos = (data ?? [])
+      .map((item) => `${authId}/${item.name}`)
+      .filter((caminho) => caminho !== manter)
+
+    if (antigos.length) {
+      await this.client.storage.from(SupabaseDataSource.AVATAR_BUCKET).remove(antigos)
+    }
+  }
+
+  async removeAvatar(): Promise<void> {
+    const { data: usuario } = await this.client.auth.getUser()
+    const authId = usuario.user?.id
+    if (!authId) return
+
+    const { data } = await this.client.storage.from(SupabaseDataSource.AVATAR_BUCKET).list(authId)
+    const todos = (data ?? []).map((item) => `${authId}/${item.name}`)
+    if (todos.length) {
+      await this.client.storage.from(SupabaseDataSource.AVATAR_BUCKET).remove(todos)
+    }
+
+    const { error } = await this.client.rpc('set_profile_avatar', { p_caminho: null })
+    if (error) this.fail('removeAvatar', error)
+  }
+
+  async getAvatarUrl(path: string | null): Promise<string | null> {
+    if (!path) return null
+
+    const { data, error } = await this.client.storage
+      .from(SupabaseDataSource.AVATAR_BUCKET)
+      .createSignedUrl(path, SupabaseDataSource.AVATAR_TTL_SEGUNDOS)
+
+    /*
+     * Sem foto a tela mostra as iniciais, que é um estado legítimo. Derrubar a
+     * página inteira porque a assinatura falhou seria trocar um avatar por uma
+     * tela de erro.
+     */
+    if (error) return null
+    return data?.signedUrl ?? null
+  }
+
+  // ── Synse Body ─────────────────────────────────────────────────────────────
+  private static readonly BODY_SELECT = `
+    id, client_id, measured_at, source, device_id, weight_kg, bmi,
+    body_fat_percent, muscle_mass_kg, lean_mass_kg, body_water_percent,
+    visceral_fat, bone_mass_kg, bmr_kcal, impedance_ohm, field_origin,
+    raw_payload, created_at
+  `
+
+  private mapBodyMeasurement(row: Row): BodyMeasurement {
+    return {
+      id: row.id,
+      clientId: row.client_id,
+      measuredAt: row.measured_at,
+      source: row.source,
+      deviceId: row.device_id ?? null,
+      weightKg: Number(row.weight_kg),
+      bmi: numero(row.bmi),
+      bodyFatPercent: numero(row.body_fat_percent),
+      muscleMassKg: numero(row.muscle_mass_kg),
+      leanMassKg: numero(row.lean_mass_kg),
+      bodyWaterPercent: numero(row.body_water_percent),
+      visceralFat: numero(row.visceral_fat),
+      boneMassKg: numero(row.bone_mass_kg),
+      bmrKcal: numero(row.bmr_kcal),
+      impedanceOhm: numero(row.impedance_ohm),
+      fieldOrigin: row.field_origin ?? {},
+      rawPayload: row.raw_payload ?? null,
+      createdAt: row.created_at,
+    }
+  }
+
+  async listBodyMeasurements(
+    period: BodyPeriod,
+    filters: BodyHistoryFilters = {},
+  ): Promise<Paginated<BodyMeasurement>> {
+    /*
+     * Sem `user_profile_id` no filtro: a RLS já devolve só o que é da pessoa.
+     * Filtrar aqui exigiria descobrir o perfil antes, numa ida a mais ao banco,
+     * para chegar no mesmo lugar.
+     */
+    return this.pesagensPorPagina('listBodyMeasurements', period, filters)
+  }
+
+  async listSharedBodyMeasurements(
+    userProfileId: string,
+    period: BodyPeriod,
+    filters: BodyHistoryFilters = {},
+  ): Promise<Paginated<BodyMeasurement>> {
+    return this.pesagensPorPagina('listSharedBodyMeasurements', period, filters, userProfileId)
+  }
+
+  /**
+   * Uma página do histórico de pesagens, com o total vindo do banco.
+   *
+   * `count: 'exact'` na mesma consulta: o total é do conjunto inteiro, e as
+   * linhas são só as da página. Antes a tela contava `medicoes.length` de uma
+   * leitura sem teto — e dizia "Últimas 500 medições" para quem tinha 900.
+   */
+  private async pesagensPorPagina(
+    operacao: string,
+    period: BodyPeriod,
+    filters: BodyHistoryFilters,
+    userProfileId?: string,
+  ): Promise<Paginated<BodyMeasurement>> {
+    const page = Math.max(1, filters.page ?? 1)
+    const pageSize = Math.min(200, Math.max(5, filters.pageSize ?? 30))
+    const de = (page - 1) * pageSize
+
+    let query = this.client
+      .from('body_measurements')
+      .select(SupabaseDataSource.BODY_SELECT, { count: 'exact' })
+
+    if (userProfileId) query = query.eq('user_profile_id', userProfileId)
+    const desde = inicioDoPeriodo(period)
+    if (desde) query = query.gte('measured_at', desde)
+
+    const { data, error, count } = await query
+      .order('measured_at', { ascending: false })
+      .range(de, de + pageSize - 1)
+
+    if (error) this.fail(operacao, error)
+
+    return {
+      rows: ((data ?? []) as Row[]).map((row) => this.mapBodyMeasurement(row)),
+      total: count ?? 0,
+      page,
+      pageSize,
+    }
+  }
+
+  /**
+   * A série do gráfico de peso, agrupada pelo banco (0052).
+   *
+   * ── Sem a 0052 ─────────────────────────────────────────────────────────────
+   *
+   * Volta a ler as pesagens cruas e a agrupar aqui, com um teto explícito.
+   * Publicar não é migrar, e um gráfico que pode vir curto é melhor que tela
+   * sem gráfico — mas o teto é escrito, e não herdado do servidor: assim o
+   * corte deixa de ser silencioso e vira um número que esta função conhece.
+   */
+  async getBodySeries(period: BodyPeriod, userProfileId?: string): Promise<BodySeriesPoint[]> {
+    const { data, error } = await this.client.rpc('serie_de_peso', {
+      p_user_profile_id: userProfileId ?? null,
+      p_desde: inicioDoPeriodo(period),
+      p_balde: baldeDoPeriodo(period),
+    })
+
+    if (error) {
+      if (!isPendingMigration(error)) this.fail('getBodySeries', error)
+      logger.warn('getBodySeries:sem_0052', {})
+      return this.seriePelaAplicacao(period, userProfileId)
+    }
+
+    return ((data ?? []) as Row[]).map((linha) => ({
+      instante: String(linha.instante),
+      pesoKg: Number(linha.peso),
+      medicoes: Number(linha.medicoes),
+    }))
+  }
+
+  /** Quantas pesagens cruas a volta ao caminho antigo aceita ler de uma vez. */
+  private static readonly TETO_DA_SERIE_ANTIGA = 1000
+
+  /** A série como era antes da 0052: lida crua e agrupada na aplicação. */
+  private async seriePelaAplicacao(
+    period: BodyPeriod,
+    userProfileId?: string,
+  ): Promise<BodySeriesPoint[]> {
+    let query = this.client
+      .from('body_measurements')
+      .select('measured_at, weight_kg')
+      .order('measured_at', { ascending: false })
+      .limit(SupabaseDataSource.TETO_DA_SERIE_ANTIGA)
+
+    if (userProfileId) query = query.eq('user_profile_id', userProfileId)
+    const desde = inicioDoPeriodo(period)
+    if (desde) query = query.gte('measured_at', desde)
+
+    const rows = (await this.select<Row[]>('getBodySeries', query)) ?? []
+    return agruparSerie(rows, baldeDoPeriodo(period))
+  }
+
+  /**
+   * Grava pela função, nunca por insert.
+   *
+   * `insert` está revogado na tabela de propósito: é a função que resolve a
+   * pessoa pelo `auth.uid()` e confere se o aparelho é dela. Numa balança de
+   * família, aceitar o dono vindo do cliente gravaria a pesagem de um no
+   * histórico de outro.
+   */
+  async recordBodyMeasurement(measurement: BodyMeasurement): Promise<string> {
+    const { data, error } = await this.client.rpc('record_body_measurement', {
+      p_client_id: measurement.clientId,
+      p_measured_at: measurement.measuredAt,
+      p_source: measurement.source,
+      p_weight_kg: measurement.weightKg,
+      p_device_id: measurement.deviceId ?? null,
+      p_bmi: measurement.bmi ?? null,
+      p_body_fat: measurement.bodyFatPercent ?? null,
+      p_muscle_mass: measurement.muscleMassKg ?? null,
+      p_lean_mass: measurement.leanMassKg ?? null,
+      p_body_water: measurement.bodyWaterPercent ?? null,
+      p_visceral_fat: measurement.visceralFat ?? null,
+      p_bone_mass: measurement.boneMassKg ?? null,
+      p_bmr_kcal: measurement.bmrKcal ?? null,
+      p_impedance: measurement.impedanceOhm ?? null,
+      p_raw_payload: measurement.rawPayload ?? null,
+      p_field_origin: measurement.fieldOrigin ?? {},
+    })
+    if (error) this.fail('recordBodyMeasurement', error)
+    return String(data)
+  }
+
+  /**
+   * A marca d'água da importação de saúde.
+   *
+   * Uma linha, a mais recente daquela origem. O `limit(1)` é o que mantém
+   * este método fora da dívida de leitura sem teto: não é lista, é máximo.
+   *
+   * A RLS já restringe à própria pessoa — `body_measurements` só devolve o que
+   * é dela ou o que foi explicitamente compartilhado com ela, e
+   * compartilhamento não entra aqui porque o filtro é por origem, e a origem
+   * de outra pessoa não interessa a esta conta.
+   */
+  async getLastHealthMeasurementAt(source: BodyMeasurementSource): Promise<string | null> {
+    const { data, error } = await this.client
+      .from('body_measurements')
+      .select('measured_at')
+      .eq('source', source)
+      .order('measured_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (error) {
+      /*
+       * Publicar não é migrar. Enquanto a 0053 não estiver aplicada a coluna
+       * existe e a consulta funciona — mas se um dia este caminho falhar por
+       * schema, tratar como "nunca importou" é a resposta segura: a janela
+       * larga reimporta, e a idempotência do `clientId` impede duplicata.
+       */
+      if (!isPendingMigration(error)) this.fail('getLastHealthMeasurementAt', error)
+      logger.warn('getLastHealthMeasurementAt:schema', { source })
+      return null
+    }
+
+    return (data as { measured_at?: string } | null)?.measured_at ?? null
+  }
+
+  async deleteBodyMeasurement(measurementId: string): Promise<void> {
+    const { error } = await this.client.from('body_measurements').delete().eq('id', measurementId)
+    if (error) this.fail('deleteBodyMeasurement', error)
+  }
+
+  async listUserDevices(): Promise<UserDevice[]> {
+    const rows =
+      (await this.select<Row[]>(
+        'listUserDevices',
+        this.client
+          .from('user_devices')
+          .select('*')
+          .neq('status', 'REMOVED')
+          .order('paired_at', { ascending: false }),
+      )) ?? []
+
+    return rows.map((row) => ({
+      id: row.id,
+      deviceType: row.device_type,
+      provider: row.provider,
+      manufacturer: row.manufacturer ?? null,
+      model: row.model ?? null,
+      displayName: row.display_name,
+      platformDeviceId: row.platform_device_identifier,
+      protocol: row.protocol ?? null,
+      capabilities: row.capabilities ?? {},
+      firmwareVersion: row.firmware_version ?? null,
+      pairedAt: row.paired_at,
+      lastSeenAt: row.last_seen_at ?? null,
+      status: row.status,
+    }))
+  }
+
+  async pairUserDevice(input: PairUserDeviceInput): Promise<string> {
+    const { data, error } = await this.client.rpc('pair_user_device', {
+      p_platform_identifier: input.platformDeviceId,
+      p_display_name: input.displayName,
+      p_provider: input.provider ?? 'standard_ble',
+      p_manufacturer: input.manufacturer ?? null,
+      p_model: input.model ?? null,
+      p_protocol: input.protocol ?? null,
+      p_capabilities: input.capabilities ?? {},
+      p_firmware: input.firmwareVersion ?? null,
+    })
+    if (error) this.fail('pairUserDevice', error)
+    return String(data)
+  }
+
+  async renameUserDevice(deviceId: string, displayName: string): Promise<void> {
+    const { error } = await this.client
+      .from('user_devices')
+      .update({ display_name: displayName, updated_at: new Date().toISOString() })
+      .eq('id', deviceId)
+    if (error) this.fail('renameUserDevice', error)
+  }
+
+  /**
+   * Desvincular marca como removido, não apaga a linha.
+   *
+   * As pesagens apontam para o aparelho, e o histórico do aparelho é o que diz
+   * de onde cada número veio. Apagar deixaria medições órfãs sem explicação.
+   */
+  async unpairUserDevice(deviceId: string): Promise<void> {
+    const { error } = await this.client
+      .from('user_devices')
+      .update({ status: 'REMOVED', updated_at: new Date().toISOString() })
+      .eq('id', deviceId)
+    if (error) this.fail('unpairUserDevice', error)
+  }
+
+  async listBodyShares(): Promise<BodyMeasurementShare[]> {
+    const rows =
+      (await this.select<Row[]>(
+        'listBodyShares',
+        this.client
+          .from('body_measurement_shares')
+          .select(
+            'id, user_profile_id, shared_with_profile_id, organization_id, granted_at, revoked_at, shared_with:user_profiles!body_measurement_shares_shared_with_profile_id_fkey(name)',
+          )
+          .is('revoked_at', null)
+          .order('granted_at', { ascending: false }),
+      )) ?? []
+
+    return rows.map((row) => ({
+      id: row.id,
+      userProfileId: row.user_profile_id,
+      sharedWithProfileId: row.shared_with_profile_id,
+      sharedWithName: row.shared_with?.name ?? null,
+      organizationId: row.organization_id ?? null,
+      grantedAt: row.granted_at,
+      revokedAt: row.revoked_at ?? null,
+    }))
+  }
+
+  /** A equipe que esta conta pode autorizar (0045). */
+  async listStaffToAuthorize(): Promise<EquipeParaAutorizar[]> {
+    const { data, error } = await this.client.rpc('equipe_para_autorizar')
+    if (error) {
+      /*
+       * Lista vazia, nunca tela quebrada — e cobre a janela entre publicar e
+       * migrar, em que a função não existe. A tela já sabe dizer "nenhuma
+       * academia para autorizar", que é o que a pessoa vê nesse intervalo.
+       */
+      logger.warn('listStaffToAuthorize', { erro: String((error as Error).message) })
+      return []
+    }
+
+    return ((data as Row[]) ?? []).map((row) => ({
+      profileId: row.perfil_id,
+      name: row.nome,
+      role: row.papel,
+      organizationId: row.organization_id,
+      organizationName: row.academia,
+    }))
+  }
+
+  /**
+   * Autoriza, pela função da 0045.
+   *
+   * O `upsert` que estava aqui gravava direto na tabela. A política
+   * `body_shares_owner` da 0032 impede autorizar **em nome de outro**, mas
+   * não confere **para quem**: dava para autorizar qualquer perfil do banco,
+   * inclusive alguém de outra academia. `autorizar_corpo` exige que a pessoa
+   * seja da equipe de uma academia desta conta, e resolve a organização
+   * sozinha — por isso `organizationId` deixa de ser lido aqui.
+   */
+  async grantBodyShare(sharedWithProfileId: string, _organizationId: string | null): Promise<void> {
+    await this.chamarFuncao('grantBodyShare', 'autorizar_corpo', {
+      p_perfil: sharedWithProfileId,
+    })
+  }
+
+  /** Revogar carimba a hora; a linha fica, para a pessoa ver o que já autorizou. */
+  async revokeBodyShare(shareId: string): Promise<void> {
+    const { error } = await this.client
+      .from('body_measurement_shares')
+      .update({ revoked_at: new Date().toISOString() })
+      .eq('id', shareId)
+    if (error) this.fail('revokeBodyShare', error)
+  }
+
+  // ── Desafios da academia ───────────────────────────────────────────────────
+  private mapChallenge(row: Row): GymChallenge {
+    return {
+      id: row.id,
+      organizationId: row.organization_id,
+      title: row.title,
+      description: row.description ?? null,
+      metric: row.metric,
+      targetValue: Number(row.target_value),
+      unit: row.unit ?? 'pontos',
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+      rankingEnabled: Boolean(row.ranking_enabled),
+      status: row.status ?? 'ACTIVE',
+      reward: row.reward ?? null,
+      // PostgREST devolve a contagem do relacionamento como [{count}].
+      participants: Number(row.challenge_participants?.[0]?.count ?? 0),
+      createdAt: row.created_at,
+    }
+  }
+
+  private static readonly DESAFIO_SELECT = '*, challenge_participants(count)'
+
+  async listGymChallenges(organizationId: string): Promise<GymChallenge[]> {
+    const rows =
+      (await this.select<Row[]>(
+        'listGymChallenges',
+        this.client
+          .from('challenges')
+          .select(SupabaseDataSource.DESAFIO_SELECT)
+          .eq('organization_id', organizationId)
+          .order('ends_at', { ascending: false }),
+      )) ?? []
+    return rows.map((row) => this.mapChallenge(row))
+  }
+
+  async getGymChallenge(organizationId: string, challengeId: string) {
+    const row = await this.select<Row>(
+      'getGymChallenge',
+      this.client
+        .from('challenges')
+        .select(SupabaseDataSource.DESAFIO_SELECT)
+        .eq('organization_id', organizationId)
+        .eq('id', challengeId)
+        .maybeSingle(),
+    )
+    return row ? this.mapChallenge(row) : null
+  }
+
+  async saveGymChallenge(input: SaveGymChallengeInput): Promise<GymChallenge> {
+    const linha = {
+      organization_id: input.organizationId,
+      title: input.title,
+      description: input.description,
+      metric: input.metric,
+      target_value: input.targetValue,
+      unit: input.unit,
+      starts_at: input.startsAt,
+      ends_at: input.endsAt,
+      ranking_enabled: input.rankingEnabled,
+      status: input.status,
+      reward: input.reward,
+      created_by_staff_id: input.createdByStaffId,
+    }
+
+    const row = input.id
+      ? await this.select<Row>(
+          'saveGymChallenge:update',
+          this.client
+            .from('challenges')
+            .update(linha)
+            .eq('organization_id', input.organizationId)
+            .eq('id', input.id)
+            .select(SupabaseDataSource.DESAFIO_SELECT)
+            .single(),
+        )
+      : await this.select<Row>(
+          'saveGymChallenge:insert',
+          this.client
+            .from('challenges')
+            .insert(linha)
+            .select(SupabaseDataSource.DESAFIO_SELECT)
+            .single(),
+        )
+
+    return this.mapChallenge(row!)
+  }
+
+  async listGymChallengesForStudent(
+    organizationId: string,
+    userProfileId: string,
+  ): Promise<GymChallengeForStudent[]> {
+    const [desafios, minhas] = await Promise.all([
+      this.listGymChallenges(organizationId),
+      this.select<Row[]>(
+        'listGymChallengesForStudent:participations',
+        this.client.from('challenge_participants').select('*').eq('user_profile_id', userProfileId),
+      ),
+    ])
+
+    const porDesafio = new Map((minhas ?? []).map((linha) => [linha.challenge_id, linha]))
+
+    return desafios.map((desafio) => {
+      const minha = porDesafio.get(desafio.id)
+      return {
+        ...desafio,
+        joined: Boolean(minha),
+        rankingOptIn: Boolean(minha?.ranking_opt_in),
+        progressValue: Number(minha?.progress_value ?? 0),
+        completedAt: minha?.completed_at ?? null,
+      }
+    })
+  }
+
+  async joinGymChallenge(challengeId: string, rankingOptIn: boolean): Promise<void> {
+    /*
+     * A academia, a matrícula e a janela são conferidas no banco. O consentimento
+     * do ranking viaja como argumento porque é escolha da pessoa, não do plano.
+     */
+    const { error } = await this.client.rpc('join_gym_challenge', {
+      p_challenge_id: challengeId,
+      p_ranking_opt_in: rankingOptIn,
+    })
+    if (error) this.fail('joinGymChallenge', error)
+  }
+
+  async getGymChallengeRanking(challengeId: string): Promise<GymChallengeRankRow[]> {
+    const { data, error } = await this.client.rpc('gym_challenge_ranking', {
+      p_challenge_id: challengeId,
+    })
+    if (error) {
+      logger.warn('gymChallengeRanking', { erro: String((error as Error).message) })
+      return []
+    }
+    return ((data as Row[]) ?? []).map((row) => ({
+      position: Number(row.posicao),
+      name: row.nome,
+      progressValue: Number(row.progresso),
+      completedAt: row.concluido_em ?? null,
+    }))
+  }
+
+  // ── Amigos (0037) ──────────────────────────────────────────────────────────
+
+  async listFriends(): Promise<Friend[]> {
+    const { data, error } = await this.client.rpc('list_friends')
+    if (error) {
+      logger.warn('listFriends', { erro: String((error as Error).message) })
+      return []
+    }
+    return ((data as Row[]) ?? []).map((row) => ({
+      friendshipId: String(row.amizade_id),
+      profileId: String(row.perfil_id),
+      name: String(row.nome),
+      synseId: String(row.synse_id),
+      status: row.situacao as Friend['status'],
+      souQuemPediu: row.sou_quem_pediu === true,
+      noRanking: row.no_ranking === true,
+      since: String(row.desde),
+    })) satisfies Friend[]
+  }
+
+  async requestFriendship(synseId: string): Promise<string> {
+    const { data, error } = await this.client.rpc('request_friendship', { p_synse_id: synseId })
+    /*
+     * Aqui o erro sobe, e não vira lista vazia como nos relatórios: pedir
+     * amizade é escrita, e "não encontramos ninguém com esse Synse ID" é a
+     * resposta que a pessoa precisa ler. Engolir viraria um botão que não faz
+     * nada.
+     */
+    if (error) throw error
+    return String(data)
+  }
+
+  async respondFriendship(friendshipId: string, accept: boolean): Promise<void> {
+    const { error } = await this.client.rpc('respond_friendship', {
+      p_friendship_id: friendshipId,
+      p_accept: accept,
+    })
+    if (error) throw error
+  }
+
+  async removeFriendship(friendshipId: string): Promise<void> {
+    const { error } = await this.client.rpc('remove_friendship', {
+      p_friendship_id: friendshipId,
+    })
+    if (error) throw error
+  }
+
+  async getFriendsRanking(from: string, to: string): Promise<FriendRankRow[]> {
+    const { data, error } = await this.client.rpc('friends_ranking', {
+      p_from: from,
+      p_to: to,
+    })
+    if (error) {
+      logger.warn('friendsRanking', { erro: String((error as Error).message) })
+      return []
+    }
+    return ((data as Row[]) ?? []).map((row) => ({
+      position: Number(row.posicao),
+      profileId: String(row.perfil_id),
+      name: String(row.nome),
+      souEu: row.sou_eu === true,
+      workouts: Number(row.treinos),
+      volumeKg: Number(row.volume_kg),
+    })) satisfies FriendRankRow[]
+  }
+
+  // ── CRM ────────────────────────────────────────────────────────────────────
+  private mapLead(row: Row): Lead {
+    return {
+      id: row.id,
+      organizationId: row.organization_id,
+      name: row.name,
+      phone: row.phone,
+      email: row.email,
+      stage: row.stage,
+      source: row.source,
+      ownerStaffId: row.owner_staff_id ?? null,
+      ownerName: row.staff?.user_profiles?.name ?? null,
+      notes: row.notes ?? null,
+      nextFollowUpAt: row.next_follow_up_at ?? null,
+      convertedStudentId: row.converted_student_id ?? null,
+      lostReason: row.lost_reason ?? null,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at ?? row.created_at,
+    }
+  }
+
+  private static readonly LEAD_SELECT =
+    '*, staff:owner_staff_id(user_profiles:user_profile_id(name))'
+
+  /** As etapas que saíram do funil: decisão tomada, para um lado ou para o outro. */
+  private static readonly ETAPAS_DECIDIDAS = ['ENROLLED', 'LOST'] as const
+
+  /**
+   * Os leads de uma academia, por página.
+   *
+   * ── Por que isto pagina ────────────────────────────────────────────────────
+   *
+   * Lead entra no CRM e não sai: uma academia com três anos de recepção tem
+   * milhares. A leitura não tinha teto, e o PostgREST corta a resposta no teto
+   * configurado no servidor **sem dar erro** — então a tela montava o funil,
+   * os quatro cartões e a lista "Já decididos" sobre um pedaço, sem jeito de
+   * saber que era um pedaço.
+   *
+   * E o corte caía no pior lugar: a ordem põe o retorno mais atrasado
+   * primeiro, então o que sobrava eram justamente os contatos vencidos — e
+   * sumia quem ainda estava morno. O número de "Retorno atrasado" ficava
+   * certo por acidente e o resto, errado.
+   *
+   * Os dois conjuntos paginam separados porque crescem diferente: o funil é
+   * trabalho em aberto, e "Já decididos" é histórico que nunca encolhe.
+   * `count: 'exact'` traz o total do **filtro**, então o rodapé diz quantos
+   * são de verdade.
+   */
+  async listLeads(organizationId: string, filters: LeadFilters): Promise<Paginated<Lead>> {
+    const page = Math.max(1, filters.page ?? 1)
+    const pageSize = Math.min(200, Math.max(5, filters.pageSize ?? 50))
+    const from = (page - 1) * pageSize
+
+    let query = this.client
+      .from('leads')
+      .select(SupabaseDataSource.LEAD_SELECT, { count: 'exact' })
+      .eq('organization_id', organizationId)
+
+    const decididas = `(${SupabaseDataSource.ETAPAS_DECIDIDAS.join(',')})`
+    query = filters.decided
+      ? query.in('stage', [...SupabaseDataSource.ETAPAS_DECIDIDAS])
+      : query.not('stage', 'in', decididas)
+
+    /*
+     * Quem tem retorno marcado vem primeiro, do mais atrasado para o mais
+     * distante. Ordenar por criação deixaria o lead de hoje no topo e o
+     * contato vencido de terça no fim — e o vencido é o que esfria.
+     *
+     * Em "Já decididos" não há retorno marcado para ordenar, e o `created_at`
+     * assume: o mais recente primeiro, que é o que alguém vai querer reler.
+     */
+    const { data, error, count } = await query
+      .order('next_follow_up_at', { ascending: true, nullsFirst: false })
+      .order('created_at', { ascending: false })
+      .range(from, from + pageSize - 1)
+
+    if (error) this.fail('listLeads', error)
+
+    const rows = ((data as Row[]) ?? []).map((row) => this.mapLead(row))
+    return { rows, total: count ?? rows.length, page, pageSize }
+  }
+
+  /**
+   * Os quatro cartões do CRM, contados pelo banco.
+   *
+   * `select('id', { count: 'exact', head: true })` não traz linha nenhuma: o
+   * Postgres conta e devolve o número no cabeçalho. Quatro consultas em
+   * paralelo saem mais baratas que uma leitura da tabela inteira — e, ao
+   * contrário dela, não têm o que cortar.
+   *
+   * "Retorno atrasado" é sobre quem **ainda está em negociação**: retorno
+   * vencido de quem já matriculou ou já desistiu não é trabalho pendente, é
+   * resíduo.
+   */
+  async getCrmSummary(organizationId: string): Promise<CrmSummary> {
+    const decididas = `(${SupabaseDataSource.ETAPAS_DECIDIDAS.join(',')})`
+    const base = () =>
+      this.client
+        .from('leads')
+        .select('id', { count: 'exact', head: true })
+        .eq('organization_id', organizationId)
+
+    const contar = async (
+      operacao: string,
+      query: PromiseLike<{ count: number | null; error: unknown }>,
+    ) => {
+      const { count, error } = await query
+      if (error) this.fail(operacao, error)
+      return count ?? 0
+    }
+
+    const [emNegociacao, retornoAtrasado, matriculados, perdidos] = await Promise.all([
+      contar('crm:abertos', base().not('stage', 'in', decididas)),
+      contar(
+        'crm:atrasados',
+        base().not('stage', 'in', decididas).lt('next_follow_up_at', new Date().toISOString()),
+      ),
+      contar('crm:matriculados', base().eq('stage', 'ENROLLED')),
+      contar('crm:perdidos', base().eq('stage', 'LOST')),
+    ])
+
+    return { emNegociacao, retornoAtrasado, matriculados, perdidos }
+  }
+
+  async getLead(organizationId: string, leadId: string) {
+    const row = await this.select<Row>(
+      'getLead',
+      this.client
+        .from('leads')
+        .select(SupabaseDataSource.LEAD_SELECT)
+        .eq('organization_id', organizationId)
+        .eq('id', leadId)
+        .maybeSingle(),
+    )
+    return row ? this.mapLead(row) : null
+  }
+
+  async saveLead(input: SaveLeadInput): Promise<Lead> {
+    const linha = {
+      organization_id: input.organizationId,
+      name: input.name,
+      phone: input.phone,
+      email: input.email,
+      source: input.source,
+      owner_staff_id: input.ownerStaffId,
+      notes: input.notes,
+      next_follow_up_at: input.nextFollowUpAt,
+    }
+
+    const row = input.id
+      ? await this.select<Row>(
+          'saveLead:update',
+          this.client
+            .from('leads')
+            .update(linha)
+            .eq('organization_id', input.organizationId)
+            .eq('id', input.id)
+            .select(SupabaseDataSource.LEAD_SELECT)
+            .single(),
+        )
+      : await this.select<Row>(
+          'saveLead:insert',
+          this.client.from('leads').insert(linha).select(SupabaseDataSource.LEAD_SELECT).single(),
+        )
+
+    return this.mapLead(row!)
+  }
+
+  async moveLeadStage(
+    organizationId: string,
+    leadId: string,
+    stage: LeadStage,
+    lostReason: string | null,
+  ) {
+    /*
+     * Só o status. O evento de histórico é do gatilho da 0028 — escrever aqui
+     * deixaria a etapa mudada por importação ou por SQL fora do funil.
+     */
+    const { error } = await this.client
+      .from('leads')
+      .update({ stage, lost_reason: lostReason })
+      .eq('organization_id', organizationId)
+      .eq('id', leadId)
+    if (error) this.fail('moveLeadStage', error)
+  }
+
+  async addLeadEvent(
+    organizationId: string,
+    leadId: string,
+    kind: LeadEventKind,
+    body: string,
+    actorStaffId: string | null,
+  ) {
+    const { error } = await this.client.from('lead_events').insert({
+      organization_id: organizationId,
+      lead_id: leadId,
+      kind,
+      body,
+      actor_staff_id: actorStaffId,
+    })
+    if (error) this.fail('addLeadEvent', error)
+  }
+
+  async listLeadEvents(organizationId: string, leadId: string): Promise<LeadEvent[]> {
+    const rows =
+      (await this.select<Row[]>(
+        'listLeadEvents',
+        this.client
+          .from('lead_events')
+          .select('*, staff:actor_staff_id(user_profiles:user_profile_id(name))')
+          .eq('organization_id', organizationId)
+          .eq('lead_id', leadId)
+          .order('created_at', { ascending: false }),
+      )) ?? []
+
+    return rows.map((row) => ({
+      id: row.id,
+      leadId: row.lead_id,
+      kind: row.kind,
+      fromStage: row.from_stage ?? null,
+      toStage: row.to_stage ?? null,
+      body: row.body ?? null,
+      actorName: row.staff?.user_profiles?.name ?? null,
+      createdAt: row.created_at,
+    }))
+  }
+
+  async convertLead(leadId: string, planId: string | null, billingDay: number): Promise<string> {
+    /*
+     * Perfil, aluno, matrícula e fechamento do lead numa transação só, no
+     * banco. Em três chamadas daqui, a falha da segunda deixaria aluno criado
+     * com lead aberto — e ninguém percebe até ligar duas vezes para a mesma
+     * pessoa.
+     */
+    const { data, error } = await this.client.rpc('convert_lead_to_student', {
+      p_lead_id: leadId,
+      p_plan_id: planId,
+      p_billing_day: billingDay,
+    })
+    if (error) this.fail('convertLead', error)
+    return String(data)
+  }
+
+  // ── Notificações ───────────────────────────────────────────────────────────
+  /*
+   * Sem filtro por perfil na consulta, de propósito: a política
+   * `notifications_self` já restringe a linha a quem está autenticado. O
+   * `userProfileId` entra como conferência — se a sessão e a política
+   * discordarem, o sino fica vazio em vez de mostrar aviso de outra pessoa.
+   */
+  /**
+   * O que esta pessoa autorizou, sobre os documentos que estão no ar.
+   *
+   * A junção é feita aqui e não no banco porque o lado que manda é o dos
+   * documentos: consentimento que ainda não existe na tela precisa aparecer
+   * como "nunca respondido", e resposta antiga a um documento que ganhou
+   * versão nova precisa aparecer como desatualizada, não como aceita.
+   */
+  async createStaffInvite(input: {
+    organizationId: string
+    email: string
+    role: UserRole
+    jobTitle: string | null
+    registrationNumber: string | null
+  }): Promise<string> {
+    /*
+     * `security definer` no banco, e as regras que importam ficam lá: quem
+     * convida precisa ser da direção, e ninguém convida acima do próprio
+     * acesso. Se essa checagem morasse aqui, um caminho novo até a tabela a
+     * contornaria.
+     */
+    const { data, error } = await this.client.rpc('create_staff_invite', {
+      p_organization_id: input.organizationId,
+      p_email: input.email,
+      p_role: input.role,
+      p_job_title: input.jobTitle,
+      p_registration_number: input.registrationNumber,
+    })
+    if (error) this.fail('createStaffInvite', error)
+    return String(data)
+  }
+
+  async listStaffInvites(organizationId: string): Promise<StaffInvite[]> {
+    const rows =
+      (await this.select<Row[]>(
+        'listStaffInvites',
+        this.client
+          .from('staff_invites_public')
+          .select('*')
+          .eq('organization_id', organizationId)
+          .order('created_at', { ascending: false }),
+      )) ?? []
+
+    return rows.map((row) => ({
+      id: row.id,
+      organizationId: row.organization_id,
+      email: row.email,
+      role: row.role,
+      jobTitle: row.job_title,
+      registrationNumber: row.registration_number,
+      status: row.status,
+      expiresAt: row.expires_at,
+      acceptedAt: row.accepted_at,
+      createdAt: row.created_at,
+    })) satisfies StaffInvite[]
+  }
+
+  async acceptStaffInvite(token: string): Promise<string> {
+    const { data, error } = await this.client.rpc('accept_staff_invite', { p_token: token })
+    if (error) this.fail('acceptStaffInvite', error)
+    return String(data)
+  }
+
+  async revokeStaffInvite(inviteId: string): Promise<void> {
+    const { error } = await this.client.rpc('revoke_staff_invite', { p_invite_id: inviteId })
+    if (error) this.fail('revokeStaffInvite', error)
+  }
+
+  async listConsents(userProfileId: string): Promise<ConsentState[]> {
+    const [documentos, respostas] = await Promise.all([
+      this.select<Row[]>(
+        'listConsentDocuments',
+        this.client
+          .from('consent_documents')
+          .select('*')
+          .lte('effective_at', new Date().toISOString())
+          .order('effective_at', { ascending: false }),
+      ),
+      this.select<Row[]>(
+        'listConsents',
+        this.client.from('consents').select('*').eq('user_profile_id', userProfileId),
+      ),
+    ])
+
+    // Mais de uma versão por tipo pode estar publicada; a primeira de cada tipo
+    // é a vigente, porque a consulta veio ordenada da mais recente.
+    const vigentes = new Map<string, Row>()
+    for (const linha of documentos ?? []) {
+      if (!vigentes.has(linha.consent_type)) vigentes.set(linha.consent_type, linha)
+    }
+
+    return [...vigentes.values()].map((documento) => {
+      const doTipo = (respostas ?? []).filter((r) => r.consent_type === documento.consent_type)
+      const naVersao = doTipo.find((r) => r.version === documento.version)
+      const anterior = doTipo.find((r) => r.accepted)
+
+      return {
+        consentType: documento.consent_type,
+        version: documento.version,
+        title: documento.title,
+        description: documento.description,
+        url: documento.url,
+        required: documento.required,
+        accepted: naVersao ? Boolean(naVersao.accepted) : false,
+        respondedAt: naVersao ? (naVersao.accepted_at ?? naVersao.revoked_at) : null,
+        revokedAt: naVersao?.revoked_at ?? null,
+        outdated: !naVersao && Boolean(anterior),
+      }
+    }) satisfies ConsentState[]
+  }
+
+  async recordConsent(input: { consentType: ConsentType; accepted: boolean }): Promise<void> {
+    /*
+     * `security definer` no banco, e por dois motivos: a tabela não aceita mais
+     * escrita direta (o registro que prova o consentimento não pode ser apagado
+     * por quem ele documenta), e a versão do documento é resolvida lá dentro.
+     */
+    const { error } = await this.client.rpc('record_consent', {
+      p_type: input.consentType,
+      p_accepted: input.accepted,
+    })
+    if (error) this.fail('recordConsent', error)
+  }
+
+  async closeOwnAccount(confirmation: string): Promise<Record<string, number>> {
+    const { data, error } = await this.client.rpc('close_own_account', {
+      p_confirmacao: confirmation,
+    })
+    if (error) this.fail('closeOwnAccount', error)
+    return (data ?? {}) as Record<string, number>
+  }
+
+  async listNotifications(userProfileId: string, limit = 20) {
+    const rows =
+      (await this.select<Row[]>(
+        'listNotifications',
+        this.client
+          .from('notifications')
+          .select('*')
+          .eq('user_profile_id', userProfileId)
+          .order('created_at', { ascending: false })
+          .limit(limit),
+      )) ?? []
+
+    return rows.map((row) => ({
+      id: row.id,
+      organizationId: row.organization_id,
+      userProfileId: row.user_profile_id,
+      category: row.category,
+      title: row.title,
+      body: row.body,
+      actionUrl: row.action_url,
+      readAt: row.read_at,
+      createdAt: row.created_at,
+    })) satisfies AppNotification[]
+  }
+
+  async countUnreadNotifications(userProfileId: string) {
+    const { count, error } = await this.client
+      .from('notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_profile_id', userProfileId)
+      .is('read_at', null)
+
+    if (error) this.fail('countUnreadNotifications', error)
+    return count ?? 0
+  }
+
+  async markNotificationsRead(_userProfileId: string) {
+    // A função no banco resolve o perfil pelo próprio JWT: o cliente não
+    // escolhe de quem são os avisos que vai marcar.
+    const { data, error } = await this.client.rpc('mark_notifications_read')
+    if (error) this.fail('markNotificationsRead', error)
+    return Number(data ?? 0)
+  }
+
+  // ── Desafios base ──────────────────────────────────────────────────────────
+  async listBaselineChallenges() {
+    const rows =
+      (await this.select<Row[]>(
+        'listBaselineChallenges',
+        this.client
+          .from('baseline_challenges')
+          .select('*')
+          .eq('active', true)
+          .order('position', { ascending: true }),
+      )) ?? []
+
+    return rows.map((row) => ({
+      code: row.code,
+      title: row.title,
+      description: row.description,
+      metric: row.metric,
+      unit: row.unit,
+      targetValue: Number(row.target_value),
+      minTier: row.min_tier,
+      position: row.position,
+    })) satisfies BaselineChallenge[]
+  }
+
+  async listChallengeEntries(userProfileId: string) {
+    const rows =
+      (await this.select<Row[]>(
+        'listChallengeEntries',
+        this.client
+          .from('challenge_entries')
+          .select('*')
+          .eq('user_profile_id', userProfileId)
+          .order('cycle', { ascending: false }),
+      )) ?? []
+
+    return rows.map((row) => ({
+      id: row.id,
+      challengeCode: row.challenge_code,
+      cycle: row.cycle,
+      targetValue: Number(row.target_value),
+      progressValue: Number(row.progress_value),
+      chosenAt: row.chosen_at,
+      closedAt: row.closed_at,
+    })) satisfies ChallengeEntry[]
+  }
+
+  async listChallengeMedals(userProfileId: string) {
+    const rows =
+      (await this.select<Row[]>(
+        'listChallengeMedals',
+        this.client
+          .from('challenge_medals')
+          .select('*')
+          .eq('user_profile_id', userProfileId)
+          .order('cycle', { ascending: false }),
+      )) ?? []
+
+    return rows.map((row) => ({
+      id: row.id,
+      challengeCode: row.challenge_code,
+      cycle: row.cycle,
+      level: row.level,
+      progressValue: Number(row.progress_value),
+      targetValue: Number(row.target_value),
+      awardedAt: row.awarded_at,
+    })) satisfies ChallengeMedal[]
+  }
+
+  /*
+   * As três escritas abaixo são RPC porque a regra mora no banco: o limite do
+   * plano gratuito, o desafio que é só do Pro e o nível da medalha. Deixar
+   * qualquer uma delas na aplicação abriria a porta de escrever direto na
+   * tabela — e a medalha de ouro viraria um POST.
+   */
+  async chooseBaselineChallenge(code: string) {
+    const { error } = await this.client.rpc('choose_baseline_challenge', { p_code: code })
+    if (error) this.fail('chooseBaselineChallenge', error)
+  }
+
+  async recordChallengeProgress(code: string, delta: number) {
+    const { data, error } = await this.client.rpc('record_challenge_progress', {
+      p_code: code,
+      p_delta: delta,
+    })
+    if (error) this.fail('recordChallengeProgress', error)
+    return Number(data ?? 0)
+  }
+
+  async closeOwnChallengeCycles() {
+    const { data, error } = await this.client.rpc('close_own_challenge_cycles')
+    if (error) this.fail('closeOwnChallengeCycles', error)
+    return Number(data ?? 0)
+  }
+
+  // ── SynseRun ───────────────────────────────────────────────────────────────
+  private mapActivity(row: Row): Activity {
+    return {
+      id: row.id,
+      userProfileId: row.user_profile_id,
+      organizationId: row.organization_id,
+      sport: row.sport,
+      status: row.status,
+      title: row.title,
+      startedAt: row.started_at,
+      endedAt: row.ended_at,
+      elapsedSeconds: Number(row.elapsed_seconds),
+      movingSeconds: Number(row.moving_seconds),
+      distanceMeters: Number(row.distance_meters),
+      averagePace: row.average_pace === null ? null : Number(row.average_pace),
+      bestPace: row.best_pace === null ? null : Number(row.best_pace),
+      averageSpeed: Number(row.average_speed),
+      maxSpeed: Number(row.max_speed),
+      elevationGain: Number(row.elevation_gain),
+      elevationLoss: Number(row.elevation_loss),
+      minAltitude: row.min_altitude === null ? null : Number(row.min_altitude),
+      maxAltitude: row.max_altitude === null ? null : Number(row.max_altitude),
+      calories: Number(row.calories),
+      startLatitude: row.start_latitude === null ? null : Number(row.start_latitude),
+      startLongitude: row.start_longitude === null ? null : Number(row.start_longitude),
+      privacy: row.privacy,
+      privacyZoneMeters: Number(row.privacy_zone_meters),
+      createdAt: row.created_at,
+    }
+  }
+
+  /**
+   * Grava a atividade inteira: cabeçalho, rota e parciais.
+   *
+   * Em três passos, e não num só, porque o PostgREST não abre transação entre
+   * chamadas. A ordem escolhida é a que menos machuca quando a rede cai no
+   * meio: o cabeçalho primeiro, com `client_id` — se a rota falhar, o reenvio
+   * encontra a atividade existente e completa, em vez de criar outra.
+   */
+  async saveActivity(input: SaveActivityInput): Promise<string> {
+    const { data: cabecalho, error } = await this.client
+      .from('activities')
+      .upsert(
+        {
+          user_profile_id: input.userProfileId,
+          organization_id: input.organizationId,
+          sport: input.sport,
+          status: 'COMPLETED',
+          title: input.title,
+          started_at: input.startedAt,
+          ended_at: input.endedAt,
+          elapsed_seconds: Math.round(input.elapsedSeconds),
+          moving_seconds: Math.round(input.movingSeconds),
+          distance_meters: input.distanceMeters,
+          average_pace: input.averagePace,
+          best_pace: input.bestPace,
+          average_speed: input.averageSpeed,
+          max_speed: input.maxSpeed,
+          elevation_gain: input.elevationGain,
+          elevation_loss: input.elevationLoss,
+          min_altitude: input.minAltitude,
+          max_altitude: input.maxAltitude,
+          calories: input.calories,
+          start_latitude: input.route[0]?.latitude ?? null,
+          start_longitude: input.route[0]?.longitude ?? null,
+          end_latitude: input.route[input.route.length - 1]?.latitude ?? null,
+          end_longitude: input.route[input.route.length - 1]?.longitude ?? null,
+          privacy: input.privacy,
+          client_id: input.clientId,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_profile_id,client_id' },
+      )
+      .select('id')
+      .single()
+
+    if (error) this.fail('saveActivity', error)
+    const activityId = cabecalho.id as string
+
+    if (input.route.length > 0) {
+      // Reenvio não duplica rota: o que já estava lá sai antes de entrar de novo.
+      await this.client.from('activity_points').delete().eq('activity_id', activityId)
+
+      /*
+       * Em lotes: uma corrida de uma hora tem milhares de pontos, e um único
+       * insert desse tamanho estoura o limite de corpo da requisição.
+       */
+      const LOTE = 500
+      for (let i = 0; i < input.route.length; i += LOTE) {
+        const { error: erroRota } = await this.client.from('activity_points').insert(
+          input.route.slice(i, i + LOTE).map((ponto) => ({
+            activity_id: activityId,
+            latitude: ponto.latitude,
+            longitude: ponto.longitude,
+            altitude: ponto.altitude,
+            speed: ponto.speed,
+            accuracy: ponto.accuracy,
+            heading: ponto.heading,
+            recorded_at: ponto.recordedAt,
+            distance_from_previous: ponto.distanceFromPrevious,
+            total_distance: ponto.totalDistance,
+          })),
+        )
+        if (erroRota) this.fail('saveActivity:route', erroRota)
+      }
+    }
+
+    if (input.splits.length > 0) {
+      await this.client.from('activity_splits').delete().eq('activity_id', activityId)
+      const { error: erroSplits } = await this.client.from('activity_splits').insert(
+        input.splits.map((parcial) => ({
+          activity_id: activityId,
+          kilometer: parcial.kilometer,
+          split_seconds: parcial.splitSeconds,
+          pace_seconds: parcial.paceSeconds,
+          elevation_gain: parcial.elevationGain,
+        })),
+      )
+      if (erroSplits) this.fail('saveActivity:splits', erroSplits)
+    }
+
+    // Recorde é reconhecido pelo banco, com a rota já gravada.
+    const { error: erroRecordes } = await this.client.rpc('claim_personal_records', {
+      p_activity_id: activityId,
+    })
+    if (erroRecordes) {
+      logger.warn('synse-run:records_failed', { error: String(erroRecordes.message) })
+    }
+
+    return activityId
+  }
+
+  async listActivities(
+    userProfileId: string,
+    filters: { sport?: SportType; since?: string; limit?: number } = {},
+  ) {
+    let consulta = this.client
+      .from('activities')
+      .select('*')
+      .eq('user_profile_id', userProfileId)
+      .eq('status', 'COMPLETED')
+      .order('started_at', { ascending: false })
+      .limit(filters.limit ?? 50)
+
+    if (filters.sport) consulta = consulta.eq('sport', filters.sport)
+    if (filters.since) consulta = consulta.gte('started_at', filters.since)
+
+    const rows = (await this.select<Row[]>('listActivities', consulta)) ?? []
+    return rows.map((row) => this.mapActivity(row))
+  }
+
+  async getActivity(activityId: string) {
+    const row = await this.select<Row>(
+      'getActivity',
+      this.client.from('activities').select('*').eq('id', activityId).maybeSingle(),
+    )
+    return row ? this.mapActivity(row) : null
+  }
+
+  /**
+   * A rota de uma atividade, lida por páginas.
+   *
+   * ── Por que paginar aqui, e não pôr um teto ────────────────────────────────
+   *
+   * `saveActivity`, vinte linhas acima, grava os pontos em lotes de 500 e o
+   * comentário dele diz por quê: "uma corrida de uma hora tem milhares de
+   * pontos". A escrita sabia disso; a leitura pedia tudo numa requisição só.
+   *
+   * O PostgREST corta a resposta no teto configurado no servidor **sem dar
+   * erro**, então o mapa de uma corrida longa desenhava a linha até onde o
+   * corte alcançasse e parava no meio — sem aviso, parecendo uma corrida mais
+   * curta. Aqui um teto não serve: a rota inteira *é* o conteúdo da tela.
+   *
+   * O laço avança pelo que **veio**, não pelo que foi pedido, e para quando
+   * uma página volta vazia. É isso que o torna indiferente ao valor do teto do
+   * servidor: se ele for menor que `PAGINA`, a primeira resposta vem curta — e
+   * parar aí, achando que terminou, seria repetir o defeito com mais passos.
+   *
+   * `TETO_DE_PONTOS` existe só como freio de sanidade: 50 mil pontos são mais
+   * de treze horas a um ponto por segundo. Chegar lá é dado estranho, não
+   * corrida, e vale um aviso no log em vez de uma página que nunca fecha.
+   */
+  async getActivityRoute(activityId: string) {
+    const PAGINA = 1_000
+    const TETO_DE_PONTOS = 50_000
+    const rows: Row[] = []
+
+    for (let inicio = 0; ;) {
+      const pagina =
+        (await this.select<Row[]>(
+          'getActivityRoute',
+          this.client
+            .from('activity_points')
+            .select('id, latitude, longitude, altitude, speed, recorded_at, total_distance')
+            .eq('activity_id', activityId)
+            .order('recorded_at', { ascending: true })
+            // Desempate estável: `id` é identidade, e sem ele dois pontos com
+            // o mesmo instante poderiam trocar de lugar entre duas páginas.
+            .order('id', { ascending: true })
+            .range(inicio, inicio + PAGINA - 1),
+        )) ?? []
+
+      if (pagina.length === 0) break
+      rows.push(...pagina)
+      inicio += pagina.length
+
+      if (rows.length >= TETO_DE_PONTOS) {
+        logger.warn('getActivityRoute:rota_longa_demais', {
+          activityId,
+          pontos: rows.length,
+        })
+        break
+      }
+    }
+
+    return rows.map((row) => ({
+      latitude: Number(row.latitude),
+      longitude: Number(row.longitude),
+      altitude: row.altitude === null ? null : Number(row.altitude),
+      speed: row.speed === null ? null : Number(row.speed),
+      recordedAt: row.recorded_at,
+      totalDistance: Number(row.total_distance),
+    })) satisfies ActivityRoutePoint[]
+  }
+
+  async getActivitySplits(activityId: string) {
+    const rows =
+      (await this.select<Row[]>(
+        'getActivitySplits',
+        this.client
+          .from('activity_splits')
+          .select('*')
+          .eq('activity_id', activityId)
+          .order('kilometer', { ascending: true }),
+      )) ?? []
+
+    return rows.map((row) => ({
+      kilometer: Number(row.kilometer),
+      splitSeconds: Number(row.split_seconds),
+      paceSeconds: Number(row.pace_seconds),
+      elevationGain: Number(row.elevation_gain),
+    })) satisfies ActivitySplit[]
+  }
+
+  async listPersonalRecords(userProfileId: string) {
+    const rows =
+      (await this.select<Row[]>(
+        'listPersonalRecords',
+        this.client
+          .from('personal_records')
+          .select('*')
+          .eq('user_profile_id', userProfileId)
+          .order('distance_meters', { ascending: true }),
+      )) ?? []
+
+    return rows.map((row) => ({
+      id: row.id,
+      sport: row.sport,
+      distanceMeters: Number(row.distance_meters),
+      seconds: Number(row.seconds),
+      paceSeconds: Number(row.pace_seconds),
+      activityId: row.activity_id,
+      achievedAt: row.achieved_at,
+    })) satisfies PersonalRecord[]
+  }
+
+  /**
+   * Resumo do período.
+   *
+   * Somado na aplicação, e não no banco, porque o PostgREST não faz agregação
+   * sem uma view — e uma view a mais para somar cinco números de algumas
+   * dezenas de linhas não se paga. Quando o volume crescer, vira função.
+   */
+  /**
+   * O resumo de corridas — somado pelo banco (0050).
+   *
+   * Um dos chamadores passa `epoch` como data: é o total da vida da pessoa,
+   * que cresce para sempre. Era o pior lugar possível para uma soma feita
+   * sobre uma leitura sem teto — e o erro aparecia como quilometragem menor
+   * do que a pessoa correu, que é o número que ela conhece de cor.
+   */
+  async summarizeActivities(userProfileId: string, since: string) {
+    const vazio: ActivitySummary = {
+      activities: 0,
+      distanceMeters: 0,
+      movingSeconds: 0,
+      calories: 0,
+      elevationGain: 0,
+    }
+
+    const { data, error } = await this.client.rpc('resumo_de_corridas', {
+      p_user_profile_id: userProfileId,
+      p_desde: since,
+    })
+
+    if (error) {
+      if (!isPendingMigration(error)) this.fail('summarizeActivities', error)
+      logger.warn('summarizeActivities:sem_0050', {})
+      return this.resumoPelaAplicacao(userProfileId, since, vazio)
+    }
+
+    const linha = ((data ?? []) as Row[])[0]
+    if (!linha) return vazio
+    return {
+      activities: Number(linha.atividades),
+      distanceMeters: Number(linha.metros),
+      movingSeconds: Number(linha.segundos),
+      calories: Number(linha.calorias),
+      elevationGain: Number(linha.ganho),
+    } satisfies ActivitySummary
+  }
+
+  /** O resumo como era antes da 0050. Só roda na janela entre publicar e migrar. */
+  private async resumoPelaAplicacao(
+    userProfileId: string,
+    since: string,
+    vazio: ActivitySummary,
+  ): Promise<ActivitySummary> {
+    const rows =
+      (await this.select<Row[]>(
+        'summarizeActivities',
+        this.client
+          .from('activities')
+          .select('distance_meters, moving_seconds, calories, elevation_gain')
+          .eq('user_profile_id', userProfileId)
+          .eq('status', 'COMPLETED')
+          .gte('started_at', since),
+      )) ?? []
+
+    return rows.reduce<ActivitySummary>(
+      (total, row) => ({
+        activities: total.activities + 1,
+        distanceMeters: total.distanceMeters + Number(row.distance_meters),
+        movingSeconds: total.movingSeconds + Number(row.moving_seconds),
+        calories: total.calories + Number(row.calories),
+        elevationGain: total.elevationGain + Number(row.elevation_gain),
+      }),
+      vazio,
+    )
+  }
+
+  async updateActivityPrivacy(activityId: string, privacy: ActivityPrivacy) {
+    const { error } = await this.client
+      .from('activities')
+      .update({ privacy, updated_at: new Date().toISOString() })
+      .eq('id', activityId)
+    if (error) this.fail('updateActivityPrivacy', error)
+  }
+
+  async deleteActivity(activityId: string) {
+    const { error } = await this.client.from('activities').delete().eq('id', activityId)
+    if (error) this.fail('deleteActivity', error)
+  }
+}
+
+/** Zero em vez de nulo: a tela mostra um número, e "—" esconde se é zero ou falha. */
+function mapTotals(row: Row | undefined): WorkoutTotals {
+  return {
+    workouts: Number(row?.treinos ?? 0),
+    sets: Number(row?.series ?? 0),
+    reps: Number(row?.reps ?? 0),
+    volumeKg: Number(row?.volume_kg ?? 0),
+    averageDurationSeconds: row?.duracao_media_seg == null ? null : Number(row.duracao_media_seg),
+    averageRestSeconds: row?.descanso_medio_seg == null ? null : Number(row.descanso_medio_seg),
+    distinctExercises: Number(row?.exercicios_distintos ?? 0),
+  }
+}
+
+/** Numérico do Postgres vira número, e nulo continua nulo. */
+function numero(v: unknown): number | null {
+  return v == null ? null : Number(v)
+}
+
+/**
+ * O começo da janela escolhida na tela, em ISO — ou nulo para "tudo".
+ *
+ * Meses contados em meses de calendário, e não em blocos de 30 dias: quem
+ * escolhe "3 meses" espera desde o mesmo dia três meses atrás.
+ */
+/**
+ * Agrupa pesagens cruas em pontos de gráfico — a série como era antes da 0052.
+ *
+ * Só roda na janela entre publicar e migrar. O recorte do balde usa o fuso de
+ * quem está rodando a aplicação, e o `date_trunc` da função usa o do banco:
+ * na virada do dia os dois podem discordar de um ponto. Alinhar isso exigiria
+ * repetir aqui a regra de fuso do Postgres, para um caminho que existe para
+ * desaparecer.
+ *
+ * Recebe em ordem decrescente, que é como a consulta pede, então a **primeira**
+ * linha de cada balde é a última pesagem dele — a mesma escolha do
+ * `distinct on` lá.
+ */
+function agruparSerie(rows: Row[], balde: BaldeDaSerie): BodySeriesPoint[] {
+  const pontos = new Map<string, BodySeriesPoint>()
+
+  for (const row of rows) {
+    const quando = new Date(row.measured_at)
+    const chave = chaveDoBalde(quando, balde)
+    const ponto = pontos.get(chave)
+    if (ponto) {
+      ponto.medicoes += 1
+      continue
+    }
+    pontos.set(chave, {
+      instante: row.measured_at,
+      pesoKg: Number(row.weight_kg),
+      medicoes: 1,
+    })
+  }
+
+  return [...pontos.values()].sort((a, b) => a.instante.localeCompare(b.instante))
+}
+
+function chaveDoBalde(data: Date, balde: BaldeDaSerie): string {
+  const ano = data.getFullYear()
+  const mes = String(data.getMonth() + 1).padStart(2, '0')
+  if (balde === 'month') return `${ano}-${mes}`
+  if (balde === 'week') {
+    /* Segunda-feira da semana, como o `date_trunc('week', …)` do Postgres. */
+    const segunda = new Date(data.getFullYear(), data.getMonth(), data.getDate())
+    segunda.setDate(segunda.getDate() - ((segunda.getDay() + 6) % 7))
+    return comoData(segunda)
+  }
+  return `${ano}-${mes}-${String(data.getDate()).padStart(2, '0')}`
+}
+
+function inicioDoPeriodo(period: BodyPeriod, agora = new Date()): string | null {
+  const data = new Date(agora)
+  switch (period) {
+    case '7d':
+      data.setDate(data.getDate() - 7)
+      return data.toISOString()
+    case '30d':
+      data.setDate(data.getDate() - 30)
+      return data.toISOString()
+    case '3m':
+      data.setMonth(data.getMonth() - 3)
+      return data.toISOString()
+    case '6m':
+      data.setMonth(data.getMonth() - 6)
+      return data.toISOString()
+    case '1a':
+      data.setFullYear(data.getFullYear() - 1)
+      return data.toISOString()
+    default:
+      return null
+  }
+}

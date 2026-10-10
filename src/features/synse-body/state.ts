@@ -11,9 +11,35 @@ export type RecordMeasurementResult =
   | { status: 'success'; measurementId: string; measurement: BodyMeasurement }
   | { status: 'error'; message: string }
 
-export type DeviceResult = { status: 'success'; deviceId?: string } | { status: 'error'; message: string }
+export type DeviceResult =
+  { status: 'success'; deviceId?: string } | { status: 'error'; message: string }
 
 export type ShareResult = { status: 'success' } | { status: 'error'; message: string }
+
+/**
+ * O resultado de uma importação de plataforma de saúde.
+ *
+ * `gravadas` e `jaExistiam` são contas diferentes de propósito. "Importamos 0"
+ * depois de uma sincronização soa como falha; "0 novas, 14 já estavam aqui"
+ * diz que funcionou. A tela precisa das duas para não assustar quem sincroniza
+ * duas vezes no mesmo dia.
+ */
+export type ImportHealthResult =
+  | {
+      status: 'success'
+      /** Entraram no banco. Inclui as que já estavam lá com o mesmo `clientId`. */
+      gravadas: number
+      /**
+       * O banco recusou.
+       *
+       * Conta separada de propósito. Reenviar uma pesagem que já existe **não**
+       * é recusa: o `clientId` é o mesmo e a gravação devolve o id de sempre.
+       * O que cai aqui é falha de verdade — e somar as duas numa contagem só
+       * faria a tela dizer "já estava aqui" para algo que deu errado.
+       */
+      recusadas: number
+    }
+  | { status: 'error'; message: string }
 
 /**
  * As janelas do histórico, com quanto cada uma pede em dias.

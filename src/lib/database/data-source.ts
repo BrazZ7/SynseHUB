@@ -3,6 +3,7 @@ import type { BodySeriesPoint } from '@/features/synse-body/baldes-da-serie'
 import type {
   Activity,
   BodyMeasurement,
+  BodyMeasurementSource,
   BodyMeasurementShare,
   BodyPeriod,
   UserDevice,
@@ -963,6 +964,17 @@ export interface DataSource {
    * offline parar de tentar sem duplicar linha.
    */
   recordBodyMeasurement(measurement: BodyMeasurement): Promise<string>
+  /**
+   * Quando entrou a última pesagem vinda desta plataforma de saúde.
+   *
+   * É a marca d'água da importação: a próxima leitura começa um pouco antes
+   * dela, em vez de varrer um ano toda vez. Volta `null` para quem nunca
+   * importou — e aí a janela é a primeira, larga.
+   *
+   * Uma linha, não uma lista, e por isso fora da dívida de paginação: a
+   * consulta é `order by measured_at desc limit 1`.
+   */
+  getLastHealthMeasurementAt(source: BodyMeasurementSource): Promise<string | null>
   deleteBodyMeasurement(measurementId: string): Promise<void>
 
   listUserDevices(): Promise<UserDevice[]>

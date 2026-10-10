@@ -52,6 +52,7 @@ import { DEFAULT_WORKOUT_PREFERENCES } from '@/types/domain'
 import type {
   Activity,
   BodyMeasurement,
+  BodyMeasurementSource,
   BodyMeasurementShare,
   BodyPeriod,
   UserDevice,
@@ -3878,6 +3879,41 @@ export class SupabaseDataSource implements DataSource {
     })
     if (error) this.fail('recordBodyMeasurement', error)
     return String(data)
+  }
+
+  /**
+   * A marca d'água da importação de saúde.
+   *
+   * Uma linha, a mais recente daquela origem. O `limit(1)` é o que mantém
+   * este método fora da dívida de leitura sem teto: não é lista, é máximo.
+   *
+   * A RLS já restringe à própria pessoa — `body_measurements` só devolve o que
+   * é dela ou o que foi explicitamente compartilhado com ela, e
+   * compartilhamento não entra aqui porque o filtro é por origem, e a origem
+   * de outra pessoa não interessa a esta conta.
+   */
+  async getLastHealthMeasurementAt(source: BodyMeasurementSource): Promise<string | null> {
+    const { data, error } = await this.client
+      .from('body_measurements')
+      .select('measured_at')
+      .eq('source', source)
+      .order('measured_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (error) {
+      /*
+       * Publicar não é migrar. Enquanto a 0053 não estiver aplicada a coluna
+       * existe e a consulta funciona — mas se um dia este caminho falhar por
+       * schema, tratar como "nunca importou" é a resposta segura: a janela
+       * larga reimporta, e a idempotência do `clientId` impede duplicata.
+       */
+      if (!isPendingMigration(error)) this.fail('getLastHealthMeasurementAt', error)
+      logger.warn('getLastHealthMeasurementAt:schema', { source })
+      return null
+    }
+
+    return (data as { measured_at?: string } | null)?.measured_at ?? null
   }
 
   async deleteBodyMeasurement(measurementId: string): Promise<void> {

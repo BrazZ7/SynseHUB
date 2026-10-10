@@ -195,6 +195,16 @@ const MIGRATIONS_ESPERADAS = [
   '0050_numero_derivado_no_banco.sql',
   '0051_inadimplencia_sem_corte.sql',
   '0052_serie_de_peso.sql',
+  /*
+   * A 0053 não ganha sonda de schema, e isto é deliberado.
+   *
+   * Ela só substitui o corpo de `record_body_measurement` — a assinatura é a
+   * mesma antes e depois. Uma `rpcCheck` responderia 401 nos dois casos, então
+   * a sonda diria "presente" para um banco que não migrou: afirmação falsa,
+   * pior que ausência de sonda. Quem responde se ela subiu é `schema_migrations`,
+   * e é por isso que a última linha de toda migration se registra lá.
+   */
+  '0053_reimportar_saude.sql',
 ]
 
 async function schemaReadiness() {
@@ -669,6 +679,7 @@ async function schemaReadiness() {
     '0050_numero_derivado_no_banco.sql',
     '0051_inadimplencia_sem_corte.sql',
     '0052_serie_de_peso.sql',
+    '0053_reimportar_saude.sql',
   )
 
   return {

@@ -856,6 +856,45 @@ existem, não para conferir se subiram.
   que desenhar o gráfico não lê linha nenhuma da tabela, e que o balde que vai
   para a função é o mesmo que a tela usa.
 
+- **0053 (`0053_reimportar_saude.sql`)** — a reimportação do Apple Saúde e do
+  Health Connect passa a atualizar a pesagem, em vez de só refrescar o
+  instante.
+
+  `record_body_measurement` é idempotente por `(user_profile_id, client_id)`, e
+  no conflito atualizava **só** o `measured_at`. Para o Bluetooth isso está
+  certo: a balança notifica a mesma leitura três vezes ao confirmar a
+  estabilização, e nada deve mudar.
+
+  Para a importação, não. O `client_id` dessas pesagens deriva do identificador
+  que a própria plataforma dá à amostra, e o **Health Connect mantém esse
+  identificador quando o registro é corrigido** — quem conserta o peso em outro
+  app gera uma atualização, não uma amostra nova. Com o conflito ignorando os
+  valores, a correção nunca chegava: o Synse guardaria o número errado para
+  sempre, e a única saída seria apagar a linha à mão. O mesmo valia para a
+  pesagem que entrou só com peso porque a bioimpedância ainda não tinha sido
+  escrita.
+
+  A atualização vale **apenas** quando a linha que existe e a que chega vêm da
+  mesma plataforma de saúde. Pesagem de Bluetooth e pesagem digitada à mão
+  continuam imutáveis no reenvio, e a origem de uma linha nunca muda — a tela
+  diz de onde cada número veio, e deixar isso mudar por baixo transformaria a
+  frase em mentira.
+
+  **Sem sonda de schema, de propósito.** A 0053 só substitui o corpo da função;
+  a assinatura é a mesma antes e depois, então uma `rpcCheck` responderia o
+  mesmo nos dois casos e diria "presente" para um banco que não migrou. Quem
+  responde se ela subiu é `schema_migrations` — e é para isso que a última
+  linha de toda migration se registra lá. Ela está em `MIGRATIONS_ESPERADAS`,
+  então `pendingMigrations` a aponta enquanto o SQL não for colado.
+
+  Sem a migration, a importação continua funcionando: o que ela perde é a
+  correção e o enriquecimento. Pesagem nova entra normalmente.
+
+  `tests/db/reimportar-saude.test.ts`: 9 testes contra Postgres, 3 mutações
+  (tirar a atualização, deixá-la valer para qualquer origem, deixar a origem
+  mudar) — as três pegas. Cinco dos nove testes existem só para provar o que a
+  migration **não** pode quebrar.
+
 ### O CRM paginado, sem migration
 
 Não é migration — entra aqui porque fecha a primeira entrada da lista de

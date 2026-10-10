@@ -51,6 +51,7 @@ const MONTH_YEAR = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'nume
 import type {
   Activity,
   BodyMeasurement,
+  BodyMeasurementSource,
   BodyMeasurementShare,
   BodyPeriod,
   UserDevice,
@@ -4245,12 +4246,51 @@ export class DemoDataSource implements DataSource {
     const existente = DemoDataSource.pesagens.get(measurement.clientId)
     const id = existente?.id ?? `bm_${measurement.clientId}`
 
+    /*
+     * ── O conflito segue a regra da 0053 ──────────────────────────────────
+     *
+     * Antes, a demonstração sobrescrevia a linha inteira em qualquer origem.
+     * Isso divergia do banco de verdade, que só refrescava o instante — e a
+     * divergência era do tipo pior: a demonstração mostrava um comportamento
+     * mais permissivo que a produção, então um defeito de reenvio passaria
+     * despercebido aqui e apareceria no cliente.
+     *
+     * A regra agora é a mesma dos dois lados: valores novos só entram quando a
+     * linha que existe e a que chega vêm da **mesma plataforma de saúde**. O
+     * instante é refrescado sempre, e a origem nunca muda.
+     */
+    const deSaude = (origem: BodyMeasurement['source']) =>
+      origem === 'APPLE_HEALTH' || origem === 'HEALTH_CONNECT'
+
+    const atualizaValores =
+      !existente || (existente.source === measurement.source && deSaude(measurement.source))
+
     DemoDataSource.pesagens.set(measurement.clientId, {
-      ...measurement,
+      ...(atualizaValores ? measurement : existente),
+      source: existente?.source ?? measurement.source,
+      measuredAt: measurement.measuredAt,
       id,
       createdAt: existente?.createdAt ?? new Date().toISOString(),
     })
     return id
+  }
+
+  /**
+   * A marca d'água da importação de saúde, na demonstração.
+   *
+   * A mesma pergunta do Supabase: a pesagem mais recente daquela origem, ou
+   * `null` para quem nunca importou.
+   */
+  async getLastHealthMeasurementAt(source: BodyMeasurementSource): Promise<string | null> {
+    this.semearPesagens()
+    let maisRecente: string | null = null
+
+    for (const medida of DemoDataSource.pesagens.values()) {
+      if (medida.source !== source) continue
+      if (!maisRecente || medida.measuredAt > maisRecente) maisRecente = medida.measuredAt
+    }
+
+    return maisRecente
   }
 
   async deleteBodyMeasurement(measurementId: string): Promise<void> {

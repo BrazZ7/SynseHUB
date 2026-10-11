@@ -2388,18 +2388,37 @@ export class SupabaseDataSource implements DataSource {
     studentId: string,
     window: ScheduleWindow,
   ): Promise<ClassSessionForStudent[]> {
-    const [sessoes, minhas] = await Promise.all([
-      this.listClassSessions(organizationId, window),
-      this.select<Row[]>(
-        'listClassSessionsForStudent:bookings',
-        this.client
-          .from('class_bookings')
-          .select('id, session_id, student_id, status, created_at')
-          .eq('organization_id', organizationId)
-          .in('status', ['BOOKED', 'WAITLIST', 'ATTENDED'])
-          .order('created_at'),
-      ),
-    ])
+    const sessoes = await this.listClassSessions(organizationId, window)
+
+    /*
+     * ── As reservas são das aulas da janela, e não da academia inteira ─────
+     *
+     * Esta consulta lia **toda** reserva da academia com situação reservada,
+     * em espera ou presente — sem teto e sem recorte de data. Uma academia com
+     * três anos de aulas acumula dezenas de milhares de `ATTENDED`, e isso era
+     * lido na tela inicial do aluno, a cada abertura do app.
+     *
+     * Os dois usos abaixo só olham as aulas desta janela: qual é a minha
+     * reserva e quem está na frente na fila de espera. Recortar por
+     * `session_id` deixa a leitura limitada pela janela que a tela pediu
+     * vezes a lotação — que é o que `listClassSessions` já garante.
+     *
+     * Janela sem aula nenhuma não vai ao banco: `in` com lista vazia é uma ida
+     * à rede para receber nada.
+     */
+    const idsDaJanela = sessoes.map((sessao) => sessao.id)
+    const minhas = idsDaJanela.length
+      ? await this.select<Row[]>(
+          'listClassSessionsForStudent:bookings',
+          this.client
+            .from('class_bookings')
+            .select('id, session_id, student_id, status, created_at')
+            .eq('organization_id', organizationId)
+            .in('session_id', idsDaJanela)
+            .in('status', ['BOOKED', 'WAITLIST', 'ATTENDED'])
+            .order('created_at'),
+        )
+      : []
 
     const todas = minhas ?? []
     const minhasPorSessao = new Map(

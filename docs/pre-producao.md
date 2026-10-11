@@ -895,6 +895,26 @@ existem, não para conferir se subiram.
   mudar) — as três pegas. Cinco dos nove testes existem só para provar o que a
   migration **não** pode quebrar.
 
+### As reservas do aluno são as da janela
+
+`listClassSessionsForStudent` recortava as **aulas** pela semana, certinho, e
+ao lado lia **toda** reserva da academia com situação reservada, em espera ou
+presente. Sem teto e sem recorte de data.
+
+Uma academia com três anos de grade acumula dezenas de milhares de `ATTENDED`,
+e isso era lido na **tela inicial do aluno**, a cada abertura do app — a
+leitura mais repetida do produto. O corte cairia no pior lugar: a ordem é por
+criação, então o que sobraria seriam as reservas **mais antigas**, e o que
+sumiria é justamente a da próxima aula. O sintoma seria o cartão da aula de
+amanhã sem a reserva do aluno, ou a posição na fila de espera errada.
+
+Agora a leitura recorta por `in(session_id, …)` com as aulas da janela — no
+máximo uma semana de grade —, e janela sem aula nenhuma não vai ao banco.
+A dívida foi de **5 para 4**.
+
+`tests/unit/schedule/reservas-da-janela.test.ts`: 4 testes, 2 mutações, as duas
+pegas.
+
 ### As avaliações com teto escrito, e a altura numa linha só
 
 `listAssessments` lia o histórico inteiro de um aluno, e a ficha usava essa

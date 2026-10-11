@@ -17,17 +17,8 @@ import { initialWorkoutState } from '@/features/workouts/state'
  * aviso "novo treino disponível" quando a linha entra em
  * `workout_assignments`, e até agora nada no produto era capaz de acioná-lo.
  */
-export function AssignWorkoutCard({
-  workoutPlanId,
-  jaAtribuido,
-}: {
-  workoutPlanId: string
-  /** Quem já tem este treino. Vira recado na lista, não impedimento. */
-  jaAtribuido: string[]
-}) {
+export function AssignWorkoutCard({ workoutPlanId }: { workoutPlanId: string }) {
   const [state, formAction] = useActionState(assignWorkoutAction, initialWorkoutState)
-
-  const jaTemEsteTreino = Object.fromEntries(jaAtribuido.map((id) => [id, 'já tem este treino']))
 
   return (
     <form action={formAction} className="space-y-4" noValidate>
@@ -41,8 +32,12 @@ export function AssignWorkoutCard({
           Reatribuir renova a validade em vez de duplicar; dizer isso antes
           evita a dúvida de "será que vou criar dois?". A anotação vale só
           para quem já tem, e por isso ela é um recado e não um bloqueio.
+
+          Quem já tem vem marcado pela própria busca: o seletor leva o id da
+          ficha e o servidor responde, para os alunos da tela, quem a tem.
+          Antes a página lia todos que têm a ficha e mandava a lista para cá.
         */}
-        <SeletorDeAluno erros={state.fieldErrors?.studentId} anotacoes={jaTemEsteTreino} />
+        <SeletorDeAluno erros={state.fieldErrors?.studentId} anotarTreino={workoutPlanId} />
 
         <Field
           id="validUntil"

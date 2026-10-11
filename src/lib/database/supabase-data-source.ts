@@ -1809,7 +1809,14 @@ export class SupabaseDataSource implements DataSource {
     })) satisfies WorkoutAssignment[]
   }
 
-  async listAssignmentsForPlan(organizationId: string, workoutPlanId: string) {
+  async listAssignmentsForPlan(
+    organizationId: string,
+    workoutPlanId: string,
+    studentIds: readonly string[],
+  ) {
+    // Pergunta sem aluno nenhum não vai ao banco.
+    if (studentIds.length === 0) return []
+
     const rows =
       (await this.select<Row[]>(
         'listAssignmentsForPlan',
@@ -1817,7 +1824,8 @@ export class SupabaseDataSource implements DataSource {
           .from('workout_assignments')
           .select('*')
           .eq('organization_id', organizationId)
-          .eq('workout_plan_id', workoutPlanId),
+          .eq('workout_plan_id', workoutPlanId)
+          .in('student_id', [...studentIds]),
       )) ?? []
     return rows.map((row) => ({
       id: row.id,

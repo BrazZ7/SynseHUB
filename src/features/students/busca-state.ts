@@ -7,6 +7,16 @@ export type AlunoEncontrado = {
   name: string
   synseId: string
   planName: string | null
+  /**
+   * Se este aluno já tem a ficha que a tela está atribuindo.
+   *
+   * Só vem preenchido quando a busca recebe um `workoutPlanId`. A anotação
+   * nasce aqui, no servidor, recortada pelos alunos que a página mostra —
+   * antes a tela recebia a lista inteira de quem tem a ficha, que numa
+   * academia com treino atribuído a todos era a academia inteira no HTML,
+   * para anotar doze nomes.
+   */
+  jaTemOTreino?: boolean
 }
 
 export type BuscaDeAlunoResultado =

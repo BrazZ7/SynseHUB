@@ -27,6 +27,11 @@ import type { AlunoEncontrado, BuscaDeAlunoResultado } from '@/features/students
  * balcão. Nada de telefone, e-mail, CPF ou situação financeira: é um seletor,
  * não uma lista de alunos, e quem precisa daquilo abre a ficha.
  *
+ * Com `workoutPlanId`, entrega também um "já tem este treino" por aluno. A
+ * anotação nasce aqui porque é aqui que se sabe **quais** doze alunos a tela
+ * mostra: a tela de atribuir treino lia antes a lista inteira de quem tem a
+ * ficha, que numa ficha atribuída a todos era a academia inteira no HTML.
+ *
  * A academia sai da sessão, nunca do argumento, e a RLS confere por cima.
  */
 
@@ -36,11 +41,23 @@ const QUANTOS = 12
 export async function buscarAlunosAction(
   termo: string,
   somenteAtivos = true,
+  /**
+   * Opcional: a ficha que a tela está atribuindo. Com ela, cada aluno
+   * devolvido vem dizendo se já a tem — a anotação recortada pelos doze da
+   * tela, em vez da lista inteira de quem tem a ficha viajando ao navegador.
+   *
+   * O id vem do cliente e não é segredo: está na URL da própria tela. O que
+   * protege é a academia, que sai da sessão, e a RLS por cima.
+   */
+  workoutPlanId?: string,
 ): Promise<BuscaDeAlunoResultado> {
   const session = await requireHubSession()
 
   try {
     requirePermission(session, 'students:read')
+    // A anotação é dado de treino, e por isso pede a permissão de treino:
+    // `students:read` sozinho não dá direito de saber quem tem qual ficha.
+    if (workoutPlanId) requirePermission(session, 'workouts:read')
 
     /*
      * A tela adia a digitação antes de chamar, então o limite não é para o
@@ -63,11 +80,30 @@ export async function buscarAlunosAction(
       pageSize: QUANTOS,
     })
 
+    /*
+     * Quem, entre estes, já tem a ficha. A pergunta leva os ids da página —
+     * no máximo `QUANTOS` —, então a resposta tem o mesmo teto da tela, e não
+     * o tamanho da academia.
+     */
+    const comOTreino =
+      workoutPlanId && pagina.rows.length
+        ? new Set(
+            (
+              await dataSource.listAssignmentsForPlan(
+                session.organizationId,
+                workoutPlanId,
+                pagina.rows.map((aluno) => aluno.id),
+              )
+            ).map((atribuicao) => atribuicao.studentId),
+          )
+        : null
+
     const alunos: AlunoEncontrado[] = pagina.rows.map((aluno) => ({
       id: aluno.id,
       name: aluno.name,
       synseId: aluno.synseId,
       planName: aluno.planName,
+      ...(comOTreino ? { jaTemOTreino: comOTreino.has(aluno.id) } : {}),
     }))
 
     /*

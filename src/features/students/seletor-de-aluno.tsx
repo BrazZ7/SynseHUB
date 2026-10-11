@@ -45,7 +45,7 @@ export function SeletorDeAluno({
   inicial,
   somenteAtivos = true,
   excluir,
-  anotacoes,
+  anotarTreino,
   erros,
   obrigatorio = true,
 }: {
@@ -56,8 +56,12 @@ export function SeletorDeAluno({
   somenteAtivos?: boolean
   /** Ids que não podem ser escolhidos — já reservados, já matriculados. */
   excluir?: string[]
-  /** Recado por aluno, do tipo "já tem este treino". */
-  anotacoes?: Record<string, string>
+  /**
+   * A ficha que a tela está atribuindo. Com ela, quem já tem o treino vem
+   * marcado — e a marca vem do servidor, junto do resultado da busca, em vez
+   * da tela receber antes a lista de todos que têm a ficha.
+   */
+  anotarTreino?: string
   erros?: string[]
   obrigatorio?: boolean
 }) {
@@ -88,7 +92,7 @@ export function SeletorDeAluno({
      */
     const tempo = setTimeout(() => {
       iniciarBusca(async () => {
-        const resultado = await buscarAlunosAction(termo, somenteAtivos)
+        const resultado = await buscarAlunosAction(termo, somenteAtivos, anotarTreino)
         if (resultado.ok) {
           setAlunos(resultado.alunos)
           setTotal(resultado.total)
@@ -102,7 +106,7 @@ export function SeletorDeAluno({
     }, ESPERA_MS)
 
     return () => clearTimeout(tempo)
-  }, [termo, aberto, somenteAtivos])
+  }, [termo, aberto, somenteAtivos, anotarTreino])
 
   // ── Fechar ao clicar fora ──────────────────────────────────────────────────
   useEffect(() => {
@@ -224,7 +228,7 @@ export function SeletorDeAluno({
                         <span className="block truncate text-xs text-synse-muted">
                           {aluno.synseId}
                           {aluno.planName && ` · ${aluno.planName}`}
-                          {anotacoes?.[aluno.id] && ` · ${anotacoes[aluno.id]}`}
+                          {aluno.jaTemOTreino && ' · já tem este treino'}
                         </span>
                       </span>
                     </button>

@@ -762,10 +762,18 @@ export interface DataSource {
   }): Promise<WorkoutAssignment>
 
   listAssignmentsForStudent(organizationId: string, studentId: string): Promise<WorkoutAssignment[]>
-  /** Quem já recebeu um treino. Uma consulta, em vez de uma por aluno. */
+  /**
+   * Quem já recebeu um treino, entre os alunos perguntados.
+   *
+   * `studentIds` é obrigatório e é o que dá teto: a pergunta é sempre "destes
+   * aqui, quem já tem?", nunca "quem tem, no mundo". Sem ele, uma ficha
+   * atribuída à academia inteira devolvia a academia inteira — e ia parar no
+   * HTML da tela, só para anotar doze nomes.
+   */
   listAssignmentsForPlan(
     organizationId: string,
     workoutPlanId: string,
+    studentIds: readonly string[],
   ): Promise<WorkoutAssignment[]>
   countAssignments(organizationId: string): Promise<Record<string, number>>
   /**

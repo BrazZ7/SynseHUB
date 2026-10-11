@@ -22,10 +22,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  * 4. **O `total` é o do cadastro**, não o da página — é o que deixa a tela
  *    dizer "mostrando 12 de 83" em vez de calar sobre o corte, que foi
  *    exatamente o defeito do `<select>`.
+ * 5. **A anotação "já tem este treino" pergunta pelos alunos da tela**, e não
+ *    pela academia. A tela de atribuir treino lia antes toda atribuição da
+ *    ficha e mandava a lista de ids ao navegador; numa ficha dada a todos,
+ *    isso é a academia inteira no HTML para anotar doze nomes.
  */
 
-const dataSource = { listStudents: vi.fn() }
-const permissao = { negar: false }
+const dataSource = { listStudents: vi.fn(), listAssignmentsForPlan: vi.fn() }
+const permissao = { negar: false, negadas: new Set<string>(), pedidas: [] as string[] }
 
 vi.mock('@/lib/auth/require-session', () => ({
   requireHubSession: async () => ({
@@ -36,8 +40,9 @@ vi.mock('@/lib/auth/require-session', () => ({
 }))
 
 vi.mock('@/lib/permissions/guard', () => ({
-  requirePermission: () => {
-    if (permissao.negar) {
+  requirePermission: (_sessao: unknown, permissaoPedida: string) => {
+    permissao.pedidas.push(permissaoPedida)
+    if (permissao.negar || permissao.negadas.has(permissaoPedida)) {
       const erro = new Error('sem permissão') as Error & { userMessage: string }
       erro.name = 'AppError'
       throw erro
@@ -62,10 +67,16 @@ const ALUNO = {
   status: 'ACTIVE',
 }
 
+const OUTRO = { ...ALUNO, id: 'stu_2', name: 'Ana Cardoso', synseId: 'SYN-2' }
+
 beforeEach(() => {
   permissao.negar = false
+  permissao.negadas = new Set()
+  permissao.pedidas = []
   dataSource.listStudents.mockReset()
   dataSource.listStudents.mockResolvedValue({ rows: [ALUNO], total: 478, page: 1, pageSize: 12 })
+  dataSource.listAssignmentsForPlan.mockReset()
+  dataSource.listAssignmentsForPlan.mockResolvedValue([])
 })
 
 describe('buscarAlunosAction', () => {
@@ -140,5 +151,84 @@ describe('buscarAlunosAction', () => {
 
     const [, filtros] = dataSource.listStudents.mock.calls[0]
     expect(filtros.search.length).toBeLessThanOrEqual(80)
+  })
+})
+
+describe('a anotação "já tem este treino"', () => {
+  it('não acontece quando a tela não está atribuindo ficha', async () => {
+    // Quatro das cinco telas que usam o seletor não têm treino nenhum em
+    // vista. Para elas, a pergunta extra seria uma ida ao banco por nada.
+    const r = await buscarAlunosAction('sofia')
+
+    expect(dataSource.listAssignmentsForPlan).not.toHaveBeenCalled()
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(Object.keys(r.alunos[0])).not.toContain('jaTemOTreino')
+  })
+
+  it('pergunta só pelos alunos que a tela mostra', async () => {
+    /*
+     * O teto da anotação é o teto da página. É esta asserção que separa o
+     * conserto do defeito: a pergunta antiga era "quem tem esta ficha?", sem
+     * recorte; a nova é "destes aqui, quem tem?".
+     */
+    dataSource.listStudents.mockResolvedValue({
+      rows: [ALUNO, OUTRO],
+      total: 478,
+      page: 1,
+      pageSize: 12,
+    })
+
+    await buscarAlunosAction('', true, 'plan_1')
+
+    expect(dataSource.listAssignmentsForPlan).toHaveBeenCalledWith('org-da-sessao', 'plan_1', [
+      'stu_1',
+      'stu_2',
+    ])
+  })
+
+  it('marca quem tem a ficha e deixa o resto sem marca', async () => {
+    dataSource.listStudents.mockResolvedValue({
+      rows: [ALUNO, OUTRO],
+      total: 2,
+      page: 1,
+      pageSize: 12,
+    })
+    dataSource.listAssignmentsForPlan.mockResolvedValue([
+      { id: 'asg_1', organizationId: 'org-da-sessao', workoutPlanId: 'plan_1', studentId: 'stu_2' },
+    ])
+
+    const r = await buscarAlunosAction('', true, 'plan_1')
+
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.alunos.map((a) => [a.id, a.jaTemOTreino])).toEqual([
+      ['stu_1', false],
+      ['stu_2', true],
+    ])
+  })
+
+  it('página vazia não gera pergunta', async () => {
+    dataSource.listStudents.mockResolvedValue({ rows: [], total: 0, page: 1, pageSize: 12 })
+
+    await buscarAlunosAction('zzz', true, 'plan_1')
+
+    expect(dataSource.listAssignmentsForPlan).not.toHaveBeenCalled()
+  })
+
+  it('exige a permissão de treino, não só a de aluno', async () => {
+    /*
+     * "Quem tem qual ficha" é dado de treino. Quem tem `students:read` e não
+     * tem `workouts:read` pode buscar aluno — não pode descobrir, aluno por
+     * aluno, quem recebeu uma prescrição.
+     */
+    permissao.negadas = new Set(['workouts:read'])
+
+    const r = await buscarAlunosAction('sofia', true, 'plan_1')
+
+    expect(r.ok).toBe(false)
+    expect(dataSource.listAssignmentsForPlan).not.toHaveBeenCalled()
+    expect(dataSource.listStudents).not.toHaveBeenCalled()
+    expect(permissao.pedidas).toContain('workouts:read')
   })
 })

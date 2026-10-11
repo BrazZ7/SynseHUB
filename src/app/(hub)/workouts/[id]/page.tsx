@@ -47,14 +47,13 @@ export default async function WorkoutDetailPage({ params }: { params: Params }) 
   /*
    * Quem já tem este treino é marcado na lista, não removido dela: reatribuir
    * renova a validade, e esconder o aluno faria parecer que ele sumiu.
+   *
+   * A marca saiu desta página. Ela lia **todas** as atribuições da ficha —
+   * sem teto, e numa ficha dada à academia inteira isso é a academia inteira
+   * — e mandava a lista de ids ao navegador para anotar os doze nomes que o
+   * seletor mostra. Agora quem anota é a própria busca, no servidor, que já
+   * sabe quais doze são.
    */
-  const jaAtribuido = new Set(
-    podeAtribuir
-      ? (await dataSource.listAssignmentsForPlan(session.organizationId, plan.id)).map(
-          (atribuicao) => atribuicao.studentId,
-        )
-      : [],
-  )
 
   return (
     <div className="mx-auto max-w-4xl animate-fade-in-up space-y-5">
@@ -134,7 +133,7 @@ export default async function WorkoutDetailPage({ params }: { params: Params }) 
                 O aluno recebe o aviso no sino e o treino aparece no app dele.
               </p>
             </div>
-            <AssignWorkoutCard workoutPlanId={plan.id} jaAtribuido={[...jaAtribuido]} />
+            <AssignWorkoutCard workoutPlanId={plan.id} />
           </CardContent>
         </Card>
       )}

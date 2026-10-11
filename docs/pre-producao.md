@@ -915,6 +915,40 @@ A dívida foi de **5 para 4**.
 `tests/unit/schedule/reservas-da-janela.test.ts`: 4 testes, 2 mutações, as duas
 pegas.
 
+### A anotação "já tem este treino" parou de carregar a academia
+
+`listAssignmentsForPlan` lia **toda** atribuição de uma ficha, sem teto. A
+única razão de existir era escrever "já tem este treino" ao lado de doze nomes
+no seletor de aluno — e para isso a página mandava ao navegador a lista inteira
+de ids de quem tem a ficha.
+
+O defeito era duplo. Numa academia que dá a mesma ficha de iniciante a todo
+mundo, "toda atribuição da ficha" é a academia inteira: lida sem teto e
+despejada no HTML. E quando o PostgREST cortasse, o sintoma não seria erro —
+seria um aluno que já tem o treino aparecendo sem a marca, e o professor
+atribuindo de novo achando que era a primeira vez.
+
+A anotação passou a nascer onde se sabe **quais** doze alunos a tela mostra: na
+própria busca. `buscarAlunosAction` recebe o id da ficha, pergunta ao banco
+"destes aqui, quem já tem?" com os ids da página, e devolve `jaTemOTreino` por
+aluno. A assinatura mudou para exigir isso: `studentIds` é obrigatório, e é ele
+que dá o teto — sem alunos, não há consulta.
+
+Junto veio uma permissão que faltava: "quem tem qual ficha" é dado de treino, e
+a busca só pedia `students:read`. Agora, quando vem id de ficha, ela também
+exige `workouts:read` — quem só atende o balcão pode achar aluno, não pode
+varrer quem recebeu prescrição.
+
+A dívida foi de **4 para 3**. Restam `listOrganizations`, `listExercises` e
+`listWorkoutPlans`.
+
+`tests/unit/workouts/atribuicao-anotada.test.ts`: 7 testes (4 contra o PostgREST
+de mentira, 3 contra a demonstração) e `tests/unit/students/busca-de-aluno.test.ts`
+cresceu de 7 para 12. Quatro mutações, todas pegas: tirar o `.in(student_id, …)`,
+fazer a demonstração ignorar os ids, tirar o guarda de `workouts:read`, e anotar
+sempre — esta última pega por dois testes, inclusive o que já existia cobrando
+que o seletor não leve campo a mais.
+
 ### As avaliações com teto escrito, e a altura numa linha só
 
 `listAssessments` lia o histórico inteiro de um aluno, e a ficha usava essa

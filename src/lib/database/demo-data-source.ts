@@ -1374,11 +1374,16 @@ export class DemoDataSource implements DataSource {
   async listAssignmentsForPlan(
     organizationId: string,
     workoutPlanId: string,
+    studentIds: readonly string[],
   ): Promise<WorkoutAssignment[]> {
+    // Pergunta sem aluno nenhum não varre nada.
+    if (studentIds.length === 0) return []
+
+    const perguntados = new Set(studentIds)
     return this.scoped(
       [...this.db.workoutAssignments, ...this.addedAssignments],
       organizationId,
-    ).filter((a) => a.workoutPlanId === workoutPlanId)
+    ).filter((a) => a.workoutPlanId === workoutPlanId && perguntados.has(a.studentId))
   }
 
   async createWorkoutPlan(input: {

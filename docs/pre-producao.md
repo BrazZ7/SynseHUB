@@ -895,6 +895,39 @@ existem, não para conferir se subiram.
   mudar) — as três pegas. Cinco dos nove testes existem só para provar o que a
   migration **não** pode quebrar.
 
+### Os dois acervos por página, sem migration
+
+`listContent` e `listSynseContent` liam o acervo inteiro e a tela repartia na
+aplicação — publicados, agendados e rascunhos, com o tamanho de cada grupo
+virando o número do cartão. É o defeito da 0049 outra vez: a leitura não tinha
+teto, o PostgREST corta sem erro, e numa academia que publica há anos as três
+contagens ficariam menores que a verdade. Um rascunho esquecido sumiria sem
+deixar rastro — e rascunho esquecido é exatamente o que alguém procura nessa
+tela.
+
+**Sem migration, e isso foi escolha.** As contagens são filtros simples sobre
+`published_at`, então saem de consultas `head: true` — contam no servidor sem
+trazer linha nenhuma. Uma função no banco só se justificaria se a conta fosse
+cara ou tivesse regra; aqui não tem.
+
+No painel da academia as três seções viraram **filtro** com contagem ao lado,
+e a lista ganhou página. O filtro é elo, não botão: o estado vive na URL, então
+recarregar e compartilhar o endereço continuam valendo.
+
+No acervo da plataforma os cartões passaram de três para quatro. Antes
+"Rascunhos" era `total − no ar`, então o que estava **agendado** entrava ali —
+um conteúdo que sai sozinho na terça contado como rascunho. Dava para conviver
+com isso enquanto o número saía de uma conta na aplicação; com o banco
+distinguindo as três situações, juntar duas seria escolher mostrar errado.
+
+A dívida de `tests/unit/leitura-sem-teto.test.ts` foi de **9 para 7**.
+
+`tests/unit/content/acervo-sem-corte.test.ts`: 15 testes, 4 mutações. Uma delas
+**sobreviveu** na primeira tentativa — a demonstração contando a página em vez
+do conjunto passava, porque o acervo de demonstração cabe inteiro numa página e
+`pageSize` tem piso de 5. A asserção virou outra: uma página além do fim vem
+vazia e o total continua de pé. Essa não depende de quantos itens existem.
+
 ### A demonstração parou de mentir sobre o que foi salvo
 
 Duas correções sem migration, as duas encontradas construindo a importação de

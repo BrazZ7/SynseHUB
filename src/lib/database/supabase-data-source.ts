@@ -16,6 +16,11 @@ import {
   janelaDaFaixa,
   type OverdueBucket,
 } from '@/features/payments/faixas-de-atraso'
+import {
+  CONTEUDOS_POR_PAGINA,
+  type ContagemDeConteudo,
+  type FiltroDeSituacao,
+} from '@/features/content/situacao'
 import { isPendingMigration } from '@/lib/database/pending-migration'
 import { logger } from '@/lib/logger'
 import { daysBetween } from '@/lib/utils'
@@ -31,6 +36,7 @@ import type {
   OverdueSummary,
   CheckInWithStudent,
   DataSource,
+  ContentFilters,
   Paginated,
   PairUserDeviceInput,
   SaveActivityInput,
@@ -2725,18 +2731,126 @@ export class SupabaseDataSource implements DataSource {
   private static readonly CONTEUDO_SELECT =
     '*, staff:author_staff_id(user_profiles:user_profile_id(name))'
 
-  async listContent(organizationId: string): Promise<ContentItem[]> {
-    const rows =
-      (await this.select<Row[]>(
-        'listContent',
-        this.client
-          .from('content_library')
-          .select(SupabaseDataSource.CONTEUDO_SELECT)
-          .eq('organization_id', organizationId)
-          .order('pinned', { ascending: false })
-          .order('created_at', { ascending: false }),
-      )) ?? []
-    return rows.map((row) => this.mapContent(row))
+  /**
+   * ── O acervo por página, e a situação filtrada no banco ──────────────────
+   *
+   * Não existe coluna `status`: a situação sai de `published_at` comparado com
+   * agora. Antes a tela lia tudo e repartia na aplicação — três contagens
+   * sobre uma leitura que o PostgREST corta sem avisar. Numa academia que
+   * publica há anos, "Rascunhos" mostraria só os que coubessem no corte, e um
+   * rascunho esquecido some sem deixar rastro.
+   */
+  private recorteDeSituacao<Q extends { is: unknown; lte: unknown; gt: unknown }>(
+    query: Q,
+    situacao: FiltroDeSituacao | undefined,
+    agora: string,
+  ): Q {
+    type ComFiltros = {
+      is: (coluna: string, valor: null) => Q
+      lte: (coluna: string, valor: string) => Q
+      gt: (coluna: string, valor: string) => Q
+    }
+    const q = query as unknown as ComFiltros
+
+    if (situacao === 'RASCUNHO') return q.is('published_at', null)
+    if (situacao === 'PUBLICADO') return q.lte('published_at', agora)
+    if (situacao === 'AGENDADO') return q.gt('published_at', agora)
+    return query
+  }
+
+  async listContent(
+    organizationId: string,
+    filters: ContentFilters = {},
+  ): Promise<Paginated<ContentItem>> {
+    return this.paginaDeConteudo('listContent', filters, 'organization_id', organizationId)
+  }
+
+  async listSynseContent(filters: ContentFilters = {}): Promise<Paginated<ContentItem>> {
+    return this.paginaDeConteudo('listSynseContent', filters, 'organization_id', null)
+  }
+
+  /**
+   * O corpo comum das duas listagens: só o dono muda.
+   *
+   * A consulta é montada aqui dentro, e não num ajudante — um ajudante que
+   * devolvesse a consulta sem `.range()` seria, para o guarda de
+   * `tests/unit/leitura-sem-teto.test.ts`, mais uma leitura sem teto. Ele
+   * estaria certo: só quem vê o `.range()` pode afirmar que há teto.
+   */
+  private async paginaDeConteudo(
+    operacao: string,
+    filters: ContentFilters,
+    coluna: 'organization_id',
+    dono: string | null,
+  ): Promise<Paginated<ContentItem>> {
+    const page = Math.max(1, filters.page ?? 1)
+    const pageSize = Math.min(200, Math.max(5, filters.pageSize ?? CONTEUDOS_POR_PAGINA))
+    const de = (page - 1) * pageSize
+
+    const base = this.client
+      .from('content_library')
+      .select(SupabaseDataSource.CONTEUDO_SELECT, { count: 'exact' })
+    const comDono = dono === null ? base.is(coluna, null) : base.eq(coluna, dono)
+    const comSituacao = this.recorteDeSituacao(comDono, filters.situacao, new Date().toISOString())
+
+    const { data, error, count } = await comSituacao
+      .order('pinned', { ascending: false })
+      .order('created_at', { ascending: false })
+      .range(de, de + pageSize - 1)
+
+    if (error) this.fail(operacao, error)
+
+    return {
+      rows: ((data ?? []) as Row[]).map((row) => this.mapContent(row)),
+      total: count ?? 0,
+      page,
+      pageSize,
+    }
+  }
+
+  /**
+   * As contagens, sobre o conjunto inteiro.
+   *
+   * Quatro consultas de contagem com `head: true` — nenhuma linha trafega, só
+   * o número. É o que permite a lista ter página e os cartões continuarem
+   * dizendo a verdade sobre a academia toda, que é a lição da 0049.
+   */
+  private async contarConteudoDe(
+    operacao: string,
+    dono: string | null,
+  ): Promise<ContagemDeConteudo> {
+    const agora = new Date().toISOString()
+    const conta = async (situacao: FiltroDeSituacao, soPlus = false) => {
+      const base = this.client.from('content_library').select('id', { count: 'exact', head: true })
+      let q = dono === null ? base.is('organization_id', null) : base.eq('organization_id', dono)
+      q = this.recorteDeSituacao(q, situacao, agora)
+      if (soPlus) q = q.eq('visibility', 'SYNSE_PLUS')
+
+      const { count, error } = await q
+      if (error) {
+        if (!isPendingMigration(error)) this.fail(operacao, error)
+        return 0
+      }
+      return count ?? 0
+    }
+
+    const [total, publicados, agendados, rascunhos, doPlus] = await Promise.all([
+      conta('TODOS'),
+      conta('PUBLICADO'),
+      conta('AGENDADO'),
+      conta('RASCUNHO'),
+      conta('PUBLICADO', true),
+    ])
+
+    return { total, publicados, agendados, rascunhos, doPlus }
+  }
+
+  async contarConteudos(organizationId: string): Promise<ContagemDeConteudo> {
+    return this.contarConteudoDe('contarConteudos', organizationId)
+  }
+
+  async contarAcervoSynse(): Promise<ContagemDeConteudo> {
+    return this.contarConteudoDe('contarAcervoSynse', null)
   }
 
   async getContent(organizationId: string, contentId: string) {
@@ -3318,20 +3432,6 @@ export class SupabaseDataSource implements DataSource {
    * publicado. Quem não é plataforma recebe lista vazia pela RLS — é o banco
    * negando, não esta consulta.
    */
-  async listSynseContent(): Promise<ContentItem[]> {
-    const rows =
-      (await this.select<Row[]>(
-        'listSynseContent',
-        this.client
-          .from('content_library')
-          .select(SupabaseDataSource.CONTEUDO_SELECT)
-          .is('organization_id', null)
-          .order('pinned', { ascending: false })
-          .order('created_at', { ascending: false }),
-      )) ?? []
-    return rows.map((row) => this.mapContent(row))
-  }
-
   /**
    * Um item do acervo, para a tela de edição.
    *

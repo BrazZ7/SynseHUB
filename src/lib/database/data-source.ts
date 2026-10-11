@@ -1,4 +1,5 @@
 import type { OverdueBucket } from '@/features/payments/faixas-de-atraso'
+import type { ContagemDeConteudo, FiltroDeSituacao } from '@/features/content/situacao'
 import type { BodySeriesPoint } from '@/features/synse-body/baldes-da-serie'
 import type {
   Activity,
@@ -405,6 +406,13 @@ export type OverdueSummary = {
   /** A soma dos dias de atraso. A média é `dias / cobrancas`, na tela. */
   dias: number
   porFaixa: Record<OverdueBucket, number>
+}
+
+/** O recorte que as telas de conteúdo pedem. */
+export type ContentFilters = {
+  situacao?: FiltroDeSituacao
+  page?: number
+  pageSize?: number
 }
 
 export type Paginated<T> = {
@@ -1015,7 +1023,16 @@ export interface DataSource {
 
   // Conteúdos
   /** Tudo que a academia escreveu, rascunho incluído. Só a equipe enxerga. */
-  listContent(organizationId: string): Promise<ContentItem[]>
+  /**
+   * O acervo de uma academia, por página.
+   *
+   * Lia tudo e a tela repartia em publicados, agendados e rascunhos — três
+   * contagens feitas sobre uma leitura que o PostgREST corta em silêncio. A
+   * situação agora é filtro do banco, e os números vêm de `contarConteudos`.
+   */
+  listContent(organizationId: string, filters?: ContentFilters): Promise<Paginated<ContentItem>>
+  /** Quantos de cada situação, contados sobre a academia inteira. */
+  contarConteudos(organizationId: string): Promise<ContagemDeConteudo>
   getContent(organizationId: string, contentId: string): Promise<ContentItem | null>
   saveContent(input: SaveContentInput): Promise<ContentItem>
   deleteContent(organizationId: string, contentId: string): Promise<void>
@@ -1117,7 +1134,10 @@ export interface DataSource {
 
   // Acervo Synse — conteúdo da plataforma, sem dono. Só conta de plataforma.
   /** Tudo que a plataforma escreveu, rascunho incluído. */
-  listSynseContent(): Promise<ContentItem[]>
+  /** O acervo da plataforma, por página. Mesma razão de `listContent`. */
+  listSynseContent(filters?: ContentFilters): Promise<Paginated<ContentItem>>
+  /** Quantos de cada situação no acervo da plataforma. */
+  contarAcervoSynse(): Promise<ContagemDeConteudo>
   getSynseContent(contentId: string): Promise<ContentItem | null>
   saveSynseContent(input: SaveSynseContentInput): Promise<string>
   deleteSynseContent(contentId: string): Promise<void>

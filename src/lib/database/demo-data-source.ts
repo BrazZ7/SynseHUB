@@ -20,6 +20,7 @@ import type {
   PairUserDeviceInput,
   CheckInWithStudent,
   DataSource,
+  ContentFilters,
   Paginated,
   SaveActivityInput,
   SaveAssessmentInput,
@@ -35,6 +36,12 @@ import type {
   StudentListItem,
 } from '@/lib/database/data-source'
 import { DEMO_ORG_ID, getDemoDataset } from '@/lib/database/demo-seed'
+import {
+  CONTAGEM_VAZIA,
+  CONTEUDOS_POR_PAGINA,
+  type ContagemDeConteudo,
+  situacaoDoConteudo,
+} from '@/features/content/situacao'
 import { appendDemoMutation, type DemoMutation } from '@/lib/database/demo-journal'
 import { BASELINE_CHALLENGES, currentCycle } from '@/lib/baseline/challenges'
 import { CONSENT_DOCUMENTS } from '@/lib/consents/catalog'
@@ -2573,14 +2580,20 @@ export class DemoDataSource implements DataSource {
     )
   }
 
-  async listContent(organizationId: string): Promise<ContentItem[]> {
+  async listContent(
+    organizationId: string,
+    filters: ContentFilters = {},
+  ): Promise<Paginated<ContentItem>> {
     this.montarConteudos()
-    return this.demoContent
-      .filter((c) => c.organizationId === organizationId)
-      .sort((a, b) => {
-        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
-        return b.createdAt.localeCompare(a.createdAt)
-      })
+    return paginarConteudo(
+      this.demoContent.filter((c) => c.organizationId === organizationId),
+      filters,
+    )
+  }
+
+  async contarConteudos(organizationId: string): Promise<ContagemDeConteudo> {
+    this.montarConteudos()
+    return contarConteudo(this.demoContent.filter((c) => c.organizationId === organizationId))
   }
 
   async getContent(organizationId: string, contentId: string) {
@@ -2696,12 +2709,14 @@ export class DemoDataSource implements DataSource {
     )
   }
 
-  async listSynseContent(): Promise<ContentItem[]> {
+  async listSynseContent(filters: ContentFilters = {}): Promise<Paginated<ContentItem>> {
     this.montarAcervo()
-    return [...this.demoAcervo].sort((a, b) => {
-      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
-      return b.createdAt.localeCompare(a.createdAt)
-    })
+    return paginarConteudo(this.demoAcervo, filters)
+  }
+
+  async contarAcervoSynse(): Promise<ContagemDeConteudo> {
+    this.montarAcervo()
+    return contarConteudo(this.demoAcervo)
   }
 
   async getSynseContent(contentId: string): Promise<ContentItem | null> {
@@ -2760,7 +2775,15 @@ export class DemoDataSource implements DataSource {
    */
   private async publicados(organizationId: string): Promise<ContentItem[]> {
     this.montarAcervo()
-    const daAcademia = await this.listContent(organizationId)
+    this.montarConteudos()
+    /*
+     * Direto do arranjo, e não por `listContent`: aquela agora devolve uma
+     * página, e o que o aluno vê é a junção do acervo da academia com o da
+     * plataforma — recortar antes de juntar deixaria de fora o que coubesse
+     * fora da primeira página. Na demonstração tudo está em memória, então
+     * não há teto a respeitar aqui.
+     */
+    const daAcademia = this.demoContent.filter((c) => c.organizationId === organizationId)
     const agora = new Date().toISOString()
 
     // Mesma regra da produção: rascunho e agendado ficam de fora, e o que é
@@ -4738,6 +4761,55 @@ function inicioDoPeriodoDemo(period: BodyPeriod, agora = new Date()): number | n
       return null
   }
   return data.getTime()
+}
+
+/**
+ * A ordem do acervo: fixado primeiro, depois o mais novo.
+ *
+ * A mesma do Supabase (`order('pinned')` e `order('created_at')`), e repetida
+ * aqui porque a demonstração não tem banco. Se divergirem, a demonstração
+ * ensina uma ordem que o produto não tem.
+ */
+function ordenarConteudo(itens: readonly ContentItem[]): ContentItem[] {
+  return [...itens].sort((a, b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
+    return b.createdAt.localeCompare(a.createdAt)
+  })
+}
+
+/** Uma página do acervo, com o total do conjunto filtrado — nunca o da página. */
+function paginarConteudo(
+  itens: readonly ContentItem[],
+  filters: ContentFilters,
+): Paginated<ContentItem> {
+  const agora = new Date()
+  const situacao = filters.situacao ?? 'TODOS'
+  const filtrados = ordenarConteudo(itens).filter(
+    (c) => situacao === 'TODOS' || situacaoDoConteudo(c, agora) === situacao,
+  )
+
+  const page = Math.max(1, filters.page ?? 1)
+  const pageSize = Math.min(200, Math.max(5, filters.pageSize ?? CONTEUDOS_POR_PAGINA))
+  const de = (page - 1) * pageSize
+
+  return { rows: filtrados.slice(de, de + pageSize), total: filtrados.length, page, pageSize }
+}
+
+/** As contagens, sobre o conjunto inteiro — é esse o ponto delas. */
+function contarConteudo(itens: readonly ContentItem[]): ContagemDeConteudo {
+  const agora = new Date()
+  const contagem = { ...CONTAGEM_VAZIA, total: itens.length }
+
+  for (const item of itens) {
+    const situacao = situacaoDoConteudo(item, agora)
+    if (situacao === 'PUBLICADO') {
+      contagem.publicados += 1
+      if (item.visibility === 'SYNSE_PLUS') contagem.doPlus += 1
+    } else if (situacao === 'AGENDADO') contagem.agendados += 1
+    else contagem.rascunhos += 1
+  }
+
+  return contagem
 }
 
 /** Uma página do histórico de pesagens, sobre a lista já recortada e ordenada. */

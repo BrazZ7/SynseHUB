@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { SynseContentForm } from '@/features/content/synse-content-form'
 import { AcervoRow } from '@/features/content/acervo-row'
+import { Pagination } from '@/components/synse/pagination'
+import { CONTEUDOS_POR_PAGINA } from '@/features/content/situacao'
 import { requirePlatformSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 import { TIPOS } from '@/lib/validations/content'
@@ -27,15 +29,35 @@ export const metadata: Metadata = { title: 'Acervo Synse' }
  * o que sai daqui chega a toda a base, em qualquer academia e também a quem
  * treina sozinho.
  */
-export default async function AcervoPage() {
+type Search = Promise<{ page?: string }>
+
+/**
+ * A lista tem página, e os três números não.
+ *
+ * Antes o acervo inteiro vinha numa leitura sem teto e os cartões contavam
+ * sobre o arranjo. O acervo da plataforma cresce com o catálogo, e é
+ * exatamente o tipo de conjunto que um dia encosta no corte silencioso do
+ * PostgREST — aí os três números ficariam menores que a verdade sem nada na
+ * tela dizendo isso.
+ *
+ * Sem filtro de situação aqui, ao contrário do painel da academia: esta tela
+ * tem o formulário de publicação logo abaixo, e quem publica quer ver o que
+ * acabou de sair. A ordem já põe o mais novo primeiro.
+ */
+export default async function AcervoPage({ searchParams }: { searchParams: Search }) {
   await requirePlatformSession()
 
   const dataSource = await getDataSource()
-  const itens = await dataSource.listSynseContent()
+  const { page } = await searchParams
+  const pagina = Math.max(1, Number.parseInt(page ?? '1', 10) || 1)
+
+  const [lista, contagem] = await Promise.all([
+    dataSource.listSynseContent({ page: pagina, pageSize: CONTEUDOS_POR_PAGINA }),
+    dataSource.contarAcervoSynse(),
+  ])
 
   const agora = new Date().toISOString()
-  const noAr = itens.filter((i) => i.publishedAt !== null && i.publishedAt <= agora)
-  const doPlus = noAr.filter((i) => i.visibility === 'SYNSE_PLUS')
+  const itens = lista.rows
 
   return (
     <div className="animate-fade-in-up space-y-6">
@@ -48,11 +70,21 @@ export default async function AcervoPage() {
         />
       </div>
 
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      {/*
+        Quatro cartões, e não três.
+
+        Antes "Rascunhos" era `total - no ar`, então o que estava **agendado**
+        entrava ali — um conteúdo que vai sair sozinho na terça contado como
+        rascunho. Dava para viver com isso enquanto os números saíam de uma
+        contagem na aplicação; agora que o banco distingue as três situações,
+        juntar duas seria escolher mostrar errado.
+      */}
+      <section className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         {[
-          { rotulo: 'No ar', valor: noAr.length },
-          { rotulo: 'Só assinantes', valor: doPlus.length },
-          { rotulo: 'Rascunhos', valor: itens.length - noAr.length },
+          { rotulo: 'No ar', valor: contagem.publicados },
+          { rotulo: 'Agendados', valor: contagem.agendados },
+          { rotulo: 'Só assinantes', valor: contagem.doPlus },
+          { rotulo: 'Rascunhos', valor: contagem.rascunhos },
         ].map(({ rotulo, valor }) => (
           <div
             key={rotulo}
@@ -73,7 +105,7 @@ export default async function AcervoPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {itens.length === 0 ? (
+          {contagem.total === 0 ? (
             <EmptyState
               icon={Library}
               title="O acervo está vazio"
@@ -124,6 +156,8 @@ export default async function AcervoPage() {
               })}
             </ul>
           )}
+
+          <Pagination page={pagina} pageSize={CONTEUDOS_POR_PAGINA} total={lista.total} />
         </CardContent>
       </Card>
 

@@ -408,6 +408,14 @@ export type OverdueSummary = {
   porFaixa: Record<OverdueBucket, number>
 }
 
+/** O recorte que a biblioteca de receitas pede. */
+export type RecipeFilters = {
+  /** O código da categoria (`ALMOCO`, `CAFE`…). Ausente é o catálogo todo. */
+  categoria?: string
+  page?: number
+  pageSize?: number
+}
+
 /** O recorte que as telas de conteúdo pedem. */
 export type ContentFilters = {
   situacao?: FiltroDeSituacao
@@ -1108,7 +1116,16 @@ export interface DataSource {
    * A lista não precisa saber disso, e é por isso que não recebe o plano como
    * parâmetro — mesmo desenho de `listPrograms`.
    */
-  listRecipes(): Promise<Recipe[]>
+  /**
+   * A biblioteca de receitas, por página.
+   *
+   * Lia o catálogo inteiro, que cresce a cada publicação da Synse. A ordem é
+   * `category, title`, a mesma de sempre — quem reordena os grupos para a
+   * ordem do dia é a tela, com `ordemDaCategoria`.
+   */
+  listRecipes(filters?: RecipeFilters): Promise<Paginated<Recipe>>
+  /** Quantas receitas, e quantas são só de assinante. Sobre o catálogo todo. */
+  contarReceitas(): Promise<{ total: number; doPlus: number }>
   getRecipe(recipeId: string): Promise<Recipe | null>
   /** As receitas do Synse+ que esta conta não abre. Vazio para quem já lê. */
   listLockedRecipes(): Promise<ReceitaTrancadaTipo[]>

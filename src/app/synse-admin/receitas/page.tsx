@@ -9,6 +9,8 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { RecipeForm } from '@/features/recipes/recipe-form'
 import { rotuloDaCategoria } from '@/features/recipes/recipe-pieces'
+import { Pagination } from '@/components/synse/pagination'
+import { RECEITAS_POR_PAGINA } from '@/features/nutrition/receitas-por-pagina'
 import { requirePlatformSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 
@@ -22,12 +24,28 @@ export const metadata: Metadata = { title: 'Receitas Synse' }
  * painel da academia porque o alcance é o mesmo: o que sai daqui chega a toda
  * a base.
  */
-export default async function ReceitasAdminPage() {
+type Search = Promise<{ page?: string }>
+
+/**
+ * A lista tem página, e os dois números não.
+ *
+ * Antes o catálogo inteiro vinha numa leitura sem teto e os cartões contavam
+ * sobre o arranjo. A biblioteca cresce a cada publicação, e é o tipo de
+ * conjunto que um dia encosta no corte silencioso do PostgREST — aí os dois
+ * números ficariam menores que a verdade sem nada na tela dizendo isso.
+ */
+export default async function ReceitasAdminPage({ searchParams }: { searchParams: Search }) {
   await requirePlatformSession()
 
   const dataSource = await getDataSource()
-  const receitas = await dataSource.listRecipes()
-  const doPlus = receitas.filter((r) => r.visibility === 'SYNSE_PLUS')
+  const { page } = await searchParams
+  const pagina = Math.max(1, Number.parseInt(page ?? '1', 10) || 1)
+
+  const [lista, contagem] = await Promise.all([
+    dataSource.listRecipes({ page: pagina, pageSize: RECEITAS_POR_PAGINA }),
+    dataSource.contarReceitas(),
+  ])
+  const receitas = lista.rows
 
   return (
     <div className="animate-fade-in-up space-y-6">
@@ -42,8 +60,8 @@ export default async function ReceitasAdminPage() {
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {[
-          { rotulo: 'Publicadas', valor: receitas.length },
-          { rotulo: 'Só assinantes', valor: doPlus.length },
+          { rotulo: 'Publicadas', valor: contagem.total },
+          { rotulo: 'Só assinantes', valor: contagem.doPlus },
         ].map(({ rotulo, valor }) => (
           <div
             key={rotulo}
@@ -64,7 +82,7 @@ export default async function ReceitasAdminPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {receitas.length === 0 ? (
+          {contagem.total === 0 ? (
             <EmptyState
               icon={CookingPot}
               title="Nenhuma receita ainda"
@@ -103,6 +121,8 @@ export default async function ReceitasAdminPage() {
               ))}
             </ul>
           )}
+
+          <Pagination page={pagina} pageSize={RECEITAS_POR_PAGINA} total={lista.total} />
         </CardContent>
       </Card>
 

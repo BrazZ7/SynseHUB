@@ -895,6 +895,26 @@ existem, não para conferir se subiram.
   mudar) — as três pegas. Cinco dos nove testes existem só para provar o que a
   migration **não** pode quebrar.
 
+### A biblioteca de receitas por página
+
+Mesma família do acervo, e também sem migration. `listRecipes` lia o catálogo
+inteiro: a tela do aluno agrupava por refeição e a de plataforma contava os
+dois cartões sobre o arranjo lido.
+
+O risco aqui tem uma cara específica: com a leitura cortada, **um grupo inteiro
+some** da tela do aluno — sem erro, sem aviso, só uma refeição a menos para
+quem abriu o app perguntando o que cozinhar.
+
+A refeição virou filtro em fichas roláveis, e a lista tem página. "Todas"
+continua agrupando na ordem do dia. Enquanto o catálogo couber numa página isso
+não se nota; quando não couber, as páginas passam a seguir a ordem do **código**
+da categoria, que é como o banco ordena — e é para isso que as fichas existem.
+Está escrito no cabeçalho da tela.
+
+A dívida foi de **7 para 6**.
+
+`tests/unit/content/receitas-sem-corte.test.ts`: 10 testes, 3 mutações.
+
 ### Os dois acervos por página, sem migration
 
 `listContent` e `listSynseContent` liam o acervo inteiro e a tela repartia na

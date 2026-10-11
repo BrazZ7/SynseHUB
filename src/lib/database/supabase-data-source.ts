@@ -16,6 +16,7 @@ import {
   janelaDaFaixa,
   type OverdueBucket,
 } from '@/features/payments/faixas-de-atraso'
+import { RECEITAS_POR_PAGINA } from '@/features/nutrition/receitas-por-pagina'
 import {
   CONTEUDOS_POR_PAGINA,
   type ContagemDeConteudo,
@@ -38,6 +39,7 @@ import type {
   DataSource,
   ContentFilters,
   Paginated,
+  RecipeFilters,
   PairUserDeviceInput,
   SaveActivityInput,
   SaveAssessmentInput,
@@ -3302,17 +3304,49 @@ export class SupabaseDataSource implements DataSource {
     return Object.keys(limpo).length > 0 ? limpo : null
   }
 
-  async listRecipes(): Promise<Recipe[]> {
-    const linhas =
-      (await this.select<Row[]>(
-        'listRecipes',
-        this.client
-          .from('recipes')
-          .select('*')
-          .order('category', { ascending: true })
-          .order('title', { ascending: true }),
-      )) ?? []
-    return linhas.map((r) => this.mapReceita(r))
+  async listRecipes(filters: RecipeFilters = {}): Promise<Paginated<Recipe>> {
+    const page = Math.max(1, filters.page ?? 1)
+    const pageSize = Math.min(200, Math.max(5, filters.pageSize ?? RECEITAS_POR_PAGINA))
+    const de = (page - 1) * pageSize
+
+    let query = this.client.from('recipes').select('*', { count: 'exact' })
+    if (filters.categoria) query = query.eq('category', filters.categoria)
+
+    const { data, error, count } = await query
+      .order('category', { ascending: true })
+      .order('title', { ascending: true })
+      .range(de, de + pageSize - 1)
+
+    if (error) this.fail('listRecipes', error)
+
+    return {
+      rows: ((data ?? []) as Row[]).map((r) => this.mapReceita(r)),
+      total: count ?? 0,
+      page,
+      pageSize,
+    }
+  }
+
+  /**
+   * As duas contagens do catálogo, sem trazer linha.
+   *
+   * `head: true` é o que separa "contar" de "ler para contar" — sem ele, os
+   * dois números custariam duas leituras do catálogo inteiro, que é o que
+   * esta mudança existe para acabar.
+   */
+  async contarReceitas(): Promise<{ total: number; doPlus: number }> {
+    const conta = async (soPlus: boolean) => {
+      const base = this.client.from('recipes').select('id', { count: 'exact', head: true })
+      const { count, error } = await (soPlus ? base.eq('visibility', 'SYNSE_PLUS') : base)
+      if (error) {
+        if (!isPendingMigration(error)) this.fail('contarReceitas', error)
+        return 0
+      }
+      return count ?? 0
+    }
+
+    const [total, doPlus] = await Promise.all([conta(false), conta(true)])
+    return { total, doPlus }
   }
 
   async getRecipe(recipeId: string): Promise<Recipe | null> {

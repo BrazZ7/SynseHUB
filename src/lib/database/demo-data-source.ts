@@ -22,6 +22,7 @@ import type {
   DataSource,
   ContentFilters,
   Paginated,
+  RecipeFilters,
   SaveActivityInput,
   SaveAssessmentInput,
   LogWorkoutSetInput,
@@ -36,6 +37,7 @@ import type {
   StudentListItem,
 } from '@/lib/database/data-source'
 import { DEMO_ORG_ID, getDemoDataset } from '@/lib/database/demo-seed'
+import { RECEITAS_POR_PAGINA } from '@/features/nutrition/receitas-por-pagina'
 import {
   CONTAGEM_VAZIA,
   CONTEUDOS_POR_PAGINA,
@@ -3191,10 +3193,28 @@ export class DemoDataSource implements DataSource {
     )
   }
 
-  async listRecipes(): Promise<Recipe[]> {
-    return this.receitasVisiveis()
+  async listRecipes(filters: RecipeFilters = {}): Promise<Paginated<Recipe>> {
+    const ordenadas = this.receitasVisiveis()
       .slice()
       .sort((a, b) => a.category.localeCompare(b.category) || a.title.localeCompare(b.title))
+
+    const filtradas = filters.categoria
+      ? ordenadas.filter((r) => r.category === filters.categoria)
+      : ordenadas
+
+    const page = Math.max(1, filters.page ?? 1)
+    const pageSize = Math.min(200, Math.max(5, filters.pageSize ?? RECEITAS_POR_PAGINA))
+    const de = (page - 1) * pageSize
+
+    return { rows: filtradas.slice(de, de + pageSize), total: filtradas.length, page, pageSize }
+  }
+
+  async contarReceitas(): Promise<{ total: number; doPlus: number }> {
+    const visiveis = this.receitasVisiveis()
+    return {
+      total: visiveis.length,
+      doPlus: visiveis.filter((r) => r.visibility === 'SYNSE_PLUS').length,
+    }
   }
 
   async getRecipe(recipeId: string): Promise<Recipe | null> {

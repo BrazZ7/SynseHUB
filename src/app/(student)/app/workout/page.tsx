@@ -20,7 +20,15 @@ export default async function StudentWorkoutPage() {
     session.organizationId,
     session.studentId,
   )
-  const plans = await dataSource.listWorkoutPlans(session.organizationId)
+  /*
+   * As fichas atribuídas a este aluno, e não o catálogo da academia. A
+   * leitura antiga trazia todas as fichas da organização — sem teto — para
+   * nomear as duas ou três que o aluno tem.
+   */
+  const plans = await dataSource.listWorkoutPlansByIds(
+    session.organizationId,
+    assignments.map((assignment) => assignment.workoutPlanId),
+  )
   const planById = new Map(plans.map((plan) => [plan.id, plan]))
 
   const assigned = assignments

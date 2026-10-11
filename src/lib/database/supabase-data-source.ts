@@ -18,6 +18,7 @@ import {
 } from '@/features/payments/faixas-de-atraso'
 import { AVALIACOES_NA_FICHA } from '@/features/assessments/janela'
 import { RECEITAS_POR_PAGINA } from '@/features/nutrition/receitas-por-pagina'
+import { FICHAS_POR_PAGINA } from '@/features/workouts/por-pagina'
 import {
   CONTEUDOS_POR_PAGINA,
   type ContagemDeConteudo,
@@ -1559,6 +1560,24 @@ export class SupabaseDataSource implements DataSource {
     return rows.map((row) => this.mapExercise(row))
   }
 
+  /**
+   * O tamanho da biblioteca, contado pelo banco.
+   *
+   * A tela de treinos anunciava "biblioteca com N exercícios" lendo a
+   * biblioteca inteira e medindo o array. Além de trazer tudo para dizer um
+   * número, o número ficaria **errado** no dia em que o PostgREST cortasse —
+   * e errado para menos, que é o jeito de errar que ninguém estranha.
+   */
+  async countExercises(organizationId: string): Promise<number> {
+    const { count, error } = await this.client
+      .from('exercises')
+      .select('id', { count: 'exact', head: true })
+      .or(`organization_id.is.null,organization_id.eq.${organizationId}`)
+
+    if (error) this.fail('countExercises', error)
+    return count ?? 0
+  }
+
   private mapWorkoutPlan(row: Row): WorkoutPlan {
     return {
       id: row.id,
@@ -1572,14 +1591,52 @@ export class SupabaseDataSource implements DataSource {
     }
   }
 
-  async listWorkoutPlans(organizationId: string) {
+  /**
+   * As fichas da academia, por página.
+   *
+   * A leitura não tinha teto, e a ordem é por divisão: o corte do PostgREST
+   * não levaria "as mais antigas", levaria **todas as divisões do fim do
+   * alfabeto**. Um "Treino E — Pernas" deixaria de existir para a tela.
+   */
+  async listWorkoutPlans(
+    organizationId: string,
+    options: { page?: number; pageSize?: number } = {},
+  ): Promise<Paginated<WorkoutPlan>> {
+    const pageSize = Math.min(200, Math.max(5, options.pageSize ?? FICHAS_POR_PAGINA))
+    const page = Math.max(1, options.page ?? 1)
+    const inicio = (page - 1) * pageSize
+
+    const { data, error, count } = await this.client
+      .from('workout_plans')
+      .select('*', { count: 'exact' })
+      .eq('organization_id', organizationId)
+      .order('split_label')
+      .order('created_at', { ascending: false })
+      .range(inicio, inicio + pageSize - 1)
+
+    if (error) this.fail('listWorkoutPlans', error)
+
+    const rows = (data as Row[] | null) ?? []
+    return {
+      rows: rows.map((row) => this.mapWorkoutPlan(row)),
+      total: count ?? rows.length,
+      page,
+      pageSize,
+    }
+  }
+
+  async listWorkoutPlansByIds(organizationId: string, planIds: readonly string[]) {
+    // Aluno sem treino atribuído não gera consulta.
+    if (planIds.length === 0) return []
+
     const rows =
       (await this.select<Row[]>(
-        'listWorkoutPlans',
+        'listWorkoutPlansByIds',
         this.client
           .from('workout_plans')
           .select('*')
           .eq('organization_id', organizationId)
+          .in('id', [...new Set(planIds)])
           .order('split_label'),
       )) ?? []
     return rows.map((row) => this.mapWorkoutPlan(row))

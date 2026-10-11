@@ -116,7 +116,6 @@ export default async function StudentProfilePage({ params }: { params: Params })
     workoutLogs,
     totalDeRegistros,
     assessments,
-    workoutPlans,
     autorizacoesDoCorpo,
     pesagens,
     seriePesagens,
@@ -148,7 +147,6 @@ export default async function StudentProfilePage({ params }: { params: Params })
     canSeeHealth
       ? dataSource.listAssessments(session.organizationId, student.id)
       : Promise.resolve([]),
-    dataSource.listWorkoutPlans(session.organizationId),
     /*
      * ── As pesagens que o aluno compartilhou ──────────────────────────────
      *
@@ -204,6 +202,17 @@ export default async function StudentProfilePage({ params }: { params: Params })
   )
   const canWriteAssessments = can(session.role, 'assessments:write')
 
+  /*
+   * As fichas **deste aluno**. Esta tela lia todas as fichas da academia, sem
+   * teto, para escrever o nome das duas ou três que ele tem atribuídas — e
+   * quando o corte do PostgREST chegasse, a ficha de um aluno mostraria
+   * "Treino" sem nome no lugar do treino dele. Depois do lote, porque depende
+   * de `assignments`.
+   */
+  const workoutPlans = await dataSource.listWorkoutPlansByIds(
+    session.organizationId,
+    assignments.map((assignment) => assignment.workoutPlanId),
+  )
   const planById = new Map(workoutPlans.map((plan) => [plan.id, plan]))
   const latestAssessment = assessments[assessments.length - 1]
   const previousAssessment = assessments[assessments.length - 2]

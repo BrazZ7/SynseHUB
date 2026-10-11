@@ -28,10 +28,9 @@ export async function getStudentHome(
 ): Promise<StudentHomeData> {
   const dataSource = await getDataSource()
 
-  const [student, assignments, plans, checkIns, nextCharge, cargas] = await Promise.all([
+  const [student, assignments, checkIns, nextCharge, cargas] = await Promise.all([
     dataSource.getStudent(organizationId, studentId),
     dataSource.listAssignmentsForStudent(organizationId, studentId),
-    dataSource.listWorkoutPlans(organizationId),
     dataSource.listCheckInsForStudent(organizationId, studentId, 90),
     dataSource.getNextOpenCharge(organizationId, studentId),
     /*
@@ -42,6 +41,21 @@ export async function getStudentHome(
      */
     dataSource.getLoadProgress(organizationId, studentId),
   ])
+
+  /*
+   * As fichas **deste aluno**, e não as da academia.
+   *
+   * A home lia todas as fichas da organização para achar as duas ou três
+   * atribuídas. Sem teto, e numa academia de anos isso são centenas de linhas
+   * na tela mais aberta do produto — para nomear três. Agora a pergunta leva
+   * os ids das atribuições, então ela é limitada pelo aluno.
+   *
+   * Depois das outras, e não junto: ela depende de `assignments`.
+   */
+  const plans = await dataSource.listWorkoutPlansByIds(
+    organizationId,
+    assignments.map((assignment) => assignment.workoutPlanId),
+  )
 
   const planById = new Map(plans.map((plan) => [plan.id, plan]))
   const assignedPlans = assignments

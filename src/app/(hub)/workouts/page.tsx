@@ -4,6 +4,8 @@ import { CalendarRange, Dumbbell, Plus, Users } from 'lucide-react'
 
 import { EmptyState } from '@/components/synse/empty-state'
 import { PageHeader } from '@/components/synse/page-header'
+import { Pagination } from '@/components/synse/pagination'
+import { FICHAS_POR_PAGINA } from '@/features/workouts/por-pagina'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -15,23 +17,44 @@ import { ListLink } from '@/components/synse/list-link'
 
 export const metadata: Metadata = { title: 'Treinos' }
 
-export default async function WorkoutsPage() {
+type Search = Promise<{ page?: string }>
+
+/**
+ * ── Por que a lista ganhou página ───────────────────────────────────────────
+ *
+ * `listWorkoutPlans` lia todas as fichas da academia, e a ordem é por divisão
+ * (`split_label`). O corte do PostgREST aqui não levaria "as mais antigas":
+ * levaria **as divisões do fim do alfabeto**. Um "Treino E — Pernas" deixaria
+ * de existir para a tela, e quem o procurasse concluiria que alguém apagou.
+ *
+ * O tamanho da biblioteca também saiu de uma leitura: ele era
+ * `exercises.length` sobre a biblioteca inteira trazida para a memória. Agora
+ * é uma contagem no banco — e um número que não encolhe em silêncio.
+ */
+export default async function WorkoutsPage({ searchParams }: { searchParams: Search }) {
   const session = await requireHubSession('workouts:read')
   const dataSource = await getDataSource()
 
-  const [plans, assignmentCounts, exercises] = await Promise.all([
-    dataSource.listWorkoutPlans(session.organizationId),
+  const { page } = await searchParams
+  const pagina = Math.max(1, Number.parseInt(page ?? '1', 10) || 1)
+
+  const [lista, assignmentCounts, totalDeExercicios] = await Promise.all([
+    dataSource.listWorkoutPlans(session.organizationId, {
+      page: pagina,
+      pageSize: FICHAS_POR_PAGINA,
+    }),
     dataSource.countAssignments(session.organizationId),
-    dataSource.listExercises(session.organizationId),
+    dataSource.countExercises(session.organizationId),
   ])
 
+  const plans = lista.rows
   const canWrite = can(session.role, 'workouts:write')
 
   return (
     <div className="animate-fade-in-up space-y-5">
       <PageHeader
         title="Treinos"
-        description={`Planos de treino da academia e biblioteca com ${formatNumber(exercises.length)} exercícios.`}
+        description={`${formatNumber(lista.total)} ${lista.total === 1 ? 'plano de treino' : 'planos de treino'} e biblioteca com ${formatNumber(totalDeExercicios)} exercícios.`}
         actions={
           canWrite && (
             <div className="flex flex-wrap gap-2">
@@ -120,6 +143,8 @@ export default async function WorkoutsPage() {
           ))}
         </div>
       )}
+
+      <Pagination page={lista.page} pageSize={lista.pageSize} total={lista.total} />
     </div>
   )
 }

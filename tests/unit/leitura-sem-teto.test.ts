@@ -52,6 +52,8 @@ const LIMITADA_PELO_DOMINIO: Record<string, string> = {
   listarSumidos: 'recorta por `.in(id, …)` com os ids da página: no máximo `pageSize`',
   listAssignmentsForPlan:
     'recorta por `.in(student_id, …)` com os alunos perguntados: no máximo os da tela',
+  listWorkoutPlansByIds:
+    'recorta por `.in(id, …)` com as fichas perguntadas: no máximo as de um aluno',
   listWorkoutExercises: 'os exercícios de uma ficha — dezenas',
   listAssignmentsForStudent: 'as fichas de um aluno — limitado pelo número de fichas da academia',
   listClassSchedules: 'a grade semanal — dezenas de horários',
@@ -89,7 +91,6 @@ const LIMITADA_PELO_DOMINIO: Record<string, string> = {
 const PAGINACAO_PENDENTE: Record<string, string> = {
   listOrganizations: 'a lista de academias da plataforma, em /synse-admin: cresce com o negócio',
   listExercises: 'a biblioteca Synse mais a da academia: cresce a cada exercício publicado',
-  listWorkoutPlans: 'as fichas de uma academia: professores criam e não apagam',
 }
 
 /**
@@ -208,9 +209,10 @@ describe('leitura de lista sem teto no data source', () => {
     // dois acervos (`listContent` e `listSynseContent`) ganharem página, 7
     // antes da biblioteca de receitas, 6 antes de as avaliações ganharem
     // janela escrita, 5 antes de as reservas do aluno pararem de ler a
-    // academia inteira, e 4 antes de a anotação "já tem este treino" passar a
-    // perguntar só pelos alunos da tela.
-    expect(Object.keys(PAGINACAO_PENDENTE)).toHaveLength(3)
+    // academia inteira, 4 antes de a anotação "já tem este treino" passar a
+    // perguntar só pelos alunos da tela, e 3 antes de as fichas ganharem
+    // página.
+    expect(Object.keys(PAGINACAO_PENDENTE)).toHaveLength(2)
   })
 })
 

@@ -40,6 +40,7 @@ import type {
 import { DEMO_ORG_ID, getDemoDataset } from '@/lib/database/demo-seed'
 import { AVALIACOES_NA_FICHA } from '@/features/assessments/janela'
 import { RECEITAS_POR_PAGINA } from '@/features/nutrition/receitas-por-pagina'
+import { FICHAS_POR_PAGINA } from '@/features/workouts/por-pagina'
 import {
   CONTAGEM_VAZIA,
   CONTEUDOS_POR_PAGINA,
@@ -1311,6 +1312,10 @@ export class DemoDataSource implements DataSource {
     )
   }
 
+  async countExercises(organizationId: string): Promise<number> {
+    return (await this.listExercises(organizationId)).length
+  }
+
   private workoutPlans(): WorkoutPlan[] {
     return [...this.db.workoutPlans, ...this.addedWorkoutPlans]
   }
@@ -1322,8 +1327,30 @@ export class DemoDataSource implements DataSource {
     return { ...plano, name: edicao.name, goal: edicao.goal, splitLabel: edicao.split }
   }
 
-  async listWorkoutPlans(organizationId: string): Promise<WorkoutPlan[]> {
-    return this.scoped(this.workoutPlans(), organizationId).map((p) => this.comEdicao(p))
+  async listWorkoutPlans(
+    organizationId: string,
+    options: { page?: number; pageSize?: number } = {},
+  ): Promise<Paginated<WorkoutPlan>> {
+    const todas = this.scoped(this.workoutPlans(), organizationId)
+      .map((p) => this.comEdicao(p))
+      .sort((a, b) => a.splitLabel.localeCompare(b.splitLabel))
+
+    const page = Math.max(1, options.page ?? 1)
+    const pageSize = Math.min(200, Math.max(5, options.pageSize ?? FICHAS_POR_PAGINA))
+    const de = (page - 1) * pageSize
+
+    return { rows: todas.slice(de, de + pageSize), total: todas.length, page, pageSize }
+  }
+
+  async listWorkoutPlansByIds(
+    organizationId: string,
+    planIds: readonly string[],
+  ): Promise<WorkoutPlan[]> {
+    if (planIds.length === 0) return []
+    const perguntadas = new Set(planIds)
+    return this.scoped(this.workoutPlans(), organizationId)
+      .filter((p) => perguntadas.has(p.id))
+      .map((p) => this.comEdicao(p))
   }
 
   async getWorkoutPlan(organizationId: string, planId: string): Promise<WorkoutPlan | null> {

@@ -895,6 +895,42 @@ existem, não para conferir se subiram.
   mudar) — as três pegas. Cinco dos nove testes existem só para provar o que a
   migration **não** pode quebrar.
 
+### As fichas por página, e as do aluno por id
+
+`listWorkoutPlans` lia **todas** as fichas da academia, sem teto. Professor
+cria ficha e não apaga: uma academia de três anos chega a centenas.
+
+O corte do PostgREST aqui doeria diferente do resto, porque a ordem é por
+divisão (`split_label`). O que sumiria não seriam "as mais antigas" — seriam
+**todas as divisões do fim do alfabeto**. Um "Treino E — Pernas" deixaria de
+existir para a tela, e quem o procurasse concluiria que alguém apagou. Na
+verificação no navegador isso apareceu sozinho: o treino novo, com divisão Z,
+caiu na segunda página.
+
+**Só uma das quatro telas queria a lista.** As outras três — a ficha do aluno
+no hub, a tela inicial do app e `/app/workout` — liam a academia inteira para
+descobrir o nome das duas ou três fichas atribuídas a **um** aluno. Elas
+passaram a usar `listWorkoutPlansByIds`, que recorta por `in(id, …)` com os
+ids das atribuições; id repetido (reatribuição renova a validade e deixa duas
+linhas) não vira filtro repetido, e aluno sem treino não gera consulta.
+
+`/workouts` ganhou página de 24 cartões (`features/workouts/por-pagina.ts`) e
+um segundo critério de ordenação: com `range`, duas fichas da mesma divisão em
+ordem indefinida podem trocar de página entre uma requisição e outra — e a que
+troca some de uma sem aparecer na outra.
+
+De quebra, o cabeçalho dizia "biblioteca com N exercícios" medindo o `length`
+de `listExercises`, isto é, trazendo a biblioteca inteira para dizer um número.
+Agora é `countExercises`, com `head: true` — conta no banco sem trazer linha.
+O número errado por corte seria errado **para menos**, que é o jeito de errar
+que ninguém estranha.
+
+A dívida foi de **3 para 2**. Restam `listOrganizations` e `listExercises`.
+
+`tests/unit/workouts/fichas-por-pagina.test.ts`: 13 testes, 5 mutações, todas
+pegas (tirar o `range`, tirar o desempate, ignorar os ids, trocar o `head: true`
+por leitura, e a demonstração não fatiar).
+
 ### A CSP de produção estava quebrando o desenvolvimento
 
 Não é paginação, e não é defeito do produto — entra aqui porque custou uma

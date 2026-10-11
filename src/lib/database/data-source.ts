@@ -692,7 +692,31 @@ export interface DataSource {
 
   // Treinos
   listExercises(organizationId: string): Promise<Exercise[]>
-  listWorkoutPlans(organizationId: string): Promise<WorkoutPlan[]>
+  /**
+   * As fichas de uma academia, por página.
+   *
+   * Professor cria ficha e não apaga: uma academia de anos tem centenas. A
+   * única tela que **lista** fichas é `/workouts`, e ela pagina. Quem só
+   * precisa do nome de uma ficha atribuída usa `listWorkoutPlansByIds`.
+   */
+  listWorkoutPlans(
+    organizationId: string,
+    options?: { page?: number; pageSize?: number },
+  ): Promise<Paginated<WorkoutPlan>>
+  /**
+   * As fichas perguntadas, e só elas.
+   *
+   * Três telas liam **todas** as fichas da academia para descobrir o nome das
+   * duas ou três atribuídas a um aluno: a ficha do aluno no hub, a lista de
+   * treinos do app e a tela inicial do app. O teto aqui é o número de
+   * atribuições de um aluno, não o tamanho da academia.
+   */
+  listWorkoutPlansByIds(
+    organizationId: string,
+    planIds: readonly string[],
+  ): Promise<WorkoutPlan[]>
+  /** Quantos exercícios a biblioteca tem — contado pelo banco. */
+  countExercises(organizationId: string): Promise<number>
   getWorkoutPlan(organizationId: string, planId: string): Promise<WorkoutPlan | null>
   listWorkoutExercises(
     workoutPlanId: string,

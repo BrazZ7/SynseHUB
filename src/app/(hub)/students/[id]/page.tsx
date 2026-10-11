@@ -1,4 +1,6 @@
 import type { Metadata } from 'next'
+
+import { AVALIACOES_NA_FICHA } from '@/features/assessments/janela'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import {
@@ -530,7 +532,16 @@ export default async function StudentProfilePage({ params }: { params: Params })
                 )}
 
                 {weightSeries.length > 1 && (
-                  <ChartCard title="Evolução do peso" description="Comparativo entre avaliações.">
+                  <ChartCard
+                    title="Evolução do peso"
+                    /*
+                      A legenda diz a janela porque a leitura tem teto escrito.
+                      Um gráfico que mostra parte do histórico sem avisar é o
+                      mesmo problema do corte silencioso, só que causado por
+                      nós — e aqui a frase é o que separa um do outro.
+                    */
+                    description={`Comparativo entre as últimas ${AVALIACOES_NA_FICHA} avaliações.`}
+                  >
                     <ProgressLineChart data={weightSeries} unit=" kg" />
                   </ChartCard>
                 )}

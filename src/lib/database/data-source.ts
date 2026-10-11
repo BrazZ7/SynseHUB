@@ -408,6 +408,14 @@ export type OverdueSummary = {
   porFaixa: Record<OverdueBucket, number>
 }
 
+/** O recorte das avaliações de um aluno. */
+export type AssessmentOptions = {
+  /** Quantas, contadas da mais recente para trás. */
+  limite?: number
+  /** Só as que têm altura — é assim que a tela acha a altura vigente. */
+  comAltura?: boolean
+}
+
 /** O recorte que a biblioteca de receitas pede. */
 export type RecipeFilters = {
   /** O código da categoria (`ALMOCO`, `CAFE`…). Ausente é o catálogo todo. */
@@ -777,7 +785,18 @@ export interface DataSource {
   getLoadProgress(organizationId: string, studentId: string): Promise<LoadProgress>
 
   // Avaliações
-  listAssessments(organizationId: string, studentId: string): Promise<Assessment[]>
+  /**
+   * As avaliações de um aluno, da mais antiga para a mais nova.
+   *
+   * `limite` recorta pelas **mais recentes** e devolve em ordem crescente, que
+   * é como o gráfico desenha. Sem ele, o padrão é a janela da ficha — e nunca
+   * mais o histórico inteiro: ver `src/features/assessments/janela.ts`.
+   */
+  listAssessments(
+    organizationId: string,
+    studentId: string,
+    options?: AssessmentOptions,
+  ): Promise<Assessment[]>
   getAssessment(organizationId: string, assessmentId: string): Promise<Assessment | null>
   /** A última avaliação de cada aluno, para a tela de acompanhamento. */
   /**

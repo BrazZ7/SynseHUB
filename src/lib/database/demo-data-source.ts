@@ -21,6 +21,7 @@ import type {
   CheckInWithStudent,
   DataSource,
   ContentFilters,
+  AssessmentOptions,
   Paginated,
   RecipeFilters,
   SaveActivityInput,
@@ -37,6 +38,7 @@ import type {
   StudentListItem,
 } from '@/lib/database/data-source'
 import { DEMO_ORG_ID, getDemoDataset } from '@/lib/database/demo-seed'
+import { AVALIACOES_NA_FICHA } from '@/features/assessments/janela'
 import { RECEITAS_POR_PAGINA } from '@/features/nutrition/receitas-por-pagina'
 import {
   CONTAGEM_VAZIA,
@@ -1526,10 +1528,20 @@ export class DemoDataSource implements DataSource {
     return [...this.db.assessments, ...this.addedAssessments]
   }
 
-  async listAssessments(organizationId: string, studentId: string): Promise<Assessment[]> {
-    return this.scoped(this.avaliacoes(), organizationId)
+  async listAssessments(
+    organizationId: string,
+    studentId: string,
+    options: AssessmentOptions = {},
+  ): Promise<Assessment[]> {
+    const limite = Math.max(1, options.limite ?? AVALIACOES_NA_FICHA)
+
+    const todas = this.scoped(this.avaliacoes(), organizationId)
       .filter((a) => a.studentId === studentId)
+      .filter((a) => !options.comAltura || a.height != null)
       .sort((a, b) => a.assessedAt.localeCompare(b.assessedAt))
+
+    // As **mais recentes**, e ainda em ordem crescente: `slice(-n)`.
+    return todas.slice(-limite)
   }
 
   async getAssessment(organizationId: string, assessmentId: string): Promise<Assessment | null> {

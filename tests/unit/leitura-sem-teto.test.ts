@@ -87,7 +87,6 @@ const PAGINACAO_PENDENTE: Record<string, string> = {
   listExercises: 'a biblioteca Synse mais a da academia: cresce a cada exercício publicado',
   listWorkoutPlans: 'as fichas de uma academia: professores criam e não apagam',
   listAssignmentsForPlan: 'os alunos de uma ficha: pode ser a academia inteira',
-  listAssessments: 'o histórico de avaliações de um aluno',
   listClassSessionsForStudent: 'o histórico de reservas de um aluno',
 }
 
@@ -204,9 +203,10 @@ describe('leitura de lista sem teto no data source', () => {
     // encolher **de propósito**: foi 15 com `listLeads` dentro, 14 com
     // `getChargesForStudent`, 13 com `listWorkoutLogs`, 12 com
     // `listOverdueCharges`, 11 com as duas leituras de pesagem, 9 antes de os
-    // dois acervos (`listContent` e `listSynseContent`) ganharem página, e 7
-    // antes da biblioteca de receitas.
-    expect(Object.keys(PAGINACAO_PENDENTE)).toHaveLength(6)
+    // dois acervos (`listContent` e `listSynseContent`) ganharem página, 7
+    // antes da biblioteca de receitas, e 6 antes de as avaliações ganharem
+    // janela escrita.
+    expect(Object.keys(PAGINACAO_PENDENTE)).toHaveLength(5)
   })
 })
 

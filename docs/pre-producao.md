@@ -895,6 +895,38 @@ existem, não para conferir se subiram.
   mudar) — as três pegas. Cinco dos nove testes existem só para provar o que a
   migration **não** pode quebrar.
 
+### As avaliações com teto escrito, e a altura numa linha só
+
+`listAssessments` lia o histórico inteiro de um aluno, e a ficha usava essa
+leitura para três coisas de naturezas diferentes: a variação de peso, o
+gráfico, e a altura vigente para o IMC.
+
+**Paginar não resolvia** — gráfico não tem página. Mas o gráfico também não
+quer o histórico inteiro: a lição da 0052 é que mandar milhares de linhas para
+desenhar trezentos pixels é o que aproxima o teto. Dois anos de avaliações
+mensais já são mais pontos do que cabem legíveis numa ficha.
+
+Então o teto virou **escrito**, não herdado do servidor: a tela pede a janela
+que desenha (24, em `features/assessments/janela.ts`) e **diz na legenda** —
+"Comparativo entre as últimas 24 avaliações". Teto que o código conhece é
+diferente de corte silencioso, e a frase é o que separa um do outro.
+
+A armadilha ao implementar: `limit` corta pelo fim da ordenação. Ascendente,
+ele devolveria as avaliações **mais antigas**, e o gráfico mostraria 2021 em
+vez dos últimos dois anos. A consulta pede decrescente e a aplicação inverte —
+o mesmo cuidado da 0052, onde a ordem decide o que se perde.
+
+De quebra, duas telas do app do aluno (`/app/corpo/pesar` e
+`/app/corpo/aparelhos`) liam **todo** o histórico para achar a altura mais
+recente, com um `reverse().find()` na aplicação. Agora pedem uma linha:
+`comAltura: true, limite: 1`.
+
+`listAssessments` saiu da lista de dívida — não reclassificada, removida: ela
+tem `.limit()` agora, e o próprio guarda recusou a entrada obsoleta quando
+tentei reclassificá-la. A dívida foi de **6 para 5**.
+
+`tests/unit/assessments/janela-escrita.test.ts`: 8 testes, 3 mutações.
+
 ### A biblioteca de receitas por página
 
 Mesma família do acervo, e também sem migration. `listRecipes` lia o catálogo

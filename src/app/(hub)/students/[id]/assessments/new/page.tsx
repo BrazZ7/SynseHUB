@@ -1,4 +1,6 @@
 import type { Metadata } from 'next'
+
+import { AVALIACOES_NO_FORMULARIO } from '@/features/assessments/janela'
 import { notFound } from 'next/navigation'
 
 import { BackLink } from '@/components/synse/back-link'
@@ -20,7 +22,9 @@ export default async function NewAssessmentPage({ params }: { params: Params }) 
 
   const [student, anteriores] = await Promise.all([
     dataSource.getStudent(session.organizationId, id),
-    dataSource.listAssessments(session.organizationId, id),
+    dataSource.listAssessments(session.organizationId, id, {
+      limite: AVALIACOES_NO_FORMULARIO,
+    }),
   ])
 
   if (!student) notFound()
@@ -35,7 +39,7 @@ export default async function NewAssessmentPage({ params }: { params: Params }) 
     [...anteriores].reverse().find((avaliacao) => avaliacao.height != null)?.height ?? null
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5 animate-fade-in-up">
+    <div className="mx-auto max-w-4xl animate-fade-in-up space-y-5">
       <BackLink href={`/students/${student.id}`} label={student.name} />
 
       <PageHeader

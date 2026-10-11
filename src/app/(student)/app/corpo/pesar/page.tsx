@@ -32,8 +32,19 @@ export default async function PesarPage() {
    */
   let alturaM: number | null = null
   try {
-    const avaliacoes = await dataSource.listAssessments(session.organizationId, session.studentId)
-    const comAltura = [...avaliacoes].reverse().find((a) => a.height != null)
+    /*
+     * Uma linha, e não o histórico inteiro.
+     *
+     * A tela lia todas as avaliações do aluno para achar a altura mais
+     * recente — um `reverse().find()` sobre uma leitura sem teto, numa tela
+     * que abre toda vez que alguém vai se pesar. `comAltura` + `limite: 1`
+     * pedem exatamente isso ao banco.
+     */
+    const [comAltura] = await dataSource.listAssessments(
+      session.organizationId,
+      session.studentId,
+      { comAltura: true, limite: 1 },
+    )
     alturaM = comAltura?.height != null ? comAltura.height / 100 : null
   } catch (erro) {
     if (!isPendingMigration(erro)) throw erro

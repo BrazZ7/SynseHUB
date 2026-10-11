@@ -16,6 +16,7 @@ import {
   janelaDaFaixa,
   type OverdueBucket,
 } from '@/features/payments/faixas-de-atraso'
+import { AVALIACOES_NA_FICHA } from '@/features/assessments/janela'
 import { RECEITAS_POR_PAGINA } from '@/features/nutrition/receitas-por-pagina'
 import {
   CONTEUDOS_POR_PAGINA,
@@ -38,6 +39,7 @@ import type {
   CheckInWithStudent,
   DataSource,
   ContentFilters,
+  AssessmentOptions,
   Paginated,
   RecipeFilters,
   PairUserDeviceInput,
@@ -1994,19 +1996,35 @@ export class SupabaseDataSource implements DataSource {
     }
   }
 
-  async listAssessments(organizationId: string, studentId: string) {
+  async listAssessments(
+    organizationId: string,
+    studentId: string,
+    options: AssessmentOptions = {},
+  ) {
+    const limite = Math.max(1, options.limite ?? AVALIACOES_NA_FICHA)
+
+    let query = this.client
+      .from('assessments')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .eq('student_id', studentId)
+    if (options.comAltura) query = query.not('height', 'is', null)
+
+    /*
+     * Pede em ordem **decrescente** e inverte aqui.
+     *
+     * O recorte tem de pegar as mais recentes, e `limit` corta pelo fim da
+     * ordenação — ascendente, ele devolveria as mais **antigas** e o gráfico
+     * mostraria 2021 em vez dos últimos dois anos. É o mesmo cuidado da 0052:
+     * a ordem decide o que se perde.
+     */
     const rows =
       (await this.select<Row[]>(
         'listAssessments',
-        this.client
-          .from('assessments')
-          .select('*')
-          .eq('organization_id', organizationId)
-          .eq('student_id', studentId)
-          .order('assessed_at', { ascending: true }),
+        query.order('assessed_at', { ascending: false }).limit(limite),
       )) ?? []
 
-    return rows.map((row) => this.mapAssessment(row))
+    return rows.map((row) => this.mapAssessment(row)).reverse()
   }
 
   async getAssessment(organizationId: string, assessmentId: string): Promise<Assessment | null> {

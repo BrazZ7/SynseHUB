@@ -895,25 +895,30 @@ existem, não para conferir se subiram.
   mudar) — as três pegas. Cinco dos nove testes existem só para provar o que a
   migration **não** pode quebrar.
 
-### As reservas do aluno são as da janela
+### A CSP de produção estava quebrando o desenvolvimento
 
-`listClassSessionsForStudent` recortava as **aulas** pela semana, certinho, e
-ao lado lia **toda** reserva da academia com situação reservada, em espera ou
-presente. Sem teto e sem recorte de data.
+Não é paginação, e não é defeito do produto — entra aqui porque custou uma
+sessão de verificação no navegador e porque o sintoma engana.
 
-Uma academia com três anos de grade acumula dezenas de milhares de `ATTENDED`,
-e isso era lido na **tela inicial do aluno**, a cada abertura do app — a
-leitura mais repetida do produto. O corte cairia no pior lugar: a ordem é por
-criação, então o que sobraria seriam as reservas **mais antigas**, e o que
-sumiria é justamente a da próxima aula. O sintoma seria o cartão da aula de
-amanhã sem a reserva do aluno, ou a posição na fila de espera errada.
+A CSP do `next.config.mjs` vale para todo ambiente, e não tem `'unsafe-eval'`
+(de propósito: é o teste `tests/unit/cabecalhos-de-seguranca.test.ts` que
+cobra). Só que o servidor de desenvolvimento do Next entrega **cada módulo
+dentro de um `eval`**. Com a CSP, o navegador recusa o pacote inteiro.
 
-Agora a leitura recorta por `in(session_id, …)` com as aulas da janela — no
-máximo uma semana de grade —, e janela sem aula nenhuma não vai ao banco.
-A dívida foi de **5 para 4**.
+O sintoma não é tela quebrada. O HTML chega completo, a página parece certa, e
+**nada hidrata**: nenhum botão responde, nenhuma Server Action sai, nenhum erro
+na tela. Até o seletor de perfil do modo de demonstração fica morto — dá para
+passar um bom tempo achando que o produto quebrou quando foi o ambiente.
 
-`tests/unit/schedule/reservas-da-janela.test.ts`: 4 testes, 2 mutações, as duas
-pegas.
+A CSP agora é montada por `cspDoAmbiente(ehDesenvolvimento)`. Em
+desenvolvimento, `script-src` ganha `'unsafe-eval'` e `connect-src` ganha
+`ws://localhost:*` (o canal de recarga quente, que seria barrado em seguida).
+Produção sai exatamente como antes.
+
+O teste cresceu de 12 para 17: além de produção continuar sem `'unsafe-eval'`,
+ele cobra que desenvolvimento **tenha** — porque uma CSP que mata a hidratação
+local é uma que alguém vai desligar inteira no primeiro aperto — e que a
+concessão seja só essa, comparando as duas listas diretiva por diretiva.
 
 ### A anotação "já tem este treino" parou de carregar a academia
 
@@ -948,6 +953,26 @@ cresceu de 7 para 12. Quatro mutações, todas pegas: tirar o `.in(student_id, �
 fazer a demonstração ignorar os ids, tirar o guarda de `workouts:read`, e anotar
 sempre — esta última pega por dois testes, inclusive o que já existia cobrando
 que o seletor não leve campo a mais.
+
+### As reservas do aluno são as da janela
+
+`listClassSessionsForStudent` recortava as **aulas** pela semana, certinho, e
+ao lado lia **toda** reserva da academia com situação reservada, em espera ou
+presente. Sem teto e sem recorte de data.
+
+Uma academia com três anos de grade acumula dezenas de milhares de `ATTENDED`,
+e isso era lido na **tela inicial do aluno**, a cada abertura do app — a
+leitura mais repetida do produto. O corte cairia no pior lugar: a ordem é por
+criação, então o que sobraria seriam as reservas **mais antigas**, e o que
+sumiria é justamente a da próxima aula. O sintoma seria o cartão da aula de
+amanhã sem a reserva do aluno, ou a posição na fila de espera errada.
+
+Agora a leitura recorta por `in(session_id, …)` com as aulas da janela — no
+máximo uma semana de grade —, e janela sem aula nenhuma não vai ao banco.
+A dívida foi de **5 para 4**.
+
+`tests/unit/schedule/reservas-da-janela.test.ts`: 4 testes, 2 mutações, as duas
+pegas.
 
 ### As avaliações com teto escrito, e a altura numa linha só
 

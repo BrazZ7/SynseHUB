@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import nextConfig from '../../next.config.mjs'
+import nextConfig, { cspDoAmbiente } from '../../next.config.mjs'
 
 /**
  * ── Os cabeçalhos de segurança ──────────────────────────────────────────────
@@ -26,8 +26,12 @@ async function diretivas(): Promise<Map<string, string>> {
   const csp = (await cabecalhos()).get('content-security-policy')
   expect(csp, 'não há CSP configurada').toBeTruthy()
 
+  return partir(csp!)
+}
+
+function partir(csp: string): Map<string, string> {
   return new Map(
-    csp!.split(';').map((parte) => {
+    csp.split(';').map((parte) => {
       const [nome, ...resto] = parte.trim().split(/\s+/)
       return [nome, resto.join(' ')]
     }),
@@ -106,5 +110,49 @@ describe('a política de conteúdo', () => {
 
   it('e o padrão é fechado', async () => {
     expect((await diretivas()).get('default-src')).toBe("'self'")
+  })
+})
+
+describe('a concessão de desenvolvimento', () => {
+  /*
+   * O servidor de desenvolvimento entrega módulo dentro de `eval` e recarrega
+   * por WebSocket em `localhost`. Com a CSP de produção, nada hidrata — e sem
+   * hidratar, nenhum botão responde e nenhuma Server Action sai. O sintoma não
+   * é tela quebrada: é tela certa e morta, sem erro visível.
+   *
+   * Então a concessão precisa existir **e** precisa ficar do lado de quem
+   * desenvolve. É o par de asserções abaixo.
+   */
+  const producao = () => partir(cspDoAmbiente(false))
+  const desenvolvimento = () => partir(cspDoAmbiente(true))
+
+  it('produção não avalia string como código', () => {
+    expect(producao().get('script-src')).toBe("'self' 'unsafe-inline'")
+  })
+
+  it('produção não abre WebSocket para localhost', () => {
+    expect(producao().get('connect-src')).not.toContain('ws://')
+  })
+
+  it('desenvolvimento avalia, senão a página não hidrata', () => {
+    expect(desenvolvimento().get('script-src')).toContain("'unsafe-eval'")
+  })
+
+  it('desenvolvimento abre o canal de recarga quente, e só em localhost', () => {
+    const connect = desenvolvimento().get('connect-src') ?? ''
+    expect(connect).toContain('ws://localhost:*')
+    expect(connect).not.toContain('ws://*')
+  })
+
+  it('a concessão é só isso: nada mais muda entre os dois', () => {
+    // Um `if` a mais nesta função é uma diretiva que produção perde sem
+    // ninguém notar — a CSP que vale é a que o servidor manda, e ela é
+    // montada aqui.
+    const dev = desenvolvimento()
+    const prod = producao()
+    expect([...dev.keys()]).toEqual([...prod.keys()])
+
+    const diferentes = [...prod.keys()].filter((nome) => dev.get(nome) !== prod.get(nome))
+    expect(diferentes.sort()).toEqual(['connect-src', 'script-src'])
   })
 })

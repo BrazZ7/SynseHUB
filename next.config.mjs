@@ -36,7 +36,7 @@
  * que uma pessoa digita. Apertar aqui quebraria a funcionalidade sem fechar
  * ataque nenhum: imagem não executa código, e `script-src` continua fechado.
  */
-const CSP = [
+const DIRETIVAS = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline'",
   // O Tailwind e o Leaflet escrevem estilo embutido; sem isto a tela fica nua.
@@ -52,7 +52,34 @@ const CSP = [
   "frame-ancestors 'none'",
   "worker-src 'self' blob:",
   'upgrade-insecure-requests',
-].join('; ')
+]
+
+/**
+ * ── A concessão que só vale em desenvolvimento ──────────────────────────────
+ *
+ * O servidor de desenvolvimento do Next entrega cada módulo dentro de um
+ * `eval`, e o canal de recarga quente é um WebSocket em `localhost`. Com a
+ * CSP de produção, os dois são barrados — e o sintoma é pior do que uma tela
+ * quebrada: o HTML chega inteiro, a página **parece** certa, e nada hidrata.
+ * Nenhum botão responde, nenhuma Server Action sai, nenhum erro aparece na
+ * tela. Custou uma sessão de verificação no navegador descobrir que o produto
+ * não estava quebrado, o ambiente estava.
+ *
+ * `NODE_ENV` é o Next que define: `next dev` dá `development`, `next build` e
+ * `next start` dão `production`. A concessão existe só do lado de quem
+ * desenvolve, e o teste de `tests/unit/cabecalhos-de-seguranca.test.ts` cobra
+ * que produção continue sem ela.
+ */
+export function cspDoAmbiente(ehDesenvolvimento) {
+  return DIRETIVAS.map((diretiva) => {
+    if (!ehDesenvolvimento) return diretiva
+    if (diretiva.startsWith('script-src')) return `${diretiva} 'unsafe-eval'`
+    if (diretiva.startsWith('connect-src')) return `${diretiva} ws://localhost:*`
+    return diretiva
+  }).join('; ')
+}
+
+const CSP = cspDoAmbiente(process.env.NODE_ENV === 'development')
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {

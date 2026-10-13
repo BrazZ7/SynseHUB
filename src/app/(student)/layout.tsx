@@ -50,7 +50,16 @@ export default async function StudentLayout({ children }: { children: React.Reac
           <OutraPorta session={session} lado="app" />
           <ContextBar session={session} />
         </div>
-        {children}
+        {/*
+          `main` e não `div`.
+          
+          O app do aluno era a única casca do produto sem marco de conteúdo
+          principal: o painel tem `<main>`, o onboarding tem, as páginas legais
+          têm. Sem ele, quem usa leitor de tela não tem o salto "ir para o
+          conteúdo" e atravessa a barra de contexto e o menu em cada página —
+          em todas as telas do produto que a pessoa mais abre.
+        */}
+        <main>{children}</main>
       </div>
       <AppBottomNavigation />
     </div>

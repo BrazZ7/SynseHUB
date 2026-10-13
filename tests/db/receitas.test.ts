@@ -161,9 +161,24 @@ describe.skipIf(!temBanco)('a vitrine das receitas', () => {
       expect(assinatura).not.toContain(proibida)
     }
 
-    // E o conteúdo de verdade, pelo valor e não só pelo nome da coluna.
+    /*
+     * E o conteúdo de verdade, pelo valor e não só pelo nome da coluna.
+     *
+     * Os ids saem do texto antes da conferência, e isso **não** é detalhe: a
+     * versão anterior procurava '460' — as calorias — no JSON inteiro, e um
+     * `gen_random_uuid()` com '460' no meio fazia o teste falhar sem defeito
+     * nenhum. Aconteceu: `c4f1e22a-9a1c-460f-…`. Teste que falha por sorteio
+     * ensina a equipe a rodar de novo em vez de ler a falha.
+     */
+    const linhas = await asUser<Record<string, unknown>>(
+      client,
+      AUTH_GRATIS,
+      `select * from receitas_trancadas()`,
+    )
+    expect(linhas.length).toBeGreaterThan(0)
+
     const texto = JSON.stringify(
-      await asUser(client, AUTH_GRATIS, `select * from receitas_trancadas()`),
+      linhas.map(({ id: _id, ...resto }) => resto),
     )
     expect(texto).not.toContain('aveia')
     expect(texto).not.toContain('Misture tudo')

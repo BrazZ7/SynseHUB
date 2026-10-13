@@ -59,20 +59,21 @@ tabela; a tabela é índice, não é o laudo.
 
 | REQUISITO | EXISTE? | ARQUIVOS/FLUXO | PROBLEMA CONFIRMADO | AÇÃO | TESTE DE ACEITE |
 | --- | --- | --- | --- | --- | --- |
-| 1. Entrada "sou aluno" | Parcial | `src/app/(auth)/login/page.tsx`, `signup/page.tsx`, `src/features/auth/account-type-picker.tsx` | Sim — D1: o `/login` só fala de academia | Reescrever a entrada sem tocar no fluxo | 21 |
+| 1. Entrada "sou aluno" | **Corrigido** | `src/app/(auth)/login/page.tsx`, `src/app/page.tsx` | Sim — D1: o `/login` só falava de academia | Texto reescrito; fluxo intacto | 21 ✔ |
 | 1. Entrada "tenho uma academia" | Sim | idem | Não | — | 21 |
 | 1. Escolha visual não concede permissão | Sim | `account-type-picker.tsx` só navega; papel vem de `organization_members` | Não | — | 21, 26 |
-| 1. Troca de contexto para quem tem vários papéis | Parcial | `src/features/platform/context-bar.tsx:21` | Sim — D2: só conta de plataforma vê o seletor | Oferecer a troca a quem tem matrícula e papel de hub | 21 |
+| 1. Troca de contexto para quem tem vários papéis | **Corrigido** | `src/features/auth/portas.ts`, `outra-porta.tsx` | Sim — D2: só conta de plataforma via o seletor | `OutraPorta` nas duas cascas | 21 ✔ |
 | 1. Destino após login respeita vínculo | Sim | `src/lib/auth/require-session.ts`, `login/page.tsx:18` | Não | — | 21 |
 | 1. Recuperação de acesso | Sim | `src/features/auth/recuperar-senha-form.tsx`, `nova-senha-form.tsx` | Não | — | 21 |
 | 2. Home "Seu dia" | Sim | `src/app/(student)/app/page.tsx:121` | Não confirmado | Revisar estados vazios | 22 |
 | 2. Atalhos sem tela vazia | Sim | idem — Treino, Correr, Alimentação | Não; **não** existe atalho de Sono, e isso está certo (não há recurso de sono) | — | 22 |
 | 3. Máquina de estados do treino | Sim | `src/features/active-workout/engine/` (7 estados) | Não | — | 1–8 |
 | 3. Uma conclusão por toque | Sim | `use-active-workout.ts:77` + `clientId` + `unique (session_id, client_id)` | Não | — | 2, 3 |
-| 3. Snapshot do treino na sessão | Sim | `engine/types.ts:75` grava `exercises` na sessão local | Não | — | — |
-| 3. Desfazer conclusão | **Não** | — | Sim — D3: não existe | Implementar com reversão de efeito derivado | 9 |
-| 7. Dados locais separados por usuário | **Não** | `storage/local-workout.ts:22-26` | Sim — D4: chave única para todos | Escopar por aluno e descartar o que não tem dono | 14, 15 |
-| 7. Política de duas abas/dispositivos | **Não** | — | Sim — D5: não há política escrita nem implementada | Definir e implementar | 13 |
+| 3. Snapshot do treino na sessão | **Corrigido** | `engine/types.ts:75` (cliente) + 0057 (servidor) | Sim — D9: o servidor não tinha retrato, e `workout_session_exercises` estava vazia | Retrato gravado na abertura | — |
+| 3. Treino concluído chega ao histórico | **Corrigido** | `encerramento.ts`, `active-workout-screen.tsx` | Sim — D10: `finish_workout_session` não tinha chamador alcançável | "Fechar" encerra; a recuperação também | — |
+| 3. Desfazer conclusão | **Corrigido** | `engine` (`UNDO_SET`), 0058, `ordem.ts` | Sim — D3: não existia | Desfazer com reversão no banco | 9 ✔ |
+| 7. Dados locais separados por usuário | **Corrigido** | `storage/escopo.ts`, `local-workout.ts` | Sim — D4: chave única para todos | Escopo por matrícula; versão 2 descarta o sem dono | 14 ✔, 15 ✔ |
+| 7. Política de duas abas/dispositivos | **Corrigido** | `storage/comando.ts`, 0059 | Sim — D5: não havia política | Manda quem abriu a tela; série de outro lugar desloca | 13 ✔ |
 | 7. Tempo de descanso por instante de término | Sim | `restEndsAt`, `reidratar` | Não | — | 10, 11 |
 | 7. Fila offline durável | Sim | `storage/local-workout.ts`, `sync.ts` | Não | — | 12 |
 | 4. Live Activity iOS (código) | Sim | `native/synse-workout-activity/ios/` (414 linhas Swift) | Sim — D6: **não há target de Widget Extension** no Xcode | Criar o target | 18 |
@@ -132,6 +133,36 @@ histórico de B. É dado de saúde atribuído à pessoa errada.
 Este é o item de maior risco da auditoria e por isso é o primeiro a ser
 corrigido.
 
+### D9 — `workout_session_exercises` nunca recebeu uma linha
+
+**FATO.** A tabela existe desde a 0026 e nada no repositório insere nela —
+conferido com `grep -rn workout_session_exercises src/`. O gatilho
+`workout_set_progress`, cuja razão de existir é marcar o exercício como
+concluído quando a última série prevista entra, procurava a linha, não achava, e
+atualizava zero linhas. Sem erro e sem log.
+
+Encontrado ao escrever a reversão do desfazer: a reversão desfazia algo que
+nunca era feito. Corrigido na 0057, que também resolve o retrato da prescrição
+pedido no item 6 — o treinador que edita a ficha no meio do treino não muda mais
+o que a sessão em andamento considera previsto.
+
+### D10 — o treino concluído não chegava ao histórico
+
+**FATO.** `encerrar('COMPLETED')` tinha um único chamador na tela: o botão
+"Concluir treino", no painel de fim de exercício, no ramo "não há próximo
+exercício". Esse ramo é inalcançável — a última série do último exercício vai
+direto para `WORKOUT_COMPLETED`, então `EXERCISE_COMPLETED` só existe quando
+**há** próximo exercício. Provado em `tests/unit/active-workout/engine.test.ts`.
+
+`finish_workout_session` nunca era chamada no caminho normal. A sessão ficava
+`IN_PROGRESS` no servidor até a regra das oito horas (0047) marcá-la como
+`ABANDONED`, e `listWorkoutSessions` filtra `status = 'COMPLETED'`: a pessoa
+treinava uma hora, apertava "Fechar" no resumo — que só limpava o aparelho — e o
+histórico dela continuava vazio.
+
+É o defeito mais caro dos encontrados nesta etapa, e ele não aparecia na
+demonstração, onde a semente já traz treinos concluídos.
+
 ### D5 — duas abas não têm política
 
 **FATO.** Nada no código trata duas abas ou dois aparelhos. Duas abas abertas
@@ -186,12 +217,82 @@ Alternativa considerada e recusada: perguntar à pessoa ("encontramos um treino
 não enviado neste aparelho; é seu?"). É a resposta ideal de produto para uma
 tela que nunca mais apareceria depois da atualização.
 
+### 2026-10-13 — a série que chega de dois lugares desloca, não é recusada
+
+`unique (session_id, exercise_id, set_number)` recusava a segunda "série 3" do
+mesmo exercício. A restrição está certa no que quer dizer; o jeito de aplicá-la
+estava errado, porque a segunda série tem `client_id` próprio, de um toque que
+aconteceu — duas abas, ou o celular e o tablet, cada um contando por conta
+própria. Recusada, a fila insistia oito vezes e a tela dizia "uma série não pôde
+ser enviada" para uma série que a pessoa fez.
+
+Agora ela entra no próximo número livre daquele exercício. Isso **muda uma
+política que estava testada**: o teste que exigia a recusa foi reescrito, com o
+registro do que havia antes.
+
+Considerado e recusado: comparar `completed_at` para adivinhar se é a mesma
+série física. Heurística que descarta errado apaga em silêncio uma série real, e
+o item 7 do pedido é explícito sobre isso.
+
+### 2026-10-13 — o custo do lado da academia não entrou na entrada
+
+O item 4 pede explicar o que é gratuito e o que exige contratação "com base nas
+regras reais". O código conhece o percentual sobre os pagamentos
+(`organization_billing_settings`) e não conhece mensalidade de painel. A entrada
+afirma apenas o que se sustenta — o aplicativo do aluno é gratuito — e nada
+sobre preço de academia: publicar uma descrição do modelo comercial é decisão do
+dono do produto.
+
+### 2026-10-13 — `create or replace` parte sempre da versão mais recente
+
+A 0057 reescreveu `start_workout_session` a partir do corpo da 0026 e apagou em
+silêncio a regra que a 0047 havia acrescentado (abandonar treino pendurado de
+oito horas). Quem pegou foi `tests/db/treino-ativo.test.ts`.
+
+O histórico de cada função redefinida agora está no cabeçalho da migration que a
+redefine — 0026 → 0047 → 0057 → 0059 para `log_workout_session` e
+`log_workout_set` — com o aviso explícito de partir da última.
+
 ## Pendências e bloqueios
 
 | Item | Natureza | Próxima ação |
 | --- | --- | --- |
 | Migrations 0053–0056 | BLOQUEIO (acesso ao Supabase) | Colar no SQL editor, na ordem; `/api/health?deep=1` confirma |
-| Validação em iPhone | BLOQUEIO (macOS + aparelho) | Target de Widget Extension criado aqui, compilado lá |
+| Target de Widget Extension no iOS | BLOQUEIO (macOS + Xcode) | Ver "O que falta no iOS", abaixo |
 | Validação em Android | BLOQUEIO (aparelho) | `WorkoutService` roda; falta ver em aparelho |
 | Medição em rede móvel | BLOQUEIO (aparelho) | Sem isto, não se afirma tempo de carregamento |
 | Revisão do Codex | BLOQUEIO (binário ausente) | `codex login status` quando existir; nenhum commit desta etapa foi revisado |
+
+## O que falta no iOS, exatamente
+
+**FATO.** `ios/App/App/Info.plist` já declara `NSSupportsLiveActivities` e
+`NSSupportsLiveActivitiesFrequentUpdates`. O Swift da Live Activity existe e
+está completo: `native/synse-workout-activity/ios/Sources/` tem o `Widget` com
+`ActivityConfiguration` (229 linhas), o plugin Capacitor (157) e os atributos
+(28). `ios/App/App.xcodeproj/project.pbxproj` tem **um** target de aplicativo
+(`App`) e nenhuma ocorrência de `WidgetExtension` nem de
+`com.apple.widgetkit-extension`.
+
+Live Activity exige uma extensão própria. Sem o target, o Swift compila para
+nada: não há como a atividade aparecer na tela bloqueada.
+
+**Por que não foi criado aqui.** O `project.pbxproj` é um grafo de objetos com
+identificadores de 24 dígitos hexadecimais e referências cruzadas entre
+`PBXNativeTarget`, `PBXBuildFile`, `XCConfigurationList` e os
+`embedAppExtensions`. Editá-lo à mão sem Xcode para validar produziria, no
+melhor caso, um projeto que abre com erro — e aí o aplicativo inteiro para de
+compilar, não só o widget. Um projeto quebrado é pior que um widget ausente.
+
+**Os passos, para quem tiver macOS:**
+
+1. Xcode → File → New → Target → **Widget Extension**, nome
+   `SynseWorkoutWidget`, com "Include Live Activity" marcado.
+2. Apagar os arquivos de exemplo do target e adicionar, por referência, os três
+   de `native/synse-workout-activity/ios/Sources/`.
+3. `SynseWorkoutAttributes.swift` precisa estar nos **dois** targets (o
+   aplicativo e a extensão): é o contrato entre eles.
+4. App Group igual nos dois, para o plugin e o widget se encontrarem.
+5. Conferir que o `Info.plist` da extensão tem
+   `NSExtensionPointIdentifier = com.apple.widgetkit-extension`.
+6. Rodar em aparelho físico. Live Activity não aparece no simulador de forma
+   confiável, e "funciona com a tela bloqueada" é afirmação que exige aparelho.

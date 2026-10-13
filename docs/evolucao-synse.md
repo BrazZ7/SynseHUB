@@ -43,6 +43,31 @@ sem rede para o Supabase de produção.
 | Treino ativo (`/app/workout/active`) | idem | 13,8 kB · **131 kB** |
 | Rotas mais pesadas | idem | `/app/run/[id]` **252 kB**, `/app/corpo` **246 kB**, `/app/progress` **231 kB** |
 
+### Medição final, no fim da etapa
+
+Mesma máquina, mesmos comandos, commit `a320c7b`. A comparação existe para não
+prometer melhoria que não houve: **esta etapa não foi de desempenho**, e os
+números confirmam que ela também não custou desempenho.
+
+| O quê | Antes (`e560a01`) | Depois (`a320c7b`) | Diferença |
+| --- | --- | --- | --- |
+| Build de produção | 1m49,7s | 1m39,4s | −10s (ruído de máquina) |
+| Suíte | 169 arq. / 2031 testes / 112,8s | **184 arq. / 2243 testes** / 122,1s | +15 arquivos, **+212 testes** |
+| JS compartilhado | 102 kB | 102 kB | igual |
+| Middleware | 151 kB | 151 kB | igual |
+| `/app` (home) | 6,12 kB · 156 kB | 6,11 kB · 156 kB | igual |
+| `/app/workout/active` | 13,8 kB · 131 kB | 13,0 kB · 133 kB | **+2 kB** de primeira carga |
+| `/app/workout` | 4,11 kB · 117 kB | 1,97 kB · 117 kB | −2,1 kB na rota |
+| `/app/progress` | 3,97 kB · 231 kB | 4,25 kB · 232 kB | +1 kB |
+| Rotas | 101 | 101 | igual |
+
+Os +2 kB do Treino Ativo são o desfazer, o aviso entre abas e o painel de
+"aberto em outra aba". É o custo de três recursos, e não uma regressão.
+
+**O que continua não medido:** tempo de resposta em aparelho e em rede móvel.
+Nada aqui autoriza afirmar quanto a tela demora na mão de alguém — a tabela mede
+bytes de JavaScript. Medir isso exige aparelho, e está na lista de bloqueios.
+
 **FATO** — as três rotas mais pesadas do app do aluno passam de 230 kB de
 primeira carga; a mediana das outras fica perto de 117 kB. O gargalo é o pacote
 de gráficos, não o jardim (o jardim é SVG inline, `src/features/students/plant.ts`).
@@ -296,3 +321,294 @@ compilar, não só o widget. Um projeto quebrado é pior que um widget ausente.
    `NSExtensionPointIdentifier = com.apple.widgetkit-extension`.
 6. Rodar em aparelho físico. Live Activity não aparece no simulador de forma
    confiável, e "funciona com a tela bloqueada" é afirmação que exige aparelho.
+
+## Os 26 aceites, um por um
+
+Onde cada um está, e o que ele ainda não cobre. "Automatizado" é teste que roda
+em `npm test`; "em aparelho" é o que exige celular e não foi feito aqui.
+
+### Motor de treino
+
+| # | Aceite | Onde | Como foi verificado |
+| --- | --- | --- | --- |
+| 1 | Conclusão inicia um único descanso | `tests/unit/active-workout/engine.test.ts` | Automatizado |
+| 2 | Dois toques rápidos, uma conclusão | idem + `use-active-workout.ts:77` | Automatizado (engine); a trava de interface não |
+| 3 | Reenvio continua idempotente | `sync.test.ts`, `tests/db/treino-ativo.test.ts` | Automatizado, inclusive no banco |
+| 4 | "+15 s" altera o término | `engine.test.ts` (o produto usa 30 s) | Automatizado |
+| 5 | Retomada antecipada segue a transição | `engine.test.ts` | Automatizado |
+| 6 | Fim do descanso não registra a próxima série | `engine.test.ts` | Automatizado |
+| 7 | Última série avança para o exercício certo | `engine.test.ts` | Automatizado |
+| 8 | Último exercício conclui o treino uma vez | `engine.test.ts` + `encerramento.test.ts` | Automatizado |
+| 9 | Desfazer restaura e corrige efeito derivado | `engine.test.ts`, `tests/db/desfazer-serie.test.ts` | Automatizado, 17 testes de banco |
+| 10 | Recarregar no descanso mantém o tempo | `engine.test.ts` (`reidratar`) | Automatizado |
+| 11 | Reabrir depois do descanso recupera o estado | idem | Automatizado |
+| 12 | Offline sobrevive ao fechamento e não duplica | `armazenamento-local.test.ts`, `sync.test.ts` | Automatizado com IndexedDB de verdade |
+| 13 | Duas abas/dispositivos seguem a política | `comando.test.ts`, `tests/db/serie-de-dois-lugares.test.ts` | Automatizado; o canal entre abas, não |
+| 14 | Sessão expirada não apaga o não sincronizado | `armazenamento-local.test.ts` | Automatizado |
+| 15 | Troca de conta não expõe registro alheio | `escopo.test.ts`, `armazenamento-local.test.ts` | Automatizado |
+
+O 2 e o 13 têm a mesma ressalva: a parte que depende de navegador —
+`setTimeout` de 400 ms e `BroadcastChannel` — não é exercitada em teste. O que
+está coberto é a regra por baixo dela.
+
+### Widgets
+
+| # | Aceite | Situação |
+| --- | --- | --- |
+| 16 | Ações chegam à sessão correta | `plugin-contract.test.ts` cobre o contrato; **nenhuma ação nativa chega ao servidor hoje** |
+| 17 | Comando obsoleto não altera outra série | Mesma situação do 16 |
+| 18 | Tela bloqueada e segundo plano | **BLOQUEADO**: iOS sem target de extensão; Android tem o serviço e não foi visto em aparelho |
+| 19 | Permissão negada mantém alternativa | `platform/web-adapter.ts` existe e a tela funciona sem Live Activity; não validado em aparelho |
+| 20 | Finalização encerra a atividade | `use-active-workout.ts` chama `liveActivity.stop()`; não validado em aparelho |
+
+### Produto
+
+| # | Aceite | Onde | Situação |
+| --- | --- | --- | --- |
+| 21 | Aluno e academia chegam ao destino autorizado | `entrada-das-duas-portas.test.ts`, `tests/db/signup.test.ts` | Automatizado |
+| 22 | Usuário sem treino recebe orientação útil | `src/app/(student)/app/page.tsx:155` já trata | **Não auditado tela a tela** |
+| 23 | Resumo respeita datas, fuso e correções | `janelas.test.ts` | Automatizado; "sem registro" vs "nenhuma atividade" não |
+| 24 | Jardim não concede recompensa duplicada | `jardim-sem-recompensa-dupla.test.ts` | Automatizado, pela estrutura |
+| 25 | Compartilhamento não inclui dado privado | `share-card.test.ts` (zona de casa) | Automatizado |
+| 26 | Academia alheia inacessível por id | `tests/db/auditoria-de-seguranca.test.ts` (F3, F5, F7, A1), `rls.test.ts` | Automatizado, já existia |
+
+## Classificação de cada requisito
+
+### IMPLEMENTADO E TESTADO
+
+- Entrada do aluno e da academia, com o texto que não manda o aluno embora.
+- Troca de contexto para quem administra e treina.
+- Escopo dos dados locais por matrícula, e descarte do que não tem dono.
+- Desfazer a série, com reversão de progresso do exercício, placar do desafio e
+  medalha.
+- Retrato da prescrição na sessão (a ficha editada no meio do treino não muda a
+  sessão em andamento).
+- Encerramento do treino chegando ao servidor.
+- Política de duas abas e de dois aparelhos.
+- Fuso e janelas da home; meta semanal contando dias treinados.
+- Zona de casa no cartão de compartilhar.
+- Instrumentação de produto, com catálogo, indicadores e coorte explícita.
+- Marco de conteúdo (`<main>`) no app do aluno.
+- Isolamento entre academias por manipulação de identificador (já existia).
+
+### IMPLEMENTADO, VALIDAÇÃO PENDENTE
+
+- Notificação de treino em andamento no Android: 342 linhas de Kotlin, serviço e
+  permissões no manifesto. Nunca rodou em aparelho.
+- Estados da Home (primeiro acesso, dia de descanso, erro de conexão, dados
+  aguardando sincronização): a tela trata vários, e **não foram auditados um a
+  um** nesta etapa.
+- Recursos de comunidade (amigos, desafios, agenda, eventos): existem e têm
+  teste próprio; não foram revisados contra os incrementos do item 11.
+
+### BLOQUEADO POR DEPENDÊNCIA EXTERNA
+
+- Live Activity no iPhone: falta o target de Widget Extension, que exige macOS
+  com Xcode. Os passos estão na seção "O que falta no iOS".
+- Migrations 0053–0060: precisam ser colada no SQL editor do Supabase.
+- Medição de desempenho em aparelho e rede móvel.
+- Revisão do Codex: o binário não existe neste ambiente (`command -v codex`
+  vazio). **Nenhum commit desta etapa foi revisado por ele.**
+
+### NÃO IMPLEMENTADO
+
+- **Widget de tela inicial** (iOS e Android). Não existe `AppWidgetProvider` nem
+  WidgetKit de home. É escopo próprio, e não um ajuste do que existe.
+- **Exercício por duração.** `workout_exercises` tem `sets`, `reps` (texto) e
+  `rest_seconds`, e nenhum campo de duração. Implementar exige coluna nova,
+  migration e decisão de produto sobre como a série de tempo se conclui.
+- **Circuitos e superséries.** Investigados, como o pedido pede: não existe
+  agrupamento no modelo. Mudar isso é mexer na prescrição, não no motor.
+- **Fonte temporal monotônica.** O descanso usa instante de parede
+  (`restEndsAt`). Mudança de relógio do aparelho desloca o fim do descanso — e
+  é por isso que a ordem da fila passou a usar identificador, e não carimbo de
+  tempo. Tratar o relógio exigiria `performance.now()` ancorado, com
+  reconciliação na volta do segundo plano.
+- **"Sem registro" diferente de "nenhuma atividade"** no resumo semanal.
+- **XP por volume.** `XP_POR_TREINO = 100` sem teto premia quantidade de
+  treinos, e o item 10 diz "não premiar volume ilimitado de exercícios". É
+  divergência confirmada e **não foi alterada**: mexer na régua de recompensa
+  muda o nível de todo mundo que já usa o produto, e isso é decisão do dono.
+- **Indicação de usuários** (nenhum convite ou código), e portanto o indicador
+  de indicações convertidas.
+
+## A entrega
+
+Os dez itens pedidos, na ordem em que foram pedidos.
+
+### 1. Resumo das mudanças reais
+
+Nove commits. Cada um fecha um defeito confirmado ou entrega um requisito:
+
+| Commit | O que mudou |
+| --- | --- |
+| `67bdd5c` | Dados locais do treino escopados por matrícula; versão 2 do banco local descarta o que não tem dono |
+| `418be49` | 0057 e 0058: retrato da prescrição na sessão, e `desfazer_serie` com reversão de efeito derivado |
+| `0b7bce1` | Desfazer no cliente; e o encerramento do treino, que não tinha chamador alcançável |
+| `7bc188d` | 0059 e `comando.ts`: a política de duas abas e de dois aparelhos |
+| `9069aed` | A entrada do aluno e da academia; a porta entre os dois lados |
+| `f887c47` | 0060: eventos do produto, catálogo e indicadores |
+| `02ffb32` | Zona de casa no cartão de corrida; trava do jardim contra recompensa dupla |
+| `8299433` | Fuso e janelas da home; meta semanal contando dias treinados |
+| `a320c7b` | `<main>` no app do aluno |
+
+Mais `6abd03f`, que é este documento, e `80c224e`, que corrige um teste frágil
+de receitas encontrado na rodada final.
+
+### 2. Arquivos e módulos principais alterados
+
+- `src/features/active-workout/` — `storage/escopo.ts`, `storage/ordem.ts`,
+  `storage/comando.ts`, `encerramento.ts` (novos); `storage/local-workout.ts`,
+  `sync.ts`, `use-active-workout.ts`, `engine/`, `actions.ts`,
+  `active-workout-screen.tsx`, `state.ts`.
+- `src/features/analytics/` — `eventos.ts`, `actions.ts`,
+  `registrar-visita.tsx` (novos).
+- `src/features/auth/` — `portas.ts`, `outra-porta.tsx` (novos).
+- `src/features/students/` — `janelas.ts` (novo), `app-service.ts`.
+- `src/features/synse-run/share-card.ts`, `src/features/share/cards.ts`,
+  `share-button.tsx`.
+- `src/lib/database/` — interface, fonte Supabase e fonte de demonstração.
+- `src/app/(auth)/login/page.tsx`, `src/app/page.tsx`,
+  `src/app/(student)/layout.tsx`, `(hub)/layout.tsx`, `onboarding/page.tsx`.
+
+### 3. Migrações e configurações necessárias
+
+**Quatro migrations novas, nenhuma aplicada** — e as 0053 a 0056 continuam
+pendentes de antes:
+
+```
+0053_reimportar_saude.sql
+0054_resumo_das_academias.sql
+0055_ganho_de_carga.sql
+0056_eventos.sql
+0057_exercicios_da_sessao.sql     ← novo
+0058_desfazer_serie.sql           ← novo
+0059_serie_de_dois_lugares.sql    ← novo
+0060_eventos_do_produto.sql       ← novo
+```
+
+Colar **na ordem**, no SQL editor do Supabase. `/api/health?deep=1` lista o que
+falta em `pendingMigrations`. Nenhuma variável de ambiente nova.
+
+O código tolera o banco antigo: `registrar_evento` ausente devolve `PGRST202` e
+é engolida (instrumentação não derruba operação), e `desfazer_serie` ausente faz
+o desfazer ficar na fila. **O que não é tolerável é o inverso** — colar a 0059
+antes da 0057 deixa `log_workout_set` sem a garantia da linha de sessão.
+
+### 4. Como executar e reproduzir os testes
+
+```bash
+# o banco de teste precisa estar no ar, senão 53 arquivos pulam em silêncio
+su postgres -c "/usr/lib/postgresql/16/bin/pg_ctl -D /var/tmp/synse-pgdata -o '-p 5433 -k /tmp' start"
+
+npm test            # tudo
+npm run test:db     # só banco
+npm run test:unit   # só lógica pura
+npm run typecheck
+npm run lint
+npm run build
+```
+
+Conferir o **número de arquivos**, não a cor: suíte com arquivos pulados termina
+em verde.
+
+### 5. Resultados dos testes, incluindo falhas
+
+- **Final: 184 arquivos, 2243 testes, 0 pulados, 0 falhas.** Build: 101 rotas.
+- **Falhas reais durante o trabalho**, todas corrigidas:
+  - `tests/db/treino-ativo.test.ts` pegou a 0057 apagando a regra do treino
+    pendurado de oito horas que a 0047 havia acrescentado.
+  - O mesmo arquivo falhou de novo, de propósito, quando a 0059 mudou a política
+    de série repetida: o teste foi reescrito com o registro do que havia antes.
+  - `tests/db/receitas.test.ts` falhou por sorteio de UUID (`…9a1c-460f…`
+    casando com a busca por '460'). Era fragilidade pré-existente; corrigida.
+  - Dois testes meus nasceram com expectativa errada e o código me corrigiu: a
+    janela de sete dias em Lisboa (`21T23:00Z`, não `22T00:00Z`) e a rota curta
+    que sobra com um ponto só.
+- **Mutações: 57 aplicadas.** Na primeira rodada, sete sobreviveram: cinco
+  cobraram teste novo, uma cobrou um teste mais forte (o deslocamento por
+  exercício, que com uma série só dava o mesmo número dos dois jeitos), e uma
+  era equivalente — revelou uma conferência redundante na 0059, que saiu do
+  código. Depois disso, nenhuma sobrevive.
+
+  Por arquivo: escopo 6, migrations 0057/0058 9, desfazer no cliente 11,
+  duas abas e 0059 7, eventos 8, janelas 6, share-card 5, portas 4, marco 1.
+
+### 6. Evidências visuais sem dados pessoais
+
+**Não há.** Capturar tela exige o aplicativo no ar com uma conta, e este
+ambiente não tem navegador contra o Supabase de produção — e usar dado de aluno
+real numa captura é exatamente o que o pedido proíbe. O que existe de evidência
+é a saída dos testes e da build, reproduzível pelos comandos acima.
+
+O caminho honesto para as capturas: `npm run dev` em modo de demonstração, que
+usa persona fictícia e não toca em dado de ninguém.
+
+### 7. Plataformas e versões efetivamente testadas
+
+| Onde | O que rodou |
+| --- | --- |
+| Node + Vitest | 2243 testes, incluindo IndexedDB de verdade (`fake-indexeddb`) |
+| PostgreSQL 16 | 53 arquivos de teste contra banco real, com RLS |
+| Next 15 (build de produção) | 101 rotas compilando |
+| Navegador | **nada** — nenhuma tela foi aberta |
+| iOS | **nada** — sem macOS |
+| Android | **nada** — sem aparelho |
+
+### 8. Limitações e pendências exatas
+
+Estão nas duas seções acima: "BLOQUEADO POR DEPENDÊNCIA EXTERNA" e "NÃO
+IMPLEMENTADO". As três que mais importam:
+
+1. Live Activity do iPhone não tem onde rodar (falta o target).
+2. Nenhuma superfície nativa envia ação ao servidor, então o uso de widget não é
+   medível — e por isso não é medido.
+3. XP por volume divergindo do item 10, deixado para o dono decidir.
+
+### 9. Próxima ação para cada bloqueio
+
+| Bloqueio | Próxima ação | De quem |
+| --- | --- | --- |
+| Migrations pendentes | Colar 0053→0060 na ordem; conferir `/api/health?deep=1` | Dono do produto |
+| Target de Widget Extension | Os seis passos da seção do iOS, em macOS com Xcode | Quem tiver Mac |
+| Validação em Android | Rodar `npx cap run android` e ver a notificação | Quem tiver aparelho |
+| Desempenho real | Lighthouse ou WebPageTest em 4G, nas três rotas mais pesadas | Qualquer um com aparelho |
+| Revisão do Codex | Instalar o binário e `codex login status` | Dono do produto |
+| XP por volume | Decidir a régua: teto por semana, ou recompensa por meta cumprida | Dono do produto |
+| Política de privacidade | Uma linha na seção "O que é coletado" sobre os eventos de produto | Advogado |
+
+### 10. Estratégia de implantação e recuperação
+
+**A ordem importa, e ela é esta:**
+
+1. **Primeiro o SQL, depois o deploy.** A Vercel publica no push; o SQL é colado
+   à mão. Toda leitura nova tolera coluna ausente, mas as escritas novas —
+   desfazer, evento — só funcionam depois da migration. Publicar antes de colar
+   deixa o desfazer na fila e a instrumentação muda; nenhuma das duas derruba
+   nada.
+2. **Conferir `/api/health?deep=1`** antes e depois: `pendingMigrations` vazio é
+   o sinal de que o banco e o código estão no mesmo ponto.
+3. **Um treino de teste completo** numa conta de teste: começar, concluir série,
+   desfazer, encerrar, e abrir o histórico. É o caminho que esta etapa mais
+   mexeu, e o que o histórico mostra é a prova de que o encerramento chegou.
+
+**Recuperação, por tipo de problema:**
+
+- **O deploy.** `vercel rollback` volta para a publicação anterior em segundos.
+  O código antigo convive com o banco novo: as funções novas simplesmente não
+  são chamadas.
+- **As migrations 0057 e 0059** substituem corpos de função. Para voltar, basta
+  colar a versão anterior daquela função — está no histórico de cada migration,
+  e o cabeçalho de cada uma diz de qual ela parte. **Atenção:** voltar a 0057 à
+  versão da 0026 apaga a regra das oito horas da 0047; a 0059 é o ponto de
+  partida correto hoje.
+- **A 0058 e a 0060** só acrescentam: dá para desfazê-las com
+  `drop function desfazer_serie`, `drop function descontar_desafio`,
+  `drop table product_events cascade` — sem perder dado de treino.
+- **A coluna `sets_planned` da 0057** é aditiva e nula para sessão antiga; o
+  gatilho tem `coalesce` para o banco sem ela. Não precisa voltar.
+- **O IndexedDB versão 2** não tem volta: o código antigo abre o banco na versão
+  2 e lê as chaves que não entende como vazias — ou seja, o treino em andamento
+  de quem estiver no meio de um treino **no instante do rollback** se perde. É o
+  único ponto sem rede de segurança, e por isso o rollback, se precisar, é
+  melhor fora do horário de pico da academia.

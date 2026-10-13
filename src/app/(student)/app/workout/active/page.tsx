@@ -32,10 +32,15 @@ export default async function ActiveWorkoutPage({ searchParams }: { searchParams
   // não pode virar treino de outra pessoa.
   if (!assignments.some((a) => a.workoutPlanId === planId)) notFound()
 
-  const [plan, workoutExercises, exercises, preferencias] = await Promise.all([
+  /*
+   * `listWorkoutExercises` já traz o exercício junto (`select('*, exercises
+   * (*)')`). Esta tela lia **a biblioteca inteira** ao lado só para montar um
+   * mapa de id → nome dos cinco exercícios que ela desenha — e o nome que ela
+   * já tinha na mão.
+   */
+  const [plan, workoutExercises, preferencias] = await Promise.all([
     dataSource.getWorkoutPlan(session.organizationId, planId),
     dataSource.listWorkoutExercises(planId),
-    dataSource.listExercises(session.organizationId),
     /*
      * Junto das outras, e não numa busca do cliente: a tela precisa delas para
      * desenhar os interruptores na posição certa já no primeiro quadro. Vindo
@@ -46,12 +51,10 @@ export default async function ActiveWorkoutPage({ searchParams }: { searchParams
   ])
   if (!plan) notFound()
 
-  const nomePorId = new Map(exercises.map((e) => [e.id, e.name]))
-
   const planejados: PlannedExercise[] = workoutExercises.map((item) => ({
     exerciseId: item.exerciseId,
     workoutExerciseId: item.id,
-    name: nomePorId.get(item.exerciseId) ?? 'Exercício',
+    name: item.exercise?.name ?? 'Exercício',
     sets: item.sets,
     reps: item.reps,
     restSeconds: item.restSeconds,

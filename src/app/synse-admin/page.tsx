@@ -22,6 +22,7 @@ import { PageHeader } from '@/components/synse/page-header'
 import { SynseLogo } from '@/components/synse/synse-logo'
 import { ThemeToggle } from '@/components/synse/theme-toggle'
 import { Badge } from '@/components/ui/badge'
+import { Pagination } from '@/components/synse/pagination'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { HUB_PLAN_CATALOG, getPlatformMetrics } from '@/features/organizations/platform-service'
@@ -33,9 +34,24 @@ export const metadata: Metadata = { title: 'Synse Admin' }
 
 type OrganizationRow = Awaited<ReturnType<typeof getPlatformMetrics>>['organizations'][number]
 
-export default async function SynseAdminPage() {
+type Search = Promise<{ page?: string }>
+
+/**
+ * ── O painel deixou de ler a base inteira ───────────────────────────────────
+ *
+ * Ele lia todas as organizações e, para cada uma, disparava duas consultas —
+ * uma delas trazendo vinte mil cobranças para somar quatro números num laço.
+ * Agora a 0054 soma no banco, a lista pagina, e os totais continuam saindo de
+ * **todas** as academias: totalizar a página faria o GMV da plataforma mudar
+ * conforme o botão "próxima".
+ */
+export default async function SynseAdminPage({ searchParams }: { searchParams: Search }) {
   await requirePlatformSession()
-  const { organizations, totals } = await getPlatformMetrics()
+  const { page } = await searchParams
+  const pagina = Math.max(1, Number.parseInt(page ?? '1', 10) || 1)
+
+  const { organizations, totals, pageSize, totaisSobre, totaisCompletos } =
+    await getPlatformMetrics({ page: pagina })
   const provider = getPaymentProvider()
 
   const columns: Column<OrganizationRow>[] = [
@@ -210,6 +226,19 @@ export default async function SynseAdminPage() {
 
         <div className="space-y-3">
           <h2 className="text-subtitle font-semibold text-synse-text">Organizações</h2>
+
+          {/*
+            O teto dos totais, dito em voz alta. Ele só aparece quando o corte
+            de fato aconteceu — e aparecer é o ponto: número de painel que
+            encolhe em silêncio é pior que número ausente.
+          */}
+          {!totaisCompletos && (
+            <p className="rounded-lg border border-synse-warning/50 bg-synse-warning/10 px-3 py-2 text-xs text-synse-text">
+              Os indicadores acima somam as {formatNumber(totaisSobre)} academias mais recentes, de{' '}
+              {formatNumber(totals.organizations)} cadastradas.
+            </p>
+          )}
+
           <DataTable
             caption="Organizações cadastradas na plataforma"
             columns={columns}
@@ -217,6 +246,8 @@ export default async function SynseAdminPage() {
             rowKey={(organization) => organization.id}
             empty={<EmptyState icon={Building2} title="Nenhuma organização cadastrada." />}
           />
+
+          <Pagination page={pagina} pageSize={pageSize} total={totals.organizations} />
         </div>
 
         <Card>

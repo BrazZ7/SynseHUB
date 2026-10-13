@@ -895,6 +895,126 @@ existem, não para conferir se subiram.
   mudar) — as três pegas. Cinco dos nove testes existem só para provar o que a
   migration **não** pode quebrar.
 
+- **0054 (`0054_resumo_das_academias.sql`)** — o resumo de cada academia somado
+  no banco, no lugar de uma varredura de cobranças por academia.
+
+  `/synse-admin` lia **todas** as organizações, sem teto, e para cada uma
+  disparava duas consultas — sendo que uma delas, o `getPaySummary`, trazia
+  **vinte mil cobranças** para somar quatro números num laço da aplicação. Com
+  cinquenta academias são 151 consultas e um milhão de linhas de cobrança
+  atravessando a rede para produzir dez números. E o `limit: 20000` era um
+  corte silencioso igual ao do PostgREST: a academia que passasse dele
+  apareceria com GMV menor do que faturou.
+
+  `resumo_das_academias` devolve **dinheiro bruto e contagem** — recebido,
+  previsto, atrasado, quantas atrasadas, alunos ativos —, uma linha por
+  academia. `academias_por_plano` conta as ativas por plano, quatro linhas, e o
+  preço continua em `HUB_PLAN_CATALOG`, que é catálogo comercial e muda sem
+  migration.
+
+  **O split não foi para o banco, e isso é deliberado.** Ele tem percentual por
+  academia, taxa fixa, três estratégias de quem absorve a tarifa do provedor,
+  uma trava para a academia nunca receber valor negativo, e padrões que vêm de
+  variáveis de ambiente — que o banco não lê. Reescrevê-lo em SQL criaria uma
+  segunda definição da conta que paga as contas da empresa, e as duas
+  divergiriam no primeiro ajuste. Um dos testes de banco existe só para
+  travar isso: se alguém acrescentar uma coluna de comissão à função, ele
+  falha.
+
+  **Por que uma linha por academia, e não um total pronto.** Porque a taxa
+  fixa é somada uma vez por academia: `split(soma dos recebidos)` não é a soma
+  dos splits. Totalizar a plataforma exige o bruto de cada uma — uma linha
+  curta por academia é a forma irredutível disso, e é ordens de grandeza menor
+  que as vinte mil cobranças por academia que trafegavam antes.
+
+  `security invoker`: a conta de plataforma enxerga tudo porque as políticas já
+  permitem, e a equipe de uma academia que chamasse a função com o id de outra
+  não soma nada. É o teste que mais importa aqui, e ele tem controle — o mesmo
+  `select` como superusuário devolve o dinheiro de Beta, para a asserção não
+  passar por uma lista vazia.
+
+  Sem a migration, a aplicação volta a somar lendo cobrança (`academiasPelaAplicacao`),
+  porque devolver zero mentiria mais do que uma soma que pode cortar. Há sonda
+  de schema: `resumo_das_academias` é nova e revogada ao anônimo, então 401/403
+  é "existe" e 404 é "não existe".
+
+  `tests/db/resumo-das-academias.test.ts`: 10 testes contra Postgres, 5
+  mutações (tirar o filtro de organização, contar aluno de qualquer situação,
+  trocar para `security definer`, somar cobrança cancelada, contar academia
+  suspensa no MRR) — as cinco pegas.
+
+### O painel da plataforma em três consultas, e a dívida zerada
+
+Era assim: `/synse-admin` lia **todas** as organizações, sem teto, e para cada
+uma disparava duas consultas — sendo que uma delas, o `getPaySummary`, trazia
+**vinte mil cobranças** para somar quatro números num laço da aplicação. Com
+cinquenta academias são 151 consultas e um milhão de linhas de cobrança
+atravessando a rede para produzir dez números, e o painel fica mais lento a
+cada cliente novo. O `limit: 20000` era corte silencioso igual ao do PostgREST:
+a academia que passasse dele apareceria com GMV menor do que faturou.
+
+A 0054 soma no banco (`resumo_das_academias`), os acordos de cobrança vêm numa
+consulta só (`listBillingSettings`), a lista da tela pagina, e o MRR sai de uma
+contagem por plano em vez de uma linha por academia. Três consultas,
+independentemente de quantas academias existirem. `/finance` e `/synse-pay` de
+cada academia ganharam o mesmo conserto de brinde: as duas chamavam
+`getPaySummary`.
+
+**O split não foi junto, e isso é deliberado** — o detalhe está no registro da
+0054 acima.
+
+**Os totais não são da página.** Esta é a propriedade fácil de quebrar sem
+ninguém notar: somar a lista em vez dos resumos passa em qualquer tela com uma
+página só, que é o que a Synse tem hoje. O sintoma seria um GMV de plataforma
+que **muda ao clicar em "próxima"** — nenhum erro, só um número de diretoria
+que depende de onde o cursor parou. A primeira rodada de mutação **sobreviveu**
+por isso: foi preciso um teste com um data source de mentira e sete academias
+em páginas de cinco para que a asserção deixasse de passar por omissão.
+
+O teto do resumo (500 academias) é **anunciado**: quando cortar, a tela diz
+sobre quantas academias os indicadores foram calculados. Teto dito em voz alta
+é o oposto de resposta cortada em silêncio.
+
+O seletor de contexto também parou de ler o cadastro inteiro — ele é montado em
+**toda** requisição de conta de plataforma, nos dois lados do produto. Mostra
+as 30 mais recentes e diz quantas ficaram de fora, em vez de cortar calado:
+quem não achasse a academia concluiria que ela não existe, que foi exatamente o
+defeito do `<select>` de alunos.
+
+**A verificação que vale:** o texto renderizado de `/synse-admin`, `/finance` e
+`/synse-pay` foi capturado antes e depois da mudança e é **idêntico** — mesmos
+R$ 452.628,40 de GMV, mesma comissão, mesmo MRR. O que mudou foi quantos dados
+atravessaram a rede para chegar neles.
+
+### A biblioteca de exercícios saiu da dívida sem ganhar página
+
+`listExercises` era a penúltima entrada, e o conserto certo foi reclassificá-la
+— com um guarda que torna a classificação conferível, não uma afirmação.
+
+`exercises` não é dado de academia: é o catálogo que a 0021 semeou com 132
+movimentos, e **nada no produto escreve nele**. Não há tela, action nem método
+de data source que insira exercício; ele cresce quando a Synse publica uma
+migration. A coluna `organization_id` permite exercício próprio da academia, e
+um dia vai existir tela para isso — nesse dia a classificação deixa de valer.
+Então o teste varre o data source atrás de um `insert` em `exercises` e, se
+achar, manda a entrada de volta para a dívida.
+
+**O que não se fez, e por quê:** mover a busca para o banco. Já existe
+`search_exercises` desde a 0021 — e nunca foi usada. Ela casa só nome e
+apelido; a busca da tela casa também aparelho e músculo, porque "peito"
+precisa achar o peitoral, e os rótulos de músculo são constantes de TypeScript.
+Levá-la para SQL duplicaria esse dicionário no banco para ganhar paginação numa
+tabela de 132 linhas que ninguém escreve.
+
+De quebra, `/app/workout/active` lia **a biblioteca inteira** para montar um
+mapa de id → nome dos cinco exercícios que desenha — e `listWorkoutExercises`
+já traz o exercício junto no `select`. O nome estava na mão o tempo todo.
+
+**A lista `PAGINACAO_PENDENTE` está vazia.** Não é o fim do assunto: é o estado
+em que toda leitura de lista do data source tem decisão registrada. Ela volta a
+crescer na primeira leitura nova sem teto, que é exatamente o que ela existe
+para cobrar.
+
 ### As fichas por página, e as do aluno por id
 
 `listWorkoutPlans` lia **todas** as fichas da academia, sem teto. Professor

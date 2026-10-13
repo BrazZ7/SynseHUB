@@ -20,6 +20,12 @@ import { AVALIACOES_NA_FICHA } from '@/features/assessments/janela'
 import { RECEITAS_POR_PAGINA } from '@/features/nutrition/receitas-por-pagina'
 import { FICHAS_POR_PAGINA } from '@/features/workouts/por-pagina'
 import {
+  ACADEMIAS_NO_RESUMO,
+  ACADEMIAS_POR_PAGINA,
+  RESUMO_VAZIO,
+  type ResumoDaAcademia,
+} from '@/features/organizations/resumo'
+import {
   CONTEUDOS_POR_PAGINA,
   type ContagemDeConteudo,
   type FiltroDeSituacao,
@@ -216,13 +222,131 @@ export class SupabaseDataSource implements DataSource {
     return row ? this.mapOrganization(row) : null
   }
 
-  async listOrganizations() {
-    const rows =
-      (await this.select<Row[]>(
-        'listOrganizations',
-        this.client.from('organizations').select('*').order('created_at', { ascending: false }),
-      )) ?? []
-    return rows.map((row) => this.mapOrganization(row))
+  async listOrganizations(
+    options: { page?: number; pageSize?: number } = {},
+  ): Promise<Paginated<Organization>> {
+    const pageSize = Math.min(200, Math.max(5, options.pageSize ?? ACADEMIAS_POR_PAGINA))
+    const page = Math.max(1, options.page ?? 1)
+    const inicio = (page - 1) * pageSize
+
+    const { data, error, count } = await this.client
+      .from('organizations')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .order('id')
+      .range(inicio, inicio + pageSize - 1)
+
+    if (error) this.fail('listOrganizations', error)
+
+    const rows = (data as Row[] | null) ?? []
+    return {
+      rows: rows.map((row) => this.mapOrganization(row)),
+      total: count ?? rows.length,
+      page,
+      pageSize,
+    }
+  }
+
+  /**
+   * O resumo de cada academia, somado pelo banco (0054).
+   *
+   * ── O caminho antigo, e por que ele continua aqui ─────────────────────────
+   *
+   * Publicar não é migrar: entre o push e o SQL colado no Supabase, esta
+   * função ainda não existe. Nessa janela a aplicação volta a somar como
+   * somava — lendo as cobranças — porque devolver zero mentiria mais do que
+   * uma soma que pode cortar. É a mesma escolha da 0050 e da 0051.
+   */
+  async resumoDasAcademias(
+    organizationIds: readonly string[] | null,
+    limite = ACADEMIAS_NO_RESUMO,
+  ): Promise<ResumoDaAcademia[]> {
+    const { data, error } = await this.client.rpc('resumo_das_academias', {
+      p_organization_ids: organizationIds ? [...organizationIds] : null,
+      p_limite: limite,
+    })
+
+    if (error) {
+      if (!isPendingMigration(error)) this.fail('resumoDasAcademias', error)
+      logger.warn('resumoDasAcademias:sem_0054', {})
+      return this.academiasPelaAplicacao(organizationIds, limite)
+    }
+
+    return ((data ?? []) as Row[]).map((row) => ({
+      organizationId: row.organization_id,
+      alunosAtivos: Number(row.alunos_ativos ?? 0),
+      recebido: Number(row.recebido ?? 0),
+      previsto: Number(row.previsto ?? 0),
+      atrasadoValor: Number(row.atrasado_valor ?? 0),
+      atrasadoQtd: Number(row.atrasado_qtd ?? 0),
+    }))
+  }
+
+  /** Como era antes da 0054: uma varredura de cobranças por academia. */
+  private async academiasPelaAplicacao(
+    organizationIds: readonly string[] | null,
+    limite: number,
+  ): Promise<ResumoDaAcademia[]> {
+    const ids = organizationIds
+      ? [...organizationIds].slice(0, limite)
+      : (await this.listOrganizations({ page: 1, pageSize: Math.min(200, limite) })).rows.map(
+          (organizacao) => organizacao.id,
+        )
+
+    return Promise.all(
+      ids.map(async (organizationId) => {
+        const [alunos, cobrancas] = await Promise.all([
+          this.client
+            .from('students')
+            .select('id', { count: 'exact', head: true })
+            .eq('organization_id', organizationId)
+            .eq('status', 'ACTIVE'),
+          this.select<Row[]>(
+            'academiasPelaAplicacao',
+            this.client
+              .from('charges')
+              .select('amount, status')
+              .eq('organization_id', organizationId),
+          ),
+        ])
+
+        const resumo = RESUMO_VAZIO(organizationId)
+        resumo.alunosAtivos = alunos.count ?? 0
+        for (const cobranca of cobrancas ?? []) {
+          const valor = Number(cobranca.amount ?? 0)
+          if (cobranca.status === 'PAID') resumo.recebido += valor
+          else if (cobranca.status === 'PENDING') resumo.previsto += valor
+          else if (cobranca.status === 'OVERDUE') {
+            resumo.atrasadoValor += valor
+            resumo.atrasadoQtd += 1
+          }
+        }
+        return resumo
+      }),
+    )
+  }
+
+  async academiasPorPlano(): Promise<Record<string, number>> {
+    const { data, error } = await this.client.rpc('academias_por_plano')
+
+    if (error) {
+      if (!isPendingMigration(error)) this.fail('academiasPorPlano', error)
+      logger.warn('academiasPorPlano:sem_0054', {})
+      const rows =
+        (await this.select<Row[]>(
+          'academiasPorPlano',
+          this.client.from('organizations').select('hub_plan').eq('status', 'ACTIVE'),
+        )) ?? []
+      return rows.reduce<Record<string, number>>((acc, row) => {
+        acc[row.hub_plan] = (acc[row.hub_plan] ?? 0) + 1
+        return acc
+      }, {})
+    }
+
+    return ((data ?? []) as Row[]).reduce<Record<string, number>>((acc, row) => {
+      acc[row.hub_plan] = Number(row.academias ?? 0)
+      return acc
+    }, {})
   }
 
   async getBillingSettings(organizationId: string): Promise<OrganizationBillingSettings | null> {
@@ -241,6 +365,33 @@ export class SupabaseDataSource implements DataSource {
       platformFixedFee: Number(row.platform_fixed_fee),
       paymentProviderFeeStrategy: row.payment_provider_fee_strategy,
     }
+  }
+
+  async listBillingSettings(
+    organizationIds: readonly string[],
+  ): Promise<Map<string, OrganizationBillingSettings>> {
+    if (organizationIds.length === 0) return new Map()
+
+    const rows =
+      (await this.select<Row[]>(
+        'listBillingSettings',
+        this.client
+          .from('organization_billing_settings')
+          .select('*')
+          .in('organization_id', [...new Set(organizationIds)]),
+      )) ?? []
+
+    return new Map(
+      rows.map((row) => [
+        row.organization_id as string,
+        {
+          organizationId: row.organization_id,
+          platformFeePercentage: Number(row.platform_fee_percentage),
+          platformFixedFee: Number(row.platform_fixed_fee),
+          paymentProviderFeeStrategy: row.payment_provider_fee_strategy,
+        } satisfies OrganizationBillingSettings,
+      ]),
+    )
   }
 
   async updateFiscalData(input: FiscalData & { organizationId: string }): Promise<void> {

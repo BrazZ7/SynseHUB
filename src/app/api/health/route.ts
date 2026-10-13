@@ -205,6 +205,7 @@ const MIGRATIONS_ESPERADAS = [
    * e é por isso que a última linha de toda migration se registra lá.
    */
   '0053_reimportar_saude.sql',
+  '0054_resumo_das_academias.sql',
 ]
 
 async function schemaReadiness() {
@@ -237,6 +238,7 @@ async function schemaReadiness() {
     numeroDerivadoNoBanco,
     inadimplenciaSemCorte,
     serieDePeso,
+    resumoDasAcademias,
   ] = await Promise.all([
     schemaCheck('user_profiles?select=tier&limit=1'),
     schemaCheck('baseline_challenges?select=code&limit=1'),
@@ -529,6 +531,21 @@ async function schemaReadiness() {
       p_desde: null,
       p_balde: 'day',
     }),
+
+    /*
+     * A 0054 — o resumo de cada academia somado no banco.
+     *
+     * Sem ela o painel da plataforma volta a somar lendo cobrança: uma
+     * varredura por academia, e o `/finance` e o `/synse-pay` de cada uma
+     * voltam a trazer o histórico inteiro para somar quatro números. O
+     * caminho antigo funciona — é por isso que ele continua no código —, mas
+     * fica mais lento a cada cliente novo, e é justamente o tipo de coisa que
+     * ninguém percebe até o painel demorar meio minuto. A sonda avisa antes.
+     */
+    rpcCheck('resumo_das_academias', {
+      p_organization_ids: ['00000000-0000-0000-0000-000000000000'],
+      p_limite: 1,
+    }),
   ])
 
   const registradas = await migracoesRegistradas()
@@ -599,6 +616,12 @@ async function schemaReadiness() {
     if (serieDePeso.present === false && !faltando.includes('0052_serie_de_peso.sql')) {
       faltando.push('0052_serie_de_peso.sql')
     }
+    if (
+      resumoDasAcademias.present === false &&
+      !faltando.includes('0054_resumo_das_academias.sql')
+    ) {
+      faltando.push('0054_resumo_das_academias.sql')
+    }
     return {
       synseRun: corridas,
       entradaSemVinculo,
@@ -628,6 +651,7 @@ async function schemaReadiness() {
       numeroDerivadoNoBanco,
       inadimplenciaSemCorte,
       serieDePeso,
+      resumoDasAcademias,
       appliedMigrations: registradas.length,
       pendingMigrations: faltando,
     }
@@ -680,6 +704,7 @@ async function schemaReadiness() {
     '0051_inadimplencia_sem_corte.sql',
     '0052_serie_de_peso.sql',
     '0053_reimportar_saude.sql',
+    '0054_resumo_das_academias.sql',
   )
 
   return {

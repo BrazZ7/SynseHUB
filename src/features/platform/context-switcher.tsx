@@ -37,10 +37,13 @@ export function ContextSwitcher({
   atual,
   opcoes,
   emAcademiaDeCliente,
+  forasDaLista = 0,
 }: {
   atual: string
   opcoes: ContextoDisponivel[]
   emAcademiaDeCliente: boolean
+  /** Quantas academias não couberam no menu. Zero esconde o recado. */
+  forasDaLista?: number
 }) {
   const router = useRouter()
   const [trocando, iniciarTransicao] = useTransition()
@@ -130,6 +133,22 @@ export function ContextSwitcher({
               </div>
             )
           })}
+
+          {/*
+            O corte dito em voz alta. O menu mostra as academias mais recentes;
+            sem esta linha, quem não achasse a sua concluiria que ela não está
+            cadastrada — que foi exatamente o defeito do `<select>` de alunos.
+          */}
+          {forasDaLista > 0 && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="text-xs font-normal text-synse-muted">
+                {forasDaLista === 1
+                  ? 'Mais 1 academia não cabe aqui. Veja todas em Plataforma.'
+                  : `Mais ${forasDaLista} academias não cabem aqui. Veja todas em Plataforma.`}
+              </DropdownMenuLabel>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 

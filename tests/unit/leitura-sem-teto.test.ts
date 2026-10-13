@@ -54,7 +54,13 @@ const LIMITADA_PELO_DOMINIO: Record<string, string> = {
     'recorta por `.in(student_id, …)` com os alunos perguntados: no máximo os da tela',
   listWorkoutPlansByIds:
     'recorta por `.in(id, …)` com as fichas perguntadas: no máximo as de um aluno',
+  listBillingSettings:
+    'recorta por `.in(organization_id, …)`: no máximo as academias do resumo',
+  academiasPorPlano:
+    'quatro linhas, uma por plano — e o `comoEra` é a lista de academias ativas',
   listWorkoutExercises: 'os exercícios de uma ficha — dezenas',
+  listExercises:
+    'o catálogo da Synse, que só a Synse publica: nada no produto escreve em `exercises`',
   listAssignmentsForStudent: 'as fichas de um aluno — limitado pelo número de fichas da academia',
   listClassSchedules: 'a grade semanal — dezenas de horários',
   listClassSessions: 'recorta pela janela que a tela pede, e a agenda pede uma semana',
@@ -88,10 +94,7 @@ const LIMITADA_PELO_DOMINIO: Record<string, string> = {
  * defeito com outro número. É paginar com total à vista, como `/avaliações` e
  * a aba "Sumidos" fazem, ou mover a conta para o banco.
  */
-const PAGINACAO_PENDENTE: Record<string, string> = {
-  listOrganizations: 'a lista de academias da plataforma, em /synse-admin: cresce com o negócio',
-  listExercises: 'a biblioteca Synse mais a da academia: cresce a cada exercício publicado',
-}
+const PAGINACAO_PENDENTE: Record<string, string> = {}
 
 /**
  * O caminho antigo, mantido só para a janela entre publicar e migrar.
@@ -210,9 +213,62 @@ describe('leitura de lista sem teto no data source', () => {
     // antes da biblioteca de receitas, 6 antes de as avaliações ganharem
     // janela escrita, 5 antes de as reservas do aluno pararem de ler a
     // academia inteira, 4 antes de a anotação "já tem este treino" passar a
-    // perguntar só pelos alunos da tela, e 3 antes de as fichas ganharem
-    // página.
-    expect(Object.keys(PAGINACAO_PENDENTE)).toHaveLength(2)
+    // perguntar só pelos alunos da tela, 3 antes de as fichas ganharem página,
+    // 2 antes de `listExercises` ser reclassificada (abaixo), e 1 antes de o
+    // painel da plataforma parar de somar lendo cobrança (0054).
+    //
+    // Zero não é o fim do assunto: é o estado em que **toda** leitura de lista
+    // do data source tem decisão registrada. A lista volta a crescer na
+    // primeira leitura nova sem teto, que é exatamente o que ela existe para
+    // cobrar.
+    expect(Object.keys(PAGINACAO_PENDENTE)).toHaveLength(0)
+  })
+})
+
+describe('a reclassificação de `listExercises` continua verdadeira', () => {
+  /*
+   * ── Por que ela saiu da dívida sem ganhar página ──────────────────────────
+   *
+   * `exercises` não é dado de academia: é o catálogo que a 0021 semeou com 132
+   * movimentos, e **nada no produto escreve nele**. Não há tela, action nem
+   * método de data source que insira exercício — ele cresce quando a Synse
+   * publica uma migration, e é a Synse quem decide o tamanho.
+   *
+   * A coluna `organization_id` permite exercício próprio da academia, e um dia
+   * vai existir tela para isso. Nesse dia a classificação deixa de valer: a
+   * biblioteca passa a crescer por uso, e volta a ser dívida.
+   *
+   * Então a classificação não fica só escrita — fica **conferida**. Se um
+   * `insert` em `exercises` aparecer no data source, este teste falha e manda
+   * a entrada de volta para `PAGINACAO_PENDENTE`.
+   *
+   * Vale dizer o que **não** se fez e por quê: mover a busca para o banco. Já
+   * existe `search_exercises` desde a 0021, e ela casa só nome e apelido. A
+   * busca da tela casa também aparelho e músculo — "peito" precisa achar o
+   * peitoral —, e os rótulos de músculo são constantes de TypeScript
+   * (`MUSCLE_GROUP_LABELS`). Levá-la para SQL seria duplicar esse dicionário
+   * no banco para ganhar paginação numa tabela de 132 linhas que ninguém
+   * escreve. O preço é maior que o problema.
+   */
+  it('nada escreve em `exercises` — é por isso que ela é limitada', () => {
+    const corpo = semComentarios(codigo)
+    const escritas = [...corpo.matchAll(/\.from\('exercises'\)([\s\S]{0,200})/g)].filter(
+      ([, depois]) => /\.(insert|update|upsert|delete)\(/.test(depois),
+    )
+
+    expect(
+      escritas.map(([trecho]) => trecho.slice(0, 60)),
+      'alguém passou a escrever em `exercises`: a biblioteca cresce por uso agora, ' +
+        'e `listExercises` volta para PAGINACAO_PENDENTE',
+    ).toEqual([])
+  })
+
+  it('e o guarda da escrita enxerga uma escrita de verdade — o controle', () => {
+    const isca = "this.client.from('exercises').insert({ name: 'x' })"
+    const achou = [...isca.matchAll(/\.from\('exercises'\)([\s\S]{0,200})/g)].filter(
+      ([, depois]) => /\.(insert|update|upsert|delete)\(/.test(depois),
+    )
+    expect(achou).toHaveLength(1)
   })
 })
 

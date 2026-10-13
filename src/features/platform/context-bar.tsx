@@ -7,6 +7,7 @@ import { CONTEXTO_PESSOAL, SYNSE_PLATFORM_ORG_ID, type SessionContext } from '@/
 import { getDataSource } from '@/lib/database'
 import { isPendingMigration } from '@/lib/database/pending-migration'
 import { createSupabaseServerClient } from '@/lib/database/supabase-server'
+import { ACADEMIAS_NO_SELETOR } from '@/features/organizations/resumo'
 import { SYNSE_SOLO_ORG_ID } from '@/lib/organizations/solo'
 
 /**
@@ -20,10 +21,16 @@ export async function ContextBar({ session }: { session: SessionContext }) {
   if (!session.isPlatformAccount) return null
 
   let academias: { id: string; name: string; slug: string }[] = []
+  let forasDaLista = 0
   try {
     const dataSource = await getDataSource()
-    const todas = await dataSource.listOrganizations()
-    academias = todas
+    /*
+     * Uma página, não o cadastro inteiro. Este menu é montado em **toda**
+     * requisição de conta de plataforma, nos dois lados do produto, e lia
+     * todas as academias sem teto para desenhar um dropdown.
+     */
+    const pagina = await dataSource.listOrganizations({ pageSize: ACADEMIAS_NO_SELETOR })
+    academias = pagina.rows
       /*
        * As duas organizações reservadas ficam de fora. A da plataforma existe
        * só para hospedar o papel, e a dos alunos solo não é academia de
@@ -31,6 +38,7 @@ export async function ContextBar({ session }: { session: SessionContext }) {
        */
       .filter((org) => org.id !== SYNSE_PLATFORM_ORG_ID && org.id !== SYNSE_SOLO_ORG_ID)
       .map((org) => ({ id: org.id, name: org.name, slug: org.slug }))
+    forasDaLista = Math.max(0, pagina.total - pagina.rows.length)
   } catch (erro) {
     if (!isPendingMigration(erro)) throw erro
   }
@@ -100,6 +108,12 @@ export async function ContextBar({ session }: { session: SessionContext }) {
         atual={emAcademia ? session.organizationId : CONTEXTO_PESSOAL}
         opcoes={opcoes}
         emAcademiaDeCliente={emAcademia}
+        /*
+         * Quantas ficaram de fora do menu. Dizer é o ponto: o seletor cortava
+         * em silêncio, e quem não achasse a academia concluiria que ela não
+         * existe — o mesmo defeito do `<select>` de alunos.
+         */
+        forasDaLista={forasDaLista}
       />
     </div>
   )

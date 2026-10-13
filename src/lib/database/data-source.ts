@@ -1,6 +1,7 @@
 import type { OverdueBucket } from '@/features/payments/faixas-de-atraso'
 import type { ContagemDeConteudo, FiltroDeSituacao } from '@/features/content/situacao'
 import type { BodySeriesPoint } from '@/features/synse-body/baldes-da-serie'
+import type { ResumoDaAcademia } from '@/features/organizations/resumo'
 import type {
   Activity,
   BodyMeasurement,
@@ -480,8 +481,37 @@ export interface DataSource {
 
   // Organização
   getOrganization(organizationId: string): Promise<Organization | null>
-  listOrganizations(): Promise<Organization[]>
+  /**
+   * As academias da plataforma, por página.
+   *
+   * Cresce com o negócio, que é o ponto do negócio. A lista de
+   * `/synse-admin` pagina; o seletor de contexto pede uma página e diz
+   * quantas ficaram de fora.
+   */
+  listOrganizations(options?: {
+    page?: number
+    pageSize?: number
+  }): Promise<Paginated<Organization>>
+  /**
+   * O resumo bruto de cada academia — dinheiro e contagem, somados no banco.
+   *
+   * `organizationIds` nulo é "todas que eu posso ver". Sem isto, o painel da
+   * plataforma lia vinte mil cobranças **por academia** para somar quatro
+   * números num laço da aplicação.
+   *
+   * Não devolve comissão: o split mora em `lib/payments/split.ts` e fica lá.
+   */
+  resumoDasAcademias(
+    organizationIds: readonly string[] | null,
+    limite?: number,
+  ): Promise<ResumoDaAcademia[]>
+  /** Quantas academias ativas há em cada plano — o preço é da aplicação. */
+  academiasPorPlano(): Promise<Record<string, number>>
   getBillingSettings(organizationId: string): Promise<OrganizationBillingSettings | null>
+  /** Os acordos de cobrança das academias perguntadas, numa consulta só. */
+  listBillingSettings(
+    organizationIds: readonly string[],
+  ): Promise<Map<string, OrganizationBillingSettings>>
   getPaymentAccount(organizationId: string): Promise<PaymentAccount | null>
   listStaff(organizationId: string): Promise<DemoStaff[]>
 

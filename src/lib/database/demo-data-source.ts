@@ -42,6 +42,12 @@ import { AVALIACOES_NA_FICHA } from '@/features/assessments/janela'
 import { RECEITAS_POR_PAGINA } from '@/features/nutrition/receitas-por-pagina'
 import { FICHAS_POR_PAGINA } from '@/features/workouts/por-pagina'
 import {
+  ACADEMIAS_NO_RESUMO,
+  ACADEMIAS_POR_PAGINA,
+  RESUMO_VAZIO,
+  type ResumoDaAcademia,
+} from '@/features/organizations/resumo'
+import {
   CONTAGEM_VAZIA,
   CONTEUDOS_POR_PAGINA,
   type ContagemDeConteudo,
@@ -850,12 +856,75 @@ export class DemoDataSource implements DataSource {
     return null
   }
 
-  async listOrganizations(): Promise<Organization[]> {
+  private todasAsAcademias(): Organization[] {
     return [this.db.organization, this.db.secondOrganization]
+  }
+
+  async listOrganizations(
+    options: { page?: number; pageSize?: number } = {},
+  ): Promise<Paginated<Organization>> {
+    const todas = this.todasAsAcademias()
+    const page = Math.max(1, options.page ?? 1)
+    const pageSize = Math.min(200, Math.max(5, options.pageSize ?? ACADEMIAS_POR_PAGINA))
+    const de = (page - 1) * pageSize
+    return { rows: todas.slice(de, de + pageSize), total: todas.length, page, pageSize }
+  }
+
+  /**
+   * O que a 0054 faz, na demonstração.
+   *
+   * Soma as mesmas situações que o SQL soma — pago, a vencer, vencido — e
+   * ignora cancelada e estornada. Somar diferente aqui faria a demonstração
+   * ensinar um painel que a produção não mostra.
+   */
+  async resumoDasAcademias(
+    organizationIds: readonly string[] | null,
+    limite = ACADEMIAS_NO_RESUMO,
+  ): Promise<ResumoDaAcademia[]> {
+    const alvos = (organizationIds
+      ? this.todasAsAcademias().filter((o) => organizationIds.includes(o.id))
+      : this.todasAsAcademias()
+    ).slice(0, Math.max(1, limite))
+
+    return alvos.map((organizacao) => {
+      const resumo = RESUMO_VAZIO(organizacao.id)
+      resumo.alunosAtivos = this.scoped(this.students(), organizacao.id).filter(
+        (aluno) => aluno.status === 'ACTIVE',
+      ).length
+
+      for (const cobranca of this.scoped(this.charges(), organizacao.id)) {
+        if (cobranca.status === 'PAID') resumo.recebido += cobranca.amount
+        else if (cobranca.status === 'PENDING') resumo.previsto += cobranca.amount
+        else if (cobranca.status === 'OVERDUE') {
+          resumo.atrasadoValor += cobranca.amount
+          resumo.atrasadoQtd += 1
+        }
+      }
+      return resumo
+    })
+  }
+
+  async academiasPorPlano(): Promise<Record<string, number>> {
+    return this.todasAsAcademias()
+      .filter((organizacao) => organizacao.status === 'ACTIVE')
+      .reduce<Record<string, number>>((acc, organizacao) => {
+        acc[organizacao.hubPlan] = (acc[organizacao.hubPlan] ?? 0) + 1
+        return acc
+      }, {})
   }
 
   async getBillingSettings(organizationId: string): Promise<OrganizationBillingSettings | null> {
     return organizationId === DEMO_ORG_ID ? this.db.billingSettings : null
+  }
+
+  async listBillingSettings(
+    organizationIds: readonly string[],
+  ): Promise<Map<string, OrganizationBillingSettings>> {
+    return new Map(
+      organizationIds.includes(DEMO_ORG_ID)
+        ? [[DEMO_ORG_ID, this.db.billingSettings] as const]
+        : [],
+    )
   }
 
   /** Em demonstração o dado fiscal não abre subconta nenhuma: aceita e ignora. */

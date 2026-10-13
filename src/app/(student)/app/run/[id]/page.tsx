@@ -87,7 +87,7 @@ export default async function ActivityDetailPage({ params }: { params: Promise<{
 
       <BotaoCompartilhar
         rotulo="Compartilhar corrida"
-        nota="A imagem leva só o traçado, sem mapa por baixo — o percurso aparece, o endereço não."
+        nota="A imagem leva só o traçado, sem mapa por baixo, e sem os primeiros e últimos 150 metros — o percurso aparece, o ponto de partida não."
         cartao={{
           tipo: 'corrida',
           titulo: atividade.title ?? tituloPorHorario(quando, atividade.sport),

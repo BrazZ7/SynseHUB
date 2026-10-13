@@ -98,3 +98,65 @@ export function afinarRota<T>(pontos: readonly T[], maximo = 400): T[] {
   for (let i = 0; i < maximo; i += 1) saida.push(pontos[Math.round(i * passo)]!)
   return saida
 }
+
+/**
+ * Tira o começo e o fim do traçado.
+ *
+ * ── Por que ──────────────────────────────────────────────────────────────────
+ *
+ * A corrida começa e termina onde a pessoa mora. O cartão não leva mapa por
+ * baixo, nem coordenada escrita, e já era essa a decisão do produto — a nota
+ * embaixo do botão diz "o percurso aparece, o endereço não".
+ *
+ * Mas a imagem carrega a **forma** do percurso com a proporção certa, e carrega
+ * o número da distância, que dá a escala. Com os dois, a forma pode ser casada
+ * com uma malha de ruas conhecida. E os dois pontos marcados — a bolinha clara
+ * do início e a verde do fim — apontam exatamente para a porta de casa.
+ *
+ * Cortar um raio em volta da primeira e da última posição resolve o caso que
+ * importa e mantém o traçado reconhecível: é a mesma ideia da zona de
+ * privacidade que os aplicativos de corrida usam. Vem ligada, porque "não
+ * incluir dado privado por padrão" é por padrão.
+ *
+ * ── A conta ──────────────────────────────────────────────────────────────────
+ *
+ * Distância aproximada em metros, suficiente para um raio de 150 m: um grau de
+ * latitude são ~111 km em qualquer lugar, e um grau de longitude são ~111 km
+ * vezes o cosseno da latitude. Fórmula de Haversine aqui seria precisão onde
+ * não faz diferença — e 150 m de raio não muda com o erro de alguns metros.
+ */
+const METROS_POR_GRAU = 111_320
+
+function distanciaAproximada(a: PontoGeografico, b: PontoGeografico): number {
+  const latMedia = ((a.latitude + b.latitude) / 2) * (Math.PI / 180)
+  const dx = (a.longitude - b.longitude) * Math.cos(latMedia) * METROS_POR_GRAU
+  const dy = (a.latitude - b.latitude) * METROS_POR_GRAU
+  return Math.sqrt(dx * dx + dy * dy)
+}
+
+export const RAIO_DA_ZONA_DE_CASA = 150
+
+export function semZonaDeCasa(
+  pontos: readonly PontoGeografico[],
+  raioMetros = RAIO_DA_ZONA_DE_CASA,
+): PontoGeografico[] {
+  if (pontos.length < 2) return []
+
+  const inicio = pontos[0]!
+  const fim = pontos[pontos.length - 1]!
+
+  const dentro = pontos.filter(
+    (ponto) =>
+      distanciaAproximada(ponto, inicio) > raioMetros &&
+      distanciaAproximada(ponto, fim) > raioMetros,
+  )
+
+  /*
+   * Corrida curta inteira dentro do raio sai sem traçado, e isso é a resposta
+   * certa: uma volta de 200 m em torno de casa **é** o endereço. O cartão então
+   * mostra a distância e o tempo, que é o que a pessoa quis compartilhar.
+   *
+   * Dois pontos é o mínimo para existir linha; um ponto solto não é percurso.
+   */
+  return dentro.length >= 2 ? dentro : []
+}

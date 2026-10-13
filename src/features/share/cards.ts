@@ -1,5 +1,10 @@
 import { formatDistance, formatDuration, formatPace } from '@/features/synse-run/format'
-import { afinarRota, projetarRota, type PontoGeografico } from '@/features/synse-run/share-card'
+import {
+  afinarRota,
+  projetarRota,
+  semZonaDeCasa,
+  type PontoGeografico,
+} from '@/features/synse-run/share-card'
 import {
   ALTURA,
   LARGURA,
@@ -91,7 +96,12 @@ function desenharCorrida(
     subtitulo: data(cartao.quando),
   })
 
-  const pontos = projetarRota(afinarRota(cartao.rota, 400), {
+  /*
+   * A zona de casa sai antes de qualquer coisa: o corte é no dado, não no
+   * desenho. Pintar o traçado inteiro e cobrir as pontas deixaria a informação
+   * na imagem — e o `canvas` é lido por quem quiser.
+   */
+  const pontos = projetarRota(afinarRota(semZonaDeCasa(cartao.rota), 400), {
     largura: LARGURA,
     altura: 820,
     margem: 150,

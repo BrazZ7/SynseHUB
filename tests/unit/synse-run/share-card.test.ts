@@ -1,7 +1,12 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
 import { percentualDaMeta } from '@/features/share/cards'
-import { afinarRota, projetarRota } from '@/features/synse-run/share-card'
+import { afinarRota, projetarRota,
+  semZonaDeCasa,
+} from '@/features/synse-run/share-card'
 
 /**
  * A geometria do cartão de compartilhar.
@@ -134,5 +139,154 @@ describe('o percentual da meta', () => {
 
   it('valor negativo não desenha percentual negativo', () => {
     expect(percentualDaMeta(-3, 12)).toBe(0)
+  })
+})
+
+describe('a zona de casa', () => {
+  /**
+   * A corrida começa e termina onde a pessoa mora — é o aceite 25:
+   * "compartilhamento não inclui dados privados por padrão".
+   *
+   * O cartão nunca levou mapa por baixo nem coordenada escrita, e já era essa a
+   * decisão do produto. O que faltava era o raio: a imagem carrega a forma do
+   * percurso na proporção certa **e** o número da distância, que dá a escala —
+   * e as duas bolinhas marcavam exatamente a porta de casa.
+   */
+  /** Um grau de latitude ≈ 111,32 km; 0,001° ≈ 111 m. */
+  const ponto = (lat: number, lon = 0) => ({ latitude: lat, longitude: lon })
+
+  it('tira os pontos em volta da partida e da chegada', () => {
+    const rota = [
+      ponto(0), // a porta de casa
+      ponto(0.0005), // ~56 m dela: dentro do raio
+      ponto(0.004), // ~445 m: fora
+      ponto(0.005), // ~557 m: fora
+      ponto(0.006), // ~668 m, e ~445 m do fim: fora
+      ponto(0.0095), // ~56 m do fim: dentro do raio
+      ponto(0.01), // a volta para casa
+    ]
+
+    const limpa = semZonaDeCasa(rota, 150)
+
+    expect(limpa.map((p) => p.latitude)).toEqual([0.004, 0.005, 0.006])
+  })
+
+  it('tira os pontos em volta da chegada', () => {
+    // Ida e volta pelo mesmo caminho: as duas pontas são a mesma casa.
+    const rota = [ponto(0), ponto(0.005), ponto(0.01), ponto(0.005), ponto(0.0004)]
+
+    const limpa = semZonaDeCasa(rota, 150)
+
+    expect(limpa.map((p) => p.latitude)).toEqual([0.005, 0.01, 0.005])
+  })
+
+  it('vem ligada por padrão, com 150 metros', () => {
+    /*
+     * "Por padrão" é a parte do requisito que não se cumpre com uma opção
+     * desligada escondida nos ajustes. Sem o raio no argumento, o corte
+     * acontece do mesmo jeito.
+     */
+    const rota = [
+      ponto(0),
+      ponto(0.001), // ~111 m: dentro de 150
+      ponto(0.004),
+      ponto(0.005),
+      ponto(0.006),
+      ponto(0.009), // ~111 m do fim
+      ponto(0.01),
+    ]
+
+    expect(semZonaDeCasa(rota).map((p) => p.latitude)).toEqual([0.004, 0.005, 0.006])
+  })
+
+  it('corrida inteira dentro do raio sai sem traçado', () => {
+    /*
+     * Uma volta de 200 m em torno de casa **é** o endereço. O cartão então
+     * mostra distância e tempo, que é o que a pessoa quis compartilhar.
+     */
+    const rota = [ponto(0), ponto(0.0003), ponto(0.0006), ponto(0.0002)]
+    expect(semZonaDeCasa(rota, 150)).toEqual([])
+  })
+
+  it('um ponto sozinho não é percurso', () => {
+    expect(semZonaDeCasa([ponto(0)], 150)).toEqual([])
+    expect(semZonaDeCasa([], 150)).toEqual([])
+  })
+
+  it('o cartão de corrida aplica a zona antes de projetar', () => {
+    /*
+     * Teste de texto, e de propósito: o desenho vive no `canvas`, que não
+     * existe no ambiente de teste. O que pode voltar em silêncio é alguém
+     * projetar `cartao.rota` direto, e aí a zona continua implementada e
+     * desligada.
+     *
+     * O corte é no dado, não no desenho: pintar o traçado inteiro e cobrir as
+     * pontas deixaria a informação na imagem.
+     */
+    const fonte = readFileSync(join(process.cwd(), 'src/features/share/cards.ts'), 'utf8')
+    expect(fonte).toMatch(/projetarRota\(afinarRota\(semZonaDeCasa\(cartao\.rota\)/)
+  })
+
+  it('o raio conta em metros nos dois eixos', () => {
+    /*
+     * Um grau de longitude encolhe com o cosseno da latitude: a -30°, ele vale
+     * ~96 km em vez de ~111 km. Medir em graus daria uma zona achatada — e é no
+     * sul que o produto está.
+     *
+     * A corrida vai para o oeste e volta pelo norte, longe das duas pontas.
+     */
+    const noSul = [
+      { latitude: -30, longitude: -51 },
+      { latitude: -30, longitude: -51.0005 }, // ~48 m: dentro
+      { latitude: -30, longitude: -51.006 }, // ~578 m: fora
+      { latitude: -30.004, longitude: -51.006 }, // fora das duas pontas
+      { latitude: -30.004, longitude: -51 }, // fora
+      { latitude: -30.0005, longitude: -51 }, // ~56 m do fim: dentro
+      { latitude: -30, longitude: -51 },
+    ]
+
+    const limpa = semZonaDeCasa(noSul, 150)
+
+    expect(limpa).toHaveLength(3)
+    // Nenhum dos que ficaram está a menos de 150 m da casa.
+    expect(limpa.every((p) => Math.abs(p.longitude + 51) > 0.002 || Math.abs(p.latitude + 30) > 0.002)).toBe(true)
+  })
+
+  it('um ponto sobrando não é traçado', () => {
+    /*
+     * Uma mutação cobrou este teste. Com a rota curta, só o ponto do meio fica
+     * fora das duas zonas — e devolver um ponto solto seria devolver uma
+     * posição, que é exatamente o que a zona existe para não devolver. Duas
+     * posições já são um trecho de percurso.
+     */
+    const rota = [ponto(0), ponto(0.0005), ponto(0.005), ponto(0.01)]
+    expect(semZonaDeCasa(rota, 150)).toEqual([])
+  })
+
+  it('150 metros a leste contam como 150 metros', () => {
+    /*
+     * A outra mutação: tirar o cosseno da latitude da conta. A -30°, um grau de
+     * longitude vale ~96 km, não ~111 km — e 0,00155° são ~149 m de verdade
+     * contra ~173 m na conta errada. É a diferença entre o ponto cair dentro do
+     * raio e ficar na imagem.
+     */
+    const rota = [
+      { latitude: -30, longitude: -51 },
+      { latitude: -30, longitude: -51.00155 }, // ~149 m: dentro, e só com o cosseno
+      { latitude: -30, longitude: -51.006 },
+      { latitude: -30.004, longitude: -51.006 },
+      { latitude: -30.004, longitude: -51.002 },
+      { latitude: -30.004, longitude: -51 },
+    ]
+
+    const limpa = semZonaDeCasa(rota, 150)
+
+    expect(limpa.some((p) => p.longitude === -51.00155)).toBe(false)
+  })
+
+  it('não muda a rota que recebeu', () => {
+    const rota = [ponto(0), ponto(0.0005), ponto(0.005), ponto(0.01)]
+    semZonaDeCasa(rota, 150)
+    expect(rota).toHaveLength(4)
   })
 })

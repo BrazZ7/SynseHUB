@@ -69,3 +69,12 @@ export function ganhoMaisTreinado(registros: readonly RegistroDeCarga[]): GanhoD
     dias: dias.size,
   }
 }
+
+/**
+ * Quantas semanas o gráfico de evolução desenha.
+ *
+ * Treze semanas são os noventa dias que a tela já anuncia ao lado, em
+ * "Últimos 90 dias" — o gráfico e os totais passam a falar da mesma janela,
+ * que antes divergiam sem nada na tela indicando isso.
+ */
+export const SEMANAS_DO_GRAFICO = 13

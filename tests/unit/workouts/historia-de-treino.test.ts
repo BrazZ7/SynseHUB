@@ -7,19 +7,23 @@ import { clienteFalso } from '../postgrest-falso'
 /**
  * ── O histórico de treino ───────────────────────────────────────────────────
  *
- * `listWorkoutLogs` lia a tabela inteira de um aluno, sem teto, em ordem
- * **crescente** de data. O PostgREST corta a resposta no teto do servidor sem
- * dar erro, e numa ordem crescente o corte descarta o registro **mais
- * recente** — o oposto do que se perde nas outras leituras deste projeto.
+ * Duas correções, uma em cima da outra.
  *
- * Três coisas se alimentavam dela, e erravam de jeitos diferentes:
+ * A primeira: `listWorkoutLogs` lia a tabela inteira de um aluno, sem teto, em
+ * ordem **crescente**. O PostgREST corta sem dar erro, e numa ordem crescente
+ * o corte descarta o registro **mais recente** — o oposto do que se perde nas
+ * outras leituras deste projeto. O "ganho de carga" congelava, o cartão de
+ * contagem dizia menos do que é, e os gráficos paravam antes do presente.
  *
- *   o "ganho de carga" da home     usa a última carga → congelava num valor antigo
- *   o cartão "Treinos"             conta as linhas    → dizia menos do que é
- *   os dois gráficos de carga      um ponto por linha → paravam antes do presente
+ * A segunda, que era a de baixo: a tabela estava **errada**. `workout_logs`
+ * não recebe escrita de lugar nenhum do produto — o treino entra em
+ * `workout_set_logs` pela 0026. Consertar o teto de uma leitura que sempre
+ * devolve vazio em produção não consertava tela nenhuma.
  *
- * As duas primeiras saíram para consultas próprias. O gráfico ficou com a
- * janela que a tela já anuncia ao lado.
+ * Hoje a contagem conta séries de `workout_set_logs`, o ganho vem da 0055, e
+ * `listWorkoutLogs` **não existe mais**: era o único leitor da tabela antiga,
+ * e deixá-la no data source é deixar a armadilha montada para a próxima tela.
+ * A demonstração continua semeando `workout_logs`, e lê dela por dentro.
  */
 
 const fonte = () => new DemoDataSource([])
@@ -36,56 +40,24 @@ async function alunoComTreino() {
 }
 
 describe('a contagem, na demonstração', () => {
-  it('a janela pedida recorta; a contagem é outra pergunta', async () => {
+  it('conta séries com carga, e não a janela de noventa dias', async () => {
     /*
      * ── O que este teste NÃO prova, e onde isso é provado ─────────────────
      *
      * "A contagem conta tudo, não a janela" não é verificável aqui: nenhum
-     * aluno da semente tem registro além de noventa dias, então a janela
-     * padrão e o histórico inteiro são o **mesmo conjunto**. A mutação que
-     * troca a contagem por `listWorkoutLogs().length` passa por este arquivo
-     * sem quebrar nada — conferi.
+     * aluno da semente tem registro além de noventa dias, então a janela e o
+     * histórico inteiro são o **mesmo conjunto**.
      *
      * A asserção que pega isso está no caminho do Supabase, lá embaixo: a
      * consulta de contagem não pode levar filtro de data. É onde o dado de
      * verdade vai ter dez anos de histórico.
-     *
-     * O que dá para provar aqui é o recorte: janela no futuro devolve zero, e
-     * a contagem continua maior que zero.
      */
-    const { f, alunoId, total } = await alunoComTreino()
-
-    const amanha = new Date(Date.now() + 86_400_000).toISOString()
-    const janelaVazia = await f.listWorkoutLogs(DEMO_ORG_ID, alunoId, { since: amanha })
-
-    expect(janelaVazia).toHaveLength(0)
+    const { total } = await alunoComTreino()
     expect(total).toBeGreaterThan(0)
   })
 
-  it('a janela recorta por data', async () => {
-    const { f, alunoId } = await alunoComTreino()
-    const tudo = await f.listWorkoutLogs(DEMO_ORG_ID, alunoId, {
-      since: new Date(0).toISOString(),
-    })
-    const semana = await f.listWorkoutLogs(DEMO_ORG_ID, alunoId, {
-      since: new Date(Date.now() - 7 * 86_400_000).toISOString(),
-    })
-
-    expect(semana.length).toBeLessThan(tudo.length)
-    for (const log of semana) {
-      expect(log.performedAt >= new Date(Date.now() - 8 * 86_400_000).toISOString()).toBe(true)
-    }
-  })
-
-  it('o que volta continua em ordem crescente', async () => {
-    // A ordem é o que o gráfico desenha: invertê-la vira a linha do avesso.
-    const { f, alunoId } = await alunoComTreino()
-    const logs = await f.listWorkoutLogs(DEMO_ORG_ID, alunoId, {
-      since: new Date(0).toISOString(),
-    })
-    const datas = logs.map((l) => l.performedAt)
-
-    expect([...datas].sort()).toEqual(datas)
+  it('aluno sem treino conta zero', async () => {
+    expect(await fonte().countWorkoutLogs(DEMO_ORG_ID, 'stu_nao_existe')).toBe(0)
   })
 })
 
@@ -126,26 +98,21 @@ describe('o ganho de carga, na demonstração', () => {
 
   it('a carga do dia é a máxima do dia', async () => {
     /*
-     * A semente grava um registro por semana, então cada dia tem um só — o
-     * que torna esta asserção fraca na demonstração e forte onde ela importa:
-     * `tests/db/ganho-de-carga.test.ts` monta um dia com aquecimento de 20 kg
-     * e série valendo de 60, e exige 60.
+     * Aqui isto é fraco de propósito: a semente grava um registro por semana,
+     * então cada dia tem um só. A asserção forte está em dois lugares onde o
+     * caso pode ser montado — `tests/unit/workouts/ganho-de-carga.test.ts`,
+     * sobre a regra pura, e `tests/db/ganho-de-carga.test.ts`, com um dia de
+     * aquecimento de 20 kg e série valendo de 60 exigindo 60.
      *
-     * Aqui dá para exigir o que não depende da semente: a última carga é a
-     * maior registrada naquele dia, nunca menor que ela.
+     * O que dá para exigir da semente é coerência: a carga do cartão é uma
+     * das cargas que o aluno registrou, não um número inventado.
      */
     const { f, alunoId } = await alunoComTreino()
-    const logs = (
-      await f.listWorkoutLogs(DEMO_ORG_ID, alunoId, { since: new Date(0).toISOString() })
-    ).filter((l) => l.load != null)
-
     const cargas = await f.getLoadProgress(DEMO_ORG_ID, alunoId)
-    const ultimoDia = logs[logs.length - 1].performedAt.slice(0, 10)
-    const maiorDoUltimoDia = Math.max(
-      ...logs.filter((l) => l.performedAt.startsWith(ultimoDia)).map((l) => l.load as number),
-    )
 
-    expect(cargas.ultima).toBe(maiorDoUltimoDia)
+    expect(cargas.ultima).toBeGreaterThan(0)
+    expect(cargas.primeira).toBeGreaterThan(0)
+    expect(cargas.ultima).toBeGreaterThan(cargas.primeira!)
   })
 
   it('aluno sem carga registrada devolve nulo, não zero', async () => {
@@ -163,49 +130,6 @@ describe('o ganho de carga, na demonstração', () => {
 })
 
 describe('o que o caminho do Supabase pede', () => {
-  const LOG = {
-    id: 'log-1',
-    organization_id: 'org-1',
-    student_id: 'stu-1',
-    workout_plan_id: null,
-    workout_exercise_id: 'ex-1',
-    performed_at: '2026-09-20T10:00:00.000Z',
-    load: '62.50',
-    reps: 10,
-    sets: 3,
-    rpe: 7,
-    notes: null,
-  }
-
-  it('o gráfico pede janela e teto', async () => {
-    const t = clienteFalso({ tabelas: { workout_logs: [{ data: [LOG], error: null }] } })
-
-    await t.dataSource.listWorkoutLogs('org-1', 'stu-1')
-
-    const passos = t.paraTabela('workout_logs')!.passos
-    const janela = passos.find((p) => p.metodo === 'gte' && p.args[0] === 'performed_at')
-    expect(janela).toBeDefined()
-    expect(passos).toEqual(
-      expect.arrayContaining([
-        { metodo: 'order', args: ['performed_at', { ascending: true }] },
-        { metodo: 'limit', args: [500] },
-      ]),
-    )
-  })
-
-  it('a janela padrão são os noventa dias que a tela anuncia', async () => {
-    const t = clienteFalso({ tabelas: { workout_logs: [{ data: [], error: null }] } })
-
-    await t.dataSource.listWorkoutLogs('org-1', 'stu-1')
-
-    const janela = t
-      .paraTabela('workout_logs')!
-      .passos.find((p) => p.metodo === 'gte' && p.args[0] === 'performed_at')!
-    const dias = (Date.now() - new Date(String(janela.args[1])).getTime()) / 86_400_000
-
-    expect(Math.round(dias)).toBe(90)
-  })
-
   it('a contagem não traz linha nenhuma, e não leva filtro de data', async () => {
     /*
      * As duas metades importam. `head: true` é o que faz a contagem não ter o
@@ -216,18 +140,46 @@ describe('o que o caminho do Supabase pede', () => {
      * Esta é a asserção que a demonstração não consegue fazer, porque na
      * semente a janela e o histórico inteiro são o mesmo conjunto.
      */
-    const t = clienteFalso({ tabelas: { workout_logs: [{ data: null, error: null, count: 412 }] } })
+    const t = clienteFalso({
+      tabelas: { workout_set_logs: [{ data: null, error: null, count: 412 }] },
+    })
 
     const total = await t.dataSource.countWorkoutLogs('org-1', 'stu-1')
 
     expect(total).toBe(412)
-    const passos = t.paraTabela('workout_logs')!.passos
+    const passos = t.paraTabela('workout_set_logs')!.passos
     expect(passos.find((p) => p.metodo === 'select')!.args[1]).toEqual({
       count: 'exact',
       head: true,
     })
     expect(passos.some((p) => p.metodo === 'gte' || p.metodo === 'lte')).toBe(false)
     expect(passos.some((p) => p.metodo === 'limit' || p.metodo === 'range')).toBe(false)
+  })
+
+  it('a contagem é das séries do aluno, na tabela em que o treino entra', async () => {
+    /*
+     * Contava `workout_logs`, em que nada escreve: o cartão "Treinos
+     * registrados" dizia `0` para todo aluno de academia real. O `!inner` é
+     * o que permite filtrar pelo aluno no servidor — a série pertence à
+     * sessão, e é a sessão que sabe de quem é.
+     */
+    const t = clienteFalso({
+      tabelas: { workout_set_logs: [{ data: null, error: null, count: 7 }] },
+    })
+
+    await t.dataSource.countWorkoutLogs('org-1', 'stu-1')
+
+    expect(t.todasParaTabela('workout_logs')).toEqual([])
+    const passos = t.paraTabela('workout_set_logs')!.passos
+    expect(passos.find((p) => p.metodo === 'select')!.args[0]).toContain('workout_sessions!inner')
+    expect(passos).toEqual(
+      expect.arrayContaining([
+        { metodo: 'eq', args: ['organization_id', 'org-1'] },
+        { metodo: 'eq', args: ['workout_sessions.student_id', 'stu-1'] },
+        // Série sem carga não é "carga anotada".
+        { metodo: 'not', args: ['weight', 'is', null] },
+      ]),
+    )
   })
 
   it('o ganho vem da função do banco, e de um exercício só', async () => {

@@ -79,7 +79,6 @@ import type {
   StudentStatus,
   WorkoutAssignment,
   WorkoutExercise,
-  WorkoutLog,
   WorkoutPlan,
 } from '@/types/domain'
 import type { DemoStaff } from '@/lib/database/demo-seed'
@@ -110,13 +109,6 @@ export type ChargeHistoryFilters = {
   status?: Charge['status'] | 'ALL'
   page?: number
   pageSize?: number
-}
-
-/** O recorte do histórico de treino. */
-export type WorkoutLogFilters = {
-  /** ISO. Sem data, o gráfico pediria a vida inteira — e plotaria milhares de pontos. */
-  since?: string
-  limit?: number
 }
 
 /**
@@ -847,17 +839,6 @@ export interface DataSource {
     studentIds: readonly string[],
   ): Promise<WorkoutAssignment[]>
   countAssignments(organizationId: string): Promise<Record<string, number>>
-  /**
-   * O histórico de treino de um aluno, recortado.
-   *
-   * O recorte é obrigatório na prática: a tabela cresce desde o primeiro dia
-   * do aluno, e os dois gráficos que a leem plotam um ponto por linha.
-   */
-  listWorkoutLogs(
-    organizationId: string,
-    studentId: string,
-    filters?: WorkoutLogFilters,
-  ): Promise<WorkoutLog[]>
   /** Quantos registros o aluno tem, contados no banco. */
   countWorkoutLogs(organizationId: string, studentId: string): Promise<number>
   /** A primeira e a última carga registradas — duas linhas, não o histórico. */

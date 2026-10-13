@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 
+import { SEMANAS_DO_GRAFICO } from '@/features/workouts/ganho-de-carga'
 import { BotaoCompartilhar } from '@/features/share/share-button'
 import { Activity, Dumbbell, TrendingUp, Trophy } from 'lucide-react'
 
@@ -23,30 +24,36 @@ export default async function StudentProgressPage() {
   const agora = new Date()
   const noventaDias = new Date(agora.getTime() - 90 * 86_400_000)
 
-  const [home, logs, assessments, recordes, totais] = await Promise.all([
+  const [home, assessments, recordes, totais] = await Promise.all([
     getStudentHome(session.organizationId, session.studentId),
-    /*
-     * O gráfico pede a janela que a tela anuncia ao lado — noventa dias. Antes
-     * pedia a vida inteira: a leitura não tinha teto, a ordem é crescente, e o
-     * corte do PostgREST levava o fim da linha. O gráfico parava antes do
-     * presente sem nada indicando isso.
-     */
-    dataSource.listWorkoutLogs(session.organizationId, session.studentId, {
-      since: noventaDias.toISOString(),
-    }),
     dataSource.listAssessments(session.organizationId, session.studentId),
-    /*
-     * Recordes e totais vêm do Treino Ativo, que grava série a série. O
-     * `listWorkoutLogs` acima continua alimentando o gráfico de carga enquanto
-     * houver histórico antigo — quem treinava antes da 0026 não perde a linha.
-     */
     dataSource.getPersonalRecords(session.studentId),
     dataSource.getWorkoutTotals(session.studentId, noventaDias.toISOString(), agora.toISOString()),
   ])
 
-  const loadSeries = logs
-    .filter((log) => log.load != null)
-    .map((log) => ({ label: formatDate(log.performedAt), value: log.load as number }))
+  /*
+   * ── O gráfico é de um exercício, e vem de onde o treino entra ───────────
+   *
+   * Ele saía de `listWorkoutLogs`, isto é, de `workout_logs` — tabela em que
+   * **nada no produto escreve**. Em academia real a linha nunca aparecia, por
+   * mais que o aluno treinasse; na demonstração aparecia, porque a semente
+   * preenche a antiga.
+   *
+   * E plotava a carga de **todos** os exercícios na mesma linha, o que não é
+   * uma curva: um agachamento de 100 kg e uma rosca de 20 alternados desenham
+   * um serrote que não diz nada. A linha agora é do mesmo exercício que os
+   * cartões nomeiam — o mais treinado —, e `exercise_progress` (0027) já dava
+   * essa série por semana desde sempre.
+   *
+   * Depois do lote, e não junto: depende de saber qual é o exercício.
+   */
+  const progresso = home.loadExercise
+    ? await dataSource.getExerciseProgress(session.studentId, home.loadExercise.id, SEMANAS_DO_GRAFICO)
+    : []
+
+  const loadSeries = progresso
+    .filter((ponto) => ponto.maxWeight != null)
+    .map((ponto) => ({ label: formatDate(ponto.week), value: ponto.maxWeight as number }))
 
   const weightSeries = assessments
     .filter((assessment) => assessment.weight != null)
@@ -219,7 +226,7 @@ export default async function StudentProgressPage() {
       {loadSeries.length > 1 ? (
         <ChartCard
           title="Evolução de carga"
-          description="Todos os exercícios com carga anotada, nos últimos 90 dias."
+          description={`${home.loadExercise?.nome ?? 'Carga registrada'} — maior carga de cada semana.`}
         >
           <ProgressLineChart data={loadSeries} unit=" kg" height={180} />
         </ChartCard>

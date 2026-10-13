@@ -990,14 +990,24 @@ existem, não para conferir se subiram.
   há exercício para nomear, e a legenda não promete um. Há sonda: a função é
   nova e revogada ao anônimo.
 
-  **O que esta migration não resolve, e fica anotado:** o gráfico "Evolução de
-  carga" da ficha do hub e o cartão "Treinos registrados" continuam lendo
-  `workout_logs`. A legenda do gráfico parou de mentir — dizia "Supino reto"
-  sobre uma linha que mistura todos os exercícios, verdade na demonstração e
-  mentira em produção —, mas a fonte dos dois ainda é a tabela vazia. São duas
-  telas do hub, não do app, e o conserto é outro: `exercise_progress` (0027) já
-  existe e dá a série semanal de um exercício, e a contagem de séries sai de
-  `workout_set_logs` com `head: true`. Próxima tarefa.
+  **O conserto foi até o fim, e `listWorkoutLogs` deixou de existir.** Os dois
+  gráficos de evolução — o do app e o da ficha do hub — e o cartão "Treinos
+  registrados" liam a mesma tabela vazia. Os gráficos passaram a desenhar a
+  série semanal do mesmo exercício que os cartões nomeiam, por
+  `exercise_progress` (0027), que já dava isso desde sempre e nunca tinha sido
+  usada para esse fim; o cartão conta séries de `workout_set_logs` com
+  `head: true` e `workout_sessions!inner` para filtrar pelo aluno no servidor.
+
+  Com isso `listWorkoutLogs` ficou sem nenhum consumidor — ela era o único
+  leitor de `workout_logs` — e saiu do data source. Deixar no lugar um método
+  que lê uma tabela que ninguém escreve é deixar a armadilha montada para a
+  próxima tela: foi exatamente assim que quatro números ficaram vazios em
+  produção sem ninguém notar. A demonstração continua semeando `workout_logs`
+  e lê dela por dentro, num método privado.
+
+  Plotar todos os exercícios na mesma linha também não era uma curva: um
+  agachamento de 100 kg e uma rosca de 20 alternados desenham um serrote que
+  não diz nada. A linha é de um exercício, como os cartões.
 
   `tests/db/ganho-de-carga.test.ts`: 9 testes contra Postgres, 5 mutações
   (carga mínima do dia em vez de máxima, aceitar um dia só, contar séries em

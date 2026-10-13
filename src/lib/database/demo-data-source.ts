@@ -10,7 +10,6 @@ import { daysBetween } from '@/lib/utils'
 import type {
   ChargeHistoryFilters,
   LoadProgress,
-  WorkoutLogFilters,
   ChargeWithStudent,
   CrmSummary,
   BodyHistoryFilters,
@@ -141,7 +140,6 @@ import type {
   Student,
   WorkoutAssignment,
   WorkoutExercise,
-  WorkoutLog,
   WorkoutPlan,
   StudentStatus,
 } from '@/types/domain'
@@ -1592,32 +1590,28 @@ export class DemoDataSource implements DataSource {
     return counts
   }
 
-  /** Noventa dias, como na produção: é o que as duas telas anunciam. */
-  private static readonly DIAS_DE_HISTORICO = 90
-
+  /**
+   * Os registros de carga do aluno, da semente — uso interno.
+   *
+   * `listWorkoutLogs` saiu do data source: ela lia `workout_logs`, tabela em
+   * que **nada no produto escreve**, e por isso devolvia lista vazia em
+   * qualquer academia real. Aqui a semente a preenche, e é dela que a
+   * demonstração tira a evolução de carga.
+   */
   private registrosDoAluno(organizationId: string, studentId: string) {
     return this.scoped(this.db.workoutLogs, organizationId)
       .filter((l) => l.studentId === studentId)
       .sort((a, b) => a.performedAt.localeCompare(b.performedAt))
   }
 
-  async listWorkoutLogs(
-    organizationId: string,
-    studentId: string,
-    filters: WorkoutLogFilters = {},
-  ): Promise<WorkoutLog[]> {
-    const desde =
-      filters.since ??
-      new Date(Date.now() - DemoDataSource.DIAS_DE_HISTORICO * 86_400_000).toISOString()
-
-    return this.registrosDoAluno(organizationId, studentId)
-      .filter((l) => l.performedAt >= desde)
-      .slice(0, Math.max(1, filters.limit ?? 500))
-  }
-
   async countWorkoutLogs(organizationId: string, studentId: string): Promise<number> {
-    // Conta tudo, não a janela: o cartão diz quantos registros o aluno tem.
-    return this.registrosDoAluno(organizationId, studentId).length
+    /*
+     * Conta tudo, não a janela: o cartão diz quantas séries com carga o aluno
+     * tem. Em produção isso sai de `workout_set_logs`; aqui a semente só
+     * preenche `workout_logs`, e contá-la é o equivalente honesto — um
+     * registro da semente é uma série anotada.
+     */
+    return this.registrosDoAluno(organizationId, studentId).filter((l) => l.load != null).length
   }
 
   /**

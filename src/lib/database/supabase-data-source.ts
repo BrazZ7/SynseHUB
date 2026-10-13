@@ -36,7 +36,6 @@ import { daysBetween } from '@/lib/utils'
 import type {
   ChargeHistoryFilters,
   LoadProgress,
-  WorkoutLogFilters,
   ChargeWithStudent,
   CrmSummary,
   BodyHistoryFilters,
@@ -136,7 +135,6 @@ import type {
   Student,
   WorkoutAssignment,
   WorkoutExercise,
-  WorkoutLog,
   WorkoutPlan,
   StudentStatus,
 } from '@/types/domain'
@@ -2066,78 +2064,31 @@ export class SupabaseDataSource implements DataSource {
     )
   }
 
-  /** Noventa dias é o que as duas telas que leem isto já anunciam. */
-  private static readonly DIAS_DE_HISTORICO = 90
-  private static readonly TETO_DE_REGISTROS = 500
-
   /**
-   * O histórico de treino de um aluno, recortado.
-   *
-   * ── Por que o recorte é obrigatório na prática ─────────────────────────────
-   *
-   * `workout_logs` cresce desde o primeiro dia do aluno, a leitura não tinha
-   * teto, e a ordem é **crescente** — então o corte do PostgREST descarta o
-   * registro mais recente. As três coisas que esta leitura alimentava erravam
-   * de jeitos diferentes:
-   *
-   *   o "ganho de carga" da home     usa a última carga: congelava num valor antigo
-   *   o cartão "Treinos"             conta as linhas: dizia menos do que é
-   *   os dois gráficos de carga      plotam um ponto por linha: sumiam no fim
-   *
-   * As duas primeiras saíram daqui (`getLoadProgress` e `countWorkoutLogs`).
-   * O gráfico fica, com janela e teto: ele mostra evolução recente, e noventa
-   * dias é o que a própria tela já anuncia ao lado.
-   */
-  async listWorkoutLogs(
-    organizationId: string,
-    studentId: string,
-    filters: WorkoutLogFilters = {},
-  ) {
-    const desde =
-      filters.since ??
-      new Date(Date.now() - SupabaseDataSource.DIAS_DE_HISTORICO * 86_400_000).toISOString()
-    const teto = Math.min(SupabaseDataSource.TETO_DE_REGISTROS, Math.max(1, filters.limit ?? 500))
-
-    const rows =
-      (await this.select<Row[]>(
-        'listWorkoutLogs',
-        this.client
-          .from('workout_logs')
-          .select('*')
-          .eq('organization_id', organizationId)
-          .eq('student_id', studentId)
-          .gte('performed_at', desde)
-          .order('performed_at', { ascending: true })
-          .limit(teto),
-      )) ?? []
-    return rows.map((row) => ({
-      id: row.id,
-      organizationId: row.organization_id,
-      studentId: row.student_id,
-      workoutPlanId: row.workout_plan_id,
-      workoutExerciseId: row.workout_exercise_id,
-      performedAt: row.performed_at,
-      load: row.load != null ? Number(row.load) : null,
-      reps: row.reps,
-      sets: row.sets,
-      rpe: row.rpe,
-      notes: row.notes,
-    })) satisfies WorkoutLog[]
-  }
-
-  /**
-   * Quantos registros o aluno tem.
+   * Quantas séries com carga o aluno registrou.
    *
    * `head: true` não traz linha nenhuma: o Postgres conta. O cartão lia
    * `logs.length` de uma leitura sem teto, então o número era o da resposta —
    * e a resposta podia vir cortada.
+   *
+   * ── E contava a tabela errada ────────────────────────────────────────────
+   *
+   * Contava `workout_logs`, em que **nada no produto escreve**. O cartão
+   * "Treinos registrados" dizia `0` para todo aluno de academia real, por
+   * mais que ele treinasse, e o número certo aparecia só na demonstração —
+   * cuja semente preenche a tabela antiga. O treino entra em
+   * `workout_set_logs` pela 0026.
+   *
+   * `workout_sessions!inner` é o que permite filtrar pelo aluno **no
+   * servidor**: a série pertence à sessão, e é a sessão que sabe de quem é.
    */
   async countWorkoutLogs(organizationId: string, studentId: string): Promise<number> {
     const { count, error } = await this.client
-      .from('workout_logs')
-      .select('id', { count: 'exact', head: true })
+      .from('workout_set_logs')
+      .select('id, workout_sessions!inner(student_id)', { count: 'exact', head: true })
       .eq('organization_id', organizationId)
-      .eq('student_id', studentId)
+      .eq('workout_sessions.student_id', studentId)
+      .not('weight', 'is', null)
 
     if (error) this.fail('countWorkoutLogs', error)
     return count ?? 0

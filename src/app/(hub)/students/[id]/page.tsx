@@ -33,6 +33,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { SEMANAS_DO_GRAFICO } from '@/features/workouts/ganho-de-carga'
 import { requireHubSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 import { seAindaNaoMigrou } from '@/lib/database/pending-migration'
@@ -113,7 +114,6 @@ export default async function StudentProfilePage({ params }: { params: Params })
     openCharge,
     checkIns,
     assignments,
-    workoutLogs,
     totalDeRegistros,
     assessments,
     autorizacoesDoCorpo,
@@ -142,7 +142,6 @@ export default async function StudentProfilePage({ params }: { params: Params })
      * aluno: a leitura não tinha teto, a ordem é crescente, e o corte do
      * PostgREST levava o fim da linha — o gráfico parava antes do presente.
      */
-    dataSource.listWorkoutLogs(session.organizationId, student.id, {}),
     dataSource.countWorkoutLogs(session.organizationId, student.id),
     canSeeHealth
       ? dataSource.listAssessments(session.organizationId, student.id)
@@ -228,9 +227,26 @@ export default async function StudentProfilePage({ params }: { params: Params })
       ? latestAssessment.weight - previousAssessment.weight
       : null
 
-  const loadSeries = workoutLogs
-    .filter((log) => log.load != null)
-    .map((log) => ({ label: formatDate(log.performedAt), value: log.load as number }))
+  /*
+   * ── O gráfico do professor, consertado na origem e no significado ───────
+   *
+   * Ele saía de `workout_logs`, em que **nada no produto escreve**: em
+   * academia real a linha nunca aparecia. E a legenda dizia "Supino reto"
+   * sobre uma curva que misturava todos os exercícios — verdade na
+   * demonstração, cuja semente registra tudo no supino, mentira em qualquer
+   * academia de verdade.
+   *
+   * Agora é a série semanal do exercício que o aluno mais treinou, pela
+   * `exercise_progress` (0027), e a legenda diz o nome que veio do banco.
+   */
+  const cargas = await dataSource.getLoadProgress(session.organizationId, student.id)
+  const progresso = cargas.exercicio
+    ? await dataSource.getExerciseProgress(student.id, cargas.exercicio.id, SEMANAS_DO_GRAFICO)
+    : []
+
+  const loadSeries = progresso
+    .filter((ponto) => ponto.maxWeight != null)
+    .map((ponto) => ({ label: formatDate(ponto.week), value: ponto.maxWeight as number }))
 
   const weightSeries = assessments
     .filter((assessment) => assessment.weight != null)
@@ -501,14 +517,7 @@ export default async function StudentProfilePage({ params }: { params: Params })
           {loadSeries.length > 1 && (
             <ChartCard
               title="Evolução de carga"
-              /*
-                "Supino reto" era legenda fixa no código, e o gráfico plota a
-                carga de **qualquer** exercício. Era verdade na demonstração,
-                onde a semente registra tudo no supino, e mentira em qualquer
-                academia real — o professor lia o nome de um exercício sobre
-                uma linha que mistura todos.
-              */
-              description="Carga registrada em todos os exercícios, ao longo do tempo."
+              description={`${cargas.exercicio?.nome ?? 'Carga registrada'} — maior carga de cada semana.`}
             >
               <ProgressLineChart data={loadSeries} unit=" kg" />
             </ChartCard>

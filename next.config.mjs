@@ -65,10 +65,16 @@ const DIRETIVAS = [
  * tela. Custou uma sessão de verificação no navegador descobrir que o produto
  * não estava quebrado, o ambiente estava.
  *
- * `NODE_ENV` é o Next que define: `next dev` dá `development`, `next build` e
- * `next start` dão `production`. A concessão existe só do lado de quem
- * desenvolve, e o teste de `tests/unit/cabecalhos-de-seguranca.test.ts` cobra
- * que produção continue sem ela.
+ * `NODE_ENV` é **padrão** do Next, não garantia: `next dev` assume
+ * `development` e `next build`/`next start` assumem `production`, mas o
+ * ambiente pode sobrescrever (`NODE_ENV=development next build` passa, só
+ * avisando). Nada neste repositório faz isso, e o `Dockerfile` fixa
+ * `ENV NODE_ENV=production` no estágio que roda — é daí que vem a garantia,
+ * não da convenção.
+ *
+ * A concessão existe só do lado de quem desenvolve, e o teste de
+ * `tests/unit/cabecalhos-de-seguranca.test.ts` cobra que produção continue
+ * sem ela.
  */
 export function cspDoAmbiente(ehDesenvolvimento) {
   return DIRETIVAS.map((diretiva) => {

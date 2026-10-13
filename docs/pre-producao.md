@@ -1015,6 +1015,57 @@ existem, não para conferir se subiram.
   pegas. Um dos testes lê `pg_get_functiondef` e falha se a função voltar a
   citar `workout_logs`.
 
+### A revisão de segurança que o Codex não fez
+
+O CLAUDE.md pede um segundo par de olhos em migration, dinheiro e permissão.
+O Codex não está instalado neste container — oito commits desta sessão foram
+escritos sem revisão nenhuma. Rodei no lugar dele uma revisão de segurança
+sobre o intervalo inteiro (`HEAD~8..HEAD`), com acesso ao repositório e às
+políticas de RLS.
+
+**Resultado: nenhum achado acima da barra.** Os seis pontos que eu pedi para
+serem verificados explicitamente voltaram fechados, cada um com evidência:
+
+- `resumo_das_academias` e `ganho_de_carga` são `security invoker`, então a
+  RLS filtra antes de a função somar; a academia vizinha e o aluno vizinho
+  recebem zero linha, não linha zerada.
+- `buscarAlunosAction` confere `students:read` e `workouts:read` **antes** de
+  qualquer leitura, e o `requireHubSession()` fica fora do `try` — o redirect
+  que recusa aluno e anônimo não é engolido pelo `catch`.
+- A concessão da CSP só alcança `development`, e o `Dockerfile` fixa
+  `NODE_ENV=production` no estágio que roda.
+- Os `.in(...)` novos sempre vêm acompanhados do `organization_id` da sessão.
+- O único campo novo que cruza para o navegador é `jaTemOTreino`, e ele é
+  recortado pelos doze alunos da tela.
+
+**Dois apontamentos vieram, e os dois eram meus.**
+
+O primeiro é o que importa: **o teste que afirmava provar isolamento entre
+alunos nunca o exercitava.** `seedTwoGyms` cria aluno sem `auth_user_id` — ele
+existe como cadastro, não como login —, então o `if (authDoAluno)` em
+`tests/db/ganho-de-carga.test.ts` era sempre falso e o teste caía no `else`,
+repetindo a asserção da academia vizinha logo abaixo. Passava sem olhar nada.
+
+O conserto liga um aluno a `auth.users` na semente do teste e tira o `if`.
+Agora a asserção roda com **dois** controles: o outro aluno tem ganho quando
+lido sem RLS (senão "vazio" provaria que ele não treinou), e o aluno
+autenticado enxerga o **próprio** ganho (senão um `set_config` mal feito faria
+tudo voltar vazio e a asserção passaria pelo motivo errado). A mutação que
+troca a função para `security definer` agora derruba esse teste — antes não
+derrubava.
+
+O segundo: o comentário do `next.config.mjs` dizia que "`NODE_ENV` é o Next
+que define". É **padrão**, não garantia — o ambiente sobrescreve, e
+`NODE_ENV=development next build` só avisa. A garantia real é o `Dockerfile`.
+O comentário agora diz isso.
+
+Dois outros apontamentos não procedem como defeito e ficam registrados: a
+interpolação de `organizationId` no filtro `.or()` de `countExercises` (valor
+sempre vindo do banco, e o método devolve só contagem — mesmo padrão do
+`listExercises` que já existia), e a assimetria de `workouts:read` exigido por
+uma tela que renderiza sob `workouts:write` (nenhum papel do produto tem um
+sem o outro).
+
 ### A régua de cobrança dizia "Ativa" e não enviava nada
 
 Mesma família da 0055, e numa tela pior: a do dinheiro.

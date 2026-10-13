@@ -37,6 +37,17 @@ let outroAluno: string
 let supino: string
 let rosca: string
 
+/*
+ * O aluno precisa de conta para o teste de isolamento valer.
+ *
+ * `seedTwoGyms` cria os alunos sem `auth_user_id` — eles existem como
+ * cadastro, não como login. Sem ligar um deles a `auth.users`, a asserção
+ * "o aluno não enxerga o treino de outro" não tem como ser feita: não há
+ * quem autenticar. A primeira versão deste arquivo tinha um `if` em volta
+ * dela, e o `if` era sempre falso — o teste passava sem exercitar nada.
+ */
+const AUTH_DO_ALUNO = '77777777-0000-0000-0000-000000000001'
+
 /** Uma sessão daquele dia com uma série de cada carga. */
 async function registrar(
   studentId: string,
@@ -83,6 +94,16 @@ beforeAll(async () => {
   )
   supino = ex.find((e) => e.slug === 'supino-teste').id
   rosca = ex.find((e) => e.slug === 'rosca-teste').id
+
+  await client.query(`insert into auth.users (id, email) values ($1,$2)`, [
+    AUTH_DO_ALUNO,
+    'aluno-carga@alpha.test',
+  ])
+  await client.query(
+    `update user_profiles set auth_user_id = $1
+      where id = (select user_profile_id from students where id = $2)`,
+    [AUTH_DO_ALUNO, aluno],
+  )
 }, 120_000)
 
 afterAll(async () => {
@@ -146,38 +167,38 @@ describe.skipIf(!temBanco)('ganho_de_carga', () => {
   })
 
   it('o aluno não enxerga o treino de outro', async () => {
-    // Controle primeiro: sem ele, uma lista vazia passaria por omissão.
+    /*
+     * ── Dois controles antes da asserção, e os dois são necessários ────────
+     *
+     * O primeiro: o outro aluno **tem** ganho quando lido sem RLS. Sem ele,
+     * "voltou vazio" provaria que o outro não treinou, não que este não
+     * enxerga.
+     *
+     * O segundo: autenticado, o aluno enxerga o **próprio** ganho. Sem ele,
+     * um `set_config` mal feito faria tudo voltar vazio e a asserção passaria
+     * pelo motivo errado — que é como esta mesma asserção passava antes, com
+     * um `if (authDoAluno)` que nunca era verdadeiro porque a semente cria
+     * aluno sem conta.
+     */
     await registrar(outroAluno, ALPHA.orgId, rosca, '2026-04-01', [30])
     await registrar(outroAluno, ALPHA.orgId, rosca, '2026-04-08', [35])
-    expect(await ganho(outroAluno)).toHaveLength(1)
+    expect(await ganho(outroAluno), 'o outro aluno não tem ganho nenhum').toHaveLength(1)
 
-    const { rows: perfil } = await client.query(
-      `select up.auth_user_id from students s
-         join user_profiles up on up.id = s.user_profile_id
-        where s.id = $1`,
+    const oProprio = await asUser<Linha>(
+      client,
+      AUTH_DO_ALUNO,
+      `select * from ganho_de_carga($1)`,
       [aluno],
     )
-    const authDoAluno = perfil[0].auth_user_id as string | null
+    expect(oProprio, 'o aluno não enxerga o próprio treino: a sessão não valeu').toHaveLength(1)
 
-    if (authDoAluno) {
-      const comoOAluno = await asUser<Linha>(
-        client,
-        authDoAluno,
-        `select * from ganho_de_carga($1)`,
-        [outroAluno],
-      )
-      expect(comoOAluno).toHaveLength(0)
-    } else {
-      // Sem conta ligada ao aluno, o que dá para exigir é que a academia
-      // vizinha não alcance — e isso o teste abaixo cobre.
-      const comoBeta = await asUser<Linha>(
-        client,
-        BETA.authId,
-        `select * from ganho_de_carga($1)`,
-        [aluno],
-      )
-      expect(comoBeta).toHaveLength(0)
-    }
+    const oDoOutro = await asUser<Linha>(
+      client,
+      AUTH_DO_ALUNO,
+      `select * from ganho_de_carga($1)`,
+      [outroAluno],
+    )
+    expect(oDoOutro).toHaveLength(0)
   })
 
   it('a academia vizinha não enxerga nada', async () => {

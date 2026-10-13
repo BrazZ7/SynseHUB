@@ -207,6 +207,7 @@ const MIGRATIONS_ESPERADAS = [
   '0053_reimportar_saude.sql',
   '0054_resumo_das_academias.sql',
   '0055_ganho_de_carga.sql',
+  '0056_eventos.sql',
 ]
 
 async function schemaReadiness() {
@@ -241,6 +242,7 @@ async function schemaReadiness() {
     serieDePeso,
     resumoDasAcademias,
     ganhoDeCarga,
+    eventos,
   ] = await Promise.all([
     schemaCheck('user_profiles?select=tier&limit=1'),
     schemaCheck('baseline_challenges?select=code&limit=1'),
@@ -559,6 +561,31 @@ async function schemaReadiness() {
      * que separa "o aluno não treinou" de "o banco não migrou".
      */
     rpcCheck('ganho_de_carga', { p_student_id: '00000000-0000-0000-0000-000000000000' }),
+
+    /*
+     * A 0056 — eventos com inscrição paga.
+     *
+     * Sem ela não há tabela nenhuma de evento, e a página pública da corrida
+     * responde erro em vez de formulário. É a sonda mais direta deste
+     * arquivo: a função é nova e **o anônimo pode executá-la**, porque é ela
+     * que recebe a inscrição de quem não tem conta. Então aqui 400 é
+     * "existe e recusou os argumentos de sonda", e 404 é "não existe".
+     *
+     * Os argumentos são deliberadamente inválidos — CPF de três dígitos, id
+     * zerado — para a sonda nunca gravar inscrição em produção.
+     */
+    rpcCheck(
+      'inscrever_no_evento',
+      {
+        p_event_id: '00000000-0000-0000-0000-000000000000',
+        p_full_name: 'sonda',
+        p_email: 'sonda@synse.test',
+        p_phone: '00000000',
+        p_tax_id: '000',
+        p_privacy_version: 'sonda',
+      },
+      { executa: true },
+    ),
   ])
 
   const registradas = await migracoesRegistradas()
@@ -638,6 +665,9 @@ async function schemaReadiness() {
     if (ganhoDeCarga.present === false && !faltando.includes('0055_ganho_de_carga.sql')) {
       faltando.push('0055_ganho_de_carga.sql')
     }
+    if (eventos.present === false && !faltando.includes('0056_eventos.sql')) {
+      faltando.push('0056_eventos.sql')
+    }
     return {
       synseRun: corridas,
       entradaSemVinculo,
@@ -669,6 +699,7 @@ async function schemaReadiness() {
       serieDePeso,
       resumoDasAcademias,
       ganhoDeCarga,
+      eventos,
       appliedMigrations: registradas.length,
       pendingMigrations: faltando,
     }
@@ -723,6 +754,7 @@ async function schemaReadiness() {
     '0053_reimportar_saude.sql',
     '0054_resumo_das_academias.sql',
     '0055_ganho_de_carga.sql',
+    '0056_eventos.sql',
   )
 
   return {

@@ -1015,6 +1015,58 @@ existem, não para conferir se subiram.
   pegas. Um dos testes lê `pg_get_functiondef` e falha se a função voltar a
   citar `workout_logs`.
 
+- **0056 (`0056_eventos.sql`)** — eventos com inscrição paga, abertos a quem
+  não é aluno.
+
+  O primeiro é a corrida de inauguração: R$ 79,90, inscrição dentro do app.
+  Nada no produto fazia isso — `class_sessions` é aula recorrente para aluno
+  matriculado, e `gym_challenges` é desafio sem dinheiro e sem vaga.
+
+  Três tabelas: `events` (com preço, teto, janela de inscrição, chave PIX e
+  situação), `event_categories` (5 km, 10 km) e `event_registrations`.
+
+  **A inscrição não cria `charge`, e isso é deliberado.** `charges.student_id`
+  é `not null`: toda cobrança pertence a um aluno. Inscrição de quem não é
+  aluno não cabe ali sem afrouxar a coluna, e afrouxá-la faria a mensalidade
+  passar a aceitar linha sem dono. Pior: hoje nenhum centavo se move no Synse,
+  e lançar inscrição em `charges` encheria o GMV, a receita da plataforma e os
+  indicadores de `/synse-pay` com dinheiro que ninguém processou — depois de
+  esta sessão inteira consertar telas que mentem. O valor fica congelado na
+  inscrição; quando houver provedor, o adapter cria a cobrança no gateway e o
+  webhook confirma, no campo `payment_reference` que já existe. Um dos testes
+  lê `pg_get_functiondef` e falha se `charges` aparecer na função.
+
+  **Quem não tem conta nunca escreve na tabela.** A inscrição entra por
+  `inscrever_no_evento`, `security definer`, que valida evento publicado,
+  janela aberta, categoria do próprio evento, CPF de onze dígitos e aceite da
+  política. O anônimo recebe `execute` nela e **nada** em
+  `event_registrations` — a tabela guarda CPF, telefone e contato de
+  emergência de terceiros, e `select` para o anônimo seria publicar a lista de
+  quem corre. Para acompanhar a própria inscrição existe
+  `consultar_inscricao`, com um código aleatório de 16 caracteres que funciona
+  como senha.
+
+  **Vaga é contada sob trava.** `for update` na linha do evento, contagem
+  depois. Vaga segurada é `PENDING_PAYMENT` mais `CONFIRMED`: segurar só o
+  confirmado deixaria alguém pagar e descobrir que lotou no meio do PIX.
+
+  **Dado pessoal de quem não é cliente.** A inscrição grava qual versão da
+  política a pessoa aceitou e quando — `privacy_version` é `not null`, e a
+  função recusa sem ele. Sem isso, é CPF de terceiro guardado sem base.
+
+  `tests/db/eventos.test.ts`: 23 testes contra Postgres, 6 mutações, todas
+  pegas.
+
+  **O teste de concorrência precisou de três versões para medir alguma
+  coisa**, e as duas primeiras passavam com e sem o `for update`. A primeira
+  usava `Promise.all` sobre o mesmo cliente, e o `node-pg` enfileira as
+  consultas de uma conexão: rodavam em sequência. A segunda abriu dois
+  clientes, mas cada chamada abria e fechava a própria transação em
+  microssegundos e elas quase nunca se sobrepunham. A terceira segura a
+  primeira transação **aberta** enquanto a segunda tenta — aí a trava separa o
+  comportamento, e a mutação morre. Foi a mutação que revelou isso; sem ela, o
+  teto do evento estaria "testado" e furado.
+
 ### A tela de amigos dizia que você estava no ranking dos outros
 
 `/app/friends` mostrava a pessoa ranqueada entre os amigos e, no mesmo rolar

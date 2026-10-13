@@ -2,6 +2,8 @@ import 'server-only'
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import type { NomeDeEvento, RotuloDeEvento } from '@/features/analytics/eventos'
+
 import {
   baldeDoPeriodo,
   type BaldeDaSerie,
@@ -2658,6 +2660,39 @@ export class SupabaseDataSource implements DataSource {
         waitlistPosition: posicao > 0 ? posicao : null,
       }
     })
+  }
+
+  // ── Eventos do produto ─────────────────────────────────────────────────────
+  async registrarEvento(evento: {
+    nome: NomeDeEvento
+    clientId: string
+    rotulo?: RotuloDeEvento | null
+    valor?: number | null
+  }): Promise<void> {
+    /*
+     * Não usa `this.fail`. Instrumentação que derruba a operação que ela
+     * observa é pior que instrumentação ausente: o aluno perderia a série
+     * porque a contagem de séries falhou.
+     *
+     * E a 0060 pode não ter subido — publicar não é migrar. Até o SQL ser
+     * colado, `registrar_evento` não existe e o PostgREST responde PGRST202.
+     * Isso não pode aparecer como erro no log de ninguém.
+     */
+    try {
+      const { error } = await this.client.rpc('registrar_evento', {
+        p_name: evento.nome,
+        p_client_id: evento.clientId,
+        p_rotulo: evento.rotulo ?? null,
+        p_valor: evento.valor ?? null,
+      })
+      if (error && !isPendingMigration(error)) {
+        logger.warn('evento:nao_registrado', { nome: evento.nome, code: error.code })
+      }
+    } catch (erro) {
+      if (!isPendingMigration(erro)) {
+        logger.warn('evento:nao_registrado', { nome: evento.nome, erro: String(erro).slice(0, 120) })
+      }
+    }
   }
 
   // ── Treino Ativo ───────────────────────────────────────────────────────────

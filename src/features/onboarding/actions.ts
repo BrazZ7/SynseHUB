@@ -53,6 +53,20 @@ export async function createOrganizationAction(
       type: 'GYM',
     })
     await recordSignupConsents()
+    /*
+     * O nascimento da coorte de retenção. `authUserId` como identificador:
+     * um cadastro por conta, e o `unique (name, client_id)` da 0060 garante
+     * que uma segunda passagem não crie uma segunda data de nascimento — que
+     * seria uma pessoa com duas coortes.
+     *
+     * Depois do `createOrganization` de propósito: o evento afirma que o
+     * cadastro terminou, e antes disso ele não terminou.
+     */
+    await dataSource.registrarEvento({
+      nome: 'CADASTRO_CONCLUIDO',
+      clientId: authUserId,
+      rotulo: 'ACADEMIA',
+    })
   } catch (error) {
     logger.error('onboarding:failed', { authUserId, error: String(error) })
     return { error: 'Não foi possível concluir o cadastro. Tente novamente.' }
@@ -106,6 +120,12 @@ export async function startPersonalAction(
       await dataSource.joinSynseAsSoloStudent({ studentName: parsed.data.studentName })
     }
     await recordSignupConsents()
+    // O mesmo nascimento de coorte do lado da academia, pelo outro caminho.
+    await dataSource.registrarEvento({
+      nome: 'CADASTRO_CONCLUIDO',
+      clientId: authUserId,
+      rotulo: 'PESSOAL',
+    })
   } catch (error) {
     const mensagem = String(error)
     if (mensagem.includes('Código de convite inválido')) {

@@ -26,6 +26,10 @@ import {
   lerSessao,
   salvarSessao,
 } from '@/features/active-workout/storage/local-workout'
+import {
+  registrarRegistroPerdidoAction,
+  registrarTreinoRecuperadoAction,
+} from '@/features/active-workout/actions'
 import { faltaEncerrarNoServidor } from '@/features/active-workout/encerramento'
 import { criarComando } from '@/features/active-workout/storage/comando'
 import { resumoDoTreino, type ResumoDoTreino } from '@/features/active-workout/state'
@@ -167,6 +171,12 @@ export function useActiveWorkout(dono: string, preferencias?: Partial<WorkoutSet
             tentativas: 0,
           })
         }
+        /*
+         * E conta que foi recuperado: para o servidor, um treino que sobe agora
+         * é igual a um que subiu na hora. Quem sabe que o app foi fechado no
+         * meio é esta tela.
+         */
+        void registrarTreinoRecuperadoAction(guardada.clientId)
         await limparSessao(dono)
       }
 
@@ -313,6 +323,21 @@ export function useActiveWorkout(dono: string, preferencias?: Partial<WorkoutSet
       setSessao((atual) => (atual ? { ...atual, serverId: resultado.sessionId } : atual))
     }
     setPendentes(resultado.pendentes)
+
+    /*
+     * A perda é contada aqui, uma vez, no momento em que o expurgo a reporta —
+     * e não a cada passagem da fila, que roda a cada volta de rede e a cada
+     * volta do segundo plano. O `expurgar` só devolve número maior que zero na
+     * passagem em que removeu as operações, então um identificador novo por
+     * chamada não duplica.
+     */
+    if (resultado.treinosPerdidos > 0) {
+      void registrarRegistroPerdidoAction(id(), 'TREINO', resultado.treinosPerdidos)
+    }
+    if (resultado.seriesPerdidas > 0) {
+      void registrarRegistroPerdidoAction(id(), 'SERIE', resultado.seriesPerdidas)
+    }
+
     setResumoDaFila(
       resumoDoTreino({
         pendentes: resultado.pendentes,

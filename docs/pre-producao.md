@@ -1149,6 +1149,52 @@ existem, não para conferir se subiram.
   com uma série de supino só, contar pela sessão e contar pelo exercício davam
   o mesmo número, e o teste passava com a conta errada.
 
+- **0060 (`0060_eventos_do_produto.sql`)** — os indicadores de produto.
+
+  Não havia instrumentação nenhuma. `grep -rln "analytics|posthog|plausible|
+  gtag(" src/` não devolvia nada, e `logger.ts` é registro técnico. Não havia
+  como responder à pergunta mais básica deste produto: **quantos treinos
+  iniciados viram concluídos?**
+
+  `product_events` e `registrar_evento()`. Vocabulário fechado — doze nomes e
+  onze rótulos, todos com `check` —, **sem campo livre e sem `jsonb`**: campo
+  livre em tabela de evento recebe, em algum momento, o nome do exercício ou a
+  observação do treinador, e aí a tabela de métrica virou cópia do dado
+  sensível, com outra política de acesso e outro prazo de guarda.
+
+  **Nada de rastreador externo.** O que este produto teria para mandar é
+  frequência de academia, carga levantada e corrida com localização — dado de
+  saúde pela LGPD. Nada sai do banco que já os guarda.
+
+  Idempotente por `unique (name, client_id)`: reenvio da fila e segunda
+  renderização do componente não contam duas vezes.
+
+  `indicadores_do_produto(p_dias)` devolve a coorte **dita por extenso**
+  (`coorte_desde`), ativação, tempo médio até a primeira ação útil, iniciados
+  versus concluídos, recuperações e perdas de sessão, e retenção de 7 e 30
+  dias. A escolha de entrada conta **pessoas distintas**, não linhas.
+
+  O significado e a origem de cada evento estão em
+  `src/features/analytics/eventos.ts`, com teste que confere que cada evento
+  declarado é emitido do arquivo que ele diz — catálogo que descreve evento que
+  ninguém emite é pior que catálogo nenhum, porque alguém monta painel em cima
+  dele.
+
+  **O que não é medido está escrito no código**, com a razão: uso dos widgets
+  (nenhuma superfície nativa envia ação ao servidor hoje) e indicações
+  convertidas (não existe indicação no produto).
+
+  `tests/db/eventos-do-produto.test.ts`: 18 testes contra Postgres.
+  `tests/unit/analytics/eventos.test.ts`: 15. Oito mutações; uma sobreviveu e
+  cobrou o teste que faltava — a função aceitando a pessoa de outro lugar que
+  não o `auth.uid()`.
+
+  **Pendência para o jurídico:** a política de privacidade descreve "registros
+  técnicos de acesso e erro" sob legítimo interesse. Estes eventos são de
+  produto, pseudonimizados e nunca compartilhados, e a seção "O que é coletado"
+  merece uma linha dizendo isso. Não foi escrita aqui porque texto de documento
+  legal é revisão de advogado, não minha.
+
 ### A área pública, e a inscrição de quem não tem conta
 
 `/eventos/<slug>` é a primeira parte do produto feita para quem **não tem

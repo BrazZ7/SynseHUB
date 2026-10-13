@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 
 import { SynseLogo } from '@/components/synse/synse-logo'
+import { RegistrarVisita } from '@/features/analytics/registrar-visita'
 import { AccountTypePicker } from '@/features/auth/account-type-picker'
 import { parseAccountType } from '@/features/auth/account-type'
 import { OnboardingForm } from '@/features/onboarding/onboarding-form'
@@ -52,6 +53,23 @@ export default async function OnboardingPage({
    */
   const tipo = parseAccountType((await searchParams).tipo)
 
+  /*
+   * A escolha da porta é contada aqui, na chegada com `?tipo=`, e não na action
+   * que conclui o cadastro: é a diferença entre quem escolheu e quem terminou —
+   * o degrau do funil que diz se o formulário seguinte está perdendo gente.
+   *
+   * Em componente de cliente porque esta página é de servidor e o Next
+   * pré-busca rotas: contar aqui no servidor contaria quem passou o dedo perto
+   * do link. O indicador conta pessoas distintas, não linhas, então recarregar
+   * a página não infla o número.
+   */
+  const marcaDaEscolha = tipo ? (
+    <RegistrarVisita
+      nome="ENTRADA_ESCOLHIDA"
+      rotulo={tipo === 'academia' ? 'ACADEMIA' : 'PESSOAL'}
+    />
+  ) : null
+
   if (!tipo) {
     return (
       <main className="mx-auto flex min-h-svh max-w-lg flex-col justify-center gap-8 px-5 py-12">
@@ -76,6 +94,8 @@ export default async function OnboardingPage({
   return (
     <main className="mx-auto flex min-h-svh max-w-lg flex-col justify-center gap-8 px-5 py-12">
       <SynseLogo size="md" />
+
+      {marcaDaEscolha}
 
       <header className="space-y-1.5">
         <h1 className="text-page-title font-semibold text-synse-text">{copy.titulo}</h1>

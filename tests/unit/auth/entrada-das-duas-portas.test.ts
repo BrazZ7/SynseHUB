@@ -57,7 +57,7 @@ describe('a porta para o outro lado', () => {
      * devolve a pessoa de onde ela veio — o mesmo sintoma de "botão que não
      * responde" que o seletor de contexto já teve.
      */
-    expect(outraPorta(conta({ role: 'ADMIN', studentId: null }), 'hub')).toBeNull()
+    expect(outraPorta(conta({ role: 'MANAGER', studentId: null }), 'hub')).toBeNull()
   })
 
   it('treinador com matrícula também tem as duas portas', () => {

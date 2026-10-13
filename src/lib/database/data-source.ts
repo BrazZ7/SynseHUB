@@ -1,3 +1,4 @@
+import type { NomeDeEvento, RotuloDeEvento } from '@/features/analytics/eventos'
 import type { OverdueBucket } from '@/features/payments/faixas-de-atraso'
 import type { ContagemDeConteudo, FiltroDeSituacao } from '@/features/content/situacao'
 import type { BodySeriesPoint } from '@/features/synse-body/baldes-da-serie'
@@ -932,6 +933,23 @@ export interface DataSource {
     studentId: string,
     window: ScheduleWindow,
   ): Promise<ClassSessionForStudent[]>
+
+  /**
+   * Registra um evento de produto (0060).
+   *
+   * Quem é a pessoa sai da sessão autenticada, no banco — nunca do argumento.
+   * O `clientId` é gerado uma vez por acontecimento e torna o reenvio e a
+   * segunda renderização inofensivos.
+   *
+   * Nunca estoura: instrumentação que derruba a operação que ela observa é
+   * pior que instrumentação ausente. Quem implementa engole a falha.
+   */
+  registrarEvento(evento: {
+    nome: NomeDeEvento
+    clientId: string
+    rotulo?: RotuloDeEvento | null
+    valor?: number | null
+  }): Promise<void>
 
   // Treino Ativo
   /**

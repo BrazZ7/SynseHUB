@@ -11,6 +11,7 @@ import { ProgressRing } from '@/components/synse/progress-ring'
 import { getStudentHome } from '@/features/students/app-service'
 import { PortasDoProgresso } from '@/features/students/components/portas-do-progresso'
 import { LinhaInteira, PilhaDoApp } from '@/components/synse/duas-colunas'
+import { RegistrarVisita } from '@/features/analytics/registrar-visita'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 import { formatDate, formatNumber } from '@/lib/utils'
@@ -66,6 +67,16 @@ export default async function StudentProgressPage() {
 
   return (
     <PilhaDoApp className="animate-fade-in-up">
+      {/*
+        Conta que o resumo foi consultado.
+
+        Em componente de cliente porque esta página é de servidor e o Next
+        pré-busca rotas: contado aqui no servidor, o indicador somaria quem
+        passou o dedo perto do link da aba. Montagem no cliente é o momento em
+        que a tela existe para alguém.
+      */}
+      <RegistrarVisita nome="RESUMO_CONSULTADO" rotulo="PROGRESSO" />
+
       <LinhaInteira className="space-y-5">
         <header>
           <h1 className="text-2xl font-semibold text-synse-text">Seu progresso</h1>

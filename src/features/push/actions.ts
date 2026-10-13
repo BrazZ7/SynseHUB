@@ -68,6 +68,12 @@ export async function registrarPushAction(
     })
 
     logger.info('push:registrado', { entregues })
+    // O par do desligar, com a mesma regra: o estado observado, não a intenção.
+    await dataSource.registrarEvento({
+      nome: 'LEMBRETE_ALTERADO',
+      clientId: `${endpoint.slice(-32)}:on`,
+      rotulo: 'LIGADO',
+    })
     return { ok: 'Pronto. Mandamos um aviso de teste agora.' }
   } catch (erro) {
     return comoErro(erro, 'Não foi possível ligar os avisos.')
@@ -86,6 +92,18 @@ export async function removerPushAction(
   try {
     const dataSource = await getDataSource()
     await dataSource.removePushSubscription(endpoint)
+    /*
+     * O rótulo é o estado em que a preferência **ficou**, observado depois da
+     * gravação — não a intenção do toque. O pedido pede essa distinção, e ela
+     * importa: o toque que falha não desligou nada, e contar a intenção faria o
+     * indicador dizer que as pessoas estão silenciando o app quando elas
+     * tentaram e não conseguiram.
+     */
+    await dataSource.registrarEvento({
+      nome: 'LEMBRETE_ALTERADO',
+      clientId: `${endpoint.slice(-32)}:off`,
+      rotulo: 'DESLIGADO',
+    })
     return { ok: 'Avisos desligados neste aparelho.' }
   } catch (erro) {
     return comoErro(erro, 'Não foi possível desligar os avisos.')

@@ -4,6 +4,8 @@ import { Check, Download, Loader2, Share2 } from 'lucide-react'
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
+import { registrarEventoAction } from '@/features/analytics/actions'
+import type { RotuloDeEvento } from '@/features/analytics/eventos'
 import { novaTela, paraBlob } from '@/features/share/card-base'
 import { NOME_DO_ARQUIVO, desenhar, type Cartao } from '@/features/share/cards'
 import { cn } from '@/lib/utils'
@@ -48,9 +50,31 @@ export function BotaoCompartilhar({
 
   const podeCompartilhar = typeof navigator !== 'undefined' && 'canShare' in navigator
 
+  /*
+   * Intenção e confirmação são dois eventos, e o pedido é explícito sobre não
+   * confundi-los.
+   *
+   * O toque é **intenção**: ele abre o menu do sistema, onde a pessoa ainda
+   * escolhe para onde vai — ou fecha sem escolher nada. Contar o toque como
+   * compartilhamento mediria vontade e chamaria de alcance.
+   *
+   * A confirmação é o `navigator.share` **resolvendo**. Cancelar no menu chega
+   * como `AbortError`, e esse caminho não confirma nada. O download também
+   * confirma: o arquivo saiu do aplicativo.
+   */
+  const marcar = (nome: 'COMPARTILHAMENTO_PEDIDO' | 'COMPARTILHAMENTO_CONFIRMADO') => {
+    const rotulo: RotuloDeEvento = cartao.tipo === 'corrida' ? 'CORRIDA' : 'TREINO'
+    const id =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    void registrarEventoAction(nome, id, rotulo)
+  }
+
   async function compartilhar() {
     setErro(null)
     setEstado('gerando')
+    marcar('COMPARTILHAMENTO_PEDIDO')
     try {
       const { tela, c } = await novaTela()
       desenhar(c, cartao)
@@ -72,6 +96,7 @@ export function BotaoCompartilhar({
         link.click()
         URL.revokeObjectURL(url)
       }
+      marcar('COMPARTILHAMENTO_CONFIRMADO')
       setEstado('pronto')
       setTimeout(() => setEstado('parado'), 2200)
     } catch (e) {

@@ -2313,6 +2313,17 @@ export class DemoDataSource implements DataSource {
     })
   }
 
+  // ── Eventos do produto ─────────────────────────────────────────────────────
+  /**
+   * Na demonstração, nada é registrado. De propósito.
+   *
+   * O visitante da demonstração não é usuário do produto: ele está vendo como o
+   * produto é. Contar os treinos dele inflaria "treinos iniciados" com cliques
+   * de quem nunca entrou na academia, e indicador inventado é pior que
+   * indicador ausente — ele é usado para decidir.
+   */
+  async registrarEvento(): Promise<void> {}
+
   // ── Treino Ativo ───────────────────────────────────────────────────────────
   /**
    * Em demonstração o treino vive em memória, com a mesma idempotência do

@@ -1,5 +1,6 @@
 'use server'
 
+import type { RotuloDeEvento } from '@/features/analytics/eventos'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 import { AppError, toUserMessage } from '@/lib/errors'
@@ -31,6 +32,13 @@ export async function startWorkoutSessionAction(
     const dataSource = await getDataSource()
     const id = await dataSource.startWorkoutSession(clientId, workoutPlanId)
     logger.info('workout:session_started', { sessionId: id })
+    /*
+     * O evento usa o id da sessão como identificador, e não o `clientId` do
+     * aparelho: a sessão é a coisa que começou. Reabrir o mesmo treino —
+     * recuperação, reenvio da fila — devolve o mesmo id e não conta um segundo
+     * início. É o que mantém honesto o "iniciados versus concluídos".
+     */
+    await dataSource.registrarEvento({ nome: 'TREINO_INICIADO', clientId: id })
     return { ok: true, id }
   } catch (error) {
     if (!(error instanceof AppError)) logger.error('workout:start_failed', { error: String(error) })
@@ -54,6 +62,9 @@ export async function logWorkoutSetAction(input: {
     await requireStudentSession()
     const dataSource = await getDataSource()
     const id = await dataSource.logWorkoutSet(input)
+    // O `clientId` da série: um evento por série, não por toque nem por
+    // tentativa da fila.
+    await dataSource.registrarEvento({ nome: 'SERIE_CONCLUIDA', clientId: input.clientId })
     return { ok: true, id }
   } catch (error) {
     if (!(error instanceof AppError)) {
@@ -84,6 +95,13 @@ export async function undoWorkoutSetAction(
     const dataSource = await getDataSource()
     await dataSource.undoWorkoutSet(sessionId, serieClientId)
     logger.info('workout:set_undone', { sessionId })
+    /*
+     * O identificador é o da série desfeita: desfazer a mesma série duas vezes
+     * — reenvio da fila — é um acontecimento, não dois. Ao lado de
+     * SERIE_CONCLUIDA, este evento mede o quanto o toque errado acontece, que é
+     * a razão de o desfazer existir.
+     */
+    await dataSource.registrarEvento({ nome: 'SERIE_DESFEITA', clientId: serieClientId })
     return { ok: true }
   } catch (error) {
     if (!(error instanceof AppError)) logger.error('workout:undo_failed', { error: String(error) })
@@ -101,12 +119,72 @@ export async function finishWorkoutSessionAction(
     const dataSource = await getDataSource()
     await dataSource.finishWorkoutSession(sessionId, durationSeconds, status)
     logger.info('workout:session_finished', { sessionId, durationSeconds, status })
+    /*
+     * Só o concluído conta. Treino abandonado é informação diferente — e
+     * registrá-lo como concluído faria o indicador que mais importa dizer o
+     * contrário do que aconteceu.
+     *
+     * `valor` é a duração em segundos: é o número que diferencia um treino de
+     * uma hora de um toque sem querer em "concluir".
+     */
+    if (status === 'COMPLETED') {
+      await dataSource.registrarEvento({
+        nome: 'TREINO_CONCLUIDO',
+        clientId: sessionId,
+        valor: durationSeconds,
+      })
+    }
     return { ok: true }
   } catch (error) {
     if (!(error instanceof AppError)) {
       logger.error('workout:finish_failed', { error: String(error) })
     }
     return { ok: false, erro: toUserMessage(error) }
+  }
+}
+
+/**
+ * O treino que ficou no aparelho e chegou depois.
+ *
+ * Quem sabe disto é a tela, não o servidor: para o banco, um treino que sobe
+ * agora é igual a um que subiu no momento em que aconteceu. A recuperação é
+ * justamente o caso em que o app foi fechado no meio, a bateria acabou ou a
+ * rede faltou — e saber quantas vezes isso acontece é o indicador "falhas e
+ * recuperação de sessão".
+ */
+export async function registrarTreinoRecuperadoAction(sessionClientId: string): Promise<void> {
+  try {
+    await requireStudentSession()
+    const dataSource = await getDataSource()
+    await dataSource.registrarEvento({ nome: 'TREINO_RECUPERADO', clientId: sessionClientId })
+  } catch (erro) {
+    logger.warn('evento:nao_registrado', { nome: 'TREINO_RECUPERADO', erro: String(erro).slice(0, 120) })
+  }
+}
+
+/**
+ * O que a fila desistiu de enviar.
+ *
+ * O outro lado do indicador acima, e o que dói: estes registros não existem no
+ * servidor. O rótulo separa treino inteiro de série solta porque a perda é de
+ * tamanhos diferentes, e `valor` diz quantos.
+ */
+export async function registrarRegistroPerdidoAction(
+  clientId: string,
+  rotulo: RotuloDeEvento,
+  quantos: number,
+): Promise<void> {
+  try {
+    await requireStudentSession()
+    const dataSource = await getDataSource()
+    await dataSource.registrarEvento({
+      nome: 'REGISTRO_PERDIDO',
+      clientId,
+      rotulo,
+      valor: quantos,
+    })
+  } catch (erro) {
+    logger.warn('evento:nao_registrado', { nome: 'REGISTRO_PERDIDO', erro: String(erro).slice(0, 120) })
   }
 }
 

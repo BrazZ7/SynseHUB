@@ -1015,6 +1015,43 @@ existem, não para conferir se subiram.
   pegas. Um dos testes lê `pg_get_functiondef` e falha se a função voltar a
   citar `workout_logs`.
 
+### A tela de amigos dizia que você estava no ranking dos outros
+
+`/app/friends` mostrava a pessoa ranqueada entre os amigos e, no mesmo rolar
+de tela, o cartão de privacidade dizia **"Sem registro ainda"** para "Aparecer
+em rankings". As duas coisas não podiam estar certas, e a legenda do ranking
+escolhia a errada: *"Só aparece quem autorizou — inclusive você."*
+
+**O banco está certo; a tela é que mentia.** `friends_ranking` (0037) monta
+`participantes` com quem chama **sempre** — ver o próprio número não é
+publicação — e aplica `consentiu_ranking` só do lado dos amigos. Então quem
+não autorizou se vê na lista e **não é vista por ninguém**. O teste de banco
+já travava esse comportamento desde a 0037 ("Só você sai daqui, porque o seu
+próprio número não é publicação"); o que faltava era a tela saber disso.
+
+Agora a legenda diz o que é — "Dos seus amigos, aparece quem autorizou. Você
+se vê sempre" — e, para quem não autorizou, entra um aviso: *"Seus amigos
+ainda não veem você aqui."* Ele some sozinho quando a pessoa autoriza, no
+cartão que já está no fim da mesma tela.
+
+**Por que a pergunta vai ao banco, e não sai de `listConsents`.** As duas
+respostas divergem num caso real: `listConsents` reporta `accepted` da
+resposta dada à **versão vigente** do documento, e `consentiu_ranking` ignora
+versão — olha a mais recente não revogada. Quem aceitou a v1 continua
+publicado depois que a v2 entra no ar.
+
+Deduzir na aplicação diria "você está invisível" para alguém cujos números
+estão na lista dos amigos. Entre os dois jeitos de errar, esse é o pior: a
+regra do produto sobre publicar métrica pessoal sem consentimento não tem
+meio-termo, e uma tela que tranquiliza indevidamente é pior que uma que
+assusta. `apareceNoRanking` pergunta exatamente a função que o ranking usa
+para filtrar os outros, então as duas não têm como divergir.
+
+`tests/unit/friends/apareco-no-ranking.test.ts`: 7 testes, 3 mutações (deduzir
+de `consents` em vez de perguntar, tratar nulo como sim, a demonstração
+ignorar o desmarcar) — as três pegas. Uma delas trava justamente que a
+resposta **não** venha de `consents`.
+
 ### A revisão de segurança que o Codex não fez
 
 O CLAUDE.md pede um segundo par de olhos em migration, dinheiro e permissão.

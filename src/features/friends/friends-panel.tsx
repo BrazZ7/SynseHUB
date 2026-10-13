@@ -43,11 +43,22 @@ export function FriendsPanel({
   amigos,
   ranking,
   dias,
+  euApareco,
 }: {
   meuSynseId: string
   amigos: readonly Friend[]
   ranking: readonly FriendRankRow[]
   dias: number
+  /**
+   * Se **eu** autorizei aparecer em ranking.
+   *
+   * `friends_ranking` (0037) põe quem chama na lista sempre, e só filtra os
+   * amigos pelo consentimento deles. Sem este sinal, a tela mostrava a pessoa
+   * ranqueada e dizia "só aparece quem autorizou — inclusive você" enquanto o
+   * cartão de privacidade logo abaixo dizia "Sem registro ainda". As duas
+   * frases não podiam estar certas, e a errada era a do ranking.
+   */
+  euApareco: boolean
 }) {
   const [pedido, pedir] = useActionState(requestFriendshipAction, INICIAL)
   const [resposta, responder] = useActionState(respondFriendshipAction, INICIAL)
@@ -148,9 +159,23 @@ export function FriendsPanel({
           Ranking dos últimos {dias} dias
           <Badge variant="primary">Synse+</Badge>
         </h2>
+        {/*
+          A frase antiga — "Só aparece quem autorizou — inclusive você" — era
+          falsa nos dois sentidos para quem não autorizou: ela aparecia aqui,
+          e não aparecia para os amigos. Agora a lista diz o que é, e a falta
+          de autorização vira aviso em vez de contradição silenciosa.
+        */}
         <p className="mt-1 text-xs text-synse-muted">
-          Por treinos concluídos. Só aparece quem autorizou — inclusive você.
+          Por treinos concluídos. Dos seus amigos, aparece quem autorizou. Você se vê sempre.
         </p>
+
+        {!euApareco && (
+          <p className="mt-3 rounded-lg border border-synse-warning/50 bg-synse-warning/10 px-3 py-2 text-xs text-synse-text">
+            <strong className="font-medium">Seus amigos ainda não veem você aqui.</strong> Você se
+            enxerga nesta lista, mas, sem autorizar, seu nome e seus números não entram no ranking
+            de ninguém. A autorização está no fim desta tela.
+          </p>
+        )}
 
         {ranking.length <= 1 ? (
           <p className="mt-4 text-sm text-synse-muted">

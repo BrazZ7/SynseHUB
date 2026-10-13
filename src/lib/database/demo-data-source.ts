@@ -1925,6 +1925,19 @@ export class DemoDataSource implements DataSource {
       }))
   }
 
+  /**
+   * O que `consentiu_ranking` (0037) responde, na demonstração.
+   *
+   * A mesma pergunta que o ranking faz sobre os outros, feita sobre mim. Na
+   * demonstração não há versão antiga de documento, então olhar a resposta
+   * guardada basta — e manter a pergunta num lugar só é o que impede a tela
+   * de afirmar o contrário do que a lista faz.
+   */
+  async apareceNoRanking(): Promise<boolean> {
+    const resposta = this.consentAnswers.get('RANKING_VISIBILITY')
+    return resposta?.accepted === true
+  }
+
   // ── CRM ────────────────────────────────────────────────────────────────────
   // ── Agenda ─────────────────────────────────────────────────────────────────
   /**

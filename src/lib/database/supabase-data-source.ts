@@ -4641,6 +4641,22 @@ export class SupabaseDataSource implements DataSource {
     })) satisfies FriendRankRow[]
   }
 
+  /**
+   * Eu apareço no ranking dos meus amigos?
+   *
+   * A mesma função que `friends_ranking` usa para filtrar os outros (0037),
+   * perguntada sobre mim. Deduzir de `listConsents` daria resposta diferente
+   * para quem aceitou uma versão anterior do documento — ela continua
+   * publicada, e a tela diria que não.
+   */
+  async apareceNoRanking(userProfileId: string): Promise<boolean> {
+    const { data, error } = await this.client.rpc('consentiu_ranking', {
+      p_profile_id: userProfileId,
+    })
+    if (error) this.fail('apareceNoRanking', error)
+    return data === true
+  }
+
   // ── CRM ────────────────────────────────────────────────────────────────────
   private mapLead(row: Row): Lead {
     return {

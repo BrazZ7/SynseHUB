@@ -1330,6 +1330,21 @@ export interface DataSource {
   removeFriendship(friendshipId: string): Promise<void>
   /** Você e os amigos que autorizaram. Sem consentimento, a pessoa não sai. */
   getFriendsRanking(from: string, to: string): Promise<FriendRankRow[]>
+  /**
+   * **Você** aparece no ranking dos seus amigos?
+   *
+   * `friends_ranking` põe quem chama na própria lista sempre — ver o próprio
+   * número não é publicação. Quem decide se os **outros** o veem é
+   * `consentiu_ranking`, e é essa a pergunta aqui.
+   *
+   * Ela vai ao banco em vez de ser deduzida de `listConsents` porque as duas
+   * respostas divergem num caso real: `listConsents` olha só a resposta dada
+   * à **versão vigente** do documento, e `consentiu_ranking` ignora versão.
+   * Quem aceitou a v1 continua publicado com a v2 no ar — e deduzir aqui
+   * diria à pessoa que ela está invisível enquanto os números dela estão na
+   * lista dos amigos. Errar para o lado de tranquilizar é o pior dos dois.
+   */
+  apareceNoRanking(userProfileId: string): Promise<boolean>
 
   listConsents(userProfileId: string): Promise<ConsentState[]>
   /**

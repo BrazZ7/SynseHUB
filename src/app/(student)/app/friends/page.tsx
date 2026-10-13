@@ -67,13 +67,27 @@ export default async function FriendsPage() {
   let amigos: Friend[] = []
   let ranking: FriendRankRow[] = []
   let consents: ConsentState[] = []
+  let euApareco = false
   let indisponivel = false
 
   try {
-    ;[amigos, ranking, consents] = await Promise.all([
+    ;[amigos, ranking, consents, euApareco] = await Promise.all([
       dataSource.listFriends(),
       dataSource.getFriendsRanking(de.toISOString(), ate.toISOString()),
       dataSource.listConsents(session.userProfileId),
+      /*
+       * ── Eu apareço para os meus amigos? ──────────────────────────────────
+       *
+       * Vem do banco, e não de `consents` ali em cima, porque as duas
+       * respostas divergem num caso real: `listConsents` olha a resposta dada
+       * à **versão vigente** do documento, e `consentiu_ranking` ignora
+       * versão. Quem aceitou a v1 continua publicado com a v2 no ar.
+       *
+       * Deduzir aqui diria "você está invisível" para alguém cujos números
+       * estão na lista dos amigos — e errar tranquilizando é o pior dos dois
+       * lados quando o assunto é publicar métrica pessoal.
+       */
+      dataSource.apareceNoRanking(session.userProfileId),
     ])
   } catch (erro) {
     if (!isPendingMigration(erro)) throw erro
@@ -81,6 +95,7 @@ export default async function FriendsPage() {
   }
 
   const rankingDaPrivacidade = consents.filter((item) => item.consentType === 'RANKING_VISIBILITY')
+
 
   return (
     <PilhaDoApp className="animate-fade-in-up">
@@ -109,6 +124,7 @@ export default async function FriendsPage() {
             amigos={amigos}
             ranking={ranking}
             dias={DIAS_DO_RANKING}
+            euApareco={euApareco}
           />
 
           {/*

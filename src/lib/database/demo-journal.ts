@@ -325,6 +325,27 @@ export type DemoMutation =
       at: string
     }
   | {
+      /**
+       * Inscrição em evento feita na demonstração.
+       *
+       * Chaves curtas porque o diário viaja em cookie e tem teto de bytes —
+       * `MAX_BYTES` logo abaixo. `cpf` entra porque é ele que impede a mesma
+       * pessoa de pegar duas vagas, e a demonstração precisa recusar a
+       * segunda como a produção recusa.
+       */
+      t: 'insc'
+      /** Código de confirmação, que é a senha de consulta. */
+      cod: string
+      ev: string
+      nome: string
+      cpf: string
+      /** Categoria escolhida, quando o evento tem. */
+      cat?: string | null
+      /** Situação: P (aguardando), W (fila), C (confirmada). */
+      s: 'P' | 'W' | 'C'
+      at: string
+    }
+  | {
       /** Consentimento aceito ou revogado na demonstração. */
       t: 'consent'
       /** Tipo do consentimento; a versão é sempre a vigente. */
@@ -392,6 +413,7 @@ const TIPOS_ACEITOS: Record<DemoMutation['t'], true> = {
   wassign: true,
   consent: true,
   friend: true,
+  insc: true,
 }
 
 function decode(raw: string): DemoMutation[] {

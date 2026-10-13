@@ -1312,3 +1312,61 @@ export type EquipeParaAutorizar = {
 
 /** As janelas do seletor de período da tela do Synse Body. */
 export type BodyPeriod = '7d' | '30d' | '3m' | '6m' | '1a' | 'tudo'
+
+// ── Eventos (0056) ───────────────────────────────────────────────────────────
+
+export type EventStatus = 'DRAFT' | 'PUBLISHED' | 'CLOSED' | 'CANCELLED'
+
+export type CategoriaDoEvento = {
+  id: string
+  name: string
+  position: number
+}
+
+/**
+ * O que a página pública mostra de um evento.
+ *
+ * `ocupadas` é a contagem de vagas tomadas — `PENDING_PAYMENT` mais
+ * `CONFIRMED` —, e vem do banco. A tela não soma nada: a lotação que vale é
+ * conferida sob trava no momento da inscrição, e um número calculado aqui
+ * seria só uma estimativa com cara de verdade.
+ */
+export type EventoPublico = {
+  id: string
+  organizationId: string
+  slug: string
+  title: string
+  description: string | null
+  location: string | null
+  startsAt: string
+  endsAt: string | null
+  price: number
+  capacity: number | null
+  ocupadas: number
+  registrationOpensAt: string | null
+  registrationClosesAt: string | null
+  status: EventStatus
+  pixKey: string | null
+  pixHolderName: string | null
+  categorias: CategoriaDoEvento[]
+}
+
+/** O que quem tem o código de confirmação consegue ver da própria inscrição. */
+export type InscricaoConsultada = {
+  id: string
+  eventId: string
+  eventTitle: string
+  startsAt: string
+  fullName: string
+  status: 'WAITLIST' | 'PENDING_PAYMENT' | 'CONFIRMED' | 'CANCELLED'
+  amount: number
+  categoria: string | null
+  pixKey: string | null
+  pixHolderName: string | null
+}
+
+/** O resultado de uma inscrição aceita. */
+export type InscricaoCriada = {
+  confirmationCode: string
+  status: 'WAITLIST' | 'PENDING_PAYMENT' | 'CONFIRMED' | 'CANCELLED'
+}

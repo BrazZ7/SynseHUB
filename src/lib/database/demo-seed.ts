@@ -10,6 +10,7 @@
  */
 
 import type {
+  EventoPublico,
   LeadEvent,
   Activity,
   Friend,
@@ -1256,6 +1257,42 @@ function buildDemoDataset() {
    * não sai no ranking — porque ser amigo não é autorizar a publicação do
    * próprio número.
    */
+  /*
+   * ── A corrida de inauguração, na demonstração ───────────────────────────
+   *
+   * Um evento publicado, com preço, teto e duas categorias. Existe para a
+   * página pública ter o que mostrar sem Supabase — é por ela que o produto é
+   * demonstrado, e um link de evento que abre vazio não demonstra nada.
+   *
+   * O teto é pequeno de propósito: com oito vagas dá para ver a fila de
+   * espera acontecer na demonstração, que é a parte que ninguém acredita até
+   * ver.
+   */
+  const demoEvento: EventoPublico = {
+    id: 'evt_0001',
+    organizationId: DEMO_ORG_ID,
+    slug: 'corrida-inauguracao',
+    title: 'Corrida de Inauguração Synse',
+    description:
+      'A primeira corrida da Academia Alpha. Percurso pela orla, kit com camiseta e medalha, '
+      + 'hidratação no caminho e café da manhã na chegada.',
+    location: 'Orla — concentração na porta da academia',
+    startsAt: addDays(DEMO_NOW, 30).toISOString(),
+    endsAt: null,
+    price: 79.9,
+    capacity: 8,
+    ocupadas: 0,
+    registrationOpensAt: null,
+    registrationClosesAt: addDays(DEMO_NOW, 25).toISOString(),
+    status: 'PUBLISHED',
+    pixKey: 'corrida@academiaalpha.com.br',
+    pixHolderName: 'Academia Alpha',
+    categorias: [
+      { id: 'evtcat_5k', name: '5 km', position: 1 },
+      { id: 'evtcat_10k', name: '10 km', position: 2 },
+    ],
+  }
+
   const demoFriends: Friend[] = [
     {
       friendshipId: 'frd_0001',
@@ -1559,6 +1596,7 @@ function buildDemoDataset() {
     leads: demoLeads,
     leadEvents: demoLeadEvents,
     collectionRules: demoCollectionRules,
+    eventos: [demoEvento],
     friends: demoFriends,
     activities: demoActivities,
     activitySplits: demoActivitySplits,

@@ -142,6 +142,9 @@ import type {
   WorkoutExercise,
   WorkoutPlan,
   StudentStatus,
+  EventoPublico,
+  InscricaoConsultada,
+  InscricaoCriada,
 } from '@/types/domain'
 
 /**
@@ -181,6 +184,23 @@ export class DemoDataSource implements DataSource {
   private readonly addedWorkoutPlans: WorkoutPlan[] = []
   private readonly addedWorkoutExercises: WorkoutExercise[] = []
   private readonly addedAssignments: WorkoutAssignment[] = []
+  /**
+   * As inscrições em evento deste visitante, reconstruídas do diário.
+   *
+   * Instância, e não `static`: o mapa estático já custou caro neste projeto
+   * (a pesagem que "salvava" e sumia, porque o Next carrega o mesmo módulo na
+   * camada da action e na do componente de servidor, cada uma com o próprio
+   * estado). O que sobrevive à requisição é o cookie.
+   */
+  private readonly inscricoesEmEventos: Array<{
+    cod: string
+    ev: string
+    nome: string
+    cpf: string
+    cat?: string | null
+    s: 'P' | 'W' | 'C'
+    at: string
+  }> = []
   /** Campos de cobrança alterados, sem tocar no objeto base. */
   private readonly chargePatches = new Map<string, Partial<Charge>>()
   private readonly studentStatusPatches = new Map<string, Student['status']>()
@@ -669,6 +689,10 @@ export class DemoDataSource implements DataSource {
       }
       case 'consent': {
         this.consentAnswers.set(mutation.code, { accepted: mutation.ok, at: mutation.at })
+        break
+      }
+      case 'insc': {
+        this.inscricoesEmEventos.push(mutation)
         break
       }
       case 'friend': {
@@ -4122,6 +4146,141 @@ export class DemoDataSource implements DataSource {
   async revokeStaffInvite(inviteId: string): Promise<void> {
     const convite = this.demoInvites.find((item) => item.id === inviteId)
     if (convite) convite.status = 'REVOKED'
+  }
+
+  // ── Eventos (0056) ─────────────────────────────────────────────────────────
+
+  /** As inscrições que este visitante fez, reconstruídas do diário. */
+  private inscricoesDoDiario(): Array<{
+    cod: string
+    ev: string
+    nome: string
+    cpf: string
+    cat?: string | null
+    s: 'P' | 'W' | 'C'
+    at: string
+  }> {
+    return this.inscricoesEmEventos
+  }
+
+  async getEventoPublico(slug: string): Promise<EventoPublico | null> {
+    const evento = this.db.eventos.find((e) => e.slug === slug)
+    // A RLS do anônimo só enxerga publicado; a demonstração repete a regra.
+    if (!evento || evento.status !== 'PUBLISHED') return null
+
+    const ocupadas = this.inscricoesDoDiario().filter(
+      (i) => i.ev === evento.id && i.s !== 'W',
+    ).length
+    return { ...evento, ocupadas }
+  }
+
+  /**
+   * O que `inscrever_no_evento` faz, na demonstração.
+   *
+   * As mesmas recusas da produção, na mesma ordem: evento publicado, janela
+   * aberta, categoria do próprio evento, CPF sem repetição. Recusar diferente
+   * aqui faria a demonstração ensinar um fluxo que a produção não tem.
+   */
+  async inscreverNoEvento(input: {
+    eventId: string
+    fullName: string
+    email: string
+    phone: string
+    taxId: string
+    privacyVersion: string
+    categoryId?: string | null
+    shirtSize?: string | null
+    emergencyName?: string | null
+    emergencyPhone?: string | null
+  }): Promise<InscricaoCriada> {
+    /*
+     * Os mesmos códigos que o Postgres usa — `22023` para argumento recusado,
+     * `P0002` para não encontrado, `23505` para unicidade. Sem eles, a
+     * tradução de erro da tela (`features/events/erros.ts`) funcionaria em
+     * produção e cairia no genérico na demonstração: o defeito que a
+     * demonstração existe para revelar seria justamente o invisível nela.
+     */
+    const recusa = (code: string, mensagem: string) =>
+      Object.assign(new Error(mensagem), { code })
+
+    const evento = this.db.eventos.find((e) => e.id === input.eventId)
+    if (!evento) throw recusa('P0002', 'Evento não encontrado.')
+    if (evento.status !== 'PUBLISHED') {
+      throw recusa('22023', 'As inscrições deste evento não estão abertas.')
+    }
+
+    const agora = new Date()
+    if (evento.registrationOpensAt && agora < new Date(evento.registrationOpensAt)) {
+      throw recusa('22023', 'As inscrições ainda não abriram.')
+    }
+    if (evento.registrationClosesAt && agora >= new Date(evento.registrationClosesAt)) {
+      throw recusa('22023', 'As inscrições já encerraram.')
+    }
+    if (input.categoryId && !evento.categorias.some((c) => c.id === input.categoryId)) {
+      throw recusa('22023', 'Categoria não é deste evento.')
+    }
+
+    const cpf = input.taxId.replace(/\D/g, '')
+    const jaInscrito = this.inscricoesDoDiario().some(
+      (i) => i.ev === evento.id && i.cpf === cpf,
+    )
+    if (jaInscrito) {
+      throw recusa(
+        '23505',
+        'duplicate key value violates unique constraint "event_registrations_sem_repeticao_idx"',
+      )
+    }
+
+    const ocupadas = this.inscricoesDoDiario().filter(
+      (i) => i.ev === evento.id && i.s !== 'W',
+    ).length
+    const naFila = evento.capacity !== null && ocupadas >= evento.capacity
+    const situacao: 'P' | 'W' | 'C' = naFila ? 'W' : evento.price === 0 ? 'C' : 'P'
+
+    /*
+     * Código aleatório, como o `gen_random_bytes` do banco: ele é a senha de
+     * consulta de quem não tem conta, e previsível seria dar a inscrição de
+     * um a quem adivinhar a do outro.
+     */
+    const cod = Array.from({ length: 16 }, () =>
+      Math.floor(Math.random() * 16).toString(16),
+    ).join('')
+
+    await appendDemoMutation({
+      t: 'insc',
+      cod,
+      ev: evento.id,
+      nome: input.fullName.trim(),
+      cpf,
+      cat: input.categoryId ?? null,
+      s: situacao,
+      at: agora.toISOString(),
+    })
+
+    const porLetra = { P: 'PENDING_PAYMENT', W: 'WAITLIST', C: 'CONFIRMED' } as const
+    return { confirmationCode: cod, status: porLetra[situacao] }
+  }
+
+  async consultarInscricao(codigo: string): Promise<InscricaoConsultada | null> {
+    const inscricao = this.inscricoesDoDiario().find((i) => i.cod === codigo)
+    if (!inscricao) return null
+
+    const evento = this.db.eventos.find((e) => e.id === inscricao.ev)
+    if (!evento) return null
+
+    const porLetra = { P: 'PENDING_PAYMENT', W: 'WAITLIST', C: 'CONFIRMED' } as const
+    return {
+      id: inscricao.cod,
+      eventId: evento.id,
+      eventTitle: evento.title,
+      startsAt: evento.startsAt,
+      fullName: inscricao.nome,
+      status: porLetra[inscricao.s],
+      amount: evento.price,
+      categoria: evento.categorias.find((c) => c.id === inscricao.cat)?.name ?? null,
+      pixKey: evento.pixKey,
+      pixHolderName: evento.pixHolderName,
+    }
   }
 
   async listConsents(): Promise<ConsentState[]> {

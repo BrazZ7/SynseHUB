@@ -137,6 +137,9 @@ import type {
   WorkoutExercise,
   WorkoutPlan,
   StudentStatus,
+  EventoPublico,
+  InscricaoConsultada,
+  InscricaoCriada,
 } from '@/types/domain'
 
 /**
@@ -4973,6 +4976,116 @@ export class SupabaseDataSource implements DataSource {
   async revokeStaffInvite(inviteId: string): Promise<void> {
     const { error } = await this.client.rpc('revoke_staff_invite', { p_invite_id: inviteId })
     if (error) this.fail('revokeStaffInvite', error)
+  }
+
+  // ── Eventos (0056) ─────────────────────────────────────────────────────────
+
+  /**
+   * O evento publicado, pelo slug — a única leitura do produto que o anônimo
+   * faz direto numa tabela.
+   *
+   * Quem recorta é a RLS: a política do anônimo em `events` enxerga apenas
+   * `PUBLISHED`. Então um slug de rascunho devolve nada aqui, sem a aplicação
+   * precisar repetir a regra — e repetir seria criar uma segunda definição de
+   * "publicado" para envelhecer sozinha.
+   *
+   * `ocupadas` vem de uma contagem no banco, com `head: true`. A tela não soma
+   * nada: a lotação que vale é conferida sob trava na hora de inscrever, e um
+   * número somado aqui seria estimativa com cara de verdade.
+   */
+  async getEventoPublico(slug: string): Promise<EventoPublico | null> {
+    const linha = await this.select<Row>(
+      'getEventoPublico',
+      this.client
+        .from('events')
+        .select('*, event_categories (id, name, position)')
+        .eq('slug', slug)
+        .maybeSingle(),
+    )
+    if (!linha) return null
+
+    const { count } = await this.client
+      .from('event_registrations')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_id', linha.id)
+      .in('status', ['PENDING_PAYMENT', 'CONFIRMED'])
+
+    const categorias = ((linha.event_categories ?? []) as Row[])
+      .map((c) => ({ id: c.id, name: c.name, position: Number(c.position ?? 0) }))
+      .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name, 'pt-BR'))
+
+    return {
+      id: linha.id,
+      organizationId: linha.organization_id,
+      slug: linha.slug,
+      title: linha.title,
+      description: linha.description,
+      location: linha.location,
+      startsAt: linha.starts_at,
+      endsAt: linha.ends_at,
+      price: Number(linha.price ?? 0),
+      capacity: linha.capacity === null ? null : Number(linha.capacity),
+      ocupadas: count ?? 0,
+      registrationOpensAt: linha.registration_opens_at,
+      registrationClosesAt: linha.registration_closes_at,
+      status: linha.status,
+      pixKey: linha.pix_key,
+      pixHolderName: linha.pix_holder_name,
+      categorias,
+    } satisfies EventoPublico
+  }
+
+  async inscreverNoEvento(input: {
+    eventId: string
+    fullName: string
+    email: string
+    phone: string
+    taxId: string
+    privacyVersion: string
+    categoryId?: string | null
+    shirtSize?: string | null
+    emergencyName?: string | null
+    emergencyPhone?: string | null
+  }): Promise<InscricaoCriada> {
+    const { data, error } = await this.client.rpc('inscrever_no_evento', {
+      p_event_id: input.eventId,
+      p_full_name: input.fullName,
+      p_email: input.email,
+      p_phone: input.phone,
+      p_tax_id: input.taxId,
+      p_privacy_version: input.privacyVersion,
+      p_category_id: input.categoryId ?? null,
+      p_shirt_size: input.shirtSize ?? null,
+      p_emergency_name: input.emergencyName ?? null,
+      p_emergency_phone: input.emergencyPhone ?? null,
+    })
+
+    if (error) this.fail('inscreverNoEvento', error)
+
+    const linha = ((data ?? []) as Row[])[0]
+    if (!linha) throw new Error('A inscrição não foi registrada.')
+    return { confirmationCode: linha.confirmation_code, status: linha.status }
+  }
+
+  async consultarInscricao(codigo: string): Promise<InscricaoConsultada | null> {
+    const { data, error } = await this.client.rpc('consultar_inscricao', { p_code: codigo })
+    if (error) this.fail('consultarInscricao', error)
+
+    const linha = ((data ?? []) as Row[])[0]
+    if (!linha) return null
+
+    return {
+      id: linha.id,
+      eventId: linha.event_id,
+      eventTitle: linha.event_title,
+      startsAt: linha.starts_at,
+      fullName: linha.full_name,
+      status: linha.status,
+      amount: Number(linha.amount ?? 0),
+      categoria: linha.category,
+      pixKey: linha.pix_key,
+      pixHolderName: linha.pix_holder_name,
+    } satisfies InscricaoConsultada
   }
 
   async listConsents(userProfileId: string): Promise<ConsentState[]> {

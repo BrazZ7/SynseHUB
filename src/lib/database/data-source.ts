@@ -80,6 +80,9 @@ import type {
   WorkoutAssignment,
   WorkoutExercise,
   WorkoutPlan,
+  EventoPublico,
+  InscricaoConsultada,
+  InscricaoCriada,
 } from '@/types/domain'
 import type { DemoStaff } from '@/lib/database/demo-seed'
 
@@ -1345,6 +1348,38 @@ export interface DataSource {
    * lista dos amigos. Errar para o lado de tranquilizar é o pior dos dois.
    */
   apareceNoRanking(userProfileId: string): Promise<boolean>
+
+  // Eventos (0056)
+  /**
+   * O evento publicado, pelo slug da URL — **sem exigir sessão**.
+   *
+   * É a única leitura do produto feita por quem pode não ter conta nenhuma: a
+   * corrida de inauguração é anunciada por link, e quem recebe o link precisa
+   * ver a prova antes de decidir. A RLS cuida do recorte: a política do
+   * anônimo em `events` só enxerga `PUBLISHED`.
+   */
+  getEventoPublico(slug: string): Promise<EventoPublico | null>
+  /**
+   * Inscreve, com ou sem conta.
+   *
+   * Vai pela função do banco, nunca por `insert` direto: é ela que valida a
+   * janela, confere a categoria, conta a vaga **sob trava** e devolve o
+   * código. O anônimo não tem escrita nenhuma na tabela.
+   */
+  inscreverNoEvento(input: {
+    eventId: string
+    fullName: string
+    email: string
+    phone: string
+    taxId: string
+    privacyVersion: string
+    categoryId?: string | null
+    shirtSize?: string | null
+    emergencyName?: string | null
+    emergencyPhone?: string | null
+  }): Promise<InscricaoCriada>
+  /** A inscrição de quem tem o código. É a senha de consulta de quem não tem conta. */
+  consultarInscricao(codigo: string): Promise<InscricaoConsultada | null>
 
   listConsents(userProfileId: string): Promise<ConsentState[]>
   /**

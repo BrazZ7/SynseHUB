@@ -47,6 +47,8 @@ const ESPERANDO_FUNCIONALIDADE: Record<string, string> = {
     'a régua de cobrança: nada envia ainda, e o cartão avisa isso antes de listar qualquer regra',
   workout_logs:
     'o caminho antigo do ganho de carga, só para a janela entre publicar e aplicar a 0055',
+  events:
+    'a corrida é criada à mão no Supabase: a tela de criar evento no hub é a próxima etapa, e até ela existir ninguém escreve aqui pelo produto',
 }
 
 function sqlDeTodasAsMigrations(): string {

@@ -1067,6 +1067,72 @@ existem, não para conferir se subiram.
   comportamento, e a mutação morre. Foi a mutação que revelou isso; sem ela, o
   teto do evento estaria "testado" e furado.
 
+### A área pública, e a inscrição de quem não tem conta
+
+`/eventos/<slug>` é a primeira parte do produto feita para quem **não tem
+conta**. A corrida é anunciada por link — em grupo de corrida, em story — e
+quem recebe precisa ver a prova e se inscrever sem baixar nada.
+
+**Não houve proteção a remover.** O middleware do projeto só renova sessão;
+ele nunca autorizou ninguém. Quem protege é cada página, chamando
+`requireHubSession` ou `requireStudentSession`. A área de eventos não chama, e
+é só por isso que ela é pública. O recorte do que se enxerga é da RLS: a
+política do anônimo em `events` alcança apenas o que está publicado, então um
+slug de rascunho devolve 404 sem a aplicação repetir a regra.
+
+Três telas: o evento com o formulário, o comprovante em
+`/eventos/inscricao/<codigo>`, e o 404 de código inexistente. O comprovante
+sai do índice dos buscadores (`robots: noindex`) — ele mostra nome e situação
+de pagamento de uma pessoa, e o código de 16 caracteres é o que faz as vezes
+de senha.
+
+**O `<main>` existe aqui.** O app do aluno não tem nenhum — é `<div>` aninhada
+do topo ao rodapé, e quem usa leitor de tela fica sem o marco de conteúdo
+principal. Não consertei o app nesta leva (atravessa todas as telas), mas
+código novo sai certo.
+
+**O que a tela diz sobre pagamento.** Não há provedor conectado, e cartão
+exige gateway. A página diz, antes do formulário, que o pagamento é por PIX e
+que a organização confirma o recebimento — "nenhum cartão é cobrado aqui". O
+comprovante mostra a chave e avisa que a confirmação é manual e pode levar
+horas. Sem essa frase, a pessoa paga, recarrega, continua "aguardando" e
+conclui que o dinheiro sumiu.
+
+#### O defeito que a verificação no navegador encontrou
+
+Inscrever com um CPF já inscrito mostrava **"Não foi possível concluir esta
+operação. Tente novamente."** — o pior texto possível, porque convida a
+repetir uma coisa que nunca vai dar certo.
+
+A causa: `toUserMessage` só conhece `AppError`, e as recusas de
+`inscrever_no_evento` — frases escritas na migration para serem lidas, como
+"As inscrições já encerraram." — se perdiam no caminho.
+
+`features/events/erros.ts` traduz por **código**: `23505` (unicidade) vira um
+recado próprio, porque a mensagem nativa é "duplicate key value violates
+unique constraint event_registrations_sem_repeticao_idx" e nome de índice não
+é recado para quem quer correr dez quilômetros; `22023` e `P0002` são
+repassados como foram escritos, com teto de tamanho; qualquer outro código
+devolve nulo e o genérico assume — falha de rede não pode virar frase
+tranquilizadora sobre inscrição.
+
+A demonstração passou a levantar os **mesmos códigos** do Postgres. Sem isso,
+a tradução funcionaria em produção e cairia no genérico na demonstração — o
+defeito ficaria invisível exatamente onde o produto é mostrado, que é como
+metade dos defeitos desta sessão sobreviveu.
+
+#### O que ainda não existe
+
+**Não há tela para criar evento.** A corrida é inserida à mão no Supabase, e o
+guarda `tabela-que-ninguem-escreve` cobra isso: `events` está declarada como
+lida sem escritor, com o motivo. A próxima etapa é o lado da academia — criar
+e publicar o evento, ver os inscritos, dar baixa no PIX e exportar a lista de
+largada. `confirmar_inscricao` já existe no banco e está testada; falta a
+tela que a chama.
+
+`tests/unit/events/`: 39 testes (regras puras, tradução de erro e a action),
+5 mutações, todas pegas.
+
 ### A tela de amigos dizia que você estava no ranking dos outros
 
 `/app/friends` mostrava a pessoa ranqueada entre os amigos e, no mesmo rolar

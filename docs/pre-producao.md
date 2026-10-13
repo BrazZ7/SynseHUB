@@ -1015,6 +1015,57 @@ existem, não para conferir se subiram.
   pegas. Um dos testes lê `pg_get_functiondef` e falha se a função voltar a
   citar `workout_logs`.
 
+### A régua de cobrança dizia "Ativa" e não enviava nada
+
+Mesma família da 0055, e numa tela pior: a do dinheiro.
+
+O cartão "Régua de cobrança" em `/synse-pay` listava três avisos marcados
+**Ativa** — vence em 3 dias, vence hoje, venceu há 3 dias — com os canais
+(Push, E-mail) em etiqueta ao lado. **Nada no produto lê `collection_rules`.**
+Não há envio: nenhuma rotina, nenhuma action, nenhum gatilho. A rotina diária
+(`/api/cron/billing`) cria mensalidade e marca vencida; ela não olha a régua.
+
+Um dono de academia que lê "Ativa" três vezes, ao lado do GMV e da
+inadimplência, conclui que o Synse cobra por ele — e para de cobrar. É o
+defeito mais caro que uma tela de financeiro pode ter, e era mudo.
+
+E repetia o acidente da `workout_logs`: as regras da demonstração são
+semeadas, então o cartão parecia certo exatamente onde o produto é
+demonstrado. Em produção a tabela é vazia, nenhuma migration a semeia, e o
+cartão aparecia como um título com uma lista vazia embaixo — sem estado vazio,
+sem explicação.
+
+Agora o cartão diz, antes de listar qualquer coisa: **"Ainda não está
+enviando."** A régua é configuração; o envio entra junto com o provedor de
+pagamento. E com a tabela vazia há estado vazio em vez de nada.
+
+Não implementei o envio: ele depende do provedor que ainda não foi escolhido,
+e inventar um canal de WhatsApp por conta própria seria pior que a omissão.
+
+### O guarda que acha o próximo
+
+`tests/unit/tabela-que-ninguem-escreve.test.ts` varre o data source e as
+migrations e exige que **toda tabela lida tenha um escritor** — `insert` pelo
+PostgREST, função do banco que a aplicação chame, gatilho, ou semente numa
+migration. Sem escritor, a tabela precisa estar declarada com o motivo.
+
+Ele nasceu depois de o mesmo defeito aparecer duas vezes em uma tarde, e a
+construção dele mostrou por que vale a pena: a primeira versão tinha **três
+erros**, e cada um dos controles pegou o seu.
+
+- A expressão consumia trezentos caracteres depois de cada `.from(...)`, o que
+  **escondia a segunda ocorrência** da mesma tabela — uma tabela lida numa
+  linha e escrita na seguinte passava como só lida. Virou olhar adiante.
+- A varredura por semente encontrava `insert into` **dentro do corpo de
+  funções**, então uma função órfã contava como escritor e uma tabela escrita
+  só por código morto passava por viva. Os corpos saem antes.
+- E ele só enxergava `.rpc('nome')` direto, não o ajudante `chamarFuncao`, o
+  que fez acusar `program_steps` — escrita por `save_program_step` desde a
+  0043. Falso positivo meu, não defeito do produto.
+
+A mutação que o valida lê `collection_attempts`, uma das oito tabelas que o
+esquema tem e o produto nem toca.
+
 ### O painel da plataforma em três consultas, e a dívida zerada
 
 Era assim: `/synse-admin` lia **todas** as organizações, sem teto, e para cada

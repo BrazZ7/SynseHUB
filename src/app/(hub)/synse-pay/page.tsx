@@ -3,6 +3,7 @@ import Link from 'next/link'
 import {
   BadgeDollarSign,
   Banknote,
+  CalendarClock,
   CircleCheck,
   CreditCard,
   Percent,
@@ -363,35 +364,66 @@ export default async function SynsePayPage() {
               <CardTitle>Régua de cobrança</CardTitle>
             </CardHeader>
             <CardContent>
-              <ul className="divide-y divide-synse-border">
-                {rules.map((rule) => (
-                  <li key={rule.id} className="flex flex-wrap items-center gap-3 py-3">
-                    <span className="min-w-32 text-sm font-medium text-synse-text">
-                      {rule.offsetDays < 0
-                        ? `${Math.abs(rule.offsetDays)} dias antes`
-                        : rule.offsetDays === 0
-                          ? 'No vencimento'
-                          : `${rule.offsetDays} dias depois`}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-sm text-synse-muted">
-                      {rule.template}
-                    </span>
-                    <span className="flex gap-1.5">
-                      {rule.channels.map((channel) => (
-                        <Badge key={channel} variant="outline">
-                          {CHANNEL_LABELS[channel]}
-                        </Badge>
-                      ))}
-                    </span>
-                    <Badge variant={rule.enabled ? 'success' : 'default'}>
-                      {rule.enabled ? 'Ativa' : 'Inativa'}
-                    </Badge>
-                  </li>
-                ))}
-              </ul>
+              {/*
+                ── O aviso que faltava, e por que ele é o mais caro daqui ────
+
+                Este cartão listava três regras marcadas "Ativa" — vence em 3
+                dias, vence hoje, venceu há 3 dias — ao lado dos números de
+                dinheiro de verdade. **Nada no produto lê `collection_rules`**:
+                não há envio, nenhuma rotina, nenhuma action, nenhum gatilho. A
+                régua existe como tabela e como tela, e só.
+
+                Um dono de academia que lê "Ativa" três vezes conclui que o
+                Synse cobra por ele — e para de cobrar.
+
+                E as regras da demonstração são semeadas, então o cartão
+                parecia certo exatamente onde o produto é mostrado, e em
+                produção aparecia vazio e sem explicação. Mesmo acidente da
+                `workout_logs`.
+              */}
+              <p className="mb-3 rounded-lg border border-synse-warning/50 bg-synse-warning/10 px-3 py-2 text-xs text-synse-text">
+                <strong className="font-medium">Ainda não está enviando.</strong> A régua é a
+                configuração; o envio automático entra junto com o provedor de pagamento, que ainda
+                não foi escolhido. Até lá, cobrar quem atrasa continua sendo manual.
+              </p>
+
+              {rules.length === 0 ? (
+                <EmptyState
+                  icon={CalendarClock}
+                  title="Nenhuma regra configurada"
+                  description="Quando o envio automático existir, é aqui que se define o que o aluno recebe e quando."
+                />
+              ) : (
+                <ul className="divide-y divide-synse-border">
+                  {rules.map((rule) => (
+                    <li key={rule.id} className="flex flex-wrap items-center gap-3 py-3">
+                      <span className="min-w-32 text-sm font-medium text-synse-text">
+                        {rule.offsetDays < 0
+                          ? `${Math.abs(rule.offsetDays)} dias antes`
+                          : rule.offsetDays === 0
+                            ? 'No vencimento'
+                            : `${rule.offsetDays} dias depois`}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-sm text-synse-muted">
+                        {rule.template}
+                      </span>
+                      <span className="flex gap-1.5">
+                        {rule.channels.map((channel) => (
+                          <Badge key={channel} variant="outline">
+                            {CHANNEL_LABELS[channel]}
+                          </Badge>
+                        ))}
+                      </span>
+                      <Badge variant={rule.enabled ? 'success' : 'default'}>
+                        {rule.enabled ? 'Ativa' : 'Inativa'}
+                      </Badge>
+                    </li>
+                  ))}
+                </ul>
+              )}
               <p className="mt-3 text-xs text-synse-muted">
-                O envio por WhatsApp usará exclusivamente a API oficial. Nenhuma integração não
-                oficial é suportada.
+                Quando existir, o envio por WhatsApp usará exclusivamente a API oficial. Nenhuma
+                integração não oficial é suportada.
               </p>
             </CardContent>
           </Card>

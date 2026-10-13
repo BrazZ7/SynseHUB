@@ -1,4 +1,5 @@
 import { AppBottomNavigation } from '@/components/synse/app-bottom-navigation'
+import { OutraPorta } from '@/features/auth/outra-porta'
 import { ContextBar } from '@/features/platform/context-bar'
 import { requireStudentSession } from '@/lib/auth/require-session'
 
@@ -40,8 +41,13 @@ export default async function StudentLayout({ children }: { children: React.Reac
   return (
     <div className="min-h-svh bg-synse-bg">
       <div className="mx-auto w-full max-w-lg px-5 pb-24 pt-6 md:max-w-2xl lg:max-w-5xl">
-        {/* Nada para conta comum. Ver `ContextBar`. */}
-        <div className="mb-6 flex justify-end empty:hidden">
+        {/*
+          Duas coisas, e nenhuma delas aparece para conta comum: o seletor de
+          contexto é só de conta de plataforma (`ContextBar`), e a porta é só de
+          quem também administra uma academia (`OutraPorta`).
+        */}
+        <div className="mb-6 flex justify-end gap-2 empty:hidden">
+          <OutraPorta session={session} lado="app" />
           <ContextBar session={session} />
         </div>
         {children}

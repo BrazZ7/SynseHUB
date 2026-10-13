@@ -149,6 +149,20 @@ export default function LandingPage() {
                   <Link href="#recursos">CONHECER SYNSEHUB</Link>
                 </Button>
               </div>
+
+              {/*
+               * Quem é o público desta porta.
+               *
+               * A página descrevia gestão, pagamentos e relatórios, e o botão
+               * dizia só "criar conta". Quem chegava para treinar — e é o maior
+               * número de contas do produto — não tinha como saber que também
+               * era com ele. A frase não promete nada novo: é o que a próxima
+               * tela faz, e o app do aluno é gratuito.
+               */}
+              <p className="text-sm text-synse-muted">
+                Para academias e para quem treina. Você escolhe depois de criar a conta, e o
+                aplicativo do aluno é gratuito.
+              </p>
             </div>
           </div>
         </section>

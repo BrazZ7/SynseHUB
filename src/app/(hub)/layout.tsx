@@ -2,6 +2,7 @@ import { HubSidebar } from '@/components/synse/hub-sidebar'
 import { HubTopbar } from '@/components/synse/hub-topbar'
 import { HUB_NAVIGATION } from '@/config/navigation'
 import { NotificationsBell } from '@/features/notifications/notifications-bell'
+import { OutraPorta } from '@/features/auth/outra-porta'
 import { ContextBar } from '@/features/platform/context-bar'
 import { signOut } from '@/lib/auth/actions'
 import { requireHubSession } from '@/lib/auth/require-session'
@@ -36,11 +37,16 @@ export default async function HubLayout({ children }: { children: React.ReactNod
         <HubTopbar organizationName={session.organizationName} />
 
         {/*
-          Só aparece para conta de plataforma. Fica acima do conteúdo, e não
-          escondido num menu, porque saber em qual academia se está agindo não
-          pode depender de a pessoa ir procurar.
+          O seletor de contexto só aparece para conta de plataforma. Fica acima
+          do conteúdo, e não escondido num menu, porque saber em qual academia se
+          está agindo não pode depender de a pessoa ir procurar.
+
+          A porta ao lado é para quem administra a academia **e** treina nela:
+          as duas rotas já aceitavam essa pessoa, e nenhuma tela oferecia a
+          passagem.
         */}
-        <div className="mx-auto flex w-full max-w-[1400px] justify-end px-4 pt-4 sm:px-6 lg:px-8 empty:hidden">
+        <div className="mx-auto flex w-full max-w-[1400px] justify-end gap-2 px-4 pt-4 sm:px-6 lg:px-8 empty:hidden">
+          <OutraPorta session={session} lado="hub" />
           <ContextBar session={session} />
         </div>
         {/* `pb-28` no celular: a barra inferior é fixa e cobriria o fim da

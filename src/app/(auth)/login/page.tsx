@@ -35,10 +35,27 @@ export default async function LoginPage({
 
   return (
     <div className="animate-fade-in-up space-y-8">
+      {/*
+       * ── Por que o texto não fala só de academia ────────────────────────────
+       *
+       * Dizia "Entrar no SynseHub / Acesse o painel da sua academia para
+       * acompanhar alunos, pagamentos e treinos", e o único convite a criar
+       * conta era "Cadastre sua academia".
+       *
+       * O fluxo sempre atendeu os dois: o `/signup` é neutro, o
+       * `AccountTypePicker` oferece as duas portas, e o redirecionamento acima
+       * já manda aluno para `/app` e academia para `/dashboard`. Era o texto da
+       * porta de entrada que estava errado — quem chegava para treinar lia uma
+       * tela de software de gestão e concluía que tinha errado o endereço.
+       *
+       * "Entrar no Synse", e não "no SynseHub": o SynseHub é o painel da
+       * academia, uma parte do produto. A conta é do Synse.
+       */}
       <header className="space-y-1.5">
-        <h1 className="text-page-title font-semibold text-synse-text">Entrar no SynseHub</h1>
+        <h1 className="text-page-title font-semibold text-synse-text">Entrar no Synse</h1>
         <p className="text-sm text-synse-muted">
-          Acesse o painel da sua academia para acompanhar alunos, pagamentos e treinos.
+          A mesma conta abre o seu treino e o painel da academia. Depois de entrar, você vai
+          direto para o seu.
         </p>
       </header>
 
@@ -57,8 +74,9 @@ export default async function LoginPage({
           <p className="text-center text-sm text-synse-muted">
             Ainda não tem conta?{' '}
             <Link href="/signup" className="text-synse-primary underline-offset-2 hover:underline">
-              Cadastre sua academia
-            </Link>
+              Criar conta
+            </Link>{' '}
+            — o app de treino é gratuito
           </p>
         </>
       )}

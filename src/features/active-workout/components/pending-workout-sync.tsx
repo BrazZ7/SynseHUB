@@ -26,7 +26,7 @@ import { cn } from '@/lib/utils'
  * porque é para onde a pessoa volta, e não na tela do treino ativo, onde o
  * `useActiveWorkout` já cuida da fila enquanto a sessão existe.
  */
-export function PendingWorkoutSync() {
+export function PendingWorkoutSync({ dono }: { dono: string }) {
   const router = useRouter()
   const [resumo, setResumo] = useState<ResumoDoTreino>(null)
   const [enviando, setEnviando] = useState(false)
@@ -41,7 +41,11 @@ export function PendingWorkoutSync() {
   const drenar = useCallback(async () => {
     if (drenando.current) return
 
-    const fila = await lerFila()
+    /*
+     * A fila desta matrícula, e só dela. O aparelho pode ter registro de outra
+     * pessoa esperando rede — ele fica lá, intocado, até ela voltar.
+     */
+    const fila = await lerFila(dono)
     if (!fila.length) {
       setResumo(null)
       return
@@ -59,7 +63,7 @@ export function PendingWorkoutSync() {
        * `null` como sessão conhecida: esta tela não tem treino aberto, e o id
        * do servidor sai da própria fila quando o START sobe.
        */
-      const resultado = await sincronizar(null)
+      const resultado = await sincronizar(dono, null)
 
       setResumo(
         resumoDoTreino({
@@ -75,7 +79,7 @@ export function PendingWorkoutSync() {
       drenando.current = false
       setEnviando(false)
     }
-  }, [router])
+  }, [dono, router])
 
   useEffect(() => {
     void drenar()

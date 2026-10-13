@@ -18,9 +18,14 @@ const fila: PendingOperation[] = []
 const chamadas: string[] = []
 
 vi.mock('@/features/active-workout/storage/local-workout', () => ({
-  lerFila: vi.fn(async () => {
+  /*
+   * O filtro por dono é parte do contrato que está sob teste, e não detalhe do
+   * IndexedDB: `lerFila` devolve o que é da matrícula que perguntou. Se o
+   * dublê devolvesse a fila inteira, o teste do escopo passaria por acidente.
+   */
+  lerFila: vi.fn(async (dono: string) => {
     const peso = { START: 0, SET: 1, FINISH: 2 }
-    return [...fila].sort((a, b) => peso[a.kind] - peso[b.kind])
+    return fila.filter((o) => o.dono === dono).sort((a, b) => peso[a.kind] - peso[b.kind])
   }),
   removerDaFila: vi.fn(async (clientId: string) => {
     const i = fila.findIndex((o) => o.clientId === clientId)
@@ -53,9 +58,13 @@ vi.mock('@/features/active-workout/actions', () => ({
 
 const { sincronizar } = await import('@/features/active-workout/sync')
 
-const serie = (n: number): PendingOperation => ({
+const ALUNA = 'matricula-1'
+const OUTRO = 'matricula-2'
+
+const serie = (n: number, dono = ALUNA): PendingOperation => ({
   kind: 'SET',
   clientId: `s-${n}`,
+  dono,
   sessionClientId: 'local-1',
   exerciseId: 'ex-1',
   setNumber: n,
@@ -83,11 +92,12 @@ describe('ordem', () => {
     fila.push(serie(2), serie(1), {
       kind: 'START',
       clientId: 'local-1',
+      dono: ALUNA,
       workoutPlanId: 'plano-1',
       tentativas: 0,
     })
 
-    const resultado = await sincronizar(null)
+    const resultado = await sincronizar(ALUNA, null)
 
     expect(chamadas[0]).toBe('START:local-1')
     expect(resultado.enviadas).toBe(3)
@@ -97,10 +107,10 @@ describe('ordem', () => {
 
   it('as séries sobem com o id que o servidor devolveu, não com o local', async () => {
     fila.push(
-      { kind: 'START', clientId: 'local-1', workoutPlanId: null, tentativas: 0 },
+      { kind: 'START', clientId: 'local-1', dono: ALUNA, workoutPlanId: null, tentativas: 0 },
       serie(1),
     )
-    await sincronizar(null)
+    await sincronizar(ALUNA, null)
     expect(chamadas).toContain('SET:s-1@servidor-1')
   })
 })
@@ -108,13 +118,13 @@ describe('ordem', () => {
 describe('a rede cai no meio', () => {
   it('nada é perdido: a fila segura o que não subiu', async () => {
     fila.push(
-      { kind: 'START', clientId: 'local-1', workoutPlanId: null, tentativas: 0 },
+      { kind: 'START', clientId: 'local-1', dono: ALUNA, workoutPlanId: null, tentativas: 0 },
       serie(1),
       serie(2),
     )
     redeDisponivel = false
 
-    const resultado = await sincronizar(null)
+    const resultado = await sincronizar(ALUNA, null)
 
     expect(resultado.enviadas).toBe(0)
     expect(resultado.pendentes).toBe(3)
@@ -122,15 +132,15 @@ describe('a rede cai no meio', () => {
 
   it('e sobe tudo quando ela volta', async () => {
     fila.push(
-      { kind: 'START', clientId: 'local-1', workoutPlanId: null, tentativas: 0 },
+      { kind: 'START', clientId: 'local-1', dono: ALUNA, workoutPlanId: null, tentativas: 0 },
       serie(1),
       serie(2),
     )
     redeDisponivel = false
-    await sincronizar(null)
+    await sincronizar(ALUNA, null)
 
     redeDisponivel = true
-    const resultado = await sincronizar(null)
+    const resultado = await sincronizar(ALUNA, null)
 
     expect(resultado.enviadas).toBe(3)
     expect(resultado.pendentes).toBe(0)
@@ -140,18 +150,18 @@ describe('a rede cai no meio', () => {
     // As seguintes dependem da sessão que acabou de falhar; insistir nelas só
     // encheria o log de erro.
     fila.push(
-      { kind: 'START', clientId: 'local-1', workoutPlanId: null, tentativas: 0 },
+      { kind: 'START', clientId: 'local-1', dono: ALUNA, workoutPlanId: null, tentativas: 0 },
       serie(1),
     )
     redeDisponivel = false
-    await sincronizar(null)
+    await sincronizar(ALUNA, null)
 
     expect(chamadas).toEqual(['START:local-1'])
   })
 
   it('não manda série antes de a sessão existir no servidor', async () => {
     fila.push(serie(1))
-    const resultado = await sincronizar(null)
+    const resultado = await sincronizar(ALUNA, null)
 
     expect(chamadas).toHaveLength(0)
     expect(resultado.pendentes).toBe(1)
@@ -160,9 +170,9 @@ describe('a rede cai no meio', () => {
 
 describe('tentativas', () => {
   it('conta a falha, para não tentar para sempre', async () => {
-    fila.push({ kind: 'START', clientId: 'local-1', workoutPlanId: null, tentativas: 0 })
+    fila.push({ kind: 'START', clientId: 'local-1', dono: ALUNA, workoutPlanId: null, tentativas: 0 })
     redeDisponivel = false
-    await sincronizar(null)
+    await sincronizar(ALUNA, null)
 
     expect(fila[0].tentativas).toBe(1)
   })
@@ -177,8 +187,8 @@ describe('tentativas', () => {
      * indefinidamente, sem explicar e sem resolver. Agora sai, e sai contada —
      * porque um treino que não subiu precisa ser dito, não escondido.
      */
-    fila.push({ kind: 'START', clientId: 'local-1', workoutPlanId: null, tentativas: 8 })
-    const resultado = await sincronizar(null)
+    fila.push({ kind: 'START', clientId: 'local-1', dono: ALUNA, workoutPlanId: null, tentativas: 8 })
+    const resultado = await sincronizar(ALUNA, null)
 
     expect(chamadas).toHaveLength(0)
     expect(resultado.pendentes).toBe(0)
@@ -192,10 +202,10 @@ describe('tentativas', () => {
      * laço de sincronização pula a série por falta dele, então ela nunca soma
      * tentativa e nunca se esgota sozinha. Pendente eterno.
      */
-    fila.push({ kind: 'START', clientId: 'local-1', workoutPlanId: null, tentativas: 8 })
+    fila.push({ kind: 'START', clientId: 'local-1', dono: ALUNA, workoutPlanId: null, tentativas: 8 })
     fila.push(serie(1))
 
-    const resultado = await sincronizar(null)
+    const resultado = await sincronizar(ALUNA, null)
 
     expect(resultado.pendentes).toBe(0)
     expect(resultado.treinosPerdidos).toBe(1)
@@ -206,19 +216,90 @@ describe('tentativas', () => {
 
 describe('reenvio', () => {
   it('sincronizar de novo com a fila vazia não chama nada', async () => {
-    const resultado = await sincronizar('servidor-1')
+    const resultado = await sincronizar(ALUNA, 'servidor-1')
     expect(chamadas).toHaveLength(0)
     expect(resultado.enviadas).toBe(0)
   })
 
   it('o encerramento sobe depois das séries', async () => {
     fila.push(
-      { kind: 'FINISH', clientId: 'f-1', sessionClientId: 'local-1', durationSeconds: 1800, status: 'COMPLETED', tentativas: 0 },
+      { kind: 'FINISH', clientId: 'f-1', dono: ALUNA, sessionClientId: 'local-1', durationSeconds: 1800, status: 'COMPLETED', tentativas: 0 },
       serie(1),
-      { kind: 'START', clientId: 'local-1', workoutPlanId: null, tentativas: 0 },
+      { kind: 'START', clientId: 'local-1', dono: ALUNA, workoutPlanId: null, tentativas: 0 },
     )
-    await sincronizar(null)
+    await sincronizar(ALUNA, null)
 
     expect(chamadas).toEqual(['START:local-1', 'SET:s-1@servidor-1', 'FINISH'])
+  })
+})
+
+describe('escopo por aluno', () => {
+  /*
+   * O defeito que estes testes fecham: a fila era uma lista só, sem dono. As
+   * actions não recebem aluno — o banco resolve pelo `auth.uid()` —, então a
+   * série gravada no aparelho por quem entrou antes subia pela sessão
+   * autenticada de quem entrou depois, e entrava no histórico da pessoa errada.
+   * Em dado de saúde, atribuição errada é pior que registro perdido.
+   */
+  it('a fila de outra matrícula não sobe nesta sessão', async () => {
+    fila.push(
+      { kind: 'START', clientId: 'local-9', dono: OUTRO, workoutPlanId: null, tentativas: 0 },
+      serie(9, OUTRO),
+    )
+
+    const resultado = await sincronizar(ALUNA, null)
+
+    expect(chamadas).toHaveLength(0)
+    expect(resultado.enviadas).toBe(0)
+    // E continua no aparelho: não é dado para jogar fora, é dado de outra pessoa.
+    expect(fila).toHaveLength(2)
+  })
+
+  it('e sobe quando é a dona dela que sincroniza', async () => {
+    // Controle do teste acima: sem isto, um `lerFila` que devolvesse sempre
+    // vazio passaria nos dois.
+    fila.push(
+      { kind: 'START', clientId: 'local-9', dono: OUTRO, workoutPlanId: null, tentativas: 0 },
+      serie(9, OUTRO),
+    )
+
+    const resultado = await sincronizar(OUTRO, null)
+
+    expect(resultado.enviadas).toBe(2)
+    expect(fila).toHaveLength(0)
+  })
+
+  it('o pendente contado é o da pessoa, não o do aparelho', async () => {
+    /*
+     * "2 a sincronizar" para quem tem um registro só manda a pessoa procurar
+     * um treino que não é dela — e não há tela onde ela possa achá-lo.
+     */
+    fila.push(
+      { kind: 'START', clientId: 'local-9', dono: OUTRO, workoutPlanId: null, tentativas: 0 },
+      { kind: 'START', clientId: 'local-1', dono: ALUNA, workoutPlanId: null, tentativas: 0 },
+    )
+    redeDisponivel = false
+
+    const resultado = await sincronizar(ALUNA, null)
+
+    expect(resultado.pendentes).toBe(1)
+  })
+
+  it('o expurgo não alcança a fila de outra matrícula', async () => {
+    /*
+     * O expurgo apaga por `clientId`, que é único no mundo — mas ele só pode
+     * apagar o que viu, e ele vê a fila filtrada. Uma operação esgotada de
+     * outra pessoa não é perda desta sessão para contar nem para remover.
+     */
+    fila.push(
+      { kind: 'START', clientId: 'local-9', dono: OUTRO, workoutPlanId: null, tentativas: 8 },
+      { kind: 'START', clientId: 'local-1', dono: ALUNA, workoutPlanId: null, tentativas: 0 },
+    )
+
+    const resultado = await sincronizar(ALUNA, null)
+
+    expect(resultado.treinosPerdidos).toBe(0)
+    expect(resultado.enviadas).toBe(1)
+    expect(fila.map((o) => o.clientId)).toEqual(['local-9'])
   })
 })

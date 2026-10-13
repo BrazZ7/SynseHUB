@@ -53,8 +53,14 @@ const id = () =>
  * página, que já as carregou do banco no mesmo `Promise.all` do plano — e
  * buscá-las de novo no cliente seria uma ida à rede para saber o que o HTML
  * já trouxe.
+ *
+ * O `dono` vem pelo mesmo caminho e é a matrícula do aluno (`studentId`), que
+ * a página tem da sessão autenticada. Ele separa o que é gravado no aparelho:
+ * sem ele, o treino de quem entrou antes reaparecia para quem entrou depois, e
+ * a fila pendente subia em nome de quem estivesse logado na hora. Não é lido no
+ * cliente de propósito — identidade que o navegador escolhe não é identidade.
  */
-export function useActiveWorkout(preferencias?: Partial<WorkoutSettings>) {
+export function useActiveWorkout(dono: string, preferencias?: Partial<WorkoutSettings>) {
   const [sessao, setSessao] = useState<WorkoutSession | null>(null)
   const [carregando, setCarregando] = useState(true)
   const [pendentes, setPendentes] = useState(0)
@@ -81,12 +87,36 @@ export function useActiveWorkout(preferencias?: Partial<WorkoutSettings>) {
    */
   const preferenciasRef = useRef(preferencias)
   preferenciasRef.current = preferencias
+  /*
+   * De quem é o treino que está na memória agora.
+   *
+   * Existe por causa da ordem em que o React roda os efeitos. Se a matrícula
+   * mudar com o hook montado, a recuperação (declarada primeiro) zera a tela,
+   * mas a persistência (declarada depois) roda no mesmo commit ainda segurando
+   * a sessão antiga — e gravaria o treino da pessoa anterior na chave da nova.
+   * Este ref só avança quando a sessão nova está de fato em mão, então a
+   * gravação fica trancada durante a janela.
+   *
+   * Hoje a troca de contexto recarrega a página e a janela não acontece. É
+   * justamente por isso que a trava está escrita: ninguém notaria a volta do
+   * vazamento num refatorador que mantivesse o componente montado.
+   */
+  const donoNaMemoriaRef = useRef(dono)
 
   // ── Recuperação ────────────────────────────────────────────────────────────
   useEffect(() => {
     let vivo = true
+    /*
+     * Zera antes de ler. Sem isto, trocar de matrícula e não encontrar treino
+     * guardado deixaria na tela o treino da pessoa anterior: o `setSessao` só
+     * acontece quando **há** o que restaurar.
+     */
+    setSessao(null)
+    setCarregando(true)
+    serverIdRef.current = null
+
     void (async () => {
-      const guardada = await lerSessao()
+      const guardada = await lerSessao(dono)
       if (!vivo) return
       if (guardada && guardada.state !== 'WORKOUT_COMPLETED') {
         serverIdRef.current = guardada.serverId
@@ -104,6 +134,7 @@ export function useActiveWorkout(preferencias?: Partial<WorkoutSettings>) {
           ...guardada,
           settings: { ...guardada.settings, ...preferenciasRef.current },
         }
+        donoNaMemoriaRef.current = dono
         setSessao(reidratar(comPreferencias, Date.now()))
       }
       setCarregando(false)
@@ -111,12 +142,17 @@ export function useActiveWorkout(preferencias?: Partial<WorkoutSettings>) {
     return () => {
       vivo = false
     }
-  }, [])
+    /*
+     * `dono` na lista: a matrícula é o escopo do que foi gravado no aparelho, e
+     * ler o escopo errado é o defeito que esta separação existe para fechar.
+     */
+  }, [dono])
 
   // ── Persistência ───────────────────────────────────────────────────────────
   useEffect(() => {
-    if (sessao) void salvarSessao(sessao)
-  }, [sessao])
+    // A trava do `donoNaMemoriaRef` está explicada na declaração dele.
+    if (sessao && donoNaMemoriaRef.current === dono) void salvarSessao(dono, sessao)
+  }, [dono, sessao])
 
   // ── Tela bloqueada ─────────────────────────────────────────────────────────
   const paraLiveActivity = useCallback((s: WorkoutSession): LiveWorkoutState | null => {
@@ -173,7 +209,7 @@ export function useActiveWorkout(preferencias?: Partial<WorkoutSettings>) {
 
   // ── Sincronização ──────────────────────────────────────────────────────────
   const empurrarFila = useCallback(async () => {
-    const resultado = await sincronizar(serverIdRef.current)
+    const resultado = await sincronizar(dono, serverIdRef.current)
     if (resultado.sessionId && resultado.sessionId !== serverIdRef.current) {
       serverIdRef.current = resultado.sessionId
       setSessao((atual) => (atual ? { ...atual, serverId: resultado.sessionId } : atual))
@@ -186,7 +222,7 @@ export function useActiveWorkout(preferencias?: Partial<WorkoutSettings>) {
         seriesPerdidas: resultado.seriesPerdidas,
       }),
     )
-  }, [])
+  }, [dono])
 
   useEffect(() => {
     if (!sessao) return
@@ -230,11 +266,13 @@ export function useActiveWorkout(preferencias?: Partial<WorkoutSettings>) {
         criarSessao({ clientId, ...input, agora }),
         { type: 'START', agora },
       )
+      donoNaMemoriaRef.current = dono
       setSessao(nova)
 
       await enfileirar({
         kind: 'START',
         clientId,
+        dono,
         workoutPlanId: input.workoutPlanId,
         tentativas: 0,
       })
@@ -253,7 +291,7 @@ export function useActiveWorkout(preferencias?: Partial<WorkoutSettings>) {
       if (estado) await liveActivity.start(estado)
       void empurrarFila()
     },
-    [liveActivity, feedback, paraLiveActivity, empurrarFila],
+    [dono, liveActivity, feedback, paraLiveActivity, empurrarFila],
   )
 
   const concluirSerie = useCallback(async () => {
@@ -274,6 +312,7 @@ export function useActiveWorkout(preferencias?: Partial<WorkoutSettings>) {
       await enfileirar({
         kind: 'SET',
         clientId,
+        dono,
         sessionClientId: sessao.clientId,
         exerciseId: exercicio.exerciseId,
         setNumber: sessao.setNumber,
@@ -295,7 +334,7 @@ export function useActiveWorkout(preferencias?: Partial<WorkoutSettings>) {
         concluindoRef.current = false
       }, 400)
     }
-  }, [sessao, feedback, empurrarFila])
+  }, [dono, sessao, feedback, empurrarFila])
 
   const encerrar = useCallback(
     async (status: 'COMPLETED' | 'ABANDONED' = 'COMPLETED') => {
@@ -307,6 +346,7 @@ export function useActiveWorkout(preferencias?: Partial<WorkoutSettings>) {
       await enfileirar({
         kind: 'FINISH',
         clientId: id(),
+        dono,
         sessionClientId: sessao.clientId,
         durationSeconds: duracaoEfetiva(final, agora),
         status,
@@ -317,15 +357,15 @@ export function useActiveWorkout(preferencias?: Partial<WorkoutSettings>) {
       await feedback.keepAwake(false)
       void empurrarFila()
     },
-    [sessao, liveActivity, feedback, empurrarFila],
+    [dono, sessao, liveActivity, feedback, empurrarFila],
   )
 
   const descartar = useCallback(async () => {
-    await limparSessao()
+    await limparSessao(dono)
     await liveActivity.stop()
     await feedback.keepAwake(false)
     setSessao(null)
-  }, [liveActivity, feedback])
+  }, [dono, liveActivity, feedback])
 
   /**
    * Exposto para o interruptor "Som": ligá-lo é o outro gesto que pode abrir o

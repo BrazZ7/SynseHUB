@@ -42,17 +42,25 @@ const mmss = (segundos: number) =>
   `${String(Math.floor(segundos / 60)).padStart(2, '0')}:${String(segundos % 60).padStart(2, '0')}`
 
 export function ActiveWorkoutScreen({
+  dono,
   planName,
   workoutPlanId,
   exercises,
   preferencias,
 }: {
+  /**
+   * A matrícula do aluno, vinda da sessão autenticada na página.
+   *
+   * Separa o que este aparelho guarda. Chega como propriedade, e não lida no
+   * cliente, porque identidade escolhida pelo navegador não é identidade.
+   */
+  dono: string
   planName: string
   workoutPlanId: string | null
   exercises: PlannedExercise[]
   preferencias: WorkoutPreferences
 }) {
-  const treino = useActiveWorkout(preferencias)
+  const treino = useActiveWorkout(dono, preferencias)
   /*
    * As preferências vivem em dois lugares de propósito, e os dois são
    * necessários: no servidor, para acompanhar quem troca de aparelho; e dentro

@@ -85,8 +85,17 @@ export async function expurgar(fila: PendingOperation[]): Promise<{
  * Processa a fila em ordem. Devolve o id da sessão no servidor quando ele
  * aparece — é ele que as operações seguintes precisam.
  */
-export async function sincronizar(sessionIdConhecido: string | null): Promise<SyncOutcome> {
-  const { restante: fila, treinosPerdidos, seriesPerdidas } = await expurgar(await lerFila())
+export async function sincronizar(
+  dono: string,
+  sessionIdConhecido: string | null,
+): Promise<SyncOutcome> {
+  /*
+   * `dono` antes de tudo: a fila é lida pela pessoa que está na sessão, e só o
+   * que é dela sobe. Sem isto, a série gravada no aparelho por quem entrou
+   * antes subiria pela sessão autenticada de quem entrou depois — e o banco,
+   * que resolve o aluno pelo `auth.uid()`, a gravaria no histórico errado.
+   */
+  const { restante: fila, treinosPerdidos, seriesPerdidas } = await expurgar(await lerFila(dono))
   let sessionId = sessionIdConhecido
   let enviadas = 0
 
@@ -115,7 +124,7 @@ export async function sincronizar(sessionIdConhecido: string | null): Promise<Sy
     }
   }
 
-  const restante = await lerFila()
+  const restante = await lerFila(dono)
   return { enviadas, pendentes: restante.length, treinosPerdidos, seriesPerdidas, sessionId }
 }
 

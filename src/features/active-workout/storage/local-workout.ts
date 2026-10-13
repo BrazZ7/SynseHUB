@@ -1,6 +1,13 @@
 'use client'
 
 import type { WorkoutSession } from '@/features/active-workout/engine/types'
+import {
+  chaveDaSessao,
+  donoValido,
+  filaDoDono,
+  sessaoDoDono,
+  type RegistroDeSessao,
+} from '@/features/active-workout/storage/escopo'
 
 /**
  * O treino em andamento, gravado no próprio aparelho.
@@ -15,22 +22,51 @@ import type { WorkoutSession } from '@/features/active-workout/engine/types'
  * em que ela precisa responder a um toque.
  *
  * Duas lojas:
- *   sessao  o treino atual, uma linha só, para a recuperação
+ *   sessao  o treino atual, uma linha por dono, para a recuperação
  *   fila    as escritas pendentes, para a sincronização
+ *
+ * Tudo é escopado pelo dono (`escopo.ts`). Antes não era, e o mesmo aparelho
+ * devolvia o treino de uma pessoa para a próxima que entrasse.
  */
 
 const BANCO = 'synse-workout'
-const VERSAO = 1
+/**
+ * 1 → 2: o escopo por dono.
+ *
+ * A virada precisa jogar fora o que a versão 1 gravou, e não há escolha aí: o
+ * registro antigo não diz de quem é. Adotá-lo para quem abrisse o app primeiro
+ * repetiria, uma última vez, exatamente o vazamento que o escopo corrige — num
+ * aparelho compartilhado, as séries de uma pessoa no histórico de outra.
+ *
+ * Descartar perde, no pior caso, um treino que ainda não subiu. Atribuição
+ * errada em dado de saúde é pior que registro perdido, e o aplicativo ainda não
+ * está nas lojas, então o pior caso é hipotético. Está registrado em
+ * `docs/evolucao-synse.md`.
+ */
+const VERSAO = 2
 const LOJA_SESSAO = 'sessao'
 const LOJA_FILA = 'fila'
-const CHAVE_ATUAL = 'atual'
 
-/** Uma escrita esperando rede. O `clientId` é o que torna o reenvio inofensivo. */
+/**
+ * Uma escrita esperando rede. O `clientId` é o que torna o reenvio inofensivo.
+ *
+ * O `dono` não é enfeite: é ele que impede a série de uma pessoa de subir pela
+ * sessão autenticada de outra. As actions não recebem aluno nenhum — o banco
+ * resolve pelo `auth.uid()` —, então fila sem dono é fila que se atribui a quem
+ * estiver logado na hora de sincronizar.
+ */
 export type PendingOperation =
-  | { kind: 'START'; clientId: string; workoutPlanId: string | null; tentativas: number }
+  | {
+      kind: 'START'
+      clientId: string
+      dono: string
+      workoutPlanId: string | null
+      tentativas: number
+    }
   | {
       kind: 'SET'
       clientId: string
+      dono: string
       sessionClientId: string
       exerciseId: string
       setNumber: number
@@ -45,6 +81,7 @@ export type PendingOperation =
   | {
       kind: 'FINISH'
       clientId: string
+      dono: string
       sessionClientId: string
       durationSeconds: number
       status: 'COMPLETED' | 'ABANDONED'
@@ -54,11 +91,21 @@ export type PendingOperation =
 function abrir(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const pedido = indexedDB.open(BANCO, VERSAO)
-    pedido.onupgradeneeded = () => {
+    pedido.onupgradeneeded = (evento) => {
       const banco = pedido.result
       if (!banco.objectStoreNames.contains(LOJA_SESSAO)) banco.createObjectStore(LOJA_SESSAO)
       if (!banco.objectStoreNames.contains(LOJA_FILA)) {
         banco.createObjectStore(LOJA_FILA, { keyPath: 'clientId' })
+      }
+
+      /*
+       * O descarte do que não tem dono acontece aqui, dentro da transação de
+       * atualização: roda uma vez por aparelho, antes de qualquer leitura, e
+       * nenhum caminho de leitura precisa saber que ele existiu.
+       */
+      if (evento.oldVersion >= 1 && evento.oldVersion < 2 && pedido.transaction) {
+        pedido.transaction.objectStore(LOJA_SESSAO).clear()
+        pedido.transaction.objectStore(LOJA_FILA).clear()
       }
     }
     pedido.onsuccess = () => resolve(pedido.result)
@@ -89,37 +136,42 @@ async function transacao<T>(
  */
 const disponivel = () => typeof indexedDB !== 'undefined'
 
-export async function salvarSessao(sessao: WorkoutSession): Promise<void> {
-  if (!disponivel()) return
+export async function salvarSessao(dono: string, sessao: WorkoutSession): Promise<void> {
+  if (!disponivel() || !donoValido(dono)) return
   try {
-    await transacao(LOJA_SESSAO, 'readwrite', (loja) => loja.put(sessao, CHAVE_ATUAL))
+    const registro: RegistroDeSessao = { dono, sessao }
+    await transacao(LOJA_SESSAO, 'readwrite', (loja) => loja.put(registro, chaveDaSessao(dono)))
   } catch {
     // Gravação falhou; o treino continua na memória. Não é motivo para parar.
   }
 }
 
-export async function lerSessao(): Promise<WorkoutSession | null> {
-  if (!disponivel()) return null
+export async function lerSessao(dono: string): Promise<WorkoutSession | null> {
+  if (!disponivel() || !donoValido(dono)) return null
   try {
-    return (await transacao<WorkoutSession | undefined>(LOJA_SESSAO, 'readonly', (loja) =>
-      loja.get(CHAVE_ATUAL),
-    )) ?? null
+    const registro = await transacao<RegistroDeSessao | undefined>(
+      LOJA_SESSAO,
+      'readonly',
+      (loja) => loja.get(chaveDaSessao(dono)),
+    )
+    // A chave já separa; `sessaoDoDono` é a segunda tranca. Ver `escopo.ts`.
+    return sessaoDoDono(registro, dono)
   } catch {
     return null
   }
 }
 
-export async function limparSessao(): Promise<void> {
-  if (!disponivel()) return
+export async function limparSessao(dono: string): Promise<void> {
+  if (!disponivel() || !donoValido(dono)) return
   try {
-    await transacao(LOJA_SESSAO, 'readwrite', (loja) => loja.delete(CHAVE_ATUAL))
+    await transacao(LOJA_SESSAO, 'readwrite', (loja) => loja.delete(chaveDaSessao(dono)))
   } catch {
     /* nada a fazer */
   }
 }
 
 export async function enfileirar(operacao: PendingOperation): Promise<void> {
-  if (!disponivel()) return
+  if (!disponivel() || !donoValido(operacao.dono)) return
   try {
     await transacao(LOJA_FILA, 'readwrite', (loja) => loja.put(operacao))
   } catch {
@@ -127,12 +179,19 @@ export async function enfileirar(operacao: PendingOperation): Promise<void> {
   }
 }
 
-export async function lerFila(): Promise<PendingOperation[]> {
-  if (!disponivel()) return []
+export async function lerFila(dono: string): Promise<PendingOperation[]> {
+  if (!disponivel() || !donoValido(dono)) return []
   try {
-    const todas = await transacao<PendingOperation[]>(LOJA_FILA, 'readonly', (loja) =>
+    const guardadas = await transacao<PendingOperation[]>(LOJA_FILA, 'readonly', (loja) =>
       loja.getAll(),
     )
+    /*
+     * Só o que é desta pessoa. O que é de outro dono fica no aparelho,
+     * intocado: ele é registro de treino que ainda não subiu, e apagá-lo na
+     * troca de conta seria perder o treino de quem não está aqui para
+     * reclamar.
+     */
+    const todas = filaDoDono(guardadas, dono)
     /*
      * A ordem importa: abrir o treino precede registrar série, que precede
      * encerrar. Fora de ordem, a série chegaria a uma sessão que o servidor

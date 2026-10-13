@@ -30,9 +30,12 @@ const { expurgar } = await import('@/features/active-workout/sync')
 
 const ESGOTADA = 8
 
+const DONO = 'matricula-1'
+
 const inicio = (clientId: string, tentativas = 0): PendingOperation => ({
   kind: 'START',
   clientId,
+  dono: DONO,
   workoutPlanId: null,
   tentativas,
 })
@@ -40,6 +43,7 @@ const inicio = (clientId: string, tentativas = 0): PendingOperation => ({
 const serie = (clientId: string, sessionClientId: string, tentativas = 0): PendingOperation => ({
   kind: 'SET',
   clientId,
+  dono: DONO,
   sessionClientId,
   exerciseId: 'ex-1',
   setNumber: 1,
@@ -55,6 +59,7 @@ const serie = (clientId: string, sessionClientId: string, tentativas = 0): Pendi
 const fim = (clientId: string, sessionClientId: string, tentativas = 0): PendingOperation => ({
   kind: 'FINISH',
   clientId,
+  dono: DONO,
   sessionClientId,
   durationSeconds: 3600,
   status: 'COMPLETED',

@@ -59,7 +59,7 @@ export default async function StudentWorkoutPage() {
         porque o caso que ele resolve é justamente o de não haver treino
         aberto — encerrado no subsolo da academia e com o app fechado depois.
       */}
-      <PendingWorkoutSync />
+      <PendingWorkoutSync dono={session.studentId} />
 
       {/*
         Sem plano atribuído não é mais tela vazia: o treino base do Synse vale

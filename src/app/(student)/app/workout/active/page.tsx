@@ -66,6 +66,7 @@ export default async function ActiveWorkoutPage({ searchParams }: { searchParams
     <ColunaDeLeitura className="animate-fade-in-up space-y-4">
       <BackLink href="/app/workout" label="Treinos" />
       <ActiveWorkoutScreen
+        dono={session.studentId}
         planName={plan.name.replace(/^Treino [A-Z]+ — /, '')}
         workoutPlanId={plan.id}
         exercises={planejados}

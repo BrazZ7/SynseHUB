@@ -127,15 +127,32 @@ export type WorkoutLogFilters = {
  * crescente, então o corte do PostgREST levava o registro mais **recente**: o
  * "ganho de carga" congelava num valor antigo.
  *
- * As duas podem ser de exercícios **diferentes**: é como o número sempre foi
- * calculado, e a diferença entre uma rosca de 20 kg e um agachamento de 100
- * não é ganho de força. Isto aqui conserta o corte e nada mais — mudar o que o
- * número significa é decisão de produto, e está anotada em
- * `docs/pre-producao.md` em vez de resolvida escondida numa correção.
+ * ── O defeito de origem, consertado pela 0055 ──────────────────────────────
+ *
+ * Isto saía de `workout_logs`, e **nada no produto escreve nessa tabela**: o
+ * treino entra série a série em `workout_set_logs` pela 0026. Numa academia
+ * real a home mostrava `—` para sempre, por mais que o aluno treinasse — e na
+ * demonstração funcionava, porque a semente preenche a tabela antiga. Tela
+ * plausível, sem erro nenhum, mentindo por omissão.
+ *
+ * ── E o número mudou de significado, por decisão do produto ────────────────
+ *
+ * Comparava a primeira carga de **qualquer** exercício com a última de
+ * qualquer exercício: uma rosca de 20 kg seguida de um agachamento de 100
+ * aparecia como "+80 kg de ganho". Decidido em 13/10/2026: é a evolução no
+ * exercício que a pessoa mais treinou, e a tela diz qual é.
+ *
+ * `null` em tudo significa "não há dois dias do mesmo exercício" — aluno novo,
+ * ou que passou uma vez por cada coisa. A tela mostra travessão e explica o
+ * que fazer; ela não recebe um zero que diria "você não evoluiu".
  */
 export type LoadProgress = {
   primeira: number | null
   ultima: number | null
+  /** O exercício de que o número fala. `null` quando não há número. */
+  exercicio: { id: string; nome: string } | null
+  /** Em quantos dias distintos este exercício foi registrado com carga. */
+  dias: number
 }
 
 export type LeadFilters = {

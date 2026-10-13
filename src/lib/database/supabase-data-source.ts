@@ -2144,17 +2144,53 @@ export class SupabaseDataSource implements DataSource {
   }
 
   /**
-   * A primeira e a última carga registradas.
+   * O ganho de carga do aluno, no exercício que ele mais treinou (0055).
    *
-   * Duas linhas, uma por consulta, com `order` oposta. A home lia o histórico
-   * inteiro para usar exatamente estas duas — e como a ordem é crescente, o
-   * corte levava justamente a última.
+   * ── A origem estava errada, e isso era o pior do defeito ─────────────────
    *
-   * As duas podem ser de exercícios diferentes, como sempre foram. Isto
-   * conserta o corte e preserva o significado — trocar o significado é
-   * decisão de produto, anotada em `docs/pre-producao.md`.
+   * Isto lia `workout_logs`, e **nada no produto escreve nessa tabela**. O
+   * treino entra série a série em `workout_set_logs` pela 0026. Numa academia
+   * real a home mostrava `—` para sempre; na demonstração funcionava, porque
+   * a semente preenche a tabela antiga.
+   *
+   * ── O caminho antigo, e por que ele fica ─────────────────────────────────
+   *
+   * Publicar não é migrar. Enquanto a 0055 não é colada, a aplicação volta a
+   * ler `workout_logs` como lia — errado como sempre foi, mas de pé para a
+   * academia que tenha histórico antigo lá. Devolver nada seria apagar da
+   * tela um número que o banco velho ainda sabe dar.
    */
   async getLoadProgress(organizationId: string, studentId: string): Promise<LoadProgress> {
+    const { data, error } = await this.client.rpc('ganho_de_carga', { p_student_id: studentId })
+
+    if (error) {
+      if (!isPendingMigration(error)) this.fail('getLoadProgress', error)
+      logger.warn('getLoadProgress:sem_0055', {})
+      return this.cargaPelaAplicacao(organizationId, studentId)
+    }
+
+    const linha = ((data ?? []) as Row[])[0]
+    if (!linha) return { primeira: null, ultima: null, exercicio: null, dias: 0 }
+
+    return {
+      primeira: linha.primeira != null ? Number(linha.primeira) : null,
+      ultima: linha.ultima != null ? Number(linha.ultima) : null,
+      exercicio: { id: linha.exercise_id, nome: linha.exercise_name },
+      dias: Number(linha.dias ?? 0),
+    }
+  }
+
+  /**
+   * Como era antes da 0055: a primeira e a última carga de `workout_logs`.
+   *
+   * Sem exercício, porque o número nunca foi de um exercício só — é
+   * exatamente o que a 0055 conserta. A tela sabe distinguir pelo `exercicio`
+   * nulo e não promete na legenda o que não tem.
+   */
+  private async cargaPelaAplicacao(
+    organizationId: string,
+    studentId: string,
+  ): Promise<LoadProgress> {
     const umaCarga = (ascendente: boolean) =>
       this.select<Row>(
         'getLoadProgress',
@@ -2174,6 +2210,8 @@ export class SupabaseDataSource implements DataSource {
     return {
       primeira: primeiro?.load != null ? Number(primeiro.load) : null,
       ultima: ultimo?.load != null ? Number(ultimo.load) : null,
+      exercicio: null,
+      dias: 0,
     }
   }
 

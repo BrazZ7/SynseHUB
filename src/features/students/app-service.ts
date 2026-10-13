@@ -16,6 +16,7 @@ export type StudentHomeData = {
   nextCharge: Charge | null
   currentLoad: number | null
   loadGain: number | null
+  loadExercise: { id: string; nome: string } | null
   programDay: { current: number; total: number; percentage: number }
   lastCheckInAt: string | null
 }
@@ -80,16 +81,22 @@ export async function getStudentHome(
   const monthlyCheckIns = checkIns.filter((c) => c.checkedInAt >= monthStart).length
   const checkedInToday = checkIns.some((c) => c.checkedInAt >= todayStart)
 
+  /*
+   * ── O que estes dois números significam agora ───────────────────────────
+   *
+   * A evolução **num exercício só**: o que a pessoa mais treinou. Antes era a
+   * primeira carga de qualquer exercício contra a última de qualquer
+   * exercício — uma rosca de 20 kg seguida de um agachamento de 100 aparecia
+   * como "+80 kg de ganho". Decisão do dono do produto, 13/10/2026.
+   *
+   * E vinham de `workout_logs`, que **nada no produto escreve**: em academia
+   * real os dois eram `—` para sempre. Agora saem de onde o treino entra.
+   *
+   * Sem dois dias do mesmo exercício não há ganho, e `null` é o certo: zero
+   * diria "você não evoluiu" para quem acabou de começar.
+   */
   const currentLoad = cargas.ultima
   const firstLoad = cargas.primeira
-  /*
-   * O mesmo cálculo de antes, agora sobre as cargas certas. Ele continua
-   * comparando a primeira carga registrada em **qualquer** exercício com a
-   * última em qualquer exercício — o que não é ganho de força, e está anotado
-   * em `docs/pre-producao.md` para decidir. Não mudei aqui de propósito:
-   * corrigir o corte e trocar o significado do número são duas coisas, e a
-   * segunda não é minha para escolher.
-   */
   const loadGain = currentLoad != null && firstLoad != null ? currentLoad - firstLoad : null
 
   // Programa Synse 30: derivado da data de matrícula, ciclo de 30 dias.
@@ -111,6 +118,8 @@ export async function getStudentHome(
     nextCharge,
     currentLoad,
     loadGain,
+    /** De qual exercício os dois números falam. A tela diz o nome. */
+    loadExercise: cargas.exercicio,
     programDay: {
       current: programCurrent,
       total: 30,

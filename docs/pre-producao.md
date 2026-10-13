@@ -943,6 +943,68 @@ existem, não para conferir se subiram.
   trocar para `security definer`, somar cobrança cancelada, contar academia
   suspensa no MRR) — as cinco pegas.
 
+- **0055 (`0055_ganho_de_carga.sql`)** — o ganho de carga passa a vir da tabela
+  que o produto escreve, e a falar de um exercício só.
+
+  **O defeito era de origem, e é o mais caro deste registro inteiro.** "Carga
+  atual" e "Ganho de carga" na home do aluno, "Treinos registrados" e o gráfico
+  "Evolução de carga" na ficha do hub — os quatro saíam de `workout_logs`. E
+  **nada no produto escreve em `workout_logs`**: a varredura é simples de
+  repetir, não há `insert` nessa tabela em lugar nenhum do repositório. Ela
+  existe desde a 0003 e é preenchida só pela semente da demonstração.
+
+  O treino de verdade entra pela 0026, série a série, em `workout_set_logs` via
+  `log_workout_set`. Então numa academia real aqueles quatro eram `—`, `—`, `0`
+  e um gráfico que nunca aparece — **para sempre**, por mais que o aluno
+  treinasse. Na demonstração tudo funcionava.
+
+  O sinal estava à vista: `personal_records` (0027) lê `workout_set_logs`, então
+  "Seus recordes" funciona em produção **na mesma tela** em que "Ganho de carga"
+  não funciona. Um comentário no código chegou a registrar que `listWorkoutLogs`
+  alimentava o gráfico "enquanto houver histórico antigo" — o que é meia
+  verdade: para academia nova não há histórico antigo nenhum, e não havia fonte
+  nova.
+
+  **A conta também mudou, por decisão do dono do produto (13/10/2026).** Ela
+  comparava a primeira carga de qualquer exercício com a última de qualquer
+  exercício: uma rosca de 20 kg seguida de um agachamento de 100 aparecia como
+  "+80 kg de ganho". Agora é a evolução no exercício **mais treinado**, com o
+  nome dele na legenda dos dois cartões — que antes podiam se contradizer lado
+  a lado, uma carga de agachamento ao lado de um ganho de rosca.
+
+  Três escolhas da função, e o porquê de cada uma:
+
+  - **Mais treinado conta dias, não séries.** Quem faz seis séries num dia não
+    treinou mais que quem fez duas em dois dias, e é a série temporal que
+    interessa.
+  - **A carga do dia é a máxima do dia.** Numa sessão há aquecimento e série
+    valendo; pegar uma série solta faria o número oscilar com a ordem em que
+    foram anotadas. Máxima é o que `personal_records` já usa, então as duas
+    seções da mesma tela concordam.
+  - **Menos de dois dias não devolve linha.** Sem dois pontos não há evolução,
+    e zero diria "você não evoluiu" para quem acabou de começar. A tela mostra
+    travessão e diz o que fazer: "Registre o mesmo exercício 2×".
+
+  Sem a migration, a aplicação volta a ler `workout_logs` como lia — errado como
+  sempre foi, mas de pé para quem tenha histórico antigo lá. Nesse caminho não
+  há exercício para nomear, e a legenda não promete um. Há sonda: a função é
+  nova e revogada ao anônimo.
+
+  **O que esta migration não resolve, e fica anotado:** o gráfico "Evolução de
+  carga" da ficha do hub e o cartão "Treinos registrados" continuam lendo
+  `workout_logs`. A legenda do gráfico parou de mentir — dizia "Supino reto"
+  sobre uma linha que mistura todos os exercícios, verdade na demonstração e
+  mentira em produção —, mas a fonte dos dois ainda é a tabela vazia. São duas
+  telas do hub, não do app, e o conserto é outro: `exercise_progress` (0027) já
+  existe e dá a série semanal de um exercício, e a contagem de séries sai de
+  `workout_set_logs` com `head: true`. Próxima tarefa.
+
+  `tests/db/ganho-de-carga.test.ts`: 9 testes contra Postgres, 5 mutações
+  (carga mínima do dia em vez de máxima, aceitar um dia só, contar séries em
+  vez de dias, tratar carga nula como zero, `security definer`) — as cinco
+  pegas. Um dos testes lê `pg_get_functiondef` e falha se a função voltar a
+  citar `workout_logs`.
+
 ### O painel da plataforma em três consultas, e a dívida zerada
 
 Era assim: `/synse-admin` lia **todas** as organizações, sem teto, e para cada

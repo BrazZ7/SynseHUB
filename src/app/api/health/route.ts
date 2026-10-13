@@ -206,6 +206,7 @@ const MIGRATIONS_ESPERADAS = [
    */
   '0053_reimportar_saude.sql',
   '0054_resumo_das_academias.sql',
+  '0055_ganho_de_carga.sql',
 ]
 
 async function schemaReadiness() {
@@ -239,6 +240,7 @@ async function schemaReadiness() {
     inadimplenciaSemCorte,
     serieDePeso,
     resumoDasAcademias,
+    ganhoDeCarga,
   ] = await Promise.all([
     schemaCheck('user_profiles?select=tier&limit=1'),
     schemaCheck('baseline_challenges?select=code&limit=1'),
@@ -546,6 +548,17 @@ async function schemaReadiness() {
       p_organization_ids: ['00000000-0000-0000-0000-000000000000'],
       p_limite: 1,
     }),
+
+    /*
+     * A 0055 — o ganho de carga vindo da tabela que o produto escreve.
+     *
+     * Sem ela, "Carga atual" e "Ganho de carga" voltam a sair de
+     * `workout_logs`, em que **nada escreve**: numa academia real os dois
+     * ficam em `—` para sempre, e na demonstração funcionam, porque a semente
+     * preenche a tabela antiga. Tela plausível, sem erro nenhum. A sonda é o
+     * que separa "o aluno não treinou" de "o banco não migrou".
+     */
+    rpcCheck('ganho_de_carga', { p_student_id: '00000000-0000-0000-0000-000000000000' }),
   ])
 
   const registradas = await migracoesRegistradas()
@@ -622,6 +635,9 @@ async function schemaReadiness() {
     ) {
       faltando.push('0054_resumo_das_academias.sql')
     }
+    if (ganhoDeCarga.present === false && !faltando.includes('0055_ganho_de_carga.sql')) {
+      faltando.push('0055_ganho_de_carga.sql')
+    }
     return {
       synseRun: corridas,
       entradaSemVinculo,
@@ -652,6 +668,7 @@ async function schemaReadiness() {
       inadimplenciaSemCorte,
       serieDePeso,
       resumoDasAcademias,
+      ganhoDeCarga,
       appliedMigrations: registradas.length,
       pendingMigrations: faltando,
     }
@@ -705,6 +722,7 @@ async function schemaReadiness() {
     '0052_serie_de_peso.sql',
     '0053_reimportar_saude.sql',
     '0054_resumo_das_academias.sql',
+    '0055_ganho_de_carga.sql',
   )
 
   return {

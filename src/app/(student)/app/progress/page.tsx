@@ -165,6 +165,15 @@ export default async function StudentProgressPage() {
         ao lado de um buraco.
       */}
       <section className="grid grid-cols-3 gap-2.5">
+        {/*
+          Os dois cartões falam do **mesmo** exercício — o mais treinado —, e
+          a legenda diz qual. "Supino reto" já foi legenda fixa no código com
+          o número vindo de qualquer exercício; lado a lado, uma carga de
+          agachamento e um ganho de rosca se contradiziam na mesma linha.
+
+          Sem exercício nomeado, o número é o do caminho antigo (banco sem a
+          0055): a legenda então não promete um exercício que não sabe qual é.
+        */}
         <StatTile
           icon={Dumbbell}
           label="Carga atual"
@@ -173,12 +182,7 @@ export default async function StudentProgressPage() {
               ? `${formatNumber(home.currentLoad, { maximumFractionDigits: 1 })} kg`
               : '—'
           }
-          /*
-           * "Supino reto" era legenda fixa no código, e o número vem de
-           * qualquer exercício. Dizer o que é continua sendo o conserto;
-           * filtrar por um exercício é decisão de produto, anotada.
-           */
-          caption="Último registro"
+          caption={home.loadExercise?.nome ?? 'Último registro'}
         />
         <StatTile
           icon={TrendingUp}
@@ -188,7 +192,16 @@ export default async function StudentProgressPage() {
               ? `+${formatNumber(home.loadGain, { maximumFractionDigits: 1 })} kg`
               : '—'
           }
-          caption="Da primeira à última"
+          /*
+           * Sem número, a legenda diz o que fazer para ele aparecer. "—" sem
+           * explicação parece defeito da tela, e o aluno novo não tem como
+           * adivinhar que faltam dois registros do mesmo exercício.
+           */
+          caption={
+            home.loadGain != null
+              ? (home.loadExercise?.nome ?? 'Da primeira à última')
+              : 'Registre o mesmo exercício 2×'
+          }
           positive
         />
         <StatTile

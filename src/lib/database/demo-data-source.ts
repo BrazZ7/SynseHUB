@@ -42,6 +42,10 @@ import { AVALIACOES_NA_FICHA } from '@/features/assessments/janela'
 import { RECEITAS_POR_PAGINA } from '@/features/nutrition/receitas-por-pagina'
 import { FICHAS_POR_PAGINA } from '@/features/workouts/por-pagina'
 import {
+  ganhoMaisTreinado,
+  type RegistroDeCarga,
+} from '@/features/workouts/ganho-de-carga'
+import {
   ACADEMIAS_NO_RESUMO,
   ACADEMIAS_POR_PAGINA,
   RESUMO_VAZIO,
@@ -1616,12 +1620,37 @@ export class DemoDataSource implements DataSource {
     return this.registrosDoAluno(organizationId, studentId).length
   }
 
+  /**
+   * O que a 0055 faz, na demonstração.
+   *
+   * Um exercício só — o mais treinado, por dias distintos —, e a carga do dia
+   * é a máxima do dia. Calcular diferente aqui faria a demonstração ensinar
+   * um número que a produção não mostra, que é exatamente como o defeito
+   * original sobreviveu: a semente registra tudo no supino, então a legenda
+   * fixa "Supino reto" era verdade aqui e mentira em produção.
+   */
   async getLoadProgress(organizationId: string, studentId: string): Promise<LoadProgress> {
-    const comCarga = this.registrosDoAluno(organizationId, studentId).filter((l) => l.load != null)
-    const primeiro = comCarga[0]
-    const ultimo = comCarga[comCarga.length - 1]
+    const exercicioDoRegistro = new Map(
+      this.db.workoutExercises.map((we) => [we.id, we.exerciseId]),
+    )
 
-    return { primeira: primeiro?.load ?? null, ultima: ultimo?.load ?? null }
+    const registros: RegistroDeCarga[] = []
+    for (const log of this.registrosDoAluno(organizationId, studentId)) {
+      if (log.load == null || !log.workoutExerciseId) continue
+      const exerciseId = exercicioDoRegistro.get(log.workoutExerciseId)
+      if (exerciseId) registros.push({ exerciseId, performedAt: log.performedAt, load: log.load })
+    }
+
+    const ganho = ganhoMaisTreinado(registros)
+    if (!ganho) return { primeira: null, ultima: null, exercicio: null, dias: 0 }
+
+    const nome = this.db.exercises.find((e) => e.id === ganho.exerciseId)?.name ?? 'Exercício'
+    return {
+      primeira: ganho.primeira,
+      ultima: ganho.ultima,
+      exercicio: { id: ganho.exerciseId, nome },
+      dias: ganho.dias,
+    }
   }
 
   // ── Avaliações ─────────────────────────────────────────────────────────────

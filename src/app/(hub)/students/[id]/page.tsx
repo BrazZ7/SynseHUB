@@ -501,7 +501,14 @@ export default async function StudentProfilePage({ params }: { params: Params })
           {loadSeries.length > 1 && (
             <ChartCard
               title="Evolução de carga"
-              description="Supino reto — carga registrada a cada semana."
+              /*
+                "Supino reto" era legenda fixa no código, e o gráfico plota a
+                carga de **qualquer** exercício. Era verdade na demonstração,
+                onde a semente registra tudo no supino, e mentira em qualquer
+                academia real — o professor lia o nome de um exercício sobre
+                uma linha que mistura todos.
+              */
+              description="Carga registrada em todos os exercícios, ao longo do tempo."
             >
               <ProgressLineChart data={loadSeries} unit=" kg" />
             </ChartCard>

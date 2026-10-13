@@ -89,23 +89,63 @@ describe('a contagem, na demonstração', () => {
   })
 })
 
-describe('a primeira e a última carga', () => {
-  it('são as pontas do histórico inteiro, não da janela', async () => {
+describe('o ganho de carga, na demonstração', () => {
+  /*
+   * ── Por que o teste antigo daqui foi reescrito ───────────────────────────
+   *
+   * Ele afirmava que as duas cargas eram "as pontas do histórico inteiro", e
+   * passava. Mas passava **por coincidência da semente**: ela registra todo
+   * treino no supino, então as pontas do histórico e as pontas do exercício
+   * mais treinado são as mesmas linhas. A asserção descrevia um
+   * comportamento que a regra nova não promete mais.
+   *
+   * É o mesmo acidente que escondeu o defeito original por tanto tempo: a
+   * legenda fixa "Supino reto" era verdade na demonstração e mentira em
+   * qualquer academia real.
+   */
+  it('fala de um exercício, e diz qual', async () => {
+    const { f, alunoId } = await alunoComTreino()
+
+    const cargas = await f.getLoadProgress(DEMO_ORG_ID, alunoId)
+
+    expect(cargas.exercicio).not.toBeNull()
+    expect(cargas.exercicio!.nome.length).toBeGreaterThan(0)
+    expect(cargas.dias).toBeGreaterThanOrEqual(2)
+  })
+
+  it('o nome é de um exercício que existe, não um rótulo inventado', async () => {
+    // A legenda antiga era a string "Supino reto" escrita no código. Esta
+    // asserção é o que impede qualquer nome fixo de voltar.
+    const { f, alunoId } = await alunoComTreino()
+    const exercicios = await f.listExercises(DEMO_ORG_ID)
+
+    const cargas = await f.getLoadProgress(DEMO_ORG_ID, alunoId)
+
+    expect(exercicios.some((e) => e.name === cargas.exercicio!.nome)).toBe(true)
+  })
+
+  it('a carga do dia é a máxima do dia', async () => {
     /*
-     * A asserção central. A home usa estas duas para o "ganho de carga", e o
-     * corte levava a última — então o número congelava. Aqui elas são
-     * comparadas com o histórico inteiro, sem janela.
+     * A semente grava um registro por semana, então cada dia tem um só — o
+     * que torna esta asserção fraca na demonstração e forte onde ela importa:
+     * `tests/db/ganho-de-carga.test.ts` monta um dia com aquecimento de 20 kg
+     * e série valendo de 60, e exige 60.
+     *
+     * Aqui dá para exigir o que não depende da semente: a última carga é a
+     * maior registrada naquele dia, nunca menor que ela.
      */
     const { f, alunoId } = await alunoComTreino()
-    const tudo = (
+    const logs = (
       await f.listWorkoutLogs(DEMO_ORG_ID, alunoId, { since: new Date(0).toISOString() })
     ).filter((l) => l.load != null)
 
     const cargas = await f.getLoadProgress(DEMO_ORG_ID, alunoId)
+    const ultimoDia = logs[logs.length - 1].performedAt.slice(0, 10)
+    const maiorDoUltimoDia = Math.max(
+      ...logs.filter((l) => l.performedAt.startsWith(ultimoDia)).map((l) => l.load as number),
+    )
 
-    expect(tudo.length).toBeGreaterThan(1)
-    expect(cargas.primeira).toBe(tudo[0].load)
-    expect(cargas.ultima).toBe(tudo[tudo.length - 1].load)
+    expect(cargas.ultima).toBe(maiorDoUltimoDia)
   })
 
   it('aluno sem carga registrada devolve nulo, não zero', async () => {
@@ -113,11 +153,12 @@ describe('a primeira e a última carga', () => {
      * Zero é uma carga; nulo é "não há registro". A tela mostra "—" para nulo
      * e "+0,0 kg" para zero, e as duas frases dizem coisas diferentes.
      */
-    const f = fonte()
-    const cargas = await f.getLoadProgress(DEMO_ORG_ID, 'stu_nao_existe')
+    const cargas = await fonte().getLoadProgress(DEMO_ORG_ID, 'stu_nao_existe')
 
     expect(cargas.primeira).toBeNull()
     expect(cargas.ultima).toBeNull()
+    expect(cargas.exercicio).toBeNull()
+    expect(cargas.dias).toBe(0)
   })
 })
 
@@ -189,14 +230,84 @@ describe('o que o caminho do Supabase pede', () => {
     expect(passos.some((p) => p.metodo === 'limit' || p.metodo === 'range')).toBe(false)
   })
 
-  it('as duas cargas saem de duas consultas de uma linha, em ordens opostas', async () => {
+  it('o ganho vem da função do banco, e de um exercício só', async () => {
     /*
-     * As duas ordens juntas **são** o conserto: `asc` dá a primeira, `desc` a
-     * última, e `limit(1)` faz cada resposta não ter o que cortar. Pedir as
-     * duas na mesma ordem devolveria a mesma linha duas vezes e o ganho seria
-     * sempre zero.
+     * A 0055 devolve o exercício mais treinado, com a carga máxima do
+     * primeiro e do último dia. Antes isto comparava a primeira carga de
+     * qualquer exercício com a última de qualquer exercício — rosca de 20 kg
+     * seguida de agachamento de 100 virava "+80 kg de ganho".
      */
     const t = clienteFalso({
+      rpcs: {
+        ganho_de_carga: {
+          data: [
+            {
+              exercise_id: 'exe-1',
+              exercise_name: 'Supino reto',
+              primeira: '40.00',
+              ultima: '62.50',
+              dias: '9',
+              primeiro_dia: '2026-01-05T00:00:00Z',
+              ultimo_dia: '2026-10-05T00:00:00Z',
+            },
+          ],
+          error: null,
+        },
+      },
+    })
+
+    const cargas = await t.dataSource.getLoadProgress('org-1', 'stu-1')
+
+    expect(cargas).toEqual({
+      primeira: 40,
+      ultima: 62.5,
+      exercicio: { id: 'exe-1', nome: 'Supino reto' },
+      dias: 9,
+    })
+    expect(t.argsDaRpc('ganho_de_carga')).toEqual({ p_student_id: 'stu-1' })
+  })
+
+  it('não toca em `workout_logs` quando a função existe', async () => {
+    /*
+     * A asserção que trava a **origem**. `workout_logs` não recebe escrita de
+     * lugar nenhum do produto: o treino entra em `workout_set_logs` pela
+     * 0026. Voltar a ler a tabela antiga faz os números sumirem em produção e
+     * aparecerem na demonstração — que foi como o defeito durou tanto.
+     */
+    const t = clienteFalso({ rpcs: { ganho_de_carga: { data: [], error: null } } })
+
+    await t.dataSource.getLoadProgress('org-1', 'stu-1')
+
+    expect(t.todasParaTabela('workout_logs')).toEqual([])
+  })
+
+  it('sem dois dias do mesmo exercício, devolve nada em vez de zero', async () => {
+    // Zero diria "você não evoluiu" para quem acabou de começar. A tela
+    // precisa distinguir ausência de resultado nulo.
+    const t = clienteFalso({ rpcs: { ganho_de_carga: { data: [], error: null } } })
+
+    expect(await t.dataSource.getLoadProgress('org-1', 'stu-1')).toEqual({
+      primeira: null,
+      ultima: null,
+      exercicio: null,
+      dias: 0,
+    })
+  })
+
+  it('banco sem a 0055 volta ao caminho antigo, em duas ordens opostas', async () => {
+    /*
+     * Publicar não é migrar. Enquanto o SQL não é colado, a aplicação lê
+     * `workout_logs` como lia: `asc` dá a primeira, `desc` a última, e
+     * `limit(1)` faz cada resposta não ter o que cortar. Pedir as duas na
+     * mesma ordem devolveria a mesma linha e o ganho seria sempre zero.
+     */
+    const t = clienteFalso({
+      rpcs: {
+        ganho_de_carga: {
+          data: null,
+          error: { code: 'PGRST202', message: 'Could not find the function' },
+        },
+      },
       tabelas: {
         workout_logs: [
           { data: { load: '40.00' }, error: null },
@@ -207,7 +318,10 @@ describe('o que o caminho do Supabase pede', () => {
 
     const cargas = await t.dataSource.getLoadProgress('org-1', 'stu-1')
 
-    expect(cargas).toEqual({ primeira: 40, ultima: 62.5 })
+    expect(cargas.primeira).toBe(40)
+    expect(cargas.ultima).toBe(62.5)
+    // Sem a função, não há exercício para nomear — e a tela não promete um.
+    expect(cargas.exercicio).toBeNull()
 
     const ordens = t
       .todasParaTabela('workout_logs')
@@ -226,11 +340,19 @@ describe('o que o caminho do Supabase pede', () => {
 
   it('`numeric` chega como texto e é convertido', async () => {
     const t = clienteFalso({
-      tabelas: {
-        workout_logs: [
-          { data: { load: '40.00' }, error: null },
-          { data: { load: '62.50' }, error: null },
-        ],
+      rpcs: {
+        ganho_de_carga: {
+          data: [
+            {
+              exercise_id: 'exe-1',
+              exercise_name: 'Supino reto',
+              primeira: '40.00',
+              ultima: '62.50',
+              dias: '9',
+            },
+          ],
+          error: null,
+        },
       },
     })
 
@@ -239,5 +361,6 @@ describe('o que o caminho do Supabase pede', () => {
     // o ganho é exibido com `toFixed`, e string sem número quebra ali.
     expect(typeof cargas.ultima).toBe('number')
     expect(typeof cargas.primeira).toBe('number')
+    expect(typeof cargas.dias).toBe('number')
   })
 })

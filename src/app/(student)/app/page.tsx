@@ -178,8 +178,14 @@ export default async function StudentHomePage() {
           <ProgressRing value={home.weeklyGoal.percentage} size={104} caption="da meta" />
           <p className="text-center text-xs text-synse-muted">
             Meta semanal
+            {/*
+              "dias treinados", e não "treinos": o número conta dias distintos
+              com check-in ou treino concluído. Dizia "treinos" e contava
+              check-ins — quem treina em casa nunca saía de zero, e quem passava
+              na recepção duas vezes no mesmo dia somava duas.
+            */}
             <span className="mt-0.5 block text-sm font-medium text-synse-text">
-              {home.weeklyGoal.done} de {home.weeklyGoal.target} treinos
+              {home.weeklyGoal.done} de {home.weeklyGoal.target} dias treinados
             </span>
           </p>
         </div>

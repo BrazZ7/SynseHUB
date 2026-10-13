@@ -1,5 +1,12 @@
 import 'server-only'
 
+import {
+  diasComRegistro,
+  inicioDaJanelaDeDias,
+  inicioDoDiaLocal,
+  inicioDoMesLocal,
+} from '@/features/students/janelas'
+import { TIMEZONE } from '@/config/app'
 import { getDataSource } from '@/lib/database'
 import { daysBetween } from '@/lib/utils'
 import type { Charge, WorkoutPlan } from '@/types/domain'
@@ -10,6 +17,13 @@ export type StudentHomeData = {
   synseId: string
   planName: string | null
   todayWorkout: (WorkoutPlan & { exerciseCount: number }) | null
+  /**
+   * Dias treinados na semana, não registros.
+   *
+   * Dois check-ins no mesmo dia são um dia treinado; check-in na recepção e
+   * Treino Ativo no mesmo dia também. Contar registros era a contagem duplicada
+   * que o pedido manda evitar.
+   */
   weeklyGoal: { done: number; target: number; percentage: number }
   monthlyCheckIns: number
   checkedInToday: boolean
@@ -29,10 +43,22 @@ export async function getStudentHome(
 ): Promise<StudentHomeData> {
   const dataSource = await getDataSource()
 
-  const [student, assignments, checkIns, nextCharge, cargas] = await Promise.all([
+  const [student, assignments, checkIns, treinos, nextCharge, cargas] = await Promise.all([
     dataSource.getStudent(organizationId, studentId),
     dataSource.listAssignmentsForStudent(organizationId, studentId),
     dataSource.listCheckInsForStudent(organizationId, studentId, 90),
+    /*
+     * Os treinos concluídos entram na conta da semana.
+     *
+     * A meta dizia "X de 5 treinos" e contava **check-ins** — presença na
+     * academia. Quem treina em casa, sem academia vinculada, nunca saía de
+     * zero por mais que treinasse todo dia; e quem passava na recepção sem
+     * treinar somava.
+     *
+     * Trinta linhas bastam: a janela é de sete dias, e ninguém faz trinta
+     * treinos numa semana.
+     */
+    dataSource.listWorkoutSessions(studentId, 30),
     dataSource.getNextOpenCharge(organizationId, studentId),
     /*
      * Duas linhas, e não o histórico inteiro. A home usava exatamente a
@@ -72,12 +98,35 @@ export async function getStudentHome(
 
   const exercises = todayPlan ? await dataSource.listWorkoutExercises(todayPlan.id) : []
 
+  /*
+   * ── As janelas são do fuso do produto, não do servidor ───────────────────
+   *
+   * Eram `new Date(ano, mes, dia)`, isto é, meia-noite de quem executa o
+   * código — UTC no servidor. No horário de Brasília o dia virava às 21h: a
+   * sequência de dias, logo acima nesta mesma tela, usa `diaLocal` com o fuso
+   * e dizia "treinou hoje" enquanto este cartão dizia que não.
+   *
+   * A semana é "hoje e os seis dias anteriores", e não "168 horas atrás": a
+   * janela por horas faz o número cair no meio do dia conforme o relógio anda,
+   * e quem abre o app à noite vê menos do que viu de manhã sem ter feito nada.
+   */
   const now = new Date()
-  const weekStart = new Date(now.getTime() - 7 * 86_400_000).toISOString()
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
+  const weekStart = inicioDaJanelaDeDias(now, TIMEZONE, 7)
+  const monthStart = inicioDoMesLocal(now, TIMEZONE)
+  const todayStart = inicioDoDiaLocal(now, TIMEZONE)
 
-  const weeklyDone = checkIns.filter((c) => c.checkedInAt >= weekStart).length
+  /*
+   * Dias treinados: check-in ou treino concluído, contados por dia distinto.
+   * Dois registros no mesmo dia são um dia.
+   */
+  const diasDeTreino = [
+    ...checkIns.map((c) => c.checkedInAt),
+    ...treinos
+      .filter((sessao) => sessao.status === 'COMPLETED')
+      .map((sessao) => sessao.completedAt ?? sessao.startedAt),
+  ]
+
+  const weeklyDone = diasComRegistro(diasDeTreino, TIMEZONE, weekStart)
   const monthlyCheckIns = checkIns.filter((c) => c.checkedInAt >= monthStart).length
   const checkedInToday = checkIns.some((c) => c.checkedInAt >= todayStart)
 

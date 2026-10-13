@@ -3,6 +3,8 @@
 import { revalidatePath } from 'next/cache'
 
 import { requireStudentSession } from '@/lib/auth/require-session'
+import { TIMEZONE } from '@/config/app'
+import { inicioDoDiaLocal } from '@/features/students/janelas'
 import { getDataSource } from '@/lib/database'
 import { conflict, AppError, toUserMessage } from '@/lib/errors'
 import { logger } from '@/lib/logger'
@@ -25,12 +27,15 @@ export async function studentCheckInAction(): Promise<CheckInState> {
     }
 
     const dataSource = await getDataSource()
-    const today = new Date()
-    const todayStart = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      today.getDate(),
-    ).toISOString()
+    /*
+     * Meia-noite no fuso do produto, não no do servidor.
+     *
+     * Era `new Date(ano, mes, dia)`, que em UTC vira o dia às 21h de Brasília:
+     * entre as 21h e a meia-noite o guarda deixava passar um segundo check-in
+     * do mesmo dia. Dois check-ins num dia inflam a meta da semana e a
+     * contagem do mês — a contagem duplicada que o pedido manda evitar.
+     */
+    const todayStart = inicioDoDiaLocal(new Date(), TIMEZONE)
 
     const recent = await dataSource.listCheckInsForStudent(
       session.organizationId,

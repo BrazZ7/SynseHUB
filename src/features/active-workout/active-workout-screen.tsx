@@ -87,6 +87,16 @@ export function ActiveWorkoutScreen({
     return <div className="h-64 animate-pulse rounded-2xl bg-synse-surface-2" aria-hidden />
   }
 
+  /*
+   * Antes de qualquer painel: uma aba manda, a outra espera. A conferência vem
+   * aqui, e não só na tela do treino, porque o momento perigoso inclui a
+   * abertura — duas abas começando o treino ao mesmo tempo produziriam duas
+   * sessões locais para a mesma sessão do servidor.
+   */
+  if (treino.comandoEmOutraAba) {
+    return <OutraAba onAssumir={() => void treino.assumirComando()} />
+  }
+
   if (!treino.sessao) {
     return (
       <div className="space-y-4">
@@ -505,6 +515,38 @@ function ExercicioConcluido({
           Concluir treino
         </Button>
       )}
+    </section>
+  )
+}
+
+// ── Outra aba ────────────────────────────────────────────────────────────────
+/**
+ * O treino está aberto em outra aba.
+ *
+ * Diz o que está acontecendo e oferece a saída, em vez de deixar as duas abas
+ * gravando uma por cima da outra — que é o que fazia o treino andar para trás
+ * sem ninguém ter desfeito nada.
+ *
+ * O texto não promete que a outra aba parou de contar: ele diz que **esta** não
+ * está gravando. É o que se pode afirmar daqui.
+ */
+function OutraAba({ onAssumir }: { onAssumir: () => void }) {
+  return (
+    <section
+      className="border-synse-warning/40 bg-synse-warning/10 rounded-2xl border p-5"
+      role="status"
+    >
+      <TriangleAlert className="size-6 text-synse-warning" aria-hidden />
+      <p className="mt-2 font-semibold text-synse-text">
+        Seu treino está aberto em outra aba.
+      </p>
+      <p className="mt-1 text-sm text-synse-muted">
+        Para não gravar duas versões do mesmo treino, esta aba parou de registrar. Continue na
+        outra aba, ou traga o treino para cá.
+      </p>
+      <Button size="lg" onClick={onAssumir} className="mt-4 h-14 w-full">
+        Treinar nesta aba
+      </Button>
     </section>
   )
 }

@@ -210,6 +210,7 @@ const MIGRATIONS_ESPERADAS = [
   '0056_eventos.sql',
   '0057_exercicios_da_sessao.sql',
   '0058_desfazer_serie.sql',
+  '0059_serie_de_dois_lugares.sql',
 ]
 
 async function schemaReadiness() {
@@ -759,6 +760,7 @@ async function schemaReadiness() {
     '0056_eventos.sql',
     '0057_exercicios_da_sessao.sql',
     '0058_desfazer_serie.sql',
+    '0059_serie_de_dois_lugares.sql',
   )
 
   return {

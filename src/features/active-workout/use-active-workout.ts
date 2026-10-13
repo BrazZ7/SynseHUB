@@ -27,6 +27,7 @@ import {
   salvarSessao,
 } from '@/features/active-workout/storage/local-workout'
 import { faltaEncerrarNoServidor } from '@/features/active-workout/encerramento'
+import { criarComando } from '@/features/active-workout/storage/comando'
 import { resumoDoTreino, type ResumoDoTreino } from '@/features/active-workout/state'
 import { sincronizar } from '@/features/active-workout/sync'
 
@@ -113,6 +114,22 @@ export function useActiveWorkout(dono: string, preferencias?: Partial<WorkoutSet
    * treino" mostra o resumo, e o "Fechar" do resumo viria depois.
    */
   const encerradoRef = useRef(false)
+  /*
+   * Esta aba, para o aviso entre abas. Gerado uma vez por montagem: é
+   * identidade de janela, não de pessoa.
+   */
+  const abaRef = useRef(id())
+  /**
+   * Outra aba assumiu o treino.
+   *
+   * Enquanto isto é verdade, esta aba não grava e não sincroniza: as duas
+   * escrevendo o mesmo registro fazem a última apagar o que a outra gravou, e a
+   * pessoa vê o treino andar para trás sem ter desfeito nada. A política inteira
+   * está em `storage/comando.ts`.
+   */
+  const [comandoEmOutraAba, setComandoEmOutraAba] = useState(false)
+  const comandoRef = useRef(false)
+  comandoRef.current = comandoEmOutraAba
 
   // ── Recuperação ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -186,8 +203,48 @@ export function useActiveWorkout(dono: string, preferencias?: Partial<WorkoutSet
   // ── Persistência ───────────────────────────────────────────────────────────
   useEffect(() => {
     // A trava do `donoNaMemoriaRef` está explicada na declaração dele.
+    if (comandoEmOutraAba) return
     if (sessao && donoNaMemoriaRef.current === dono) void salvarSessao(dono, sessao)
-  }, [dono, sessao])
+  }, [comandoEmOutraAba, dono, sessao])
+
+  // ── Comando entre abas ─────────────────────────────────────────────────────
+  const comando = useMemo(() => criarComando(dono, abaRef.current), [dono])
+
+  useEffect(() => {
+    comando.ouvir(() => setComandoEmOutraAba(true))
+    /*
+     * Anuncia na montagem: quem abre a tela assume. É a regra mais simples de
+     * explicar — manda quem está olhando — e a única que não precisa de tempo
+     * limite para resolver aba fechada.
+     */
+    comando.anunciar()
+    setComandoEmOutraAba(false)
+    return () => comando.fechar()
+  }, [comando])
+
+  /**
+   * Retoma o comando nesta aba.
+   *
+   * Relê o treino gravado antes de assumir: a outra aba pode ter registrado
+   * séries depois de esta ter lido, e assumir com a cópia velha na memória
+   * regravaria o registro para trás — exatamente o que a política existe para
+   * impedir.
+   */
+  const assumirComando = useCallback(async () => {
+    const guardada = await lerSessao(dono)
+    if (guardada && guardada.state !== 'WORKOUT_COMPLETED') {
+      serverIdRef.current = guardada.serverId
+      donoNaMemoriaRef.current = dono
+      setSessao(
+        reidratar(
+          { ...guardada, settings: { ...guardada.settings, ...preferenciasRef.current } },
+          Date.now(),
+        ),
+      )
+    }
+    comando.anunciar()
+    setComandoEmOutraAba(false)
+  }, [comando, dono])
 
   // ── Tela bloqueada ─────────────────────────────────────────────────────────
   const paraLiveActivity = useCallback((s: WorkoutSession): LiveWorkoutState | null => {
@@ -244,6 +301,12 @@ export function useActiveWorkout(dono: string, preferencias?: Partial<WorkoutSet
 
   // ── Sincronização ──────────────────────────────────────────────────────────
   const empurrarFila = useCallback(async () => {
+    /*
+     * Aba sem comando não sincroniza. A fila é a mesma — está no IndexedDB
+     * compartilhado — e quem manda drena. Duas abas drenando gastariam rede
+     * mandando o mesmo `client_id` duas vezes.
+     */
+    if (comandoRef.current) return
     const resultado = await sincronizar(dono, serverIdRef.current)
     if (resultado.sessionId && resultado.sessionId !== serverIdRef.current) {
       serverIdRef.current = resultado.sessionId
@@ -504,6 +567,8 @@ export function useActiveWorkout(dono: string, preferencias?: Partial<WorkoutSet
     resumoDaFila,
     iniciar,
     prepararSom,
+    comandoEmOutraAba,
+    assumirComando,
     concluirSerie,
     concluirTreino,
     desfazer,

@@ -224,7 +224,25 @@ describe.skipIf(!temBanco)('o toque duplo', () => {
     expect(rows[0].total).toBe(1)
   })
 
-  it('duas séries 2 com ids diferentes não é reenvio: é dado errado', async () => {
+  it('duas séries 2 com ids diferentes não é reenvio: é outra série', async () => {
+    /*
+     * ── Política mudada na 0059, e vale registrar o que havia antes ─────────
+     *
+     * Este teste exigia que a segunda fosse **recusada** pela unicidade
+     * `(session_id, exercise_id, set_number)`, com a razão da 0026: "duas
+     * série 2 no mesmo exercício não é reenvio, é dado errado".
+     *
+     * A restrição continua certa no que ela quer dizer; o jeito de aplicá-la
+     * estava errado. A segunda série tem `client_id` próprio, de um toque que
+     * aconteceu — é o caso de duas abas, ou do celular e do tablet, cada um
+     * contando as séries por conta própria. Recusada, a fila insistia oito
+     * vezes, desistia, e a tela dizia "uma série não pôde ser enviada" para uma
+     * série que a pessoa fez.
+     *
+     * Agora ela entra no próximo número livre. Número de série é ordenação; a
+     * série é o dado. Ver o cabeçalho da 0059 e
+     * `tests/db/serie-de-dois-lugares.test.ts`.
+     */
     const { rows } = await client.query(
       `select id from workout_sessions where student_id = $1 and status = 'IN_PROGRESS'`,
       [alunoAlpha],
@@ -232,9 +250,35 @@ describe.skipIf(!temBanco)('o toque duplo', () => {
     const sessao = rows[0].id
     await registrarSerie(sessao, 2, 'serie-2a')
 
-    await expect(registrarSerie(sessao, 2, 'serie-2b')).rejects.toThrow(
-      /duplicate key|workout_set_logs_session_id_exercise_id_set_number_key/i,
+    await registrarSerie(sessao, 2, 'serie-2b')
+
+    const { rows: series } = await client.query(
+      `select set_number, client_id from workout_set_logs
+       where session_id = $1 and client_id in ('serie-2a','serie-2b') order by set_number`,
+      [sessao],
     )
+    expect(series.map((r) => r.client_id)).toEqual(['serie-2a', 'serie-2b'])
+    expect(series[0].set_number).not.toBe(series[1].set_number)
+  })
+
+  it('e a unicidade do número continua de pé no banco', async () => {
+    /*
+     * O controle da mudança acima: o deslocamento é da função, não um
+     * afrouxamento da tabela. Escrita direta com número repetido continua
+     * recusada — e é isso que mantém "duas série 2" impossível.
+     */
+    const { rows } = await client.query(
+      `select id, organization_id, exercise_id from workout_set_logs limit 1`,
+    )
+    await expect(
+      client.query(
+        `insert into workout_set_logs
+           (organization_id, session_id, exercise_id, set_number, reps_completed, client_id)
+         select organization_id, session_id, exercise_id, set_number, 10, 'colado-a-mao'
+         from workout_set_logs where id = $1`,
+        [rows[0].id],
+      ),
+    ).rejects.toThrow(/duplicate key|set_number/i)
   })
 
   it('série em treino já encerrado é recusada', async () => {

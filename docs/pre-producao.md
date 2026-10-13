@@ -1113,6 +1113,42 @@ existem, não para conferir se subiram.
   `tests/db/desfazer-serie.test.ts`: 17 testes contra Postgres, 6 mutações,
   todas pegas.
 
+- **0059 (`0059_serie_de_dois_lugares.sql`)** — a série que chega de dois
+  lugares.
+
+  O produto mantém uma sessão aberta por aluno e `start_workout_session`
+  devolve a que já está aberta. Quando a mesma pessoa tem o treino aberto em
+  dois lugares — duas abas, celular e tablet, ou uma aba antiga cuja fila só
+  drena horas depois — os dois lados contam as séries por conta própria e os
+  dois mandam "série 3 do supino".
+
+  `unique (session_id, exercise_id, set_number)` recusava a segunda. A fila
+  insistia oito vezes, desistia, e a tela dizia "uma série não pôde ser
+  enviada" para uma série que a pessoa fez.
+
+  **A política, escrita.** Reenvio é `client_id` repetido e continua resolvido
+  pelo `on conflict (session_id, client_id)`. Série de outro lugar é
+  `client_id` novo com número ocupado: entra no próximo número livre **daquele
+  exercício**. Número de série é ordenação; a série é o dado.
+
+  Foi considerado e recusado comparar `completed_at` para adivinhar se é a
+  mesma série física. Heurística que descarta errado apaga em silêncio uma
+  série real, e o item 7 do pedido é explícito: não resolver conflito de um
+  jeito que possa apagar série válida.
+
+  A restrição da tabela **não** foi afrouxada — o deslocamento é da função.
+  `tests/db/treino-ativo.test.ts` tem o controle disso: escrita direta com
+  número repetido continua recusada.
+
+  A metade de duas **abas** é do cliente, em
+  `src/features/active-workout/storage/comando.ts`: manda quem abriu a tela, a
+  outra para de gravar e oferece retomar.
+
+  `tests/db/serie-de-dois-lugares.test.ts`: 8 testes contra Postgres, 3
+  mutações, todas pegas. Uma delas obrigou a refazer o teste do deslocamento:
+  com uma série de supino só, contar pela sessão e contar pelo exercício davam
+  o mesmo número, e o teste passava com a conta errada.
+
 ### A área pública, e a inscrição de quem não tem conta
 
 `/eventos/<slug>` é a primeira parte do produto feita para quem **não tem

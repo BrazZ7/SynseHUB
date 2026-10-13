@@ -231,6 +231,53 @@ export function reduzir(s: WorkoutSession, evento: WorkoutEvent): WorkoutSession
       }
     }
 
+    case 'UNDO_SET': {
+      /*
+       * Desfazer é a volta de um toque, não uma edição do treino.
+       *
+       * O botão "concluir série" é grande, fica no meio da tela e é apertado
+       * com a mão cansada entre duas séries. Até existir isto, o toque errado
+       * era definitivo: a série entrava na lista, na fila e no banco, e quem
+       * errava a última série do último exercício encerrava o treino sem
+       * querer.
+       *
+       * O que volta:
+       *   - a série sai da lista;
+       *   - o treino volta a executá-la, com as reps e a carga que ela tinha,
+       *     para a pessoa corrigir o número em vez de redigitar;
+       *   - o descanso que a conclusão abriu é cancelado — ele era descanso de
+       *     uma série que não aconteceu;
+       *   - `finishedAt` volta a ser nulo, que é o que reabre o treino
+       *     encerrado pelo toque na última série.
+       *
+       * `setStartedAt` recebe o instante em que a série começou de verdade, e
+       * não `agora`: a duração da série é dado, e carimbá-la de novo a
+       * encurtaria para quem desfez.
+       */
+      if (s.state === 'PAUSED') return s
+      const ultima = s.completedSets[s.completedSets.length - 1]
+      if (!ultima) return s
+
+      const indice = s.exercises.findIndex(
+        (exercicio) => exercicio.exerciseId === ultima.exerciseId,
+      )
+
+      return {
+        ...s,
+        completedSets: s.completedSets.slice(0, -1),
+        state: 'ACTIVE_SET',
+        // A ficha pode não ter mais o exercício; aí a posição atual fica.
+        exerciseIndex: indice >= 0 ? indice : s.exerciseIndex,
+        setNumber: ultima.setNumber,
+        currentReps: ultima.repsCompleted,
+        currentWeight: ultima.weight,
+        setStartedAt: ultima.startedAt,
+        restStartedAt: null,
+        restEndsAt: null,
+        finishedAt: null,
+      }
+    }
+
     case 'ADD_REST': {
       if (s.state !== 'RESTING' || !s.restEndsAt) return s
       /*

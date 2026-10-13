@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { PendingOperation } from '@/features/active-workout/storage/local-workout'
+/*
+ * A ordenação de verdade, e não uma cópia dela no dublê. A ordem é parte do
+ * contrato que este arquivo testa — um dublê com a própria regra provaria que
+ * duas implementações concordam, não que a fila sobe na ordem certa.
+ */
+import { ordenarFila } from '@/features/active-workout/storage/ordem'
 
 /**
  * A fila offline.
@@ -23,10 +29,7 @@ vi.mock('@/features/active-workout/storage/local-workout', () => ({
    * IndexedDB: `lerFila` devolve o que é da matrícula que perguntou. Se o
    * dublê devolvesse a fila inteira, o teste do escopo passaria por acidente.
    */
-  lerFila: vi.fn(async (dono: string) => {
-    const peso = { START: 0, SET: 1, FINISH: 2 }
-    return fila.filter((o) => o.dono === dono).sort((a, b) => peso[a.kind] - peso[b.kind])
-  }),
+  lerFila: vi.fn(async (dono: string) => ordenarFila(fila.filter((o) => o.dono === dono))),
   removerDaFila: vi.fn(async (clientId: string) => {
     const i = fila.findIndex((o) => o.clientId === clientId)
     if (i >= 0) fila.splice(i, 1)
@@ -50,6 +53,10 @@ vi.mock('@/features/active-workout/actions', () => ({
     chamadas.push(`SET:${input.clientId}@${input.sessionId}`)
     return redeDisponivel ? { ok: true as const, id: 'set-x' } : semRede
   }),
+  undoWorkoutSetAction: vi.fn(async (sessionId: string, serieClientId: string) => {
+    chamadas.push(`UNDO:${serieClientId}@${sessionId}`)
+    return redeDisponivel ? { ok: true as const } : semRede
+  }),
   finishWorkoutSessionAction: vi.fn(async () => {
     chamadas.push('FINISH')
     return redeDisponivel ? { ok: true as const } : semRede
@@ -61,7 +68,10 @@ const { sincronizar } = await import('@/features/active-workout/sync')
 const ALUNA = 'matricula-1'
 const OUTRO = 'matricula-2'
 
-const serie = (n: number, dono = ALUNA): PendingOperation => ({
+/** O ramo `SET` da união, para os testes poderem sobrescrever campos dele. */
+type OperacaoDeSerie = Extract<PendingOperation, { kind: 'SET' }>
+
+const serie = (n: number, dono = ALUNA): OperacaoDeSerie => ({
   kind: 'SET',
   clientId: `s-${n}`,
   dono,
@@ -230,6 +240,89 @@ describe('reenvio', () => {
     await sincronizar(ALUNA, null)
 
     expect(chamadas).toEqual(['START:local-1', 'SET:s-1@servidor-1', 'FINISH'])
+  })
+})
+
+describe('desfazer na fila', () => {
+  const desfazer = (clientId: string, serieClientId: string): PendingOperation => ({
+    kind: 'UNDO',
+    clientId,
+    dono: ALUNA,
+    sessionClientId: 'local-1',
+    serieClientId,
+    tentativas: 0,
+  })
+
+  it('sobe logo atrás da série que desfaz', async () => {
+    /*
+     * A série errada, o desfazer e a correção com o mesmo número de série.
+     * `unique (session_id, exercise_id, set_number)` (0026) recusa a correção
+     * se ela chegar antes do desfazer — e a fila então insistiria oito vezes
+     * numa série que a pessoa fez.
+     */
+    fila.push(
+      { kind: 'START', clientId: 'local-1', dono: ALUNA, workoutPlanId: null, tentativas: 0 },
+      { ...serie(3), clientId: 's-3b', completedAt: 3_000 },
+      desfazer('u-1', 's-3'),
+      { ...serie(3), clientId: 's-3', completedAt: 2_000 },
+    )
+
+    await sincronizar(ALUNA, null)
+
+    expect(chamadas).toEqual([
+      'START:local-1',
+      'SET:s-3@servidor-1',
+      'UNDO:s-3@servidor-1',
+      'SET:s-3b@servidor-1',
+    ])
+  })
+
+  it('o desfazer da série que já subiu também sobe', async () => {
+    fila.push(
+      { kind: 'START', clientId: 'local-1', dono: ALUNA, workoutPlanId: null, tentativas: 0 },
+      desfazer('u-1', 's-que-ja-subiu'),
+    )
+
+    const resultado = await sincronizar(ALUNA, null)
+
+    expect(chamadas).toContain('UNDO:s-que-ja-subiu@servidor-1')
+    expect(resultado.pendentes).toBe(0)
+  })
+
+  it('sem rede, espera como todo o resto', async () => {
+    fila.push(desfazer('u-1', 's-1'))
+    redeDisponivel = false
+
+    const resultado = await sincronizar(ALUNA, 'servidor-1')
+
+    expect(resultado.pendentes).toBe(1)
+    expect(resultado.desfazerPerdidos).toBe(0)
+  })
+
+  it('o desfazer esgotado não é contado como série perdida', async () => {
+    /*
+     * A notícia é a oposta: a série que a pessoa quis tirar continua no
+     * servidor. Chamar isso de "série não pôde ser enviada" mandaria procurar
+     * um treino que está lá, e esconderia o que de fato aconteceu.
+     */
+    fila.push({ ...desfazer('u-1', 's-1'), tentativas: 8 })
+
+    const resultado = await sincronizar(ALUNA, 'servidor-1')
+
+    expect(resultado.seriesPerdidas).toBe(0)
+    expect(resultado.desfazerPerdidos).toBe(1)
+    expect(resultado.pendentes).toBe(0)
+  })
+
+  it('a série esgotada continua sendo série perdida', async () => {
+    // Controle do teste acima: a separação não pode ter apagado a contagem
+    // que já existia.
+    fila.push({ ...serie(1), tentativas: 8 })
+
+    const resultado = await sincronizar(ALUNA, 'servidor-1')
+
+    expect(resultado.seriesPerdidas).toBe(1)
+    expect(resultado.desfazerPerdidos).toBe(0)
   })
 })
 

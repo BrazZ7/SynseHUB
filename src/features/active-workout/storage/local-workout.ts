@@ -1,6 +1,7 @@
 'use client'
 
 import type { WorkoutSession } from '@/features/active-workout/engine/types'
+import { ordenarFila } from '@/features/active-workout/storage/ordem'
 import {
   chaveDaSessao,
   donoValido,
@@ -76,6 +77,23 @@ export type PendingOperation =
       restSeconds: number | null
       startedAt: number
       completedAt: number
+      tentativas: number
+    }
+  /**
+   * Desfazer a série que já subiu.
+   *
+   * Só é enfileirado quando a série pode ter chegado ao servidor — e isso é
+   * quase sempre: a fila sobe em segundos e o desfazer acontece durante o
+   * descanso. O `serieClientId` é o que o `desfazer_serie` (0058) usa para
+   * achar a linha, e é o que põe este desfazer atrás da própria série na ordem
+   * de envio (`ordem.ts`).
+   */
+  | {
+      kind: 'UNDO'
+      clientId: string
+      dono: string
+      sessionClientId: string
+      serieClientId: string
       tentativas: number
     }
   | {
@@ -191,14 +209,8 @@ export async function lerFila(dono: string): Promise<PendingOperation[]> {
      * troca de conta seria perder o treino de quem não está aqui para
      * reclamar.
      */
-    const todas = filaDoDono(guardadas, dono)
-    /*
-     * A ordem importa: abrir o treino precede registrar série, que precede
-     * encerrar. Fora de ordem, a série chegaria a uma sessão que o servidor
-     * ainda não conhece.
-     */
-    const peso = { START: 0, SET: 1, FINISH: 2 }
-    return todas.sort((a, b) => peso[a.kind] - peso[b.kind])
+    // A ordem é regra, e está explicada em `ordem.ts`.
+    return ordenarFila(filaDoDono(guardadas, dono))
   } catch {
     return []
   }

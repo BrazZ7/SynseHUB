@@ -4,6 +4,7 @@ import {
   finishWorkoutSessionAction,
   logWorkoutSetAction,
   startWorkoutSessionAction,
+  undoWorkoutSetAction,
 } from '@/features/active-workout/actions'
 import {
   lerFila,
@@ -38,6 +39,12 @@ export type SyncOutcome = {
    */
   treinosPerdidos: number
   seriesPerdidas: number
+  /**
+   * Desfazeres que a fila desistiu de enviar. Separado porque é a notícia
+   * oposta: a série não se perdeu, ela **ficou** — e quem desfez precisa saber
+   * para conferir o histórico.
+   */
+  desfazerPerdidos: number
   sessionId: string | null
 }
 
@@ -58,9 +65,12 @@ export async function expurgar(fila: PendingOperation[]): Promise<{
   restante: PendingOperation[]
   treinosPerdidos: number
   seriesPerdidas: number
+  desfazerPerdidos: number
 }> {
   const esgotadas = fila.filter((operacao) => operacao.tentativas >= MAX_TENTATIVAS)
-  if (!esgotadas.length) return { restante: fila, treinosPerdidos: 0, seriesPerdidas: 0 }
+  if (!esgotadas.length) {
+    return { restante: fila, treinosPerdidos: 0, seriesPerdidas: 0, desfazerPerdidos: 0 }
+  }
 
   const sessoesPerdidas = new Set(
     esgotadas.filter((operacao) => operacao.kind === 'START').map((operacao) => operacao.clientId),
@@ -77,7 +87,15 @@ export async function expurgar(fila: PendingOperation[]): Promise<{
     restante: fila.filter((operacao) => !morrer(operacao)),
     treinosPerdidos: sessoesPerdidas.size,
     // O encerramento cai junto da série: para quem treinou, os dois são "o que fiz".
-    seriesPerdidas: condenadas.filter((operacao) => operacao.kind !== 'START').length,
+    seriesPerdidas: condenadas.filter(
+      (operacao) => operacao.kind === 'SET' || operacao.kind === 'FINISH',
+    ).length,
+    /*
+     * O desfazer esgotado não é série perdida — é o contrário. A série que a
+     * pessoa quis tirar continua no servidor, e chamar isso de perda mandaria
+     * procurar um treino que está lá.
+     */
+    desfazerPerdidos: condenadas.filter((operacao) => operacao.kind === 'UNDO').length,
   }
 }
 
@@ -95,7 +113,12 @@ export async function sincronizar(
    * antes subiria pela sessão autenticada de quem entrou depois — e o banco,
    * que resolve o aluno pelo `auth.uid()`, a gravaria no histórico errado.
    */
-  const { restante: fila, treinosPerdidos, seriesPerdidas } = await expurgar(await lerFila(dono))
+  const {
+    restante: fila,
+    treinosPerdidos,
+    seriesPerdidas,
+    desfazerPerdidos,
+  } = await expurgar(await lerFila(dono))
   let sessionId = sessionIdConhecido
   let enviadas = 0
 
@@ -125,7 +148,14 @@ export async function sincronizar(
   }
 
   const restante = await lerFila(dono)
-  return { enviadas, pendentes: restante.length, treinosPerdidos, seriesPerdidas, sessionId }
+  return {
+    enviadas,
+    pendentes: restante.length,
+    treinosPerdidos,
+    seriesPerdidas,
+    desfazerPerdidos,
+    sessionId,
+  }
 }
 
 async function executar(operacao: PendingOperation, sessionId: string | null) {
@@ -146,6 +176,9 @@ async function executar(operacao: PendingOperation, sessionId: string | null) {
         startedAt: new Date(operacao.startedAt).toISOString(),
         completedAt: new Date(operacao.completedAt).toISOString(),
       })
+
+    case 'UNDO':
+      return undoWorkoutSetAction(sessionId!, operacao.serieClientId)
 
     case 'FINISH':
       return finishWorkoutSessionAction(sessionId!, operacao.durationSeconds, operacao.status)

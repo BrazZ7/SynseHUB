@@ -2675,6 +2675,21 @@ export class SupabaseDataSource implements DataSource {
     return String(data)
   }
 
+  async undoWorkoutSet(sessionId: string, serieClientId: string): Promise<boolean> {
+    /*
+     * A reversão dos efeitos derivados mora na função, não aqui: o exercício
+     * que voltou a não estar concluído, o desconto no desafio e a medalha que
+     * cai quando o progresso fica abaixo da meta. Fazer isso em três idas ao
+     * PostgREST abriria janela para o reenvio descontar duas vezes.
+     */
+    const { data, error } = await this.client.rpc('desfazer_serie', {
+      p_session_id: sessionId,
+      p_client_id: serieClientId,
+    })
+    if (error) this.fail('undoWorkoutSet', error)
+    return data === true
+  }
+
   async logWorkoutSet(input: LogWorkoutSetInput): Promise<string> {
     const { data, error } = await this.client.rpc('log_workout_set', {
       p_session_id: input.sessionId,

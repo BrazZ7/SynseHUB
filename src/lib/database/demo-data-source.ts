@@ -244,7 +244,16 @@ export class DemoDataSource implements DataSource {
    */
   private readonly friendEdits = new Map<string, Friend | null>()
   private readonly demoWorkoutSessions: WorkoutSessionSummary[] = []
-  private readonly demoSetLogs = new Map<string, { reps: number; weight: number | null }[]>()
+  /*
+   * O `clientId` fica junto da série porque é por ele que o desfazer acha a
+   * linha — como no banco, onde `desfazer_serie` (0058) procura por
+   * `client_id`. Sem ele, desfazer na demonstração teria de adivinhar qual
+   * série tirar.
+   */
+  private readonly demoSetLogs = new Map<
+    string,
+    { clientId: string; reps: number; weight: number | null }[]
+  >()
   /** `sessionId:clientId` já gravados. É o `unique` da 0026, aqui. */
   private readonly demoSetClientIds = new Set<string>()
   private demoWorkoutPrefs: WorkoutPreferences = { ...DEFAULT_WORKOUT_PREFERENCES }
@@ -623,6 +632,16 @@ export class DemoDataSource implements DataSource {
         const aberta = this.demoWorkoutSessions.find((s) => s.status === 'IN_PROGRESS')
         if (!aberta) break
         if (mutation.a === 'set') aberta.totalSets += 1
+        /*
+         * `undo` precisa do próprio ramo. O `else` de antes tratava tudo que
+         * não era `start` nem `set` como encerramento — uma série desfeita
+         * fecharia o treino do visitante no meio.
+         *
+         * O piso é zero porque o diário tem teto de 40 entradas e corta as
+         * mais antigas: o `set` correspondente pode já ter saído da lista, e
+         * série negativa no painel é pior que uma série a menos.
+         */
+        else if (mutation.a === 'undo') aberta.totalSets = Math.max(aberta.totalSets - 1, 0)
         else {
           aberta.status = 'COMPLETED'
           aberta.completedAt = new Date().toISOString()
@@ -2354,7 +2373,11 @@ export class DemoDataSource implements DataSource {
      */
     if (!this.demoSetClientIds.has(chave)) {
       this.demoSetClientIds.add(chave)
-      series.push({ reps: input.repsCompleted, weight: input.weight })
+      series.push({
+        clientId: input.clientId,
+        reps: input.repsCompleted,
+        weight: input.weight,
+      })
       this.demoSetLogs.set(input.sessionId, series)
       sessao.totalSets = series.length
       sessao.totalReps = series.reduce((a, b) => a + b.reps, 0)
@@ -2362,6 +2385,35 @@ export class DemoDataSource implements DataSource {
       await appendDemoMutation({ t: 'wsess', a: 'set' })
     }
     return chave
+  }
+
+  /**
+   * Desfazer, na demonstração.
+   *
+   * Com a mesma idempotência do banco: a segunda passagem não acha a série e
+   * devolve `false` sem mexer em nada. Sem isso, o reenvio da fila subtrairia
+   * duas vezes e o painel da recepção mostraria menos séries do que o visitante
+   * fez — e a demonstração é justamente onde alguém olha para decidir se
+   * confia no produto.
+   */
+  async undoWorkoutSet(sessionId: string, serieClientId: string): Promise<boolean> {
+    const sessao = this.demoWorkoutSessions.find((s) => s.id === sessionId)
+    if (!sessao) return false
+
+    const series = this.demoSetLogs.get(sessionId) ?? []
+    const indice = series.findIndex((serie) => serie.clientId === serieClientId)
+    if (indice < 0) return false
+
+    series.splice(indice, 1)
+    this.demoSetLogs.set(sessionId, series)
+    this.demoSetClientIds.delete(`${sessionId}:${serieClientId}`)
+
+    sessao.totalSets = series.length
+    sessao.totalReps = series.reduce((a, b) => a + b.reps, 0)
+    sessao.volumeKg = Math.round(series.reduce((a, b) => a + (b.weight ?? 0) * b.reps, 0))
+
+    await appendDemoMutation({ t: 'wsess', a: 'undo' })
+    return true
   }
 
   async finishWorkoutSession(

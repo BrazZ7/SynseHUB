@@ -1067,6 +1067,52 @@ existem, não para conferir se subiram.
   comportamento, e a mutação morre. Foi a mutação que revelou isso; sem ela, o
   teto do evento estaria "testado" e furado.
 
+- **0057 (`0057_exercicios_da_sessao.sql`)** — a tabela que ninguém preenchia.
+
+  `workout_session_exercises` existe desde a 0026 e nunca recebeu uma linha.
+  O gatilho `workout_set_progress`, que existe para marcar o exercício como
+  concluído quando a última série prevista entra, procurava a linha, não
+  achava, e atualizava zero linhas. Sem erro e sem log.
+
+  Agora a abertura do treino copia os exercícios da ficha para dentro da
+  sessão, com a quantidade de séries prevista em `sets_planned`. A cópia
+  resolve o gatilho e resolve a consistência da sessão: o treinador que edita
+  a ficha no meio do treino não muda mais o que a sessão em andamento
+  considera previsto. Sem o retrato, quem já fez 3 de 3 via o exercício
+  desconcluir porque a ficha passou a pedir 4.
+
+  Exercício fora da ficha ganha a própria linha na primeira série, com
+  `workout_exercise_id` nulo — o caso que a 0026 previa no comentário da
+  coluna e que nunca acontecia.
+
+  **Quem redefinir `start_workout_session` parte desta versão.** O corpo aqui
+  vem da 0047. Escrevê-lo a partir da 0026 apagou em silêncio o abandono do
+  treino pendurado de oito horas, e as séries de hoje voltaram a cair na
+  sessão de três dias atrás; quem pegou foi `tests/db/treino-ativo.test.ts`.
+
+  `tests/db/exercicios-da-sessao.test.ts`: 10 testes contra Postgres, 3
+  mutações, todas pegas.
+
+- **0058 (`0058_desfazer_serie.sql`)** — desfazer a série concluída por
+  engano.
+
+  `desfazer_serie(session_id, client_id)` apaga a série e desfaz o que ela
+  moveu: o `completed_at` do exercício, o progresso do desafio em SETS e
+  VOLUME_KG, e a medalha — `bump_gym_challenge` grava `completed_at` na
+  primeira vez que a meta é batida e nunca limpa, e medalha vale
+  `XP_POR_MEDALHA`.
+
+  Idempotente porque a fila offline reenvia: desfazer o que já foi desfeito
+  devolve `false` sem mexer em nada. Treino já encerrado é recusado — depois
+  do encerramento o número entrou no histórico e no placar de quem olhou, e
+  corrigir isso é outra operação.
+
+  O jardim, o nível e o XP não precisam de reversão: são calculados na
+  leitura, do histórico.
+
+  `tests/db/desfazer-serie.test.ts`: 17 testes contra Postgres, 6 mutações,
+  todas pegas.
+
 ### A área pública, e a inscrição de quem não tem conta
 
 `/eventos/<slug>` é a primeira parte do produto feita para quem **não tem

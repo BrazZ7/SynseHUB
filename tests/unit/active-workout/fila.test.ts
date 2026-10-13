@@ -50,6 +50,47 @@ describe('o resumo da fila de treino', () => {
     expect(resumo?.tom).toBe('alerta')
   })
 
+  it('o desfazer que não subiu é notícia oposta à da perda', () => {
+    /*
+     * Aqui nada se perdeu: ficou a mais. A série que a pessoa desfez continua
+     * no servidor, e dizer "não pôde ser enviada" a mandaria procurar um
+     * registro que está lá — escondendo o que de fato aconteceu.
+     */
+    const resumo = resumoDoTreino({
+      pendentes: 0,
+      treinosPerdidos: 0,
+      seriesPerdidas: 0,
+      desfazerPerdidos: 1,
+    })
+    expect(resumo?.tom).toBe('alerta')
+    expect(resumo?.texto).toMatch(/desfez/i)
+    expect(resumo?.texto).not.toMatch(/não pôde ser enviada/i)
+  })
+
+  it('e no plural conta quantas', () => {
+    expect(
+      resumoDoTreino({
+        pendentes: 0,
+        treinosPerdidos: 0,
+        seriesPerdidas: 0,
+        desfazerPerdidos: 2,
+      })?.texto,
+    ).toMatch(/^2 séries que você desfez/)
+  })
+
+  it('a perda de verdade tem precedência sobre o desfazer que ficou', () => {
+    // Quem perdeu o treino inteiro não precisa ouvir, no mesmo instante, que
+    // uma série desfeita ficou registrada.
+    expect(
+      resumoDoTreino({
+        pendentes: 0,
+        treinosPerdidos: 1,
+        seriesPerdidas: 0,
+        desfazerPerdidos: 3,
+      })?.texto,
+    ).toMatch(/^Um treino/)
+  })
+
   it('fala no singular quando é um só', () => {
     expect(resumoDoTreino({ pendentes: 1, treinosPerdidos: 0, seriesPerdidas: 0 })?.texto).toMatch(
       /^Um registro/,

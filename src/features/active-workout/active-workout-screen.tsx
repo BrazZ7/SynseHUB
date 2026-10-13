@@ -10,6 +10,7 @@ import {
   Timer,
   TrendingUp,
   TriangleAlert,
+  Undo2,
 } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
@@ -126,7 +127,13 @@ export function ActiveWorkoutScreen({
   }
 
   if (sessao.state === 'WORKOUT_COMPLETED') {
-    return <Resumo sessao={sessao} onFechar={() => void treino.descartar()} />
+    return (
+      <Resumo
+        sessao={sessao}
+        onFechar={() => void treino.concluirTreino()}
+        onDesfazer={treino.podeDesfazer ? () => void treino.desfazer() : undefined}
+      />
+    )
   }
 
   return (
@@ -145,6 +152,8 @@ export function ActiveWorkoutScreen({
       ) : (
         <PainelSerie treino={treino} sessao={sessao} />
       )}
+
+      {treino.podeDesfazer && <Desfazer onDesfazer={() => void treino.desfazer()} />}
 
       <ProximoExercicio sessao={sessao} />
 
@@ -481,15 +490,46 @@ function ExercicioConcluido({
           </Button>
         </>
       ) : (
+        /*
+         * Hoje este ramo não aparece: a última série do último exercício vai
+         * direto para o resumo, sem passar por aqui (ver `encerramento.ts`).
+         * Ele fica como defesa — e aponta para o mesmo encerramento do resumo,
+         * porque foi justamente um botão esquecido aqui que deixou o
+         * `finish_workout_session` sem chamador.
+         */
         <Button
           size="lg"
-          onClick={() => void treino.encerrar('COMPLETED')}
+          onClick={() => void treino.concluirTreino()}
           className="mt-5 h-16 w-full text-base font-semibold"
         >
           Concluir treino
         </Button>
       )}
     </section>
+  )
+}
+
+// ── Desfazer ─────────────────────────────────────────────────────────────────
+/**
+ * A volta do toque errado.
+ *
+ * Fica num só lugar, abaixo do painel do momento, e não dentro de cada estado:
+ * o botão precisa estar sempre no mesmo ponto da tela para a mão achar sem
+ * procurar. Discreto de propósito — concluir série é a ação principal, e dois
+ * botões do mesmo tamanho lado a lado fariam o toque errado ficar mais fácil,
+ * não menos.
+ */
+function Desfazer({ onDesfazer }: { onDesfazer: () => void }) {
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={onDesfazer}
+      className="w-full text-synse-muted"
+    >
+      <Undo2 className="size-3.5" aria-hidden />
+      Desfazer a última série
+    </Button>
   )
 }
 
@@ -534,7 +574,16 @@ function Retomada({
 }
 
 // ── Resumo ───────────────────────────────────────────────────────────────────
-function Resumo({ sessao, onFechar }: { sessao: WorkoutSession; onFechar: () => void }) {
+function Resumo({
+  sessao,
+  onFechar,
+  onDesfazer,
+}: {
+  sessao: WorkoutSession
+  onFechar: () => void
+  /** Ausente quando não há série para desfazer — treino vazio, por exemplo. */
+  onDesfazer?: () => void
+}) {
   const dados = resumo(sessao, sessao.finishedAt ?? Date.now())
 
   return (
@@ -569,6 +618,18 @@ function Resumo({ sessao, onFechar }: { sessao: WorkoutSession; onFechar: () => 
             Ver progresso
           </Link>
         </Button>
+        {onDesfazer && (
+          /*
+           * O desfazer mais importante da tela inteira. A última série do
+           * último exercício encerra o treino na hora: o toque errado ali
+           * trazia a pessoa para este resumo sem volta, olhando o número de um
+           * treino que ela não terminou.
+           */
+          <Button variant="ghost" onClick={onDesfazer} className="text-white/70 hover:text-white">
+            <Undo2 className="size-4" aria-hidden />
+            Não terminei: desfazer a última série
+          </Button>
+        )}
       </div>
     </section>
   )

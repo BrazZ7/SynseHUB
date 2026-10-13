@@ -102,6 +102,15 @@ export type WorkoutSession = {
 export type WorkoutEvent =
   | { type: 'START'; agora: number }
   | { type: 'COMPLETE_SET'; agora: number; clientId: string }
+  /**
+   * Desfaz a última série concluída.
+   *
+   * Só a última, e é uma regra, não uma limitação de implementação: desfazer
+   * no meio exigiria apagar o que veio depois, e apagar em silêncio registro
+   * válido é pior que recusar. Quem errou duas séries atrás corrige no
+   * histórico, não aqui.
+   */
+  | { type: 'UNDO_SET'; agora: number }
   | { type: 'ADJUST_REPS'; delta: number }
   | { type: 'ADJUST_WEIGHT'; delta: number }
   | { type: 'SKIP_REST'; agora: number }

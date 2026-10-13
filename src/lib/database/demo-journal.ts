@@ -254,7 +254,13 @@ export type DemoMutation =
        * menos num treino muito longo, que é o erro aceitável aqui.
        */
       t: 'wsess'
-      a: 'start' | 'set' | 'finish'
+      /**
+       * `undo` é a série desfeita. Ela entra como uma entrada nova em vez de
+       * apagar a de `set`, porque o diário só acrescenta — e porque o teto de
+       * 40 entradas corta as mais antigas: se o `set` tivesse sido removido, o
+       * `undo` sozinho faria o painel contar série negativa.
+       */
+      a: 'start' | 'set' | 'undo' | 'finish'
       /** Só no `start`. */
       id?: string
       plano?: string | null

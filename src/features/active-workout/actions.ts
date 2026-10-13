@@ -63,6 +63,34 @@ export async function logWorkoutSetAction(input: {
   }
 }
 
+/**
+ * Desfaz a série concluída por engano.
+ *
+ * `ok: true` tanto para a série desfeita agora quanto para a que já não
+ * estava lá — a fila reenvia o que não teve resposta, e o resultado é o mesmo
+ * dos dois lados: aquela série não existe no servidor. Tratar o reenvio como
+ * falha deixaria a operação na fila tentando desfazer para sempre o que já
+ * foi desfeito.
+ *
+ * Quem decide se pode desfazer é `desfazer_serie` (0058): ela confere que o
+ * treino é do aluno autenticado e recusa treino já encerrado.
+ */
+export async function undoWorkoutSetAction(
+  sessionId: string,
+  serieClientId: string,
+): Promise<SyncResult> {
+  try {
+    await requireStudentSession()
+    const dataSource = await getDataSource()
+    await dataSource.undoWorkoutSet(sessionId, serieClientId)
+    logger.info('workout:set_undone', { sessionId })
+    return { ok: true }
+  } catch (error) {
+    if (!(error instanceof AppError)) logger.error('workout:undo_failed', { error: String(error) })
+    return { ok: false, erro: toUserMessage(error) }
+  }
+}
+
 export async function finishWorkoutSessionAction(
   sessionId: string,
   durationSeconds: number,

@@ -26,6 +26,15 @@ export function resumoDoTreino(estado: {
   pendentes: number
   treinosPerdidos: number
   seriesPerdidas: number
+  /**
+   * Desfazeres que a fila desistiu de enviar.
+   *
+   * Notícia diferente, e por isso não entra na conta das séries perdidas: aqui
+   * nada se perdeu — pelo contrário, ficou **a mais**. A série que a pessoa
+   * desfez continua no servidor, e ela precisa saber disso para olhar o
+   * histórico, em vez de descobrir um número que não reconhece semanas depois.
+   */
+  desfazerPerdidos?: number
 }): ResumoDoTreino {
   if (estado.treinosPerdidos > 0) {
     const plural = estado.treinosPerdidos > 1
@@ -44,6 +53,20 @@ export function resumoDoTreino(estado: {
       texto: plural
         ? `${estado.seriesPerdidas} séries não puderam ser enviadas.`
         : 'Uma série não pôde ser enviada.',
+    }
+  }
+
+  if ((estado.desfazerPerdidos ?? 0) > 0) {
+    /*
+     * Depois das perdas de propósito: quem perdeu o treino inteiro não precisa
+     * ouvir, no mesmo instante, que uma série desfeita ficou registrada.
+     */
+    const plural = (estado.desfazerPerdidos ?? 0) > 1
+    return {
+      tom: 'alerta',
+      texto: plural
+        ? `${estado.desfazerPerdidos} séries que você desfez podem ter ficado no seu histórico. Confira o treino.`
+        : 'Uma série que você desfez pode ter ficado no seu histórico. Confira o treino.',
     }
   }
 

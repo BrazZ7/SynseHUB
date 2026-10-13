@@ -942,6 +942,18 @@ export interface DataSource {
    */
   startWorkoutSession(clientId: string, workoutPlanId: string | null): Promise<string>
   logWorkoutSet(input: LogWorkoutSetInput): Promise<string>
+  /**
+   * Desfaz a série concluída por engano.
+   *
+   * Devolve `true` quando havia o que desfazer e `false` quando não havia — o
+   * caso do reenvio da fila. Quem chama trata os dois igual: a série não está
+   * mais lá, que é o que foi pedido.
+   *
+   * Desfazer não é só apagar a linha: o progresso do exercício, o placar do
+   * desafio e a medalha vieram dela e voltam atrás. Por isso vive numa função
+   * do banco (`desfazer_serie`, 0058) e não num delete daqui.
+   */
+  undoWorkoutSet(sessionId: string, serieClientId: string): Promise<boolean>
   finishWorkoutSession(
     sessionId: string,
     durationSeconds: number,

@@ -21,10 +21,12 @@ import { criarFeedback, criarLiveActivity } from '@/features/active-workout/plat
 import type { LiveWorkoutState } from '@/features/active-workout/platform/types'
 import {
   enfileirar,
+  lerFila,
   limparSessao,
   lerSessao,
   salvarSessao,
 } from '@/features/active-workout/storage/local-workout'
+import { faltaEncerrarNoServidor } from '@/features/active-workout/encerramento'
 import { resumoDoTreino, type ResumoDoTreino } from '@/features/active-workout/state'
 import { sincronizar } from '@/features/active-workout/sync'
 
@@ -102,6 +104,15 @@ export function useActiveWorkout(dono: string, preferencias?: Partial<WorkoutSet
    * vazamento num refatorador que mantivesse o componente montado.
    */
   const donoNaMemoriaRef = useRef(dono)
+  /*
+   * Se o encerramento deste treino já foi decidido.
+   *
+   * Guarda contra enviar dois: `finish_workout_session` grava o status que
+   * recebe, e um `COMPLETED` em cima de um `ABANDONED` já enviado viraria
+   * treino abandonado em treino concluído. O caminho é real — "Encerrar
+   * treino" mostra o resumo, e o "Fechar" do resumo viria depois.
+   */
+  const encerradoRef = useRef(false)
 
   // ── Recuperação ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -118,6 +129,30 @@ export function useActiveWorkout(dono: string, preferencias?: Partial<WorkoutSet
     void (async () => {
       const guardada = await lerSessao(dono)
       if (!vivo) return
+
+      /*
+       * Treino concluído não volta para a tela — reabrir o resumo de um treino
+       * terminado seria pior. Mas antes de esquecê-lo, o servidor precisa
+       * saber que ele acabou: quem fechou o app na tela do resumo, sem tocar
+       * em "Fechar", deixou a sessão aberta no servidor. Oito horas depois a
+       * regra da 0047 a marca como abandonada, e o histórico — que filtra
+       * `COMPLETED` — nunca mostra aquele treino.
+       */
+      if (guardada && guardada.state === 'WORKOUT_COMPLETED') {
+        if (faltaEncerrarNoServidor(guardada, await lerFila(dono), false)) {
+          await enfileirar({
+            kind: 'FINISH',
+            clientId: id(),
+            dono,
+            sessionClientId: guardada.clientId,
+            durationSeconds: duracaoEfetiva(guardada, guardada.finishedAt ?? Date.now()),
+            status: 'COMPLETED',
+            tentativas: 0,
+          })
+        }
+        await limparSessao(dono)
+      }
+
       if (guardada && guardada.state !== 'WORKOUT_COMPLETED') {
         serverIdRef.current = guardada.serverId
         /*
@@ -220,6 +255,7 @@ export function useActiveWorkout(dono: string, preferencias?: Partial<WorkoutSet
         pendentes: resultado.pendentes,
         treinosPerdidos: resultado.treinosPerdidos,
         seriesPerdidas: resultado.seriesPerdidas,
+        desfazerPerdidos: resultado.desfazerPerdidos,
       }),
     )
   }, [dono])
@@ -336,6 +372,48 @@ export function useActiveWorkout(dono: string, preferencias?: Partial<WorkoutSet
     }
   }, [dono, sessao, feedback, empurrarFila])
 
+  /**
+   * Desfaz a última série concluída.
+   *
+   * A série sai do estado local **e** sobe um desfazer para o servidor. Ela
+   * quase sempre já chegou lá: a fila sincroniza em segundos e o desfazer
+   * acontece durante o descanso.
+   *
+   * O desfazer é enfileirado mesmo quando o registro da série ainda está na
+   * fila, em vez de tirá-lo de lá. Parece desperdício — mandar a série e
+   * desfazê-la em seguida — e é a escolha certa: entre ler a fila e remover o
+   * registro, a sincronização pode estar enviando aquela série naquele
+   * instante. Removê-la deixaria o servidor com uma série que a tela diz que
+   * não existe, e ninguém descobriria até o histórico não bater. Com as duas
+   * operações na fila, a ordem (`ordem.ts`) garante que o desfazer chega
+   * atrás da série, e `desfazer_serie` (0058) é inofensiva quando não há o que
+   * desfazer.
+   */
+  const desfazer = useCallback(async () => {
+    if (!sessao) return
+    const ultima = sessao.completedSets[sessao.completedSets.length - 1]
+    if (!ultima) return
+
+    const agora = Date.now()
+    const depois = reduzir(sessao, { type: 'UNDO_SET', agora })
+    // O engine devolve a mesma sessão quando recusa o evento — em pausa, por
+    // exemplo. Aí não há o que desfazer no servidor também.
+    if (depois === sessao) return
+    setSessao(depois)
+
+    await enfileirar({
+      kind: 'UNDO',
+      clientId: id(),
+      dono,
+      sessionClientId: sessao.clientId,
+      serieClientId: ultima.clientId,
+      tentativas: 0,
+    })
+
+    if (sessao.settings.vibration) feedback.vibrate([20, 60, 20])
+    void empurrarFila()
+  }, [dono, sessao, feedback, empurrarFila])
+
   const encerrar = useCallback(
     async (status: 'COMPLETED' | 'ABANDONED' = 'COMPLETED') => {
       if (!sessao) return
@@ -343,15 +421,18 @@ export function useActiveWorkout(dono: string, preferencias?: Partial<WorkoutSet
       const final = reduzir(sessao, { type: 'FINISH', agora })
       setSessao(final)
 
-      await enfileirar({
-        kind: 'FINISH',
-        clientId: id(),
-        dono,
-        sessionClientId: sessao.clientId,
-        durationSeconds: duracaoEfetiva(final, agora),
-        status,
-        tentativas: 0,
-      })
+      if (faltaEncerrarNoServidor(sessao, await lerFila(dono), encerradoRef.current)) {
+        await enfileirar({
+          kind: 'FINISH',
+          clientId: id(),
+          dono,
+          sessionClientId: sessao.clientId,
+          durationSeconds: duracaoEfetiva(final, agora),
+          status,
+          tentativas: 0,
+        })
+        encerradoRef.current = true
+      }
 
       await liveActivity.stop()
       await feedback.keepAwake(false)
@@ -360,12 +441,53 @@ export function useActiveWorkout(dono: string, preferencias?: Partial<WorkoutSet
     [dono, sessao, liveActivity, feedback, empurrarFila],
   )
 
-  const descartar = useCallback(async () => {
-    await limparSessao(dono)
-    await liveActivity.stop()
-    await feedback.keepAwake(false)
-    setSessao(null)
-  }, [dono, liveActivity, feedback])
+  /**
+   * Fecha o treino: avisa o servidor e limpa o aparelho.
+   *
+   * É o que o "Fechar" do resumo e o "Descartar" da retomada chamam. Antes
+   * disto, os dois só limpavam o aparelho — e aí a sessão ficava aberta no
+   * servidor. Para o treino concluído isso significava histórico vazio; para o
+   * descartado, significava que as séries do treino seguinte caíam na sessão
+   * velha, porque `start_workout_session` devolve a que já está aberta.
+   */
+  const fechar = useCallback(
+    async (status: 'COMPLETED' | 'ABANDONED') => {
+      if (sessao && faltaEncerrarNoServidor(sessao, await lerFila(dono), encerradoRef.current)) {
+        const agora = Date.now()
+        const final = reduzir(sessao, { type: 'FINISH', agora })
+        await enfileirar({
+          kind: 'FINISH',
+          clientId: id(),
+          dono,
+          sessionClientId: sessao.clientId,
+          durationSeconds: duracaoEfetiva(final, agora),
+          status,
+          tentativas: 0,
+        })
+        encerradoRef.current = true
+      }
+
+      await limparSessao(dono)
+      await liveActivity.stop()
+      await feedback.keepAwake(false)
+      setSessao(null)
+      encerradoRef.current = false
+      void empurrarFila()
+    },
+    [dono, sessao, liveActivity, feedback, empurrarFila],
+  )
+
+  /** O "Fechar" do resumo: o treino terminou, e o servidor precisa saber. */
+  const concluirTreino = useCallback(() => fechar('COMPLETED'), [fechar])
+
+  /**
+   * O "Descartar e começar outro" da retomada.
+   *
+   * Encerra como abandonado em vez de só apagar do aparelho. Sem isso, a
+   * sessão continuava aberta no servidor e `start_workout_session` a devolvia
+   * para o treino seguinte: as séries de hoje entravam no treino de ontem.
+   */
+  const descartar = useCallback(() => fechar('ABANDONED'), [fechar])
 
   /**
    * Exposto para o interruptor "Som": ligá-lo é o outro gesto que pode abrir o
@@ -383,6 +505,16 @@ export function useActiveWorkout(dono: string, preferencias?: Partial<WorkoutSet
     iniciar,
     prepararSom,
     concluirSerie,
+    concluirTreino,
+    desfazer,
+    /**
+     * Se há o que desfazer.
+     *
+     * A tela precisa da resposta para não oferecer um botão que não faz nada.
+     * Em pausa não oferece: o desfazer põe o treino em ACTIVE_SET e retomaria
+     * o treino de lado, sem fechar a conta do tempo parado.
+     */
+    podeDesfazer: !!sessao && sessao.completedSets.length > 0 && sessao.state !== 'PAUSED',
     encerrar,
     descartar,
     despachar,

@@ -395,6 +395,31 @@ R$ 29 com 15% de comissão da Apple **mais** a taxa do Mercado Pago não são
 R$ 29. Com 10%, muda de novo. O preço do Synse+ foi escolhido sem essas
 comissões na conta, e é uma decisão comercial — não de código.
 
+### O que já está construído (17/10/2026)
+
+O caminho 2 foi escolhido, e as três primeiras camadas estão de pé:
+
+| Camada | Estado |
+| --- | --- |
+| Banco com três origens (0061) | **Aplicada em produção**, regras conferidas contra ela |
+| Trava da compra dupla | Pronta: recusa comprar quando já há assinatura viva, dizendo onde ela vive |
+| O app se identifica ao servidor | Pronto: `appendUserAgent: 'SynseApp/1'`, lido no servidor |
+| Decisão de o que oferecer | Pronta: dentro do app, **nunca** o Mercado Pago |
+| Plugin nativo de IAP e Play Billing | **Não existe** |
+| Verificação de recibo nas lojas | **Não existe** |
+
+**E isso já libera publicar.** Enquanto a cobrança da loja não existir, o app
+não oferece compra nenhuma: sem caminho de compra não há infração, e a venda
+segue inteira na web, onde não há comissão. O botão da loja entra depois,
+trocando `LOJA_DISPONIVEL` em `src/lib/plans/oferta-do-plus.ts` — e há teste
+que falha quando essa constante virar `true`, para obrigar quem mudar a olhar o
+resto.
+
+Dentro do app, a tela do Synse+ mostra a comparação inteira e **não** mostra
+preço nem botão. Esconder o valor parece exagero, já que ninguém compra ali, mas
+a regra alcança *levar* à compra: preço sem botão é instrução para ir procurar
+onde pagar. Netflix e Spotify não mostram valor dentro do app, e não é timidez.
+
 ### Os três caminhos
 
 1. **Publicar sem vender o Synse+ dentro do app.** Mantém o cadeado e a tabela

@@ -33,6 +33,23 @@ const config: CapacitorConfig = {
   appId: 'br.com.synse.app',
   appName: 'Synse',
   /*
+   * A marca que faz o servidor saber que é o app, e não um navegador.
+   *
+   * É o único sinal que chega numa navegação de topo — a WebView não deixa
+   * acrescentar cabeçalho, e aqui toda navegação é de topo, porque o app
+   * carrega páginas em vez de montá-las por API.
+   *
+   * **Tem de ser igual** a `MARCA_DO_APP` em `src/lib/plataforma/app-nativo.ts`,
+   * e há teste que confere os dois. Divergir faz o app publicado ser tratado
+   * como navegador e mostrar o caminho de compra que as lojas proíbem — defeito
+   * que nenhum teste de tela pega, e que aparece na revisão da App Store.
+   *
+   * `appendUserAgent` e não `overrideUserAgent`: trocar o UA inteiro esconderia
+   * a versão do sistema e do WebView, que é o que diagnostica defeito de
+   * renderização em aparelho específico.
+   */
+  appendUserAgent: 'SynseApp/1',
+  /*
    * Com `server.url` o conteúdo vem da rede; `mobile/www` guarda só a tela de
    * falha de conexão, apontada por `server.errorPath` logo abaixo.
    */

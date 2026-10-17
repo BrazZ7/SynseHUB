@@ -8,8 +8,10 @@ import { OQueEntra } from '@/features/plus/o-que-entra'
 import { Button } from '@/components/ui/button'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { isSimulatedProvider } from '@/lib/payments'
+import { mostraPreco, ofertaDoPlus } from '@/lib/plans/oferta-do-plus'
 import { PLUS_PRICE, TIER_COMPARISON } from '@/lib/plans/tiers'
 import { resumoDaAssinatura } from '@/lib/plans/subscription'
+import { noAppNativo } from '@/lib/plataforma/app-nativo-servidor'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
 export const metadata: Metadata = { title: 'Synse+' }
@@ -26,6 +28,22 @@ export default async function SynsePlusPage() {
   const session = await requireStudentSession()
   const resumo = resumoDaAssinatura(session.plus)
   const assinante = resumo.ativa
+
+  /*
+   * ── O que esta tela pode oferecer depende de onde ela está sendo aberta ────
+   *
+   * Dentro do app, nenhum caminho de compra e nenhum preço: o Synse+ destrava
+   * só conteúdo digital, e isso Apple e Google reservam para a cobrança delas.
+   * A comparação continua inteira — explicar o que o plano inclui é permitido;
+   * vender, ou mandar comprar, não é.
+   *
+   * Na web nada muda. A venda segue onde não há comissão.
+   */
+  const oferta = ofertaDoPlus({
+    noApp: await noAppNativo(),
+    provedorSimulado: isSimulatedProvider(),
+  })
+  const comPreco = mostraPreco(oferta)
 
   return (
     /*
@@ -129,7 +147,7 @@ export default async function SynsePlusPage() {
           </p>
         )}
 
-        {!assinante && (
+        {!assinante && comPreco && (
           <>
             <p className="text-sm text-synse-muted">Primeiro mês</p>
             <p className="text-3xl font-semibold text-synse-text">
@@ -147,7 +165,7 @@ export default async function SynsePlusPage() {
           carregar — quanto, quando, e como sair. Teste que vira cobrança sem
           isso escrito é reclamação certa, e com razão.
         */}
-        {resumo.proximaCobranca && (
+        {resumo.proximaCobranca && comPreco && (
           <p className="text-sm text-synse-muted">
             {resumo.emTeste ? 'Primeira cobrança' : 'Renova'} em{' '}
             <strong className="font-medium text-synse-text">
@@ -176,11 +194,31 @@ export default async function SynsePlusPage() {
              * faz esta assinatura muito bem. Usar a pergunta errada aqui
              * manteria o botão desligado para sempre.
              */}
-            <AssinarPlusButton indisponivel={isSimulatedProvider()} />
-            <p className="mt-2 text-xs text-synse-muted">
-              O primeiro mês sai por {formatCurrency(0)} e a assinatura renova automaticamente por{' '}
-              {formatCurrency(PLUS_PRICE.monthly)} até você cancelar.
-            </p>
+            {oferta === 'mercadopago' && (
+              <>
+                <AssinarPlusButton />
+                <p className="mt-2 text-xs text-synse-muted">
+                  O primeiro mês sai por {formatCurrency(0)} e a assinatura renova automaticamente
+                  por {formatCurrency(PLUS_PRICE.monthly)} até você cancelar.
+                </p>
+              </>
+            )}
+            {/*
+              Provedor simulado, na web: reaproveita o botão desligado, que já
+              diz o motivo e que nenhuma cobrança é feita. Botão cinza sem
+              explicação faz a pessoa tentar de novo e achar o app quebrado.
+            */}
+            {oferta === 'sem-provedor' && <AssinarPlusButton indisponivel />}
+            {/*
+              Dentro do app: nada sobre comprar, e nada sobre onde comprar. A
+              comparação acima continua inteira — ela explica o plano, e
+              explicar é permitido.
+            */}
+            {oferta === 'nenhuma-no-app' && (
+              <p className="mt-4 text-sm text-synse-muted">
+                O Synse+ faz parte da sua conta Synse, não da sua academia.
+              </p>
+            )}
           </>
         )}
       </section>

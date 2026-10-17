@@ -90,21 +90,30 @@ describe.skipIf(!temBanco)('a trava da assinatura', () => {
 })
 
 describe.skipIf(!temBanco)('set_plus_subscription', () => {
-  const aplicar = (status: string, until: Date | null = daquiA(30), prov = 'GATEWAY', ref = 'sub_1') =>
-    client.query(`select set_plus_subscription($1, $2, $3, $4, $5)`, [
-      perfil,
-      status,
-      until,
-      prov,
-      ref,
-    ])
+  /*
+   * `'mercadopago'` e não `'GATEWAY'`, que era o nome fictício daqui quando
+   * `plus_provider` era texto livre. A 0061 fechou a lista em
+   * ('mercadopago','apple','google') porque com três origens um nome que a
+   * conciliação não conhece é receita que ninguém acha depois — e foi esta
+   * chamada que a restrição pegou primeiro.
+   *
+   * O que estes testes conferem é o mapa de status para `tier`, não o nome do
+   * provedor; a precedência entre as três origens é
+   * `tests/db/assinatura-de-tres-origens.test.ts`.
+   */
+  const aplicar = (
+    status: string,
+    until: Date | null = daquiA(30),
+    prov = 'mercadopago',
+    ref = 'sub_1',
+  ) => client.query(`select set_plus_subscription($1, $2, $3, $4, $5)`, [perfil, status, until, prov, ref])
 
   it('o teste grátis dá PRO', async () => {
     await aplicar('TRIAL')
     expect(await leEstado()).toMatchObject({
       tier: 'PRO',
       plus_status: 'TRIAL',
-      plus_provider: 'GATEWAY',
+      plus_provider: 'mercadopago',
       plus_provider_ref: 'sub_1',
     })
   })

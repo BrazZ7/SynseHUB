@@ -33,7 +33,15 @@ import type { MercadoPagoProvider } from '@/lib/payments/providers/mercadopago'
  *    `user_profiles`.
  */
 
-export type ResultadoDoAviso = 'PROCESSED' | 'DUPLICATE' | 'IGNORED' | 'FAILED'
+export type ResultadoDoAviso =
+  | 'PROCESSED'
+  | 'DUPLICATE'
+  | 'IGNORED'
+  | 'FAILED'
+  /** A 0061 descartou: notificação mais velha que a última aplicada. */
+  | 'STALE'
+  /** A 0061 recusou: a assinatura viva é de outra origem. Há conflito aberto. */
+  | 'CONFLICT'
 
 /** Os tipos de evento que dizem respeito a uma assinatura. */
 const DE_ASSINATURA = ['subscription_preapproval', 'preapproval']
@@ -92,14 +100,53 @@ export async function processarAvisoDePlus(input: {
 
     const estado = estadoDoPlus(assinatura)
 
-    const { error: erroDaEscrita } = await admin.rpc('set_plus_subscription', {
+    /*
+     * ── O retorno não pode ser ignorado ──────────────────────────────────────
+     *
+     * Até a 0061 esta função devolvia `void` e aqui só se olhava o erro. Com
+     * três origens ela devolve o que **de fato** aconteceu, e duas das três
+     * possibilidades não escrevem nada:
+     *
+     *   APPLIED  — escreveu.
+     *   STALE    — notificação mais velha que a última aplicada; descartada.
+     *   CONFLICT — a assinatura viva é da Apple ou da Google; não foi mexida.
+     *
+     * Marcar PROCESSED nos dois últimos seria registrar no `webhook_events`
+     * que a assinatura mudou quando ela não mudou — e é essa linha que alguém
+     * vai ler quando a receita de um mês não fechar.
+     */
+    const { data: desfecho, error: erroDaEscrita } = await admin.rpc('set_plus_subscription', {
       p_profile_id: perfil,
       p_status: estado.status,
       p_until: estado.until,
       p_provider: provider.id,
       p_provider_ref: preapprovalId,
+      p_event_at: assinatura.last_modified ?? null,
+      /*
+       * `false`: isto é notificação, não compra. A tomada de posse só vale no
+       * caminho em que a pessoa acabou de comprar — e a compra pela web não
+       * passa por aqui, passa por `assinarPlusAction`.
+       */
+      p_takeover: false,
     })
     if (erroDaEscrita) throw new Error(erroDaEscrita.message)
+
+    if (desfecho === 'STALE') {
+      await marcar(admin, provider.id, eventId, 'IGNORED', 'fora de ordem (0061)')
+      logger.info('plus:webhook_fora_de_ordem', { perfil, estado: estado.status })
+      return 'STALE'
+    }
+
+    if (desfecho === 'CONFLICT') {
+      /*
+       * `IGNORED` e não `FAILED`: nada falhou, e reenviar daria o mesmo
+       * resultado para sempre. O que precisa de gente está em
+       * `plus_subscription_conflicts`, que a própria função registrou.
+       */
+      await marcar(admin, provider.id, eventId, 'IGNORED', 'assinatura viva em outra origem (0061)')
+      logger.error('plus:webhook_conflito_de_origem', { perfil, estado: estado.status })
+      return 'CONFLICT'
+    }
 
     await marcar(admin, provider.id, eventId, 'PROCESSED')
     /*

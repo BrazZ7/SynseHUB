@@ -1150,6 +1150,14 @@ existem, não para conferir se subiram.
   o mesmo número, e o teste passava com a conta errada.
 
 - **0060 (`0060_eventos_do_produto.sql`)** — os indicadores de produto.
+- **0061 (`0061_assinatura_de_tres_origens.sql`)** — o Synse+ passa a ter três
+  escritores: Mercado Pago na web, Apple e Google dentro do app. Fecha a lista
+  de provedores, guarda o horário do evento **na origem** para descartar
+  notificação fora de ordem, impede um provedor de sobrescrever a assinatura
+  viva de outro, e registra cobrança duplicada em
+  `plus_subscription_conflicts`. Sem ela, uma notificação atrasada da Apple
+  derruba o acesso de quem paga pela web — e uma renovação velha do Mercado
+  Pago dá Synse+ de graça a quem já cancelou na loja.
 
   Não havia instrumentação nenhuma. `grep -rln "analytics|posthog|plausible|
   gtag(" src/` não devolvia nada, e `logger.ts` é registro técnico. Não havia

@@ -127,6 +127,13 @@ export type PreapprovalDoMercadoPago = {
   external_reference?: string
   next_payment_date?: string | null
   auto_recurring?: { end_date?: string | null; frequency?: number; frequency_type?: string } | null
+  /*
+   * Quando o Mercado Pago mudou esta assinatura pela última vez. É o horário
+   * do evento **na origem**, e a 0061 usa ele para descartar notificação fora
+   * de ordem: ordenar pelo nosso horário de recebimento ordena a entrega, não
+   * os fatos.
+   */
+  last_modified?: string | null
 }
 
 export type EstadoDoPlus = { status: PlusStatus; until: string | null }

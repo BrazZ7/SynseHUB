@@ -59,3 +59,19 @@ ios/DerivedData/
 # entra com milhares de arquivos a cada compilação.
 native/*/android/build/
 native/*/android/.gradle/
+
+# ── Credenciais de publicação ───────────────────────────────────────────────
+#
+# `android/.gitignore` já cobre `keystore.properties` e `*.jks` dentro de
+# `android/`. Isto é o mesmo corte na raiz, porque o repositório é **público** e
+# um arquivo de chave fora daquela pasta passaria.
+#
+# Perder a chave de upload do Android significa não poder mais atualizar o app;
+# vazá-la significa alguém poder. A chave da App Store Connect (`.p8`) só pode
+# ser baixada uma vez e assina envios em nome da conta.
+*.jks
+*.keystore
+*.p8
+*.p12
+*.mobileprovision
+keystore.properties

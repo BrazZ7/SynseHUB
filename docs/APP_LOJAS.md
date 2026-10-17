@@ -14,11 +14,13 @@ operacional.
 | Botão voltar do Android | Anda no histórico; só encerra numa raiz |
 | Volta do segundo plano | `router.refresh()`, para a tela não ficar congelada em dado de ontem |
 | Permissões | GPS (SynseRun), notificação e serviço em primeiro plano (Treino Ativo), Bluetooth (Synse Body) |
-| Assinatura de release | Configurada, lendo chave de fora do repositório |
+| Assinatura de release | Configurada e **verificada**: `app-release.aab` e `app-release.apk` saem assinados (esquema v2), `versionCode` e `versionName` como pedidos |
 | Versão | `SYNSE_VERSION_CODE` / `SYNSE_VERSION_NAME` por variável de ambiente |
 | App Links | Manifesto declara o domínio; `/.well-known/assetlinks.json` serve o outro lado |
 | Projeto iOS | Dois targets (app + extensão da Live Activity) e scheme compartilhado. **Nunca compilado** — o build é na CI, ver abaixo |
 | Build do iOS sem Mac | `codemagic.yaml`: compila, assina e sobe ao TestFlight num Mac alugado por minuto |
+| Build do Android | `.github/workflows/android.yml`: AAB e APK assinados, com a assinatura conferida antes de publicar o artefato |
+| Guarda do código nativo | O mesmo workflow compila o debug a cada push que toca `android/`, `native/` ou o Capacitor |
 
 ## Gerar a chave de assinatura
 
@@ -49,7 +51,37 @@ Numa esteira de build, as mesmas quatro coisas vão como
 `SYNSE_KEY_PASSWORD`.
 
 Sem nenhum dos dois caminhos, o build avisa e sai sem assinatura — de propósito:
-falhar aqui impediria alguém de simplesmente compilar o projeto.
+falhar aqui impediria alguém de simplesmente compilar o projeto. **É também o
+defeito mais perigoso desta parte**, porque o build fica verde: por isso o
+workflow confere a assinatura do pacote antes de publicá-lo, e por isso ele para
+quando o segredo da chave está faltando em vez de entregar um pacote que a Play
+recusa depois.
+
+### A chave no GitHub Actions
+
+O keystore é binário, e segredo do GitHub é texto. Em base64:
+
+```bash
+base64 -w 0 synse-release.jks   # Linux
+base64 -i synse-release.jks     # macOS
+```
+
+Em *Settings → Secrets and variables → Actions*, quatro segredos:
+
+| Segredo | Conteúdo |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | a saída do comando acima |
+| `ANDROID_KEYSTORE_PASSWORD` | `storePassword` |
+| `ANDROID_KEY_ALIAS` | `keyAlias` |
+| `ANDROID_KEY_PASSWORD` | `keyPassword` |
+
+O GitHub guarda cifrado e não devolve: isto serve para assinar, **não** como
+cópia de segurança da chave. A cópia é sua, no cofre de senhas.
+
+Em repositório público, o segredo não é entregue a workflow disparado por pull
+request de fork — ninguém abre um PR para roubar a chave. Mas o log do build é
+público, e nenhum passo do workflow imprime segredo; há teste que falha se
+alguém escrever um.
 
 ## Gerar o pacote
 
@@ -95,6 +127,7 @@ adb shell pm get-app-links br.com.synse.app   # espera-se "verified"
 | Conta Google Play Console | play.google.com/console | US$ 25, uma vez |
 | Conta Apple Developer | developer.apple.com | US$ 99/ano |
 | Chave da App Store Connect API | App Store Connect → Users and Access → Integrations | Grátis; vai no Codemagic, não no repositório |
+| Os quatro segredos do Android | GitHub → Settings → Secrets → Actions | Grátis; ver "A chave no GitHub Actions" |
 | Conta Codemagic | codemagic.io | 500 min de macOS/mês grátis na conta individual |
 | Formulário de Segurança dos Dados | Play Console | Declarar saúde, localização e Bluetooth |
 | Política de privacidade publicada | `/privacidade` já existe | Falta a identificação legal |
@@ -131,6 +164,52 @@ O que precisa de **iPhone** — não de Mac: ver a Live Activity na tela
 bloqueada. Não há outro jeito de verificar, e o TestFlight instala no aparelho
 de qualquer pessoa que você convidar.
 
+## Android sem máquina local
+
+Android compila em Linux, então não há o problema do iOS: o
+`.github/workflows/android.yml` faz tudo num runner do GitHub, e **em
+repositório público o Actions não tem cota** — é grátis sem limite de minutos.
+
+Dois trabalhos no mesmo arquivo, com propósitos diferentes:
+
+- **`pacote`** — só no botão (*Actions → Android → Run workflow*). Gera o
+  `app-release.aab` e o `app-release.apk` assinados, confere a assinatura dos
+  dois, e guarda como artefato por 14 dias. Gerar pacote de loja é decidir
+  publicar, e essa decisão é humana.
+- **`compilar`** — automático, a cada push ou PR que toque `android/`,
+  `native/`, `mobile/` ou o Capacitor. Compila o debug, sem chave nenhuma, e
+  não guarda nada. É só a pergunta "o Kotlin ainda compila?".
+
+O segundo existe por causa do iOS: a Live Activity passou meses chamando um tipo
+que não existia, e ninguém soube porque aquele código nunca era compilado. Com o
+guarda, código nativo que não compila aparece no push, não na véspera de
+publicar.
+
+**O `versionCode`** sai do contador de execuções do Actions, que nunca repete —
+é o que a Play exige. Se algum dia o contador ficar atrás do que já subiu
+(recriar o workflow zera), defina a variável `ANDROID_VERSION_CODE_OFFSET` em
+*Settings → Variables* para levantar o piso sem mexer no arquivo.
+
+**O que foi conferido rodando, e não só escrito.** O build de release rodou
+neste contêiner, com uma chave descartável gerada só para isso:
+
+```
+package: name='br.com.synse.app' versionCode='42' versionName='0.1.42' compileSdkVersion='36'
+Verified using v2 scheme (APK Signature Scheme v2): true
+AAB assinado.
+```
+
+E o controle que justifica a conferência: o **mesmo build sem as variáveis da
+chave termina em verde**, com um `AVISO:` no log e um arquivo chamado
+`app-release-unsigned.apk`. É exatamente o pacote que a Play Console recusa
+depois. Por isso o workflow para quando o segredo falta, e por isso ele exige
+que o arquivo assinado exista pelo nome que ele tem quando é assinado.
+
+**O envio para a Play Console não está automatizado**, e isso é deliberado: a
+primeira versão de um app novo não pode subir por API — a Play exige o painel,
+com a ficha da loja preenchida. O passo está escrito e desligado no fim do
+arquivo, com as três coisas que faltam.
+
 ## As duas revisões que podem recusar
 
 **Apple, diretriz 4.2 — "app que é só um site".** É o risco real de um
@@ -156,3 +235,8 @@ está em aberto, e ela muda o que precisa ser construído. Ver `docs/pre-produca
   Activity aparece de verdade na Dynamic Island, ninguém viu ainda.
 - **App Links não foi verificado de ponta a ponta**, porque depende de um app
   publicado e de uma digital real.
+- **Os workflows nunca rodaram num runner do GitHub nem num Mac do Codemagic.**
+  Do Android, os comandos foram todos executados aqui, um por um, com os
+  mesmos pacotes do SDK e a mesma conferência de assinatura — o que não foi
+  exercitado é o runner: o `base64 -d` do segredo, o cache e o artefato. Do
+  iOS, nada: nem build, nem assinatura.

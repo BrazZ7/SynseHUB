@@ -7,10 +7,10 @@ import { requireStudentSession } from '@/lib/auth/require-session'
 import { toUserMessage } from '@/lib/errors'
 import { logger } from '@/lib/logger'
 import { getPaymentProvider, isSimulatedProvider } from '@/lib/payments'
+import { podeAssinarPlus } from '@/lib/plans/pode-assinar'
 import { PLUS_PRICE } from '@/lib/plans/tiers'
-import { resumoDaAssinatura } from '@/lib/plans/subscription'
 import { pruneRateLimits, rateLimit } from '@/lib/rate-limit'
-import type { AdesaoState } from '@/features/plus/state'
+import { mensagemDeNaoAssinar, type AdesaoState } from '@/features/plus/state'
 
 /**
  * ── Começar a assinatura do Synse+ ───────────────────────────────────────────
@@ -39,9 +39,18 @@ export async function assinarPlusAction(
     return { status: 'error', message: 'Muitas tentativas. Espere um minuto e tente de novo.' }
   }
 
-  // Já é assinante: não criar uma segunda cobrança para a mesma conta.
-  if (resumoDaAssinatura(session.plus).ativa) {
-    return { status: 'error', message: 'Sua conta já tem o Synse+ ativo.' }
+  /*
+   * Já é assinante: não criar uma segunda cobrança para a mesma conta.
+   *
+   * Era `resumoDaAssinatura(...).ativa` solto. Virou a trava compartilhada
+   * porque com três origens "já é assinante" deixou de ser resposta
+   * suficiente: a mensagem precisa dizer **onde** a cobrança vive, senão a
+   * pessoa que assinou pela App Store lê "você já tem" e vai procurar na
+   * fatura do cartão da web.
+   */
+  const veredicto = podeAssinarPlus({ assinatura: session.plus, origemPretendida: 'mercadopago' })
+  if (!veredicto.pode) {
+    return { status: 'error', message: mensagemDeNaoAssinar(veredicto) }
   }
 
   /*

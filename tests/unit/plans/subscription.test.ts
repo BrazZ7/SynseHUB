@@ -13,9 +13,12 @@ const daquiA = (dias: number) => new Date(AGORA.getTime() + dias * DIA).toISOStr
 
 describe('lerAssinatura', () => {
   it('lê o que a 0036 grava', () => {
+    // `origem: null` porque a 0036 não tinha a coluna: a leitura da origem veio
+    // com a 0061, e linha sem ela é o caso real de "publicar não é migrar".
     expect(lerAssinatura({ plus_status: 'TRIAL', plus_until: daquiA(18) })).toEqual({
       status: 'TRIAL',
       until: daquiA(18),
+      origem: null,
     })
   })
 

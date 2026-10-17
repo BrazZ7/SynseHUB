@@ -134,7 +134,7 @@ export function assinaturaDaDemo(persona: DemoPersona, agora: Date): PlusSubscri
 
   const fim = new Date(agora)
   fim.setDate(fim.getDate() + (PLUS_PRICE.trialDays - DIAS_JA_CORRIDOS_NA_DEMO))
-  return { status: 'TRIAL', until: fim.toISOString() }
+  return { status: 'TRIAL', until: fim.toISOString(), origem: 'mercadopago' }
 }
 
 /** A assinatura da persona que está no cookie. Fora da demonstração, nenhuma. */

@@ -178,6 +178,8 @@ type ProfileRow = {
   /* A 0036 pode não ter subido ainda — vide `readProfile`, que pede `*`. */
   plus_status?: string | null
   plus_until?: string | null
+  /* E a 0061 é mais nova ainda. Mesma tolerância, mesmo motivo. */
+  plus_provider?: string | null
 }
 
 /**

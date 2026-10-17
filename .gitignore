@@ -75,3 +75,17 @@ native/*/android/.gradle/
 *.p12
 *.mobileprovision
 keystore.properties
+
+# ── A exceção do `*.pem` ────────────────────────────────────────────────────
+#
+# `*.pem` é ignorado na linha 19, herdado do `.gitignore` do Next — e com
+# razão: quase todo `.pem` num repositório é chave privada por descuido.
+#
+# `apple-raiz.pem` é o oposto: é um **certificado raiz público** da Apple,
+# fixado de propósito, e sem ele a verificação de recibo da App Store não tem
+# com o que comparar a cadeia — ela passaria a aceitar qualquer uma.
+#
+# O defeito que isso causou: o arquivo ficou de fora do commit, os testes
+# passaram aqui porque ele existe no disco, e em produção a leitura falharia.
+# Descoberto conferindo a lista de arquivos do commit.
+!src/lib/plans/lojas/apple-raiz.pem

@@ -1,5 +1,5 @@
 import { createPrivateKey, createSign, X509Certificate, type KeyObject } from 'node:crypto'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, execSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -400,5 +400,21 @@ describe('a raiz fixada no repositório', () => {
     )
     // E continua válida: raiz expirada faria toda compra ser recusada.
     expect(new Date(certificado.validTo).getTime()).toBeGreaterThan(Date.now())
+  })
+
+  it('e está versionada, não só no disco de quem rodou o teste', () => {
+    /*
+     * Isto aconteceu. O `.gitignore` herdado do Next ignora `*.pem` — com
+     * razão, porque quase todo `.pem` num repositório é chave privada por
+     * descuido. O certificado ficou de fora do commit, **a suíte passou aqui
+     * porque o arquivo existe no disco**, e em produção a leitura falharia.
+     *
+     * O teste acima não pega isso: ele lê o disco. Este lê o índice do git.
+     */
+    const rastreados = execSync('git ls-files src/lib/plans/lojas/', {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+    })
+    expect(rastreados).toContain('apple-raiz.pem')
   })
 })

@@ -36,136 +36,145 @@ antes de virar 12, e quem decide é a Play, não este documento.
 
 ---
 
-## Fase 0 — O site no ar. Isto vem primeiro, sem exceção
+## Fase 0 — O site no ar: **já está**, menos uma coisa
 
-**O aplicativo é um invólucro: ele carrega `https://synse.com.br`.** Se o site
-não estiver no ar e funcionando quando o revisor abrir o app, ele vê uma tela de
-erro — e isso é recusa nas duas lojas, não "quase".
+Conferido em 17/10/2026 contra `https://synse.com.br/api/health?deep=1`:
 
-### 0.1 Supabase **VOCÊ**
-
-1. Criar o projeto em [supabase.com](https://supabase.com).
-2. No **SQL Editor**, colar as migrations de `src/db/migrations/` **em ordem
-   numérica, uma por vez**, de `0001` até `0060`. Cada uma se registra sozinha
-   em `schema_migrations`; colar fora de ordem quebra dependência de tabela.
-3. As de `0053` a `0060` são as mais recentes e nunca foram aplicadas em lugar
-   nenhum.
-
-> **Por que à mão.** A Vercel publica o código no push; o SQL não vai com ele.
-> Entre um e outro, o código novo fala com o banco velho — por isso toda leitura
-> tolera coluna ausente. Mas tolerar não é funcionar.
-
-### 0.2 Variáveis na Vercel **VOCÊ**
-
-Em *Settings → Environment Variables*, os nomes estão em `.env.example`. Os que
-travam publicação se faltarem:
-
-| Variável | Onde consegue |
+| Item | Estado |
 | --- | --- |
-| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase → *Project Settings → API* |
-| `SUPABASE_SERVICE_ROLE_KEY` | idem — **só no servidor**, nunca em `NEXT_PUBLIC_` |
-| `NEXT_PUBLIC_APP_URL` | `https://synse.com.br` |
-| `NEXT_PUBLIC_LEGAL_ENTITY`, `NEXT_PUBLIC_LEGAL_TAX_ID`, `NEXT_PUBLIC_LEGAL_ADDRESS`, `NEXT_PUBLIC_LEGAL_CONTACT` | seus dados — **as duas lojas exigem identificação legal na política de privacidade** |
-| `CRON_SECRET` | você sorteia |
+| Site no ar | **Sim**, HTTP 200, `environment: production` |
+| Supabase ligado | **Sim**, projeto `SynseHUB` em `sa-east-1` |
+| Migrations | **54 aplicadas, `pendingMigrations: []`** |
+| Sondas de schema | Todas presentes |
+| Cobrança agendada, limitador | Ligados |
+| **Identificação legal** | **Não** — `identificacaoLegal: false` |
 
-`PAYMENT_PROVIDER` fica em `mock`: não há provedor escolhido, e não há cobrança
-real para fazer ainda.
-
-### 0.3 Conferir **VOCÊ**
+Quem escreveu este documento (eu) supôs que faltava colar as migrations e que o
+provedor de pagamento estava em `mock`. **As duas coisas estavam erradas** — o
+banco está completo e o Mercado Pago está configurado em produção, com token e
+segredo de webhook válidos. O jeito de descobrir isso foi perguntar ao site em
+vez de confiar no documento, e é o que você deve fazer sempre que este arquivo
+disser algo sobre o estado atual:
 
 ```
 https://synse.com.br/api/health?deep=1
 ```
 
-Tem de voltar `pendingMigrations` **vazio**. Se vier com números, falta colar
-aquelas migrations — volte ao 0.1 antes de seguir.
+### 0.1 O que falta: a identificação legal **VOCÊ**
 
-E abrir `https://synse.com.br/privacidade` no celular: precisa carregar e
-precisa ter sua identificação legal. É o endereço que as duas lojas pedem no
-formulário.
+`identificacaoLegal: false` significa que a página `/privacidade` está no ar sem
+dizer **quem** opera o serviço. **As duas lojas exigem isso** — é um dos
+motivos mais comuns de recusa no formulário de privacidade, e some em cinco
+minutos.
 
-**Só depois disto a Fase 1 faz sentido.**
+Na Vercel, *Settings → Environment Variables*, quatro variáveis:
 
----
+| Variável | O que é |
+| --- | --- |
+| `NEXT_PUBLIC_LEGAL_ENTITY` | seu nome completo (ou a razão social, se um dia houver CNPJ) |
+| `NEXT_PUBLIC_LEGAL_TAX_ID` | CPF, ou CNPJ quando houver |
+| `NEXT_PUBLIC_LEGAL_ADDRESS` | endereço que você aceita publicar |
+| `NEXT_PUBLIC_LEGAL_CONTACT` | e-mail de contato |
+
+Depois **Redeploy**, e `identificacaoLegal` vira `true`.
+
+> **Isto é público, não é segredo** — o prefixo `NEXT_PUBLIC_` quer dizer
+> exatamente que vai para o navegador de quem abrir a página. É a informação
+> que a lei manda publicar, não dado para esconder. Ainda assim, quem decide
+> qual endereço aparece é você, não eu.
 
 ## Fase 1 — Android: a chave de assinatura
 
 **Uma vez na vida do produto.** Perder esta chave é não poder mais atualizar o
 app. Vazá-la é outra pessoa poder assinar em seu nome.
 
-### 1.1 Gerar **VOCÊ**
+Existe um script que faz os três passos e imprime exatamente o que colar:
 
-Precisa de um computador com Java — **qualquer sistema**, Windows ou Linux
-serve. Isto é a única coisa aqui que não é problema de Mac.
+```bash
+bash scripts/android/preparar-a-chave.sh
+```
+
+Ele pergunta seu nome e uma senha (duas vezes, sem aparecer na tela), gera o
+keystore, escreve o base64 num arquivo e lista os quatro segredos com os nomes
+certos. Depois é copiar e colar no navegador.
+
+**Testado de ponta a ponta neste projeto:** a chave que ele gera, passada pelo
+mesmo caminho do workflow (base64 → `base64 -d` → Gradle), produziu um APK cujo
+certificado tem a digital que o script imprimiu. Ele também recusa sobrescrever
+chave existente, recusa senha curta ou digitada diferente nas duas vezes, e não
+cria nada quando recusa.
+
+### Onde rodar, se você não tem computador
+
+| Onde | Como |
+| --- | --- |
+| Windows/Linux com Android Studio | o Java já está lá; use o terminal do Studio |
+| Ubuntu/WSL | `sudo apt install -y openjdk-17-jdk-headless` |
+| Android, no próprio celular | Termux: `pkg install openjdk-17` |
+| **Só um navegador** | GitHub → botão **Code → Codespaces → Create**. Roda no navegador, já tem Java, e é a sua conta |
+
+O Codespace é a saída honesta para "não tenho computador": a chave nasce dentro
+da sua conta, não num log de build público nem num chat. **Baixe o `.jks` antes
+de apagar o Codespace** — ele é descartável, a chave não.
+
+Se o script não rodar por algum motivo, o comando cru é:
 
 ```bash
 keytool -genkey -v -keystore synse-release.jks \
   -keyalg RSA -keysize 4096 -validity 10000 -alias synse
+base64 -w 0 synse-release.jks     # macOS: base64 -i
 ```
 
-Ele pergunta uma senha e alguns dados de identificação. Guarde `synse-release.jks`
-**e as duas senhas** num gerenciador de senhas, com cópia. Não no Drive sem
-senha, não em anexo de e-mail, não no repositório.
+### Os quatro segredos **VOCÊ**
 
-> **Se você não tem nenhum computador:** peça emprestado por dez minutos, ou use
-> Termux no Android com `pkg install openjdk-17`. O que não vale é a chave passar
-> por um chat ou aparecer num log de build público — e logs deste repositório são
-> públicos.
-
-### 1.2 Virar texto **VOCÊ**
-
-Segredo do GitHub é texto; keystore é binário.
-
-```bash
-base64 -w 0 synse-release.jks    # Linux/Termux
-base64 -i synse-release.jks      # macOS
-```
-
-### 1.3 Os quatro segredos **VOCÊ**
-
-GitHub → *Settings → Secrets and variables → Actions → New repository secret*:
+[github.com/BrazZ7/SynseHUB/settings/secrets/actions](https://github.com/BrazZ7/SynseHUB/settings/secrets/actions)
+→ *New repository secret*, quatro vezes:
 
 | Segredo | Conteúdo |
 | --- | --- |
-| `ANDROID_KEYSTORE_BASE64` | a saída do comando acima, inteira |
-| `ANDROID_KEYSTORE_PASSWORD` | a senha do keystore |
+| `ANDROID_KEYSTORE_BASE64` | o conteúdo do arquivo `.base64.txt` |
+| `ANDROID_KEYSTORE_PASSWORD` | a senha que você digitou |
 | `ANDROID_KEY_ALIAS` | `synse` |
-| `ANDROID_KEY_PASSWORD` | a senha da chave (igual à do keystore, se você deixou igual) |
+| `ANDROID_KEY_PASSWORD` | a mesma senha |
 
-O GitHub guarda cifrado e não devolve. **Isto serve para assinar, não é cópia de
-segurança.** A cópia é sua, no gerenciador de senhas.
-
-Em repositório público, o segredo não é entregue a workflow disparado por pull
-request de fork — ninguém abre um PR para roubar a chave.
+O GitHub guarda cifrado e **não devolve**: isto serve para assinar, não como
+cópia de segurança. A cópia é sua, no gerenciador de senhas.
 
 ---
 
-## Fase 2 — Android: gerar o pacote **VOCÊ**, dois cliques
+## Fase 2 — Android: gerar o pacote
 
-1. GitHub → aba **Actions** → workflow **Android — pacote assinado** → botão
-   **Run workflow**.
-2. Esperar ~4 minutos.
-3. Baixar o artefato `synse-android-…` no fim da página do run. Dentro:
-   `app-release.aab` (o que a Play aceita) e `app-release.apk` (para instalar
-   num aparelho e testar).
+**Isto eu consigo disparar daqui** — e disparei, em 17/10/2026, para descobrir
+se os segredos já existiam. Não existiam, e o workflow fez o que devia:
 
-O workflow **confere a assinatura dos dois pacotes antes de guardá-los**, e para
-com erro se o segredo da chave estiver faltando. Isso existe porque sem chave o
-Gradle termina em **verde** e entrega um pacote sem assinatura — que a Play
-recusa depois, longe daqui.
+```
+✓ 1–6  checkout, Node, Java, npm ci, pacotes do SDK
+✗ 7    A chave de assinatura  →  "Falta o segredo ANDROID_KEYSTORE_BASE64."
+–  8–12  pulados
+✓ 13   Apagar a chave  (roda mesmo com o build falhando)
+```
 
-**O `versionCode` sai do contador de execuções do Actions**, que nunca repete. A
-Play recusa `versionCode` repetido e não aceita voltar atrás, então não há o que
-controlar à mão.
+Ele **parou** em vez de entregar um pacote sem assinatura — que é o defeito que
+a Play só recusaria horas depois. Era o único caminho do workflow que ainda não
+havia sido exercitado num runner de verdade.
 
-Antes de subir, instale o APK num Android e abra: é a hora mais barata de
-descobrir que a Fase 0 ficou pela metade.
+Depois de colar os quatro segredos, me avise e eu disparo de novo, ou você faz:
+
+1. *Actions → **Android — pacote assinado** → Run workflow*;
+2. esperar ~4 minutos;
+3. baixar o artefato `synse-android-…` no fim da página do run — `app-release.aab`
+   para a Play, `app-release.apk` para instalar num aparelho.
+
+O `versionCode` sai do contador de execuções do Actions, que nunca repete. A
+Play recusa repetido e não aceita voltar atrás, então não há o que controlar à
+mão.
+
+Antes de subir, instale o APK num Android e abra — é a hora mais barata de
+descobrir um problema:
 
 ```bash
 adb install -r app-release.apk
 ```
-
----
 
 ## Fase 3 — Play Console **VOCÊ**
 
@@ -318,10 +327,24 @@ compra pela loja delas, com a comissão que vem junto.** Se a compra for fora �
 PIX pelo navegador — não pode haver botão, link nem menção a pagamento dentro do
 app, e as duas lojas verificam isso.
 
-Hoje o provedor é `mock` e o Synse Pay está engavetado, então **nada vende dentro
-do app** e você pode publicar sem decidir. Mas essa é a última hora em que isso é
-verdade de graça: no dia em que houver cobrança real, a decisão muda o que
-precisa ser construído. Ver `docs/pre-producao.md`.
+**Atenção, porque isto mudou e eu tinha escrito errado:** o
+`/api/health?deep=1` de produção mostra `paymentProvider: mercadopago`,
+configurado, com token e segredo de webhook válidos. Não é `mock`. Então a
+pergunta das lojas **não é hipotética**.
+
+Antes de enviar, responda com honestidade: **um aluno consegue pagar
+mensalidade ou assinatura de dentro do app?** O app é um invólucro do site, e
+para as lojas não existe essa distinção — webview conta como dentro do app.
+
+- **Se consegue** → Apple e Google exigem a compra pela loja delas, com a
+  comissão. Publicar sem isso é recusa, e depois de publicado é suspensão.
+- **Se não consegue** (a cobrança é combinada fora, por PIX ou pelo painel da
+  academia) → não pode haver botão, link nem menção a pagamento nas telas do
+  aluno. As duas lojas verificam isso na revisão.
+
+Isto precisa ser conferido tela por tela do app do aluno antes do envio, e é a
+única coisa deste documento que pode exigir mudança de código. Ver
+`docs/pre-producao.md`.
 
 ---
 
@@ -329,11 +352,10 @@ precisa ser construído. Ver `docs/pre-producao.md`.
 
 | # | O quê | Quem | Custo | Trava o quê |
 | --- | --- | --- | --- | --- |
-| 0.1 | Supabase + migrations 0001–0060 | VOCÊ | grátis | **tudo** |
-| 0.2 | Variáveis na Vercel | VOCÊ | grátis | tudo |
-| 0.3 | `/api/health?deep=1` limpo | VOCÊ | — | tudo |
-| 1 | Chave de assinatura + 4 segredos | VOCÊ | grátis | Fase 2 |
-| 2 | Rodar o workflow, baixar o AAB | VOCÊ | grátis | Fase 3 |
+| 0 | Supabase, migrations, site no ar | ✅ **feito** | — | — |
+| 0.1 | As quatro variáveis `NEXT_PUBLIC_LEGAL_*` na Vercel | VOCÊ | grátis | formulários das duas lojas |
+| 1 | `bash scripts/android/preparar-a-chave.sh` + colar 4 segredos | VOCÊ | grátis | Fase 2 |
+| 2 | Rodar o workflow, baixar o AAB | VOCÊ **ou eu** | grátis | Fase 3 |
 | 3.1 | Conta Play Console | VOCÊ | US$ 25 | Fase 3 |
 | 3.4 | Teste fechado, 12 testadores | VOCÊ | — | **14 dias** |
 | 3.5 | Digital SHA-256 → Vercel | VOCÊ | — | App Links |

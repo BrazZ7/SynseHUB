@@ -33,6 +33,7 @@ const RAIZ = process.cwd()
 const ler = (caminho: string) => readFileSync(join(RAIZ, caminho), 'utf8')
 
 const ANDROID_YML = ler('.github/workflows/android.yml')
+const PREPARAR_CHAVE = ler('scripts/android/preparar-a-chave.sh')
 const CODEMAGIC = ler('codemagic.yaml')
 const VARIAVEIS = ler('android/variables.gradle')
 const APP_GRADLE = ler('android/app/build.gradle')
@@ -255,6 +256,57 @@ describe('as credenciais de publicação', () => {
       expect(gitignore).toContain(padrao)
     },
   )
+
+  it('o script da chave ensina os nomes que o workflow realmente lê', () => {
+    /*
+     * `scripts/android/preparar-a-chave.sh` imprime uma lista do que colar em
+     * *Settings → Secrets*. Renomear um segredo no workflow e esquecer o
+     * script produz instrução errada — e o erro só aparece quando alguém
+     * segue a instrução e o build para, com o segredo "faltando" porque tem
+     * outro nome.
+     */
+    for (const segredo of [
+      'ANDROID_KEYSTORE_BASE64',
+      'ANDROID_KEYSTORE_PASSWORD',
+      'ANDROID_KEY_ALIAS',
+      'ANDROID_KEY_PASSWORD',
+    ]) {
+      expect(ANDROID_YML, `${segredo} saiu do workflow`).toContain(segredo)
+      expect(PREPARAR_CHAVE, `${segredo} não é mais ensinado pelo script`).toContain(segredo)
+    }
+
+    /*
+     * E o alias que ele gera é o alias que ele manda colar — garantido por
+     * interpolação, não por coincidência. A primeira versão deste teste
+     * cobrava o literal `synse` na instrução; o script usa `$ALIAS`, que é o
+     * jeito certo, porque trocar o alias lá em cima muda a instrução junto.
+     * O teste estava errado, não o script.
+     */
+    expect(PREPARAR_CHAVE).toMatch(/^ALIAS="[^"]+"/m)
+    expect(PREPARAR_CHAVE, 'a instrução repete o alias em vez de interpolar').toMatch(
+      /ANDROID_KEY_ALIAS\s+\$ALIAS/,
+    )
+  })
+
+  it('o script da chave não deixa a senha vazar', () => {
+    /*
+     * Duas formas de vazar, e as duas já aconteceram em script de setup por
+     * aí: imprimir a senha na tela, e passá-la por argumento de linha de
+     * comando — onde ela fica visível em `ps` para qualquer processo da
+     * máquina enquanto o keytool roda. Daí `-storepass:env`.
+     */
+    expect(PREPARAR_CHAVE, 'senha por argumento fica visível em `ps`').not.toMatch(
+      /-(store|key)pass\s+["$]/,
+    )
+    expect(PREPARAR_CHAVE).toContain('-storepass:env')
+    expect(PREPARAR_CHAVE).toContain('-keypass:env')
+
+    // Lido sem eco, e nunca impresso.
+    expect(PREPARAR_CHAVE).toMatch(/read -r -s -p/)
+    const linhas = PREPARAR_CHAVE.split('\n').filter((l) => !l.trim().startsWith('#'))
+    const ecos = linhas.filter((l) => /\b(echo|printf)\b[^|]*\$\{?(SENHA|SYNSE_SENHA|CONFIRMA)\b/.test(l))
+    expect(ecos).toEqual([])
+  })
 
   it('e nenhuma delas está no repositório agora', () => {
     // Controle do teste acima: ignorar o padrão não desfaz um arquivo que já

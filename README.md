@@ -495,7 +495,10 @@ por consulta, e não o número de milissegundos numa máquina específica.
 
 Credenciais a rotacionar, ambiente de desenvolvimento separado, plano da Vercel
 e a verificação do Synse Pay ponta a ponta estão em
-[`docs/pre-producao.md`](docs/pre-producao.md). Durante a construção é comum
+[`docs/pre-producao.md`](docs/pre-producao.md), e o roteiro para publicar nas
+lojas — do Supabase ao envio — em
+[`docs/publicar-passo-a-passo.md`](docs/publicar-passo-a-passo.md).
+Durante a construção é comum
 adiar esses itens — a lista existe para que adiar não vire esquecer.
 
 ## O que ainda não está pronto

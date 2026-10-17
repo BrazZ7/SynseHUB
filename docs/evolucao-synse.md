@@ -280,6 +280,9 @@ redefine — 0026 → 0047 → 0057 → 0059 para `log_workout_session` e
 
 ## Pendências e bloqueios
 
+O roteiro de execução destas pendências, na ordem que funciona, está em
+[`docs/publicar-passo-a-passo.md`](publicar-passo-a-passo.md).
+
 | Item | Natureza | Próxima ação |
 | --- | --- | --- |
 | Migrations 0053–0060 | BLOQUEIO (acesso ao Supabase) | Colar no SQL editor, na ordem; `/api/health?deep=1` confirma |

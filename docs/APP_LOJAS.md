@@ -4,6 +4,11 @@ O app é um invólucro Capacitor que carrega `https://synse.com.br`. A decisão 
 risco dela estão comentados em `capacitor.config.ts`; este documento é a parte
 operacional.
 
+> **Procurando o que fazer, na ordem?**
+> [`docs/publicar-passo-a-passo.md`](publicar-passo-a-passo.md) é o roteiro de
+> execução, fase por fase, do Supabase até o envio nas duas lojas. Aqui é como
+> cada peça funciona e por quê.
+
 ## O que já funciona
 
 | Item | Estado |

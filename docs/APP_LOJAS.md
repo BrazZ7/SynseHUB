@@ -176,21 +176,38 @@ Dois trabalhos no mesmo arquivo, com propósitos diferentes:
   `app-release.aab` e o `app-release.apk` assinados, confere a assinatura dos
   dois, e guarda como artefato por 14 dias. Gerar pacote de loja é decidir
   publicar, e essa decisão é humana.
-- **`compilar`** — automático, a cada push ou PR que toque `android/`,
-  `native/`, `mobile/` ou o Capacitor. Compila o debug, sem chave nenhuma, e
-  não guarda nada. É só a pergunta "o Kotlin ainda compila?".
+- **`compilar`** — automático, a cada push que toque `android/`, `native/`,
+  `mobile/` ou o Capacitor. Compila o debug, sem chave nenhuma, e não guarda
+  nada. É só a pergunta "o Kotlin ainda compila?".
 
 O segundo existe por causa do iOS: a Live Activity passou meses chamando um tipo
 que não existia, e ninguém soube porque aquele código nunca era compilado. Com o
 guarda, código nativo que não compila aparece no push, não na véspera de
 publicar.
 
-**Um commit, uma compilação.** Branch com PR aberto dispara `push` e
-`pull_request` no mesmo commit — e no primeiro push deste arquivo saíram dois
-runs idênticos, os dois verdes, compilando o mesmo debug em dois runners. O agrupamento do `concurrency` é por trabalho justamente por
-isso: o guarda se cancela (só a cabeça do branch interessa, e o run duplicado
-morre em segundos), e o `pacote` tem grupo próprio que **nunca** é cancelado,
-para um push que chegue no meio não matar um pacote de loja.
+**Um commit, uma compilação — e isso custou duas correções.** O primeiro push
+deste arquivo gerou **dois** runs do mesmo commit, os dois verdes: branch com PR
+aberto dispara `push` e `pull_request` juntos.
+
+A primeira tentativa foi agrupar os dois runs no mesmo `concurrency` para um
+cancelar o outro. Não funcionou, e o motivo vale saber: **`github.ref` não é a
+mesma coisa nos dois eventos** — `refs/heads/<branch>` no push,
+`refs/pull/<n>/merge` no pull_request. Grupos diferentes, nada se cancelou. Dá
+para costurar com `github.head_ref || github.ref_name`, mas aí quem morre
+depende de qual evento chegou primeiro, e no dia em que o run do PR perde a
+corrida o check dele fica *cancelado* — que não é verde e segura o merge.
+
+O que ficou foi mais simples: **só `push`**, em todo branch. Conferido no PR #1,
+com os dois runs no ar: os jobs do run de `push` já aparecem como check do pull
+request, então o `pull_request` não acrescentava cobertura — acrescentava um
+build. O que se perde é PR vindo de fork, que nenhum `push` alcança; o
+repositório nunca teve um, e está escrito no workflow onde isso volta quando
+tiver.
+
+O `concurrency` continua, agora por trabalho e com outro propósito: o guarda é
+cancelado por um push mais novo no mesmo branch, e o `pacote` tem grupo próprio
+que **nunca** é cancelado, para um push que chegue no meio não matar um pacote
+de loja.
 
 **O `versionCode`** sai do contador de execuções do Actions, que nunca repete —
 é o que a Play exige. Se algum dia o contador ficar atrás do que já subiu

@@ -151,30 +151,53 @@ describe('o workflow do Android', () => {
     expect(linhas.filter((linha) => /^\s*[\w-]+:\s*\*\w+\s*$/.test(linha))).toEqual([])
   })
 
-  it('não compila o mesmo commit duas vezes, nem cancela um release', () => {
+  it('não compila o mesmo commit duas vezes', () => {
     /*
-     * Visto no primeiro push deste arquivo: um branch com PR aberto dispara
-     * `push` **e** `pull_request` no mesmo commit, e saíram dois runs
-     * idênticos. O agrupamento é por trabalho justamente por isso — e nenhum
-     * dos dois grupos pode carregar o tipo de evento, que foi o que permitiu a
-     * duplicata.
+     * Medido, não suposto. Com `push` e `pull_request` juntos, um push num
+     * branch com PR aberto gerou **dois** runs do mesmo commit, os dois
+     * verdes, em dois runners.
+     *
+     * A tentativa de resolver por `concurrency` falhou e ensinou o motivo:
+     * `github.ref` é `refs/heads/<branch>` no push e `refs/pull/<n>/merge` no
+     * pull_request, então os grupos nunca coincidiam. E costurar com
+     * `head_ref || ref_name` deixa quem morre na mão de qual evento chegou
+     * primeiro — no dia em que o run do PR perde, o check dele fica cancelado.
+     *
+     * O que ficou: só `push`. Conferido no PR #1 que os jobs do run de `push`
+     * aparecem como check do pull request, então nada de cobertura se perdeu.
+     */
+    // Só o bloco `on:` — `/^ {2}\w+:/` solto pegava `contents: read` e os
+    // nomes dos trabalhos, que têm a mesma indentação.
+    const linhas = ANDROID_YML.split('\n')
+    const inicio = linhas.findIndex((linha) => linha === 'on:')
+    expect(inicio, 'não achei o bloco `on:`').toBeGreaterThan(-1)
+    const fim = linhas.findIndex((linha, i) => i > inicio && /^\S/.test(linha))
+    const gatilhos = linhas
+      .slice(inicio + 1, fim)
+      .filter((linha) => /^ {2}\w+:/.test(linha))
+      .map((linha) => linha.trim())
+
+    expect(gatilhos).toEqual(['workflow_dispatch:', 'push:'])
+  })
+
+  it('agrupa por trabalho, e o release não é cancelável', () => {
+    /*
+     * Os dois trabalhos querem coisas opostas: o guarda deve morrer quando
+     * chega commit novo, o pacote nunca. Num grupo único do workflow, um push
+     * mataria um release em andamento na mesma referência.
      */
     expect(ANDROID_YML, 'concurrency no topo agrupa os dois trabalhos juntos').not.toMatch(
       /^concurrency:/m,
     )
-
     // Até o fim da linha, não `\S+`: `${{ github.ref }}` tem espaços dentro, e
-    // com `\S+` a captura parava no `${{` — o assert abaixo passava sempre, e o
-    // mutante que recoloca o tipo de evento no grupo sobrevivia.
+    // com `\S+` a captura parava no `${{` — o assert ficava vazio e o mutante
+    // sobrevivia.
     const grupos = [...ANDROID_YML.matchAll(/group:\s*(android-.*)/g)].map((m) => m[1].trim())
-    expect(grupos).toHaveLength(2)
-    for (const grupo of grupos) {
-      expect(grupo, `${grupo} agrupa por evento e deixa o duplicado passar`).not.toContain(
-        'event_name',
-      )
-    }
+    expect(grupos).toEqual([
+      'android-pacote-${{ github.ref }}',
+      'android-compilar-${{ github.ref }}',
+    ])
 
-    // E o release não morre no meio por causa de um push que chegou depois.
     const doPacote = ANDROID_YML.slice(ANDROID_YML.indexOf('group: android-pacote'))
     expect(doPacote.split('\n')[1]).toContain('cancel-in-progress: false')
   })
@@ -182,9 +205,8 @@ describe('o workflow do Android', () => {
   it('o pacote é manual e a compilação é automática', () => {
     // Gerar um AAB assinado é decidir publicar. A compilação do nativo é
     // guarda, e guarda que depende de alguém lembrar não é guarda.
-    expect(ANDROID_YML).toContain('workflow_dispatch')
     expect(ANDROID_YML).toMatch(/if: github\.event_name == 'workflow_dispatch'/)
-    expect(ANDROID_YML).toMatch(/if: github\.event_name != 'workflow_dispatch'/)
+    expect(ANDROID_YML).toMatch(/if: github\.event_name == 'push'/)
   })
 })
 

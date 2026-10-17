@@ -69,20 +69,10 @@ on:
         description: 'Nome da versão (vazio = o `version` do package.json)'
         required: false
         default: ''
+  # Um gatilho só, de propósito. Ver a nota abaixo.
   push:
     branches:
       - '**'
-    # A lista aparece duas vezes porque o GitHub Actions **não** suporta anchor
-    # de YAML (`&nativo` / `*nativo`): o parser recusa o arquivo. Repetir é a
-    # forma que funciona; mexer numa lista pede mexer na outra.
-    paths:
-      - 'android/**'
-      - 'native/**'
-      - 'capacitor.config.ts'
-      - 'mobile/**'
-      - 'package-lock.json'
-      - '.github/workflows/android.yml'
-  pull_request:
     paths:
       - 'android/**'
       - 'native/**'
@@ -91,19 +81,36 @@ on:
       - 'package-lock.json'
       - '.github/workflows/android.yml'
 
+# ── Por que não tem `pull_request` ──────────────────────────────────────────
+#
+# Tinha, e duplicava: branch com PR aberto dispara `push` **e** `pull_request`
+# no mesmo commit, e o mesmo debug compilou em dois runners.
+#
+# A primeira tentativa de arrumar foi `concurrency` por trabalho, para os dois
+# runs caírem no mesmo grupo e um cancelar o outro. **Não funcionou, e vale
+# saber por quê:** `github.ref` não é a mesma coisa nos dois eventos — no push é
+# `refs/heads/<branch>`, no pull_request é `refs/pull/<n>/merge`. Grupos
+# diferentes, nada se cancelou. Dá para costurar com
+# `${{ github.head_ref || github.ref_name }}`, mas aí quem é cancelado depende
+# de qual evento chegou primeiro, e no dia em que o run do PR perde a corrida o
+# check dele aparece cancelado — que não é verde e segura o merge.
+#
+# Então: só `push`, em todo branch. Conferido no PR #1, com os dois runs no ar:
+# os jobs do run de `push` **já aparecem como check do pull request**. O
+# `pull_request` não acrescentava cobertura nenhuma; acrescentava um build.
+#
+# O que se perde é PR vindo de fork, que o `push` não alcança. Este repositório
+# nunca teve um, e não tem outra verificação de CI que o alcance — quando tiver
+# colaborador de fora, é aqui que isso volta, com `pull_request` e o `paths`
+# repetido (o GitHub Actions **não** suporta anchor de YAML: `&nativo`/`*nativo`
+# faz o parser recusar o arquivo).
+
 # O agrupamento é **por trabalho**, não do workflow inteiro, porque os dois
-# trabalhos daqui querem coisas opostas.
-#
-# Visto acontecendo: um push num branch que tem PR aberto dispara `push` **e**
-# `pull_request` no mesmo commit — dois runs idênticos. Com o tipo de evento no
-# grupo, eles não se cancelam, e o mesmo debug compila duas vezes; sem o tipo
-# de evento num grupo único do workflow, um push cancelaria um release em
-# andamento na mesma referência, e o pacote morreria no meio sem motivo
-# aparente.
-#
-# Então: o guarda (`compilar`) agrupa sem o tipo de evento e se cancela — só o
-# commit mais recente importa, e o run duplicado morre em segundos. O pacote
-# (`pacote`) tem grupo próprio e **nunca** é cancelado. Ver cada trabalho.
+# querem coisas opostas: o guarda deve ser cancelado por um push mais novo (só
+# a cabeça do branch interessa) e o pacote **nunca** pode ser cancelado. Num
+# grupo único do workflow, um push mataria um release em andamento na mesma
+# referência, e o pacote morreria no meio sem motivo aparente. Ver cada
+# trabalho.
 
 # O mínimo. Este workflow lê o código e não escreve nada no repositório.
 permissions:
@@ -295,14 +302,11 @@ jobs:
     # que não existia, e ninguém soube porque nada daquilo era compilado. Build
     # de debug não precisa de chave nenhuma — o Android assina com a chave de
     # depuração que ele mesmo gera.
-    if: github.event_name != 'workflow_dispatch'
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    # Sem o tipo de evento no grupo, de propósito: um push num branch com PR
-    # aberto dispara `push` e `pull_request` no mesmo commit, e aqui os dois
-    # cairiam no mesmo grupo — um cancela o outro e o nativo compila uma vez.
-    # Um push novo também cancela o guarda do commit anterior, que é o que se
-    # quer: só a cabeça do branch interessa.
+    # Um push novo cancela o guarda do commit anterior no mesmo branch, que é o
+    # que se quer: o que interessa é a cabeça compilar, não o histórico.
     concurrency:
       group: android-compilar-${{ github.ref }}
       cancel-in-progress: true

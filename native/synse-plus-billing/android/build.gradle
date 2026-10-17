@@ -1,0 +1,86 @@
+/*
+ * O módulo Android do plugin da cobrança.
+ *
+ * Mesmo formato do `synse-workout-activity`, e pelo mesmo motivo registrado
+ * lá: sem este arquivo o Gradle recusa o build com "No variants exist", e um
+ * `cap sync` passa sem ele porque só copia arquivo.
+ *
+ * ── A versão do Play Billing é fixada aqui, e isto é exceção ────────────────
+ *
+ * As outras versões vêm do projeto pai, para o plugin não brigar com o app a
+ * cada atualização do Capacitor. O Play Billing é diferente: a API muda entre
+ * majors de um jeito que **quebra compilação** — `queryProductDetailsAsync`
+ * trocou de assinatura na 8, `SkuDetails` saiu na 5 —, e este código foi
+ * escrito contra a 7. Deixar flutuar aqui seria combinar um build vermelho
+ * para o dia de uma atualização transitiva.
+ */
+ext {
+    capacitorVersion = System.getenv('CAPACITOR_VERSION')
+    androidxCoreVersion = project.hasProperty('androidxCoreVersion') ? rootProject.ext.androidxCoreVersion : '1.17.0'
+    androidxAppCompatVersion = project.hasProperty('androidxAppCompatVersion') ? rootProject.ext.androidxAppCompatVersion : '1.7.1'
+    playBillingVersion = '7.1.1'
+}
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.13.0'
+        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.21'
+    }
+}
+
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+android {
+    namespace = "com.synse.billing"
+    compileSdk = project.hasProperty('compileSdkVersion') ? rootProject.ext.compileSdkVersion : 36
+
+    defaultConfig {
+        minSdkVersion 26
+        targetSdkVersion project.hasProperty('targetSdkVersion') ? rootProject.ext.targetSdkVersion : 36
+        versionCode 1
+        versionName "0.1.0"
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+
+    kotlinOptions {
+        jvmTarget = '21'
+    }
+
+    lintOptions {
+        abortOnError false
+    }
+}
+
+repositories {
+    google()
+    mavenCentral()
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation project(':capacitor-android')
+    implementation "androidx.core:core-ktx:$androidxCoreVersion"
+    /*
+     * O `appcompat` não é enfeite aqui.
+     *
+     * `Plugin.getActivity()` do Capacitor devolve `AppCompatActivity`, e sem
+     * esta dependência o Kotlin não consegue sequer ler a hierarquia da
+     * classe: o compilador reclama de "Cannot access class" **e** de tipo
+     * incompatível ao passar a Activity para `launchBillingFlow`, que pede
+     * `android.app.Activity` — da qual `AppCompatActivity` descende. Dois
+     * erros, uma causa.
+     *
+     * Achado compilando o módulo de verdade; nenhum teste de contrato pegaria.
+     */
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "com.android.billingclient:billing-ktx:$playBillingVersion"
+}

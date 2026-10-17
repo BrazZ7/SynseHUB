@@ -50,6 +50,7 @@
     "@radix-ui/react-tooltip": "^1.1.6",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.47.10",
+    "@synse/plus-billing": "file:native/synse-plus-billing",
     "@synse/workout-activity": "file:native/synse-workout-activity",
     "@tanstack/react-query": "^5.62.11",
     "class-variance-authority": "^0.7.1",

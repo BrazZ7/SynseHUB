@@ -405,8 +405,19 @@ O caminho 2 foi escolhido, e as três primeiras camadas estão de pé:
 | Trava da compra dupla | Pronta: recusa comprar quando já há assinatura viva, dizendo onde ela vive |
 | O app se identifica ao servidor | Pronto: `appendUserAgent: 'SynseApp/1'`, lido no servidor |
 | Decisão de o que oferecer | Pronta: dentro do app, **nunca** o Mercado Pago |
-| Plugin nativo de IAP e Play Billing | **Não existe** |
-| Verificação de recibo nas lojas | **Não existe** |
+| Plugin nativo de IAP e Play Billing | **Escrito.** O Kotlin compila contra o Play Billing 7.1.1 e entra no APK; o Swift nunca foi compilado |
+| Verificação de recibo nas lojas | **Não existe** — é o que falta para o botão poder ser ligado |
+
+> **O plugin está instalado e não é usado por ninguém.** `LOJA_DISPONIVEL`
+> continua `false`, de propósito: código escrito não é código verificado, e
+> nenhuma compra deste plugin jamais foi executada — não há conta de loja, não
+> há produto cadastrado e não há aparelho. O que existe é um plugin que
+> compila, com teste que confere que os três lados (TypeScript, Kotlin, Swift)
+> descrevem a mesma interface.
+>
+> Para ligar o botão falta, em ordem: a verificação de recibo no servidor, as
+> notificações das duas lojas, os produtos cadastrados nos dois painéis, e
+> **ver uma compra funcionar num aparelho**.
 
 **E isso já libera publicar.** Enquanto a cobrança da loja não existir, o app
 não oferece compra nenhuma: sem caminho de compra não há infração, e a venda

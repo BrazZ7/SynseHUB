@@ -320,33 +320,98 @@ real** numa captura.
 
 ---
 
-## A decisão que ainda está em aberto, e ela muda código
+## Pagamento dentro do app — auditado em 17/10/2026
 
-**Se a assinatura do aluno for vendida dentro do app, Apple e Google exigem a
-compra pela loja delas, com a comissão que vem junto.** Se a compra for fora —
-PIX pelo navegador — não pode haver botão, link nem menção a pagamento dentro do
-app, e as duas lojas verificam isso.
+Conferido tela por tela no app do aluno. **São dois fluxos de pagamento, e eles
+têm respostas opostas.**
 
-**Atenção, porque isto mudou e eu tinha escrito errado:** o
-`/api/health?deep=1` de produção mostra `paymentProvider: mercadopago`,
-configurado, com token e segredo de webhook válidos. Não é `mock`. Então a
-pergunta das lojas **não é hipotética**.
+### A) Mensalidade da academia — pode ficar como está
 
-Antes de enviar, responda com honestidade: **um aluno consegue pagar
-mensalidade ou assinatura de dentro do app?** O app é um invólucro do site, e
-para as lojas não existe essa distinção — webview conta como dentro do app.
+`/app/finance` → `StudentPixPanel` → PIX de uma cobrança aberta.
 
-- **Se consegue** → Apple e Google exigem a compra pela loja delas, com a
-  comissão. Publicar sem isso é recusa, e depois de publicado é suspensão.
-- **Se não consegue** (a cobrança é combinada fora, por PIX ou pelo painel da
-  academia) → não pode haver botão, link nem menção a pagamento nas telas do
-  aluno. As duas lojas verificam isso na revisão.
+Isto **não** cai na regra de compra dentro do app, e a razão é simples: o que a
+pessoa está pagando é o acesso à academia — um serviço físico, consumido fora do
+app. As duas lojas abrem exceção explícita para isso; é o mesmo caso de pagar
+academia, estacionamento ou aluguel por aplicativo. Nenhuma comissão, nenhuma
+mudança.
 
-Isto precisa ser conferido tela por tela do app do aluno antes do envio, e é a
-única coisa deste documento que pode exigir mudança de código. Ver
-`docs/pre-producao.md`.
+O código já está do lado certo em duas coisas que importam: o botão não aparece
+quando o provedor não faz PIX ou está simulado, e o status só muda pelo webhook
+— nunca pelo navegador.
 
----
+### B) Synse+ — **não** pode ficar como está
+
+| | |
+| --- | --- |
+| Onde | `/app/synse` → `AssinarPlusButton` → `assinarPlusAction` |
+| O que faz | cria assinatura recorrente de **R$ 29/mês** no cartão, no Mercado Pago, e manda a pessoa para o checkout dele |
+| O que destrava | **só conteúdo digital dentro do app**: programas guiados, biblioteca de receitas, 6 desafios por ciclo em vez de 1, 36 meses de histórico em vez de 3 |
+
+Conteúdo digital destravado dentro do app é exatamente o que as duas lojas
+reservam para a cobrança **delas**. E não é um botão só — **oito pontos do app
+empurram para essa página**:
+
+| Tela | Onde |
+| --- | --- |
+| Hoje (card em destaque) | `app/page.tsx:491` |
+| Desafios | `app/challenges/page.tsx:195` |
+| Histórico de corrida | `app/run/history/page.tsx:111` e `:132` |
+| Análise do progresso | `app/progress/analise/page.tsx:228` |
+| Amigos | `app/friends/page.tsx:44` |
+| Corpo | `app/corpo/page.tsx:167` |
+| Seletor de período do corpo | `features/synse-body/period-selector.tsx:50` |
+| Vitrine de conteúdo | `features/content/vitrine.tsx:79` |
+
+Tirar o botão de assinar e deixar os oito caminhos não resolve: a regra das
+lojas alcança também **levar** à compra, não só efetuá-la.
+
+> **O lado da academia está limpo.** O hub não vende nada dentro do app — a
+> taxa da plataforma sai do recebível da academia, não é uma compra. Conferido.
+
+### A boa notícia, e ela é de junho deste ano
+
+O Brasil é um dos poucos lugares onde isto deixou de ser proibido — mas **não
+ficou de graça**:
+
+**Apple**, desde **18/06/2026** (iOS 26.5, por acordo com o CADE): dá para
+vender por outra plataforma de pagamento dentro do app. Duas condições que
+mudam o projeto: a opção externa tem de aparecer **lado a lado** com a da
+Apple, e a Apple continua cobrando comissão de serviços de loja — **15%**, ou
+**10%** para quem está no programa de pequenos negócios e para assinaturas
+depois do primeiro ano. Pela compra dela: 10% (ou 21%) **mais 5%** de
+processamento.
+
+**Google Play**: o Brasil **está** na lista oficial de países onde app que não
+é jogo pode oferecer faturamento alternativo — mas a página da Google diz
+"**além do** sistema de faturamento do Google Play", não em vez dele. Ela não
+diz como fica a taxa no Brasil, e as fontes de terceiros se contradizem (uma
+afirma que a cobrança alternativa dentro do app só chega ao Brasil em setembro
+de 2027). **Isto precisa ser confirmado no próprio Play Console**, com a conta
+criada — não dá para resolver daqui.
+
+### Faça a conta antes de decidir
+
+R$ 29 com 15% de comissão da Apple **mais** a taxa do Mercado Pago não são
+R$ 29. Com 10%, muda de novo. O preço do Synse+ foi escolhido sem essas
+comissões na conta, e é uma decisão comercial — não de código.
+
+### Os três caminhos
+
+1. **Publicar sem vender o Synse+ dentro do app.** Mantém o cadeado e a tabela
+   comparativa, tira o caminho de compra. Menor mudança, comissão zero, pior
+   conversão — e atenção: sem o direito de link externo, nem um "assine no
+   site" pode aparecer.
+2. **Oferecer a cobrança da loja ao lado do Mercado Pago**, que é o que as duas
+   exigem hoje no Brasil. Correto e completo, e de longe o maior trabalho:
+   integrar IAP e Play Billing, validar recibo, e conciliar duas origens de
+   assinatura contra `assinatura_plus` sem o webhook de uma apagar o estado da
+   outra.
+3. **Usar só o pagamento externo**, nos termos novos. Exige credenciar-se nos
+   dois programas, e a redação da Google ("além do") sugere que sozinho pode
+   não ser permitido.
+
+**Isto é decisão sua, não minha** — mexe em preço e em receita. Diga qual
+caminho e eu implemento.
 
 ## Resumo em uma tabela
 

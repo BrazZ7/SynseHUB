@@ -91,15 +91,19 @@ on:
       - 'package-lock.json'
       - '.github/workflows/android.yml'
 
-# Um build por referência **e por tipo de evento**.
+# O agrupamento é **por trabalho**, não do workflow inteiro, porque os dois
+# trabalhos daqui querem coisas opostas.
 #
-# O tipo de evento no grupo não é detalhe: sem ele, um push cancelaria um
-# release em andamento na mesma referência. Você clica em "Run workflow",
-# empurra um commit enquanto ele compila, e o pacote morre no meio sem motivo
+# Visto acontecendo: um push num branch que tem PR aberto dispara `push` **e**
+# `pull_request` no mesmo commit — dois runs idênticos. Com o tipo de evento no
+# grupo, eles não se cancelam, e o mesmo debug compila duas vezes; sem o tipo
+# de evento num grupo único do workflow, um push cancelaria um release em
+# andamento na mesma referência, e o pacote morreria no meio sem motivo
 # aparente.
-concurrency:
-  group: android-${{ github.ref }}-${{ github.event_name }}
-  cancel-in-progress: true
+#
+# Então: o guarda (`compilar`) agrupa sem o tipo de evento e se cancela — só o
+# commit mais recente importa, e o run duplicado morre em segundos. O pacote
+# (`pacote`) tem grupo próprio e **nunca** é cancelado. Ver cada trabalho.
 
 # O mínimo. Este workflow lê o código e não escreve nada no repositório.
 permissions:
@@ -112,6 +116,11 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Um release de cada vez por referência, e **nunca** cancelado: nada que
+    # chegue depois tem o direito de matar um pacote de loja no meio.
+    concurrency:
+      group: android-pacote-${{ github.ref }}
+      cancel-in-progress: false
 
     steps:
       - uses: actions/checkout@v4
@@ -289,6 +298,14 @@ jobs:
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    # Sem o tipo de evento no grupo, de propósito: um push num branch com PR
+    # aberto dispara `push` e `pull_request` no mesmo commit, e aqui os dois
+    # cairiam no mesmo grupo — um cancela o outro e o nativo compila uma vez.
+    # Um push novo também cancela o guarda do commit anterior, que é o que se
+    # quer: só a cabeça do branch interessa.
+    concurrency:
+      group: android-compilar-${{ github.ref }}
+      cancel-in-progress: true
 
     steps:
       - uses: actions/checkout@v4

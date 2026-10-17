@@ -151,6 +151,34 @@ describe('o workflow do Android', () => {
     expect(linhas.filter((linha) => /^\s*[\w-]+:\s*\*\w+\s*$/.test(linha))).toEqual([])
   })
 
+  it('não compila o mesmo commit duas vezes, nem cancela um release', () => {
+    /*
+     * Visto no primeiro push deste arquivo: um branch com PR aberto dispara
+     * `push` **e** `pull_request` no mesmo commit, e saíram dois runs
+     * idênticos. O agrupamento é por trabalho justamente por isso — e nenhum
+     * dos dois grupos pode carregar o tipo de evento, que foi o que permitiu a
+     * duplicata.
+     */
+    expect(ANDROID_YML, 'concurrency no topo agrupa os dois trabalhos juntos').not.toMatch(
+      /^concurrency:/m,
+    )
+
+    // Até o fim da linha, não `\S+`: `${{ github.ref }}` tem espaços dentro, e
+    // com `\S+` a captura parava no `${{` — o assert abaixo passava sempre, e o
+    // mutante que recoloca o tipo de evento no grupo sobrevivia.
+    const grupos = [...ANDROID_YML.matchAll(/group:\s*(android-.*)/g)].map((m) => m[1].trim())
+    expect(grupos).toHaveLength(2)
+    for (const grupo of grupos) {
+      expect(grupo, `${grupo} agrupa por evento e deixa o duplicado passar`).not.toContain(
+        'event_name',
+      )
+    }
+
+    // E o release não morre no meio por causa de um push que chegou depois.
+    const doPacote = ANDROID_YML.slice(ANDROID_YML.indexOf('group: android-pacote'))
+    expect(doPacote.split('\n')[1]).toContain('cancel-in-progress: false')
+  })
+
   it('o pacote é manual e a compilação é automática', () => {
     // Gerar um AAB assinado é decidir publicar. A compilação do nativo é
     // guarda, e guarda que depende de alguém lembrar não é guarda.

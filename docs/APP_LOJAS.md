@@ -20,7 +20,7 @@ operacional.
 | Projeto iOS | Dois targets (app + extensão da Live Activity) e scheme compartilhado. **Nunca compilado** — o build é na CI, ver abaixo |
 | Build do iOS sem Mac | `codemagic.yaml`: compila, assina e sobe ao TestFlight num Mac alugado por minuto |
 | Build do Android | `.github/workflows/android.yml`: AAB e APK assinados, com a assinatura conferida antes de publicar o artefato |
-| Guarda do código nativo | O mesmo workflow compila o debug a cada push que toca `android/`, `native/` ou o Capacitor |
+| Guarda do código nativo | O mesmo workflow compila o debug a cada push que toca `android/`, `native/` ou o Capacitor. **Já rodou verde** num runner do GitHub |
 
 ## Gerar a chave de assinatura
 
@@ -185,6 +185,13 @@ que não existia, e ninguém soube porque aquele código nunca era compilado. Co
 guarda, código nativo que não compila aparece no push, não na véspera de
 publicar.
 
+**Um commit, uma compilação.** Branch com PR aberto dispara `push` e
+`pull_request` no mesmo commit — e no primeiro push deste arquivo saíram dois
+runs idênticos, os dois verdes, compilando o mesmo debug em dois runners. O agrupamento do `concurrency` é por trabalho justamente por
+isso: o guarda se cancela (só a cabeça do branch interessa, e o run duplicado
+morre em segundos), e o `pacote` tem grupo próprio que **nunca** é cancelado,
+para um push que chegue no meio não matar um pacote de loja.
+
 **O `versionCode`** sai do contador de execuções do Actions, que nunca repete —
 é o que a Play exige. Se algum dia o contador ficar atrás do que já subiu
 (recriar o workflow zera), defina a variável `ANDROID_VERSION_CODE_OFFSET` em
@@ -235,8 +242,9 @@ está em aberto, e ela muda o que precisa ser construído. Ver `docs/pre-produca
   Activity aparece de verdade na Dynamic Island, ninguém viu ainda.
 - **App Links não foi verificado de ponta a ponta**, porque depende de um app
   publicado e de uma digital real.
-- **Os workflows nunca rodaram num runner do GitHub nem num Mac do Codemagic.**
-  Do Android, os comandos foram todos executados aqui, um por um, com os
-  mesmos pacotes do SDK e a mesma conferência de assinatura — o que não foi
-  exercitado é o runner: o `base64 -d` do segredo, o cache e o artefato. Do
-  iOS, nada: nem build, nem assinatura.
+- **O trabalho `pacote` nunca rodou.** O guarda rodou: `compilar` passou num
+  runner do GitHub em 2m47s, com `npm ci`, pacotes do SDK, `cap sync` e o build
+  de debug verdes. O que o runner ainda não exercitou é o caminho da chave — o
+  `base64 -d` do segredo, a assinatura e o artefato —, porque isso depende dos
+  quatro segredos, que são seus. O build de release em si rodou aqui, com chave
+  descartável, e a conferência de assinatura passou nos dois pacotes.

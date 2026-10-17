@@ -282,8 +282,9 @@ redefine — 0026 → 0047 → 0057 → 0059 para `log_workout_session` e
 
 | Item | Natureza | Próxima ação |
 | --- | --- | --- |
-| Migrations 0053–0056 | BLOQUEIO (acesso ao Supabase) | Colar no SQL editor, na ordem; `/api/health?deep=1` confirma |
+| Migrations 0053–0060 | BLOQUEIO (acesso ao Supabase) | Colar no SQL editor, na ordem; `/api/health?deep=1` confirma |
 | Build do iOS | Falta rodar | `codemagic.yaml`; ver "O iOS, depois de 17/10" |
+| Pacote do Android | Falta os quatro segredos | Guarda já roda verde na CI; ver "O Android, depois de 17/10" |
 | Validação em Android | BLOQUEIO (aparelho) | `WorkoutService` roda; falta ver em aparelho |
 | Medição em rede móvel | BLOQUEIO (aparelho) | Sem isto, não se afirma tempo de carregamento |
 | Revisão do Codex | BLOQUEIO (binário ausente) | `codex login status` quando existir; nenhum commit desta etapa foi revisado |
@@ -350,6 +351,55 @@ identificador `Synse*` usado no código nativo tem de ser declarado nele.**
 iPhone, depois os botões. Escrever os botões antes de ver o cartão é escrever
 contra uma suposição — e o App Group, que eles exigem, faz a assinatura falhar
 enquanto a capacidade não existir no portal da Apple.
+
+## O Android, depois de 17/10
+
+O Android não tinha esteira nenhuma, e o release nunca tinha sido compilado por
+ninguém além de mim, à mão. `.github/workflows/android.yml` tem dois trabalhos:
+`pacote`, só no botão, que gera o AAB e o APK assinados; e `compilar`,
+automático, que compila o debug a cada push que toque o nativo.
+
+| Item | Onde | Estado |
+| --- | --- | --- |
+| Build de release, assinado | `android/app/build.gradle` + workflow | **Rodou aqui**: `versionCode 42`, assinatura v2 conferida nos dois pacotes |
+| Guarda do código nativo | mesmo workflow, trabalho `compilar` | **Rodou verde num runner do GitHub**, 2m47s |
+| Trabalho `pacote` | mesmo workflow | Nunca rodou: depende dos quatro segredos, que são seus |
+| 24 testes vigiando os dois workflows | `tests/unit/esteira/workflows.test.ts` | Automatizado |
+
+### O defeito que o controle mostrou
+
+Rodando o mesmo build **sem as variáveis da chave**, o Gradle termina em
+**verde**: imprime um `AVISO:` no log e entrega um arquivo chamado
+`app-release-unsigned.apk`. É exatamente o pacote que a Play Console recusa
+depois, longe daqui. Por isso o workflow para quando o segredo falta, confere a
+assinatura dos dois pacotes antes de publicar o artefato, e exige que o arquivo
+exista pelo nome que ele tem **quando é assinado**.
+
+### A duplicata, e a correção que não funcionou
+
+O primeiro push do workflow gerou **dois** runs do mesmo commit, os dois verdes:
+branch com PR aberto dispara `push` e `pull_request` juntos.
+
+Agrupar os dois no mesmo `concurrency` não resolveu, e o motivo é instrutivo:
+`github.ref` é `refs/heads/<branch>` no push e `refs/pull/<n>/merge` no
+pull_request — grupos diferentes, nada para cancelar. O runner mostrou os dois
+jobs em paralelo, cada um no seu runner. O que ficou foi tirar o gatilho de
+`pull_request`: conferido no PR #1 que os jobs do run de `push` já aparecem como
+check do pull request, então nada de cobertura se perdeu. O push seguinte gerou
+um run só, verde em 1m37s.
+
+Fica registrado porque é a forma do defeito que mais aparece neste projeto:
+**algo verde que não faz o que diz.** Duas vezes no mesmo arquivo — o pacote sem
+assinatura e o build em dobro —, e nos dois casos só o que roda mostrou.
+
+### O que continua aberto
+
+| Item | Natureza | Próxima ação |
+| --- | --- | --- |
+| Os quatro segredos | DEPENDE DE VOCÊ | Gerar o `.jks`, `base64 -w 0`, colar em *Settings → Secrets → Actions* |
+| Conta Play Console | DEPENDE DE VOCÊ | US$ 25, uma vez |
+| Primeiro envio à Play | NÃO AUTOMATIZÁVEL | A Play exige o painel na primeira versão; o passo está escrito e desligado no fim do workflow |
+| Notificação em aparelho | BLOQUEIO (aparelho) | `WorkoutService` compila; ninguém viu a notificação |
 
 ## Os 26 aceites, um por um
 
@@ -548,7 +598,10 @@ em verde.
 
 ### 5. Resultados dos testes, incluindo falhas
 
-- **Final: 184 arquivos, 2243 testes, 0 pulados, 0 falhas.** Build: 101 rotas.
+- **Final: 186 arquivos, 2282 testes, 0 pulados, 0 falhas.** Build: 101 rotas.
+  Eram 184 arquivos e 2243 testes quando esta seção foi escrita; os dois
+  arquivos a mais são as esteiras de build — `tests/unit/ios/extensao-do-widget.test.ts`
+  (15) e `tests/unit/esteira/workflows.test.ts` (24).
 - **Falhas reais durante o trabalho**, todas corrigidas:
   - `tests/db/treino-ativo.test.ts` pegou a 0057 apagando a regra do treino
     pendurado de oito horas que a 0047 havia acrescentado.
@@ -567,6 +620,13 @@ em verde.
 
   Por arquivo: escopo 6, migrations 0057/0058 9, desfazer no cliente 11,
   duas abas e 0059 7, eventos 8, janelas 6, share-card 5, portas 4, marco 1.
+- **Nas esteiras, 23 mutações depois disso, com um sobrevivente real.**
+  `/group:\s*(android-\S+)/` parava a captura no `${{` — `${{ github.ref }}`
+  tem espaços dentro —, então o assert que proibia o tipo de evento no grupo
+  passava sempre. O mutante que o recolocava sobreviveu e entregou o assert
+  vazio; com a captura até o fim da linha, morre. Um segundo "sobrevivente" era
+  erro do meu contador de mortes, que lia `1 failed` em duas linhas da saída do
+  vitest — o teste estava certo.
 
 ### 6. Evidências visuais sem dados pessoais
 

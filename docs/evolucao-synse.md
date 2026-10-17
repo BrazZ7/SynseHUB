@@ -283,44 +283,73 @@ redefine — 0026 → 0047 → 0057 → 0059 para `log_workout_session` e
 | Item | Natureza | Próxima ação |
 | --- | --- | --- |
 | Migrations 0053–0056 | BLOQUEIO (acesso ao Supabase) | Colar no SQL editor, na ordem; `/api/health?deep=1` confirma |
-| Target de Widget Extension no iOS | BLOQUEIO (macOS + Xcode) | Ver "O que falta no iOS", abaixo |
+| Build do iOS | Falta rodar | `codemagic.yaml`; ver "O iOS, depois de 17/10" |
 | Validação em Android | BLOQUEIO (aparelho) | `WorkoutService` roda; falta ver em aparelho |
 | Medição em rede móvel | BLOQUEIO (aparelho) | Sem isto, não se afirma tempo de carregamento |
 | Revisão do Codex | BLOQUEIO (binário ausente) | `codex login status` quando existir; nenhum commit desta etapa foi revisado |
 
-## O que falta no iOS, exatamente
+## O iOS, depois de 17/10
 
-**FATO.** `ios/App/App/Info.plist` já declara `NSSupportsLiveActivities` e
-`NSSupportsLiveActivitiesFrequentUpdates`. O Swift da Live Activity existe e
-está completo: `native/synse-workout-activity/ios/Sources/` tem o `Widget` com
-`ActivityConfiguration` (229 linhas), o plugin Capacitor (157) e os atributos
-(28). `ios/App/App.xcodeproj/project.pbxproj` tem **um** target de aplicativo
-(`App`) e nenhuma ocorrência de `WidgetExtension` nem de
-`com.apple.widgetkit-extension`.
+O target da extensão **foi criado**, de dentro deste contêiner Linux, e o build
+na App Store Connect passou a ter caminho sem Mac. O que mudou e o que continua
+aberto:
 
-Live Activity exige uma extensão própria. Sem o target, o Swift compila para
-nada: não há como a atividade aparecer na tela bloqueada.
+### O que foi feito
 
-**Por que não foi criado aqui.** O `project.pbxproj` é um grafo de objetos com
-identificadores de 24 dígitos hexadecimais e referências cruzadas entre
-`PBXNativeTarget`, `PBXBuildFile`, `XCConfigurationList` e os
-`embedAppExtensions`. Editá-lo à mão sem Xcode para validar produziria, no
-melhor caso, um projeto que abre com erro — e aí o aplicativo inteiro para de
-compilar, não só o widget. Um projeto quebrado é pior que um widget ausente.
+| Item | Onde |
+| --- | --- |
+| Target `SynseWorkoutWidget`, tipo app-extension, piso iOS 16.1 | `scripts/ios/criar-target-do-widget.rb` |
+| `@main` da extensão, que não existia | `ios/App/SynseWorkoutWidget/SynseWorkoutWidgetBundle.swift` |
+| `Info.plist` com `NSExtensionPointIdentifier` | `ios/App/SynseWorkoutWidget/Info.plist` |
+| Extensão embutida no app (PlugIns) e dependência de build | idem script |
+| Scheme `App` compartilhado, que o projeto não tinha | `ios/App/App.xcodeproj/xcshareddata/xcschemes/` |
+| Build, assinatura e envio ao TestFlight | `codemagic.yaml` |
+| 15 testes vigiando a descrição do projeto | `tests/unit/ios/extensao-do-widget.test.ts` |
 
-**Os passos, para quem tiver macOS:**
+O script é idempotente e roda a cada build na CI: o widget não depende de
+alguém lembrar, e continua de pé se alguém regenerar o projeto do Capacitor.
 
-1. Xcode → File → New → Target → **Widget Extension**, nome
-   `SynseWorkoutWidget`, com "Include Live Activity" marcado.
-2. Apagar os arquivos de exemplo do target e adicionar, por referência, os três
-   de `native/synse-workout-activity/ios/Sources/`.
-3. `SynseWorkoutAttributes.swift` precisa estar nos **dois** targets (o
-   aplicativo e a extensão): é o contrato entre eles.
-4. App Group igual nos dois, para o plugin e o widget se encontrarem.
-5. Conferir que o `Info.plist` da extensão tem
-   `NSExtensionPointIdentifier = com.apple.widgetkit-extension`.
-6. Rodar em aparelho físico. Live Activity não aparece no simulador de forma
-   confiável, e "funciona com a tela bloqueada" é afirmação que exige aparelho.
+**Por que a gem `xcodeproj` e não edição à mão:** `project.pbxproj` é um grafo
+de objetos com identificadores de 24 dígitos e referências cruzadas. A gem
+gera os identificadores e escreve o arquivo no formato que o Xcode escreveria.
+Editar à mão produz, no melhor caso, um projeto que abre com erro — e aí o
+aplicativo inteiro para de compilar, não só o widget.
+
+### Três defeitos que apareceram ao descrever o build
+
+Nenhum deles era visível antes, e a razão é a mesma para os três: **nada neste
+código nativo jamais foi compilado.**
+
+1. **`SynseWorkoutIntent` não existe.** `BotoesDaAtividade` o chamava em quatro
+   lugares — pular descanso, +30 s, iniciar série, concluir série — e não há
+   nenhuma implementação no repositório. O arquivo não compilava. Os botões
+   foram retirados desta etapa, com o que falta escrito no lugar deles; a Live
+   Activity continua inteira (cartão, Dynamic Island, cronômetro).
+2. **`SynseWorkoutAttributes` sem `@available`.** O tipo conforma
+   `ActivityAttributes`, que só existe no iOS 16.1, e o arquivo compila também
+   no alvo do plugin, cujo piso é o do app: iOS 15. O Swift recusa.
+3. **Piso de plataforma do pacote maior que o do app.** `Package.swift` do
+   plugin declarava `.iOS(.v16)`; o `CapApp-SPM` que o Capacitor gera declara
+   `.iOS(.v15)`. O SPM recusa dependência com plataforma mais alta que a do
+   dependente, e o build morria antes de compilar qualquer linha.
+
+Os três têm teste agora. O do intent é o mais útil e o mais estreito: **todo
+identificador `Synse*` usado no código nativo tem de ser declarado nele.**
+
+### O que continua aberto
+
+| Item | Natureza | Próxima ação |
+| --- | --- | --- |
+| O build nunca rodou | Falta a CI rodar | Ligar o repositório no Codemagic e disparar o primeiro build |
+| Live Activity nunca foi vista | BLOQUEIO (iPhone) | TestFlight num iPhone, seu ou de quem você convidar |
+| Botões da Live Activity | NÃO IMPLEMENTADO | `LiveActivityIntent` + App Group `group.br.com.synse.app` criado no portal e habilitado nos dois App IDs |
+| Widget de tela inicial | NÃO IMPLEMENTADO | Entra no `WidgetBundle`, uma linha por widget |
+| Simulador e crash nativo | BLOQUEIO (macOS) | Mac por hora, quando precisar — não bloqueia publicar |
+
+**A ordem certa é esta:** primeiro um build verde, depois o cartão visto num
+iPhone, depois os botões. Escrever os botões antes de ver o cartão é escrever
+contra uma suposição — e o App Group, que eles exigem, faz a assinatura falhar
+enquanto a capacidade não existir no portal da Apple.
 
 ## Os 26 aceites, um por um
 
@@ -357,7 +386,7 @@ está coberto é a regra por baixo dela.
 | --- | --- | --- |
 | 16 | Ações chegam à sessão correta | `plugin-contract.test.ts` cobre o contrato; **nenhuma ação nativa chega ao servidor hoje** |
 | 17 | Comando obsoleto não altera outra série | Mesma situação do 16 |
-| 18 | Tela bloqueada e segundo plano | **BLOQUEADO**: iOS sem target de extensão; Android tem o serviço e não foi visto em aparelho |
+| 18 | Tela bloqueada e segundo plano | **BLOQUEADO em aparelho**: o iOS já tem o target e o build na CI; falta rodar e ver. Android tem o serviço e também não foi visto |
 | 19 | Permissão negada mantém alternativa | `platform/web-adapter.ts` existe e a tela funciona sem Live Activity; não validado em aparelho |
 | 20 | Finalização encerra a atividade | `use-active-workout.ts` chama `liveActivity.stop()`; não validado em aparelho |
 
@@ -403,8 +432,9 @@ está coberto é a regra por baixo dela.
 
 ### BLOQUEADO POR DEPENDÊNCIA EXTERNA
 
-- Live Activity no iPhone: falta o target de Widget Extension, que exige macOS
-  com Xcode. Os passos estão na seção "O que falta no iOS".
+- Live Activity no iPhone: o target existe desde 17/10, criado por script a
+  partir do Linux, e o build sai do `codemagic.yaml`. O que falta é rodar o
+  build e ver o cartão num iPhone — aparelho, não Mac.
 - Migrations 0053–0060: precisam ser colada no SQL editor do Supabase.
 - Medição de desempenho em aparelho e rede móvel.
 - Revisão do Codex: o binário não existe neste ambiente (`command -v codex`
@@ -413,7 +443,11 @@ está coberto é a regra por baixo dela.
 ### NÃO IMPLEMENTADO
 
 - **Widget de tela inicial** (iOS e Android). Não existe `AppWidgetProvider` nem
-  WidgetKit de home. É escopo próprio, e não um ajuste do que existe.
+  widget de home. No iOS ele agora tem onde entrar — uma linha no
+  `SynseWorkoutWidgetBundle` —, mas a arte e os dados são escopo próprio.
+- **Botões da Live Activity.** `SynseWorkoutIntent` era chamado em quatro
+  lugares e não existia; os botões saíram da etapa. Voltam com um
+  `LiveActivityIntent` e o App Group criado no portal da Apple.
 - **Exercício por duração.** `workout_exercises` tem `sets`, `reps` (texto) e
   `rest_seconds`, e nenhum campo de duração. Implementar exige coluna nova,
   migration e decisão de produto sobre como a série de tempo se conclui.

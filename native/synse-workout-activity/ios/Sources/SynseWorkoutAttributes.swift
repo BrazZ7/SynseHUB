@@ -8,7 +8,17 @@ import Foundation
  permite ao SwiftUI animar a contagem sozinho, com `Text(timerInterval:)`. Se
  viesse "01:18" pronto, o app teria de atualizar a atividade a cada segundo — e
  o iOS limita a frequência dessas atualizações, então o contador travaria.
+
+ ── Por que o `@available` ──────────────────────────────────────────────────
+
+ `ActivityAttributes` só existe a partir do iOS 16.1, e este arquivo compila
+ também no alvo do plugin, cujo piso é o do aplicativo: iOS 15. Sem a anotação
+ o Swift recusa — "'ActivityAttributes' is only available in iOS 16.1 or
+ newer" — e o aplicativo inteiro deixa de compilar.
+
+ Na extensão do widget, cujo piso é 16.1, ela é sempre satisfeita.
 */
+@available(iOS 16.1, *)
 struct SynseWorkoutAttributes: ActivityAttributes {
     public struct ContentState: Codable, Hashable {
         var exerciseName: String

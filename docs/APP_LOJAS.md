@@ -17,7 +17,8 @@ operacional.
 | Assinatura de release | Configurada, lendo chave de fora do repositório |
 | Versão | `SYNSE_VERSION_CODE` / `SYNSE_VERSION_NAME` por variável de ambiente |
 | App Links | Manifesto declara o domínio; `/.well-known/assetlinks.json` serve o outro lado |
-| Projeto iOS | Existe, **nunca compilado** — exige macOS com Xcode |
+| Projeto iOS | Dois targets (app + extensão da Live Activity) e scheme compartilhado. **Nunca compilado** — o build é na CI, ver abaixo |
+| Build do iOS sem Mac | `codemagic.yaml`: compila, assina e sobe ao TestFlight num Mac alugado por minuto |
 
 ## Gerar a chave de assinatura
 
@@ -93,10 +94,42 @@ adb shell pm get-app-links br.com.synse.app   # espera-se "verified"
 | --- | --- | --- |
 | Conta Google Play Console | play.google.com/console | US$ 25, uma vez |
 | Conta Apple Developer | developer.apple.com | US$ 99/ano |
-| Máquina com macOS + Xcode | — | Sem isso o iOS não compila nem é enviado |
+| Chave da App Store Connect API | App Store Connect → Users and Access → Integrations | Grátis; vai no Codemagic, não no repositório |
+| Conta Codemagic | codemagic.io | 500 min de macOS/mês grátis na conta individual |
 | Formulário de Segurança dos Dados | Play Console | Declarar saúde, localização e Bluetooth |
 | Política de privacidade publicada | `/privacidade` já existe | Falta a identificação legal |
 | Capturas de tela e descrição | Ambas as lojas | — |
+
+## iOS sem Mac
+
+O compilador do iOS roda em hardware Apple por licença — e é só isso que exige
+macOS. `codemagic.yaml` aluga essa máquina por minuto: a conta individual do
+Codemagic tem 500 minutos de macOS por mês, e um build aqui deve ficar em
+10–15.
+
+O arquivo tem no cabeçalho os quatro pré-requisitos, na ordem. O resumo:
+
+1. Programa de Desenvolvedor da Apple ativo. **Sem CNPJ, a inscrição é como
+   pessoa física** — conta de organização exige número D-U-N-S. O nome do
+   vendedor na loja fica sendo o seu, e a conversão para empresa depois existe,
+   leva semanas e pede o D-U-N-S.
+2. Chave da App Store Connect API com acesso *App Manager*, cadastrada no
+   Codemagic em *Team integrations → Developer Portal → Manage keys*. O nome que
+   você der ali vai em `integrations.app_store_connect` do yaml.
+3. O app criado na App Store Connect com o id `br.com.synse.app`, e o id
+   numérico dele em `APP_STORE_APPLE_ID`.
+4. Repositório ligado ao Codemagic. O build sai do `codemagic.yaml`.
+
+**A chave e o certificado não passam pelo repositório nem por mim.** Eles vão
+de você para o Codemagic.
+
+O que ainda precisa de um Mac, e não é o build: abrir o simulador e depurar
+crash nativo. Para isso existe Mac por hora (MacinCloud, MacStadium, EC2 Mac),
+e nada disso bloqueia publicar.
+
+O que precisa de **iPhone** — não de Mac: ver a Live Activity na tela
+bloqueada. Não há outro jeito de verificar, e o TestFlight instala no aparelho
+de qualquer pessoa que você convidar.
 
 ## As duas revisões que podem recusar
 
@@ -114,8 +147,11 @@ está em aberto, e ela muda o que precisa ser construído. Ver `docs/pre-produca
 
 ## O que não foi verificado
 
-- **iOS nunca foi compilado.** O projeto existe e o plugin tem `Package.swift` e
-  `.podspec`, mas nada disso passou por um compilador. Exige macOS.
+- **iOS nunca foi compilado.** O projeto agora está descrito para compilar — e
+  descrever não é compilar. O primeiro build na CI é que vai dizer.
+- **A extensão da Live Activity nunca foi carregada.** O target existe, o
+  `.appex` é embutido e o `codemagic.yaml` confere que ele entrou no `.ipa`. Se
+  o cartão aparece na tela bloqueada, só um iPhone diz.
 - **O plugin nativo nunca rodou num aparelho.** Compila no Android; se a Live
   Activity aparece de verdade na Dynamic Island, ninguém viu ainda.
 - **App Links não foi verificado de ponta a ponta**, porque depende de um app

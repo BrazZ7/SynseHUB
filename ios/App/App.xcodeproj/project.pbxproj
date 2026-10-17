@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		06942622A558047F6C807534 /* SynseWorkoutLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C9F7843B7CDA3A19BCB1F1A /* SynseWorkoutLiveActivity.swift */; };
+		13E928D30FDE7377AE76D77F /* SynseWorkoutWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = ECD2A5B00B7062B175F07E63 /* SynseWorkoutWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		2146E7837FF4F9981674F8DE /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9EDDA849A406C3CCD6CF0B81 /* Foundation.framework */; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
 		4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */ = {isa = PBXBuildFile; productRef = 4D22ABE82AF431CB00220026 /* CapApp-SPM */; };
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
@@ -16,10 +19,39 @@
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
+		C8B79F161F35262A923057AF /* SynseWorkoutAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47229E20EFE1E8D6ABFEA9B9 /* SynseWorkoutAttributes.swift */; };
+		FAE4B556B6D9F0BDF71497AF /* SynseWorkoutWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2A8C94EFC8BF54A70A4863F /* SynseWorkoutWidgetBundle.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		742FC48898E45318147A24E2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 504EC2FC1FED79650016851F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5FDC0AE62494BE8DCCAF4F13;
+			remoteInfo = SynseWorkoutWidget;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		E3DEA5C9BA4A236982150CFC /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				13E928D30FDE7377AE76D77F /* SynseWorkoutWidget.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		16AB4E7705C72A43A6F77FD5 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
+		3C9F7843B7CDA3A19BCB1F1A /* SynseWorkoutLiveActivity.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SynseWorkoutLiveActivity.swift; path = "../../native/synse-workout-activity/ios/Sources/SynseWorkoutLiveActivity.swift"; sourceTree = "<group>"; };
+		47229E20EFE1E8D6ABFEA9B9 /* SynseWorkoutAttributes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SynseWorkoutAttributes.swift; path = "../../native/synse-workout-activity/ios/Sources/SynseWorkoutAttributes.swift"; sourceTree = "<group>"; };
 		50379B222058CBB4000EE86E /* capacitor.config.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = capacitor.config.json; sourceTree = "<group>"; };
 		504EC3041FED79650016851F /* App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = App.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		504EC3071FED79650016851F /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -30,6 +62,9 @@
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
 		9582B6822FE993A50072D4E8 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
+		9EDDA849A406C3CCD6CF0B81 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		A2A8C94EFC8BF54A70A4863F /* SynseWorkoutWidgetBundle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SynseWorkoutWidgetBundle.swift; sourceTree = "<group>"; };
+		ECD2A5B00B7062B175F07E63 /* SynseWorkoutWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SynseWorkoutWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -41,15 +76,43 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		831DCD1B1003355B20109699 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2146E7837FF4F9981674F8DE /* Foundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		1846CEF34746D5C154BACFA8 /* SynseWorkoutShared */ = {
+			isa = PBXGroup;
+			children = (
+				47229E20EFE1E8D6ABFEA9B9 /* SynseWorkoutAttributes.swift */,
+				3C9F7843B7CDA3A19BCB1F1A /* SynseWorkoutLiveActivity.swift */,
+			);
+			name = SynseWorkoutShared;
+			sourceTree = "<group>";
+		};
+		4CC3EB853BF7D6204488F457 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				A0D5493D6F3463862C299169 /* iOS */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		504EC2FB1FED79650016851F = {
 			isa = PBXGroup;
 			children = (
 				958DCC722DB07C7200EA8C5F /* debug.xcconfig */,
 				504EC3061FED79650016851F /* App */,
 				504EC3051FED79650016851F /* Products */,
+				4CC3EB853BF7D6204488F457 /* Frameworks */,
+				AC2FB6AE93F0477F7B2169DB /* SynseWorkoutWidget */,
+				1846CEF34746D5C154BACFA8 /* SynseWorkoutShared */,
 			);
 			sourceTree = "<group>";
 		};
@@ -57,6 +120,7 @@
 			isa = PBXGroup;
 			children = (
 				504EC3041FED79650016851F /* App.app */,
+				ECD2A5B00B7062B175F07E63 /* SynseWorkoutWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -77,6 +141,24 @@
 			path = App;
 			sourceTree = "<group>";
 		};
+		A0D5493D6F3463862C299169 /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				9EDDA849A406C3CCD6CF0B81 /* Foundation.framework */,
+			);
+			name = iOS;
+			sourceTree = "<group>";
+		};
+		AC2FB6AE93F0477F7B2169DB /* SynseWorkoutWidget */ = {
+			isa = PBXGroup;
+			children = (
+				16AB4E7705C72A43A6F77FD5 /* Info.plist */,
+				A2A8C94EFC8BF54A70A4863F /* SynseWorkoutWidgetBundle.swift */,
+			);
+			name = SynseWorkoutWidget;
+			path = SynseWorkoutWidget;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -87,10 +169,12 @@
 				504EC3001FED79650016851F /* Sources */,
 				504EC3011FED79650016851F /* Frameworks */,
 				504EC3021FED79650016851F /* Resources */,
+				E3DEA5C9BA4A236982150CFC /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				78AC6D12202B61827ED76F99 /* PBXTargetDependency */,
 			);
 			name = App;
 			packageProductDependencies = (
@@ -99,6 +183,23 @@
 			productName = App;
 			productReference = 504EC3041FED79650016851F /* App.app */;
 			productType = "com.apple.product-type.application";
+		};
+		5FDC0AE62494BE8DCCAF4F13 /* SynseWorkoutWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 41AAC792E1FEDF9B711B6894 /* Build configuration list for PBXNativeTarget "SynseWorkoutWidget" */;
+			buildPhases = (
+				12E57990C9668CB071A9B0ED /* Sources */,
+				831DCD1B1003355B20109699 /* Frameworks */,
+				6728C99E24F99B97993CB48E /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SynseWorkoutWidget;
+			productName = SynseWorkoutWidget;
+			productReference = ECD2A5B00B7062B175F07E63 /* SynseWorkoutWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -133,6 +234,7 @@
 			projectRoot = "";
 			targets = (
 				504EC3031FED79650016851F /* App */,
+				5FDC0AE62494BE8DCCAF4F13 /* SynseWorkoutWidget */,
 			);
 		};
 /* End PBXProject section */
@@ -151,9 +253,26 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		6728C99E24F99B97993CB48E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		12E57990C9668CB071A9B0ED /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FAE4B556B6D9F0BDF71497AF /* SynseWorkoutWidgetBundle.swift in Sources */,
+				C8B79F161F35262A923057AF /* SynseWorkoutAttributes.swift in Sources */,
+				06942622A558047F6C807534 /* SynseWorkoutLiveActivity.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		504EC3001FED79650016851F /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -164,6 +283,15 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		78AC6D12202B61827ED76F99 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = SynseWorkoutWidget;
+			target = 5FDC0AE62494BE8DCCAF4F13 /* SynseWorkoutWidget */;
+			targetProxy = 742FC48898E45318147A24E2 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
 		504EC30B1FED79650016851F /* Main.storyboard */ = {
@@ -314,6 +442,7 @@
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Debug;
 		};
@@ -335,12 +464,77 @@
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Release;
+		};
+		5C350E90190410BF558493CE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = SynseWorkoutWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.1;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = br.com.synse.app.SynseWorkoutWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		B888450BCFA38BD4CBB05581 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = SynseWorkoutWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.1;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = br.com.synse.app.SynseWorkoutWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Debug;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		41AAC792E1FEDF9B711B6894 /* Build configuration list for PBXNativeTarget "SynseWorkoutWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5C350E90190410BF558493CE /* Release */,
+				B888450BCFA38BD4CBB05581 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		504EC2FF1FED79650016851F /* Build configuration list for PBXProject "App" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

@@ -6,12 +6,25 @@ import PackageDescription
  continua funcionando pelo podspec ao lado, para projetos que ainda usam Pods —
  os dois descrevem o mesmo código.
 
- `iOS(.v16)` é o piso: o ActivityKit, que desenha a Live Activity, não existe
- antes do 16.1. O código verifica `#available` para não quebrar em 16.0.
+ ── O piso é 15, e precisa ser ──────────────────────────────────────────────
+
+ Era `.iOS(.v16)`, e isso impedia o aplicativo de compilar. O SPM exige que o
+ pacote dependente declare plataforma **maior ou igual** à da dependência, e o
+ `CapApp-SPM` que o Capacitor gera declara `.iOS(.v15)` — igual ao
+ `IPHONEOS_DEPLOYMENT_TARGET` do target App. Com 16 aqui, o build morria antes
+ de compilar: "requires minimum platform version 16.0 ... but this target
+ supports 15.0".
+
+ Baixar para 15 é seguro porque todo uso de ActivityKit neste pacote é guardado
+ por `#available(iOS 16.1, *)`, e `SynseWorkoutAttributes` tem `@available`.
+ Quem desenha a Live Activity é a extensão do widget, cujo piso é 16.1 e vive
+ no projeto Xcode, não aqui.
+
+ Isto nunca apareceu porque nunca foi compilado: não há Mac no projeto.
 */
 let package = Package(
     name: "SynseWorkoutActivity",
-    platforms: [.iOS(.v16)],
+    platforms: [.iOS(.v15)],
     products: [
         .library(
             name: "SynseWorkoutActivity",

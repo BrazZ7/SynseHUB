@@ -80,13 +80,26 @@ struct SynseWorkoutLiveActivity: Widget {
                             .foregroundStyle(.primary)
                     }
                 }
-                DynamicIslandExpandedRegion(.bottom) {
-                    // Botão só a partir do iOS 17. Antes disso o cartão informa
-                    // e o toque abre o app — não há como contornar.
-                    if #available(iOS 17.0, *) {
-                        BotoesDaAtividade(phase: faseVisivel(context.state))
-                    }
-                }
+                /*
+                 Aqui entram os botões — e eles ainda não existem.
+
+                 O código deles estava escrito e chamava `SynseWorkoutIntent`,
+                 que **não existe em nenhum lugar do repositório**. O arquivo
+                 não compilava, e ninguém soube porque nada aqui jamais foi
+                 compilado: não há Mac no projeto.
+                 Ver `docs/evolucao-synse.md`, seção do iOS.
+
+                 O que falta, na ordem: um `LiveActivityIntent` (iOS 17+), o
+                 App Group `group.br.com.synse.app` criado no portal da Apple e
+                 habilitado nos dois App IDs, e o `entitlements` nos dois
+                 targets. Nada disso dá para verificar sem aparelho, e com o
+                 entitlement no projeto e a capacidade ausente no portal a
+                 assinatura falha — o build nem chega a compilar.
+
+                 Sem botão, a atividade continua inteira: cartão, Dynamic
+                 Island e o cronômetro do descanso. O toque abre o app, que é o
+                 comportamento de qualquer iPhone antes do iOS 17.
+                */
             } compactLeading: {
                 Image(systemName: "figure.strengthtraining.traditional")
                     .foregroundStyle(Self.cyan)
@@ -182,9 +195,8 @@ private struct LockScreenView: View {
             ProgressView(value: state.progress)
                 .tint(Self.cyan)
 
-            if #available(iOS 17.0, *) {
-                BotoesDaAtividade(phase: fase)
-            }
+            // Os botões entram aqui quando o intent existir. Ver a nota na
+            // `ActivityConfiguration`, acima.
         }
         .padding(16)
     }
@@ -204,26 +216,28 @@ private struct Rotulo: View {
 }
 
 /*
- Os botões usam App Intents, disponíveis a partir do iOS 17. O intent roda no
- processo da extensão e grava a ação num App Group; o app lê e repassa ao
- engine. É o único caminho: a extensão não conversa com o WebView diretamente.
-*/
-@available(iOS 17.0, *)
-private struct BotoesDaAtividade: View {
-    let phase: String
+ ── Os botões saíram daqui, e o que estava escrito ──────────────────────────
 
-    var body: some View {
-        HStack(spacing: 8) {
-            if phase == "REST" {
-                Button(intent: SynseWorkoutIntent(action: "SKIP_REST")) { Text("Pular") }
-                Button(intent: SynseWorkoutIntent(action: "ADD_REST")) { Text("+30s") }
-            } else if phase == "REST_FINISHED" {
-                Button(intent: SynseWorkoutIntent(action: "NEXT_SET")) { Text("Iniciar série") }
-            } else {
-                Button(intent: SynseWorkoutIntent(action: "COMPLETE_SET")) { Text("Concluir série") }
-            }
-        }
-        .buttonStyle(.bordered)
-        .tint(Color(red: 0.09, green: 0.77, blue: 0.65))
-    }
-}
+ Havia um `BotoesDaAtividade` com `Button(intent: SynseWorkoutIntent(...))`
+ para pular o descanso, somar 30 segundos, iniciar a próxima série e concluir
+ a série. `SynseWorkoutIntent` não existe no repositório — quatro chamadas,
+ nenhuma implementação. O arquivo não compilava, e isso passou por não haver
+ Mac que o compilasse.
+
+ Não foi reimplementado agora de propósito. Fazer certo exige:
+
+   1. um tipo conformando `LiveActivityIntent` (iOS 17+), visível para a
+      extensão **e** para o app — o sistema executa esse intent no processo do
+      aplicativo, que é o que permite a ação chegar ao engine;
+   2. o App Group `group.br.com.synse.app` criado no portal da Apple e
+      habilitado nos dois App IDs, porque é por ele que
+      `SynseWorkoutActivityPlugin.lerAcaoPendente()` lê a ação;
+   3. o arquivo de `entitlements` nos dois targets.
+
+ O item 2 é o que impede fazer isto às cegas: com o entitlement no projeto e a
+ capacidade ausente no portal, a assinatura falha antes de compilar — e quem
+ for depurar isso sem Mac vai depurar uma mensagem de assinatura.
+
+ O caminho é: primeiro este widget no TestFlight, visto num iPhone. Depois os
+ botões, com o App Group já criado.
+*/

@@ -1,0 +1,157 @@
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║ O build do iOS, sem Mac                                                  ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+#
+# Este projeto não tem Mac. O que exige macOS é o compilador do iOS — por
+# licença da Apple, o SDK roda em hardware Apple — e é isso que este arquivo
+# aluga por minuto, num Mac mini do Codemagic. O resto (inscrição no programa,
+# certificado, perfil, envio, revisão) é navegador e API.
+#
+# A conta individual do Codemagic tem 500 minutos de macOS M2 grátis por mês. Um
+# build aqui deve ficar na casa dos 10–15 minutos, a maior parte no `npm ci`.
+#
+# ── O que você precisa ter feito antes do primeiro build ────────────────────
+#
+#  1. Programa de Desenvolvedor da Apple ativo (US$ 99/ano).
+#     Sem CNPJ, a inscrição é como **pessoa física** — conta de organização
+#     exige número D-U-N-S. O nome do vendedor na loja fica sendo o seu.
+#
+#  2. Uma chave da App Store Connect API:
+#     App Store Connect → Users and Access → Integrations → chave nova, com
+#     acesso **App Manager**. Baixe o `.p8` (ele só pode ser baixado uma vez) e
+#     anote Issuer ID e Key ID.
+#
+#  3. A chave cadastrada no Codemagic:
+#     Team integrations → Developer Portal → Manage keys → Add key.
+#     O nome que você der ali vai em `integrations.app_store_connect`, abaixo.
+#
+#  4. O app criado na App Store Connect, com o bundle id `br.com.synse.app`.
+#     Enquanto ele não existir, o build funciona e o envio ao TestFlight não —
+#     e o passo do número de build já trata isso.
+#
+# **Nada disso passa por mim.** Chave, certificado e senha vão direto de você
+# para o Codemagic; não peço nem recebo nenhum deles.
+#
+# ── O que este arquivo deliberadamente NÃO faz ──────────────────────────────
+#
+# Não roda `npm test` nem `npm run typecheck`. Não é esquecimento: o aplicativo
+# carrega a aplicação publicada (`server.url` no `capacitor.config.ts`), então
+# TypeScript quebrado não afeta o binário do iOS — afeta o site, e lá a Vercel
+# já barra. Rodar 2.200 testes num Mac alugado é queimar o minuto mais caro do
+# orçamento para conferir o que não entra no build. Esses testes pertencem a um
+# runner Linux.
+
+workflows:
+  ios-testflight:
+    name: Synse App — iOS para o TestFlight
+    instance_type: mac_mini_m2
+    # Teto curto de propósito: build travado consome minuto grátis até o limite.
+    max_build_duration: 45
+
+    integrations:
+      # ⚠️ Troque pelo nome que você deu à chave no Codemagic.
+      app_store_connect: Synse App Store Connect
+
+    environment:
+      node: 22
+      xcode: latest
+      ios_signing:
+        distribution_type: app_store
+        # Um bundle id só, e isso é suficiente: o Codemagic busca também os
+        # perfis das extensões, procurando por `br.com.synse.app.*` — que é
+        # exatamente o id do widget (`br.com.synse.app.SynseWorkoutWidget`).
+        bundle_identifier: br.com.synse.app
+      vars:
+        XCODE_PROJECT: ios/App/App.xcodeproj
+        XCODE_SCHEME: App
+        # ⚠️ O id numérico do app na App Store Connect, quando ele existir.
+        # Vazio no primeiro build: o passo do número trata.
+        APP_STORE_APPLE_ID: ''
+
+    scripts:
+      - name: Dependências do node
+        # `npm ci` e não `npm install`: o `package-lock.json` é o que garante
+        # que o build de hoje usa as mesmas versões do de ontem.
+        #
+        # Obrigatório mesmo sem empacotar o site: o `CapApp-SPM/Package.swift`
+        # aponta para `../../../node_modules/@capacitor/*`, então sem
+        # `node_modules` o Xcode não resolve os pacotes dos plugins.
+        script: npm ci
+
+      - name: Garantir o target do widget e o scheme
+        # Idempotente: se o target já existe, o script sai sem fazer nada. Roda
+        # a cada build para que o widget não dependa de alguém lembrar — e para
+        # que continue de pé se alguém regenerar o projeto do Capacitor.
+        #
+        # A gem vem com o CocoaPods na imagem do Codemagic; a linha de instalação
+        # é a rede de segurança para quando não vier.
+        script: |
+          gem list -i xcodeproj > /dev/null 2>&1 || gem install xcodeproj --no-document
+          ruby scripts/ios/criar-target-do-widget.rb
+
+      - name: Sincronizar o Capacitor
+        # Copia `mobile/www` (a tela de falha de conexão) e atualiza a
+        # configuração nativa. Não há `pod install`: este projeto usa Swift
+        # Package Manager, não CocoaPods.
+        script: npx cap sync ios
+
+      - name: Aplicar os perfis de provisionamento ao projeto
+        # Escreve no projeto os perfis que o `ios_signing` já buscou — do app e
+        # do widget. Sem isto, o Xcode tenta assinar com a conta local, que no
+        # runner não existe.
+        script: xcode-project use-profiles
+
+      - name: Número do build
+        # A App Store recusa build com número repetido, e recusa extensão com
+        # número diferente do aplicativo. `agvtool -all` resolve os dois: ele
+        # escreve `CURRENT_PROJECT_VERSION` para todos os targets, e os dois
+        # `Info.plist` leem dessa variável.
+        script: |
+          set -e
+          cd "$CM_BUILD_DIR/ios/App"
+          if [ -n "$APP_STORE_APPLE_ID" ]; then
+            ULTIMO=$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID")
+            NUMERO=$((ULTIMO + 1))
+          else
+            # Primeiro build, app ainda não criado na loja: usa o contador do
+            # próprio Codemagic, que sobe a cada build.
+            NUMERO=${BUILD_NUMBER:-1}
+          fi
+          echo "Build número $NUMERO"
+          agvtool new-version -all "$NUMERO"
+
+      - name: Compilar o .ipa
+        # `--project` e não `--workspace`: o projeto do Capacitor com SPM não
+        # tem workspace.
+        script: |
+          xcode-project build-ipa \
+            --project "$CM_BUILD_DIR/$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME"
+
+      - name: Conferir que o widget entrou no pacote
+        # A conferência que importa, e a razão de ela existir: o target pode
+        # compilar, ser assinado e **não** ser embutido — aí o `.ipa` sobe sem
+        # widget e a tela bloqueada fica vazia, sem erro em lugar nenhum.
+        script: |
+          set -e
+          IPA=$(ls build/ios/ipa/*.ipa | head -1)
+          if unzip -l "$IPA" | grep -q "PlugIns/SynseWorkoutWidget.appex"; then
+            echo "OK: SynseWorkoutWidget.appex está dentro do .ipa"
+          else
+            echo "FALHOU: o .ipa não tem PlugIns/SynseWorkoutWidget.appex"
+            unzip -l "$IPA" | head -40
+            exit 1
+          fi
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        # Sem `submit_to_app_store`: a primeira submissão à loja é decisão
+        # humana, com a ficha da loja preenchida. Aqui só vai para o TestFlight.
+        submit_to_app_store: false

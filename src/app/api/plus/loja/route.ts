@@ -1,6 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
-
 import { NextResponse } from 'next/server'
 
 import { verificarCompraDaLoja } from '@/features/plus/loja/verificar-service'
@@ -8,7 +5,7 @@ import { requireStudentSession } from '@/lib/auth/require-session'
 import { createSupabaseAdminClient } from '@/lib/database/supabase-admin'
 import { isDemoMode } from '@/lib/database/env'
 import { logger } from '@/lib/logger'
-import type { Ambiente } from '@/lib/plans/lojas/apple-jws'
+import { ambientesDaApple, raizDaApple } from '@/lib/plans/lojas/apple-config'
 import { APP_ID, PRODUTO_MENSAL, type Loja } from '@/lib/plans/lojas/tipos'
 import { pruneRateLimits, rateLimit } from '@/lib/rate-limit'
 
@@ -44,34 +41,6 @@ export const dynamic = 'force-dynamic'
  */
 
 const LOJAS: readonly Loja[] = ['apple', 'google']
-
-/**
- * Quais ambientes da Apple aceitar.
- *
- * `Sandbox` entra só fora de produção. Aceitar em produção é dar Synse+ a quem
- * tiver uma conta de teste da Apple — grátis, ilimitado, e invisível em
- * relatório de receita. A variável existe para o TestFlight, que roda em
- * sandbox com o app de produção.
- */
-function ambientesDaApple(): readonly Ambiente[] {
-  const aceitaTeste =
-    process.env.APPLE_ACEITA_SANDBOX === '1' || process.env.NEXT_PUBLIC_SYNSE_ENV !== 'production'
-  return aceitaTeste ? ['Production', 'Sandbox'] : ['Production']
-}
-
-/**
- * A raiz fixada, lida do disco.
- *
- * `process.cwd()` e não `import`: é um `.pem`, e o empacotador do Next não o
- * embute. Em `output: 'standalone'` o arquivo vem junto porque está sob `src/`
- * e é lido em tempo de execução — se algum dia parar de vir, a verificação
- * **falha**, e falhar é o certo: sem raiz não há com o que comparar a cadeia.
- */
-let raizEmCache: string | null = null
-function raizDaApple(): string {
-  raizEmCache ??= readFileSync(join(process.cwd(), 'src/lib/plans/lojas/apple-raiz.pem'), 'utf8')
-  return raizEmCache
-}
 
 export async function POST(request: Request) {
   const session = await requireStudentSession()

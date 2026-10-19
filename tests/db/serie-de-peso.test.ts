@@ -44,6 +44,13 @@ const PESAGENS: Array<{ dias: number; hora: number; peso: number }> = [
   { dias: 0, hora: 13, peso: 80.6 },
   { dias: 0, hora: 21, peso: 81.2 },
   { dias: 1, hora: 7, peso: 80.4 },
+  /*
+   * O terceiro dia consecutivo não é enfeite: **três dias seguidos sempre têm
+   * dois na mesma semana ISO**, em qualquer dia em que a suíte rode. Com 0 e 1
+   * só, numa segunda-feira ontem cai na semana anterior, nada se agrupa, e o
+   * teste do balde semanal falha — como falhou em 19/10/2026.
+   */
+  { dias: 2, hora: 7, peso: 80.8 },
   { dias: 9, hora: 7, peso: 82.0 },
   { dias: 40, hora: 7, peso: 84.5 },
   { dias: 200, hora: 7, peso: 88.0 },
@@ -133,7 +140,7 @@ describe.skipIf(!temBanco)('serie_de_peso', () => {
   it('devolve um ponto por dia, não um por pesagem', async () => {
     const pontos = await serie(AUTH_ALUNO, null, 365, 'day')
 
-    /* Sete pesagens em cinco dias distintos. */
+    /* Mais pesagens que dias distintos: o ponto é o dia, não a pesagem. */
     const diasDistintos = new Set(PESAGENS.map((p) => p.dias)).size
     expect(PESAGENS.length).toBeGreaterThan(diasDistintos)
     expect(pontos).toHaveLength(diasDistintos)
@@ -172,6 +179,18 @@ describe.skipIf(!temBanco)('serie_de_peso', () => {
   })
 
   it('a janela recorta, e o balde muda o número de pontos sem mudar o dado', async () => {
+    /*
+     * O "hoje" do **banco**, não do Node: as pesagens são ancoradas em
+     * `date_trunc('day', now())` lá dentro, e se os dois discordassem na
+     * virada do dia a conta abaixo erraria por um.
+     */
+    const { rows } = await client.query(
+      `select extract(year from d)::int as y, extract(month from d)::int as m,
+              extract(day from d)::int as d
+         from (select date_trunc('day', now()) as d) t`,
+    )
+    const hojeUtc = { y: rows[0].y, m: rows[0].m - 1, d: rows[0].d }
+
     const umMes = await serie(AUTH_ALUNO, null, 30, 'day')
     const umAno = await serie(AUTH_ALUNO, null, 365, 'day')
     const porSemana = await serie(AUTH_ALUNO, null, 365, 'week')
@@ -182,7 +201,32 @@ describe.skipIf(!temBanco)('serie_de_peso', () => {
       new Set(PESAGENS.filter((p) => p.dias <= 30).map((p) => p.dias)).size,
     )
 
-    /* A semana agrupa hoje e ontem num ponto só; o peso mais novo continua o mesmo. */
+    /*
+     * ── O balde semanal, sem depender do dia em que a suíte roda ────────────
+     *
+     * A versão anterior afirmava "a semana agrupa hoje e ontem num ponto só".
+     * Isso é verdade de terça a domingo e **falso na segunda**: o
+     * `date_trunc('week')` do Postgres começa na segunda, então domingo cai na
+     * semana anterior. O teste passou meses e quebrou em 19/10/2026, uma
+     * segunda — e o erro (`expected 5 to be less than 5`) não dizia nada sobre
+     * dia da semana.
+     *
+     * Agora a expectativa é **calculada** com a mesma definição de semana que o
+     * banco usa, e vale em qualquer dia.
+     */
+    const inicioDaSemanaUtc = (dias: number) => {
+      const d = new Date(Date.UTC(hojeUtc.y, hojeUtc.m, hojeUtc.d) - dias * 86_400_000)
+      // `getUTCDay()` dá 0 no domingo; a semana do Postgres começa na segunda.
+      const desdeSegunda = (d.getUTCDay() + 6) % 7
+      return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - desdeSegunda)
+    }
+
+    const semanasEsperadas = new Set(
+      PESAGENS.filter((p) => p.dias <= 365).map((p) => inicioDaSemanaUtc(p.dias)),
+    ).size
+
+    expect(porSemana).toHaveLength(semanasEsperadas)
+    /* E agrupar precisa agrupar: menos pontos que dias, sempre. */
     expect(porSemana.length).toBeLessThan(umAno.length)
     expect(Number(porSemana[porSemana.length - 1].peso)).toBe(Number(umAno[umAno.length - 1].peso))
   })

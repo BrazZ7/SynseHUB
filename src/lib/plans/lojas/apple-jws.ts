@@ -78,7 +78,26 @@ type Opcoes = {
   agora?: Date
 }
 
-export function verificarJwsDaApple(jws: string, opcoes: Opcoes): TransacaoDaApple {
+/**
+ * ── Só a parte criptográfica: cadeia, raiz fixada e assinatura ──────────────
+ *
+ * Separada porque a Apple assina **duas coisas diferentes** do mesmo jeito: a
+ * transação de uma compra e a notificação do servidor dela. A conferência de
+ * cadeia é idêntica; o que cada uma precisa ter no corpo não é — a notificação
+ * não tem `productId` nem `bundleId` no topo, e exigir isso dela recusaria
+ * toda notificação legítima.
+ *
+ * Então aqui mora o que é comum, e quem chama confere o conteúdo que lhe cabe.
+ * Antes isto era um bloco só com as checagens de transação embutidas, e
+ * reaproveitar significaria afrouxá-las.
+ *
+ * **Devolve JSON sem validar nada do conteúdo.** Quem chama é responsável por
+ * isso — e é por isso que esta função não é exportada como "verificar".
+ */
+export function corpoAssinadoPelaApple(
+  jws: string,
+  opcoes: { raizPem: string; agora?: Date },
+): Record<string, unknown> {
   const agora = opcoes.agora ?? new Date()
 
   const partes = jws.split('.')
@@ -171,8 +190,17 @@ export function verificarJwsDaApple(jws: string, opcoes: Opcoes): TransacaoDaApp
   )
   if (!confere) throw new JwsInvalida('a assinatura não confere com o certificado da folha')
 
-  // ── O conteúdo ────────────────────────────────────────────────────────────
-  const corpo = lerJson(corpoB64, 'corpo') as unknown as TransacaoDaApple
+  return lerJson(corpoB64, 'corpo')
+}
+
+/**
+ * A transação de uma compra: a cadeia **e** o que o corpo precisa dizer.
+ */
+export function verificarJwsDaApple(jws: string, opcoes: Opcoes): TransacaoDaApple {
+  const corpo = corpoAssinadoPelaApple(jws, {
+    raizPem: opcoes.raizPem,
+    agora: opcoes.agora,
+  }) as unknown as TransacaoDaApple
 
   if (corpo.bundleId !== opcoes.bundleId) {
     /*

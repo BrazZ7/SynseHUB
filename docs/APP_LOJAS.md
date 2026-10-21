@@ -26,6 +26,42 @@ operacional.
 | Build do iOS sem Mac | `codemagic.yaml`: compila, assina e sobe ao TestFlight num Mac alugado por minuto |
 | Build do Android | `.github/workflows/android.yml`: AAB e APK assinados, com a assinatura conferida antes de publicar o artefato |
 | Guarda do código nativo | O mesmo workflow compila o debug a cada push que toca `android/`, `native/` ou o Capacitor. **Já rodou verde** num runner do GitHub |
+| O app se identifica ao servidor | `appendUserAgent: 'SynseApp/1'`, conferido dentro do `capacitor.config.json` que vai no APK |
+| Cobrança pelas lojas | Plugin, verificação de recibo e notificações construídos (155 testes). **Nenhuma compra executada** — ver abaixo |
+
+## A cobrança do Synse+ pelas lojas
+
+O Synse+ destrava só conteúdo digital, e isso Apple e Google reservam para a
+cobrança **delas**. A auditoria de 17/10 encontrou o app vendendo por fora, e o
+caminho escolhido foi oferecer a cobrança da loja ao lado do Mercado Pago.
+
+| Peça | Onde |
+| --- | --- |
+| Plugin nativo | `native/synse-plus-billing` — StoreKit 2 e Play Billing 7.1.1 |
+| Rota da compra | `/api/plus/loja` |
+| Notificações | `/api/webhooks/lojas/apple` e `/api/webhooks/lojas/google` |
+| Três origens na mesma conta | migration `0061` |
+| O que cada mundo oferece | `src/lib/plans/oferta-do-plus.ts` |
+
+**O botão não aparece.** `LOJA_DISPONIVEL` é `false`, e enquanto for, o app não
+vende Synse+ de jeito nenhum — o que, de propósito, **permite publicar**: sem
+caminho de compra não há infração, e a venda segue na web, sem comissão.
+
+Três coisas que valem saber antes de mexer nisso:
+
+- **A mensalidade da academia não entra nesta regra.** Ela é serviço físico,
+  consumido fora do app, e as duas lojas abrem exceção explícita. O PIX do
+  `/app/finance` fica como está.
+- **Dentro do app não aparece preço**, nem botão. A regra alcança *levar* à
+  compra, e preço sem botão é instrução para ir procurar onde pagar.
+- **A `Apple Root CA - G3` está fixada no repositório**, em
+  `src/lib/plans/lojas/apple-raiz.pem`, com a impressão digital num teste. Sem
+  ela, "verificar o recibo" seria conferir a assinatura contra um certificado
+  que vem dentro do próprio recibo.
+
+O que falta para ligar está na Fase 6 de
+[`docs/publicar-passo-a-passo.md`](publicar-passo-a-passo.md), e termina em
+**ver uma compra funcionar num aparelho**.
 
 ## Gerar a chave de assinatura
 
@@ -137,6 +173,9 @@ adb shell pm get-app-links br.com.synse.app   # espera-se "verified"
 | Formulário de Segurança dos Dados | Play Console | Declarar saúde, localização e Bluetooth |
 | Política de privacidade publicada | `/privacidade` já existe | Falta a identificação legal |
 | Capturas de tela e descrição | Ambas as lojas | — |
+| Produto `synse_plus_mensal` | Ambas as lojas | Grátis; id idêntico nos dois |
+| Conta de serviço do Google | Google Cloud + Play Console | Grátis; vai em `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` |
+| Endereço das notificações | Ambas as lojas | Grátis; ver Fase 6 do roteiro |
 
 ## iOS sem Mac
 
@@ -248,10 +287,21 @@ balança Bluetooth do Synse Body. Nenhuma delas existe num site. O plugin de
 `native/synse-workout-activity` precisa estar **funcionando no aparelho** antes
 da primeira submissão — não basta compilar.
 
-**Ambas as lojas, pagamento digital.** Se a assinatura do aluno for vendida
-dentro do app, Apple e Google exigem a compra pela loja delas, com a comissão
-que vem junto. Essa decisão — compra dentro do app ou PIX pelo navegador — ainda
-está em aberto, e ela muda o que precisa ser construído. Ver `docs/pre-producao.md`.
+**Ambas as lojas, pagamento digital.** Era o risco em aberto; hoje está
+resolvido para a primeira submissão, e vale saber como.
+
+A auditoria de 17/10 encontrou o Synse+ sendo vendido dentro do app por
+assinatura no Mercado Pago, destravando só conteúdo digital — exatamente o que
+as duas reservam para a cobrança delas, e recusa certa na revisão.
+
+A saída não foi tirar a venda, foi **separar os dois mundos**: o app e o site
+são o mesmo site, e o servidor agora sabe por onde está sendo aberto. Na web a
+venda segue igual, sem comissão; dentro do app não há preço nem botão. Sem
+caminho de compra não há o que recusar.
+
+A cobrança pela loja está construída e desligada, esperando produto cadastrado
+e um aparelho — ver "A cobrança do Synse+ pelas lojas", acima. A mensalidade da
+academia nunca entrou nesta regra: serviço físico, consumido fora do app.
 
 ## O que não foi verificado
 
@@ -264,6 +314,11 @@ está em aberto, e ela muda o que precisa ser construído. Ver `docs/pre-produca
   Activity aparece de verdade na Dynamic Island, ninguém viu ainda.
 - **App Links não foi verificado de ponta a ponta**, porque depende de um app
   publicado e de uma digital real.
+- **Nenhuma compra pela loja foi processada.** O código existe inteiro e tem
+  155 testes — inclusive com cadeias de certificados geradas de verdade para
+  provar a verificação da Apple. O que ele não tem é uma execução real: sem
+  produto cadastrado e sem aparelho, não há como saber se a loja manda os
+  campos que este código espera.
 - **O trabalho `pacote` nunca rodou.** O guarda rodou: `compilar` passou num
   runner do GitHub em 2m47s, com `npm ci`, pacotes do SDK, `cap sync` e o build
   de debug verdes. O que o runner ainda não exercitou é o caminho da chave — o

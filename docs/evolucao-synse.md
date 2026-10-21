@@ -285,9 +285,11 @@ O roteiro de execução destas pendências, na ordem que funciona, está em
 
 | Item | Natureza | Próxima ação |
 | --- | --- | --- |
-| Migrations 0053–0060 | BLOQUEIO (acesso ao Supabase) | Colar no SQL editor, na ordem; `/api/health?deep=1` confirma |
+| Migrations até a 0061 | ✅ resolvido | 55 aplicadas, `pendingMigrations: []` conferido em produção |
 | Build do iOS | Falta rodar | `codemagic.yaml`; ver "O iOS, depois de 17/10" |
 | Pacote do Android | Falta os quatro segredos | Guarda já roda verde na CI; ver "O Android, depois de 17/10" |
+| Identificação legal | DEPENDE DE VOCÊ | `identificacaoLegal: false` em produção; quatro variáveis na Vercel |
+| Cobrança pelas lojas | Falta rodar | Código completo, nenhuma compra executada; ver "A cobrança pelas lojas" |
 | Validação em Android | BLOQUEIO (aparelho) | `WorkoutService` roda; falta ver em aparelho |
 | Medição em rede móvel | BLOQUEIO (aparelho) | Sem isto, não se afirma tempo de carregamento |
 | Revisão do Codex | BLOQUEIO (binário ausente) | `codex login status` quando existir; nenhum commit desta etapa foi revisado |
@@ -403,6 +405,104 @@ assinatura e o build em dobro —, e nos dois casos só o que roda mostrou.
 | Conta Play Console | DEPENDE DE VOCÊ | US$ 25, uma vez |
 | Primeiro envio à Play | NÃO AUTOMATIZÁVEL | A Play exige o painel na primeira versão; o passo está escrito e desligado no fim do workflow |
 | Notificação em aparelho | BLOQUEIO (aparelho) | `WorkoutService` compila; ninguém viu a notificação |
+
+## A cobrança pelas lojas, 17–19/10
+
+Começou como uma pergunta do dono do produto — "tem botão de pagamento no app
+do aluno?" — e virou a maior frente desta etapa. **155 testes.**
+
+### O que a auditoria achou
+
+Dois fluxos de pagamento no app do aluno, com respostas opostas:
+
+- **A mensalidade da academia** (`/app/finance`, PIX) **pode ficar como está.**
+  O que se paga ali é acesso à academia: serviço físico, consumido fora do app.
+  As duas lojas abrem exceção explícita — é o mesmo caso de pagar
+  estacionamento por aplicativo.
+- **O Synse+ não podia.** R$ 29/mês no cartão, pelo Mercado Pago, destravando
+  **só conteúdo digital** — programas guiados, receitas, 6 desafios por ciclo
+  em vez de 1, 36 meses de histórico em vez de 3. É exatamente o que Apple e
+  Google reservam para a cobrança delas. E não era um botão: **oito telas**
+  levavam àquela página, e a regra alcança *levar* à compra, não só efetuá-la.
+
+O hub está limpo: a academia não compra nada dentro do app, e a taxa da
+plataforma sai do recebível.
+
+### A decisão
+
+Das três saídas — não vender no app, vender pela loja ao lado do Mercado Pago,
+ou usar só o pagamento externo —, o dono do produto escolheu a segunda, que é o
+que as duas exigem hoje no Brasil.
+
+Vale registrar a novidade que mudou o quadro: **desde 18/06/2026, por acordo
+com o CADE, a Apple permite pagamento externo dentro do app no Brasil** — lado a
+lado com o dela, e com comissão de serviços de loja de 15% (10% no programa de
+pequenos negócios). O Brasil também está na lista oficial da Google para
+faturamento alternativo, mas a redação é "além do" sistema dela.
+
+### O que foi construído
+
+| Camada | Onde |
+| --- | --- |
+| Três origens de assinatura na mesma conta | migration `0061`, **aplicada em produção** |
+| Trava da compra dupla | `src/lib/plans/pode-assinar.ts` |
+| O app se identifica ao servidor | `appendUserAgent: 'SynseApp/1'` |
+| O que cada mundo pode oferecer | `src/lib/plans/oferta-do-plus.ts` |
+| Plugin nativo (StoreKit 2 + Play Billing 7.1.1) | `native/synse-plus-billing` |
+| Verificação do recibo da Apple | `src/lib/plans/lojas/apple-jws.ts` |
+| Consulta à Play Developer API | `src/lib/plans/lojas/google-api.ts` |
+| Notificações das duas lojas | `src/app/api/webhooks/lojas/` |
+
+### Os erros que não falham, e que custaram mais caro
+
+Cada um destes libera acesso ou cobra duas vezes em silêncio. São a razão de a
+frente ter levado três dias:
+
+1. **O recibo emprestado.** Um recibo da App Store é documento válido que
+   qualquer pessoa extrai do aparelho. Verificar a assinatura e parar aí o
+   transforma em senha de Synse+: uma pessoa assina, publica num grupo, todos
+   que colarem recebem acesso. Fecha com a referência da conta no recibo.
+2. **A raiz fixada.** A cadeia vem **dentro** da JWS. Sem comparar o último
+   certificado com a `Apple Root CA - G3` guardada no repositório, "verificar"
+   é conferir que quem assinou assinou.
+3. **Três escritores na mesma linha.** Uma notificação atrasada da Apple
+   derrubava quem pagava pela web; uma renovação velha do Mercado Pago dava
+   Synse+ de graça a quem já cancelara na loja. Daí as três regras da 0061.
+4. **Negar a compra depois do débito.** Parece rigor e é prejuízo: quem assinou
+   duas vezes pagou duas vezes, e das duas a única que o Synse não cancela é a
+   da loja. O acesso segue a compra, e a duplicidade vira linha em
+   `plus_subscription_conflicts`.
+5. **ON_HOLD do Google tem `expiryTime` no futuro.** Decidir por data em vez de
+   por estado dá acesso a quem parou de pagar.
+6. **Estorno da Apple não reescreve `expiresDate`.** Checar a data antes do
+   estorno dá acesso a quem recebeu o dinheiro de volta.
+
+### O que a mutação encontrou, e que nenhum teste pegava
+
+Além dos mutantes mortos na primeira volta, cinco acharam defeito real:
+
+- **`checkIssued` era redundante.** Removê-lo não derrubou nada — e não por
+  falta de teste: se a assinatura de A confere com a chave de B, quem tem a
+  chave de B assinou A. Saiu. Código de segurança redundante é pior que código
+  a menos, porque alguém o lê e acha que está protegido por ele.
+- **Faltava o caso que isola a verificação de assinatura dos elos.** Construído:
+  uma folha forjada por uma CA impostora com o mesmo nome e o mesmo
+  `subjectKeyIdentifier` da intermediária legítima.
+- **O 404 da Play API era tratado como "a API está fora".** O comentário dizia
+  que era definitivo; o código lançava a mesma exceção dos dois casos. Um token
+  inventado virava "tente de novo", para sempre.
+- **`autoRenewStatus` ausente virava "renova".** Assumir que renova é assumir
+  receita que pode não vir.
+- **A raiz fixada não estava versionada.** O `.gitignore` do Next ignora
+  `*.pem`; a suíte passava porque o arquivo existe no disco de quem roda. Em
+  produção, toda compra pela App Store seria recusada.
+
+### O que falta, e não é código
+
+Nada disto jamais processou uma compra. Falta produto cadastrado nos dois
+painéis, conta de serviço do Google, as duas notificações configuradas, e **ver
+uma compra funcionar num aparelho**. `LOJA_DISPONIVEL` segue `false`, e virá-la
+é afirmar ter visto. A Fase 6 de `docs/publicar-passo-a-passo.md` tem a ordem.
 
 ## Os 26 aceites, um por um
 
@@ -601,10 +701,31 @@ em verde.
 
 ### 5. Resultados dos testes, incluindo falhas
 
-- **Final: 186 arquivos, 2282 testes, 0 pulados, 0 falhas.** Build: 101 rotas.
-  Eram 184 arquivos e 2243 testes quando esta seção foi escrita; os dois
-  arquivos a mais são as esteiras de build — `tests/unit/ios/extensao-do-widget.test.ts`
-  (15) e `tests/unit/esteira/workflows.test.ts` (24).
+- **Final: 195 arquivos, 2447 testes, 0 pulados, 0 falhas.** Build: 103 rotas.
+
+  Esta seção foi escrita com 184 arquivos. Os **11 arquivos novos** desde
+  então, com a contagem que o vitest reporta, somam **201 testes**:
+
+  | Arquivo | Testes | Frente |
+  | --- | --- | --- |
+  | `unit/ios/extensao-do-widget` | 15 | esteira do iOS |
+  | `unit/esteira/workflows` | 24 | esteira do Android |
+  | `db/assinatura-de-tres-origens` | 22 | cobrança (0061) |
+  | `unit/payments/plus-webhook-desfecho` | 7 | cobrança |
+  | `unit/plans/pode-assinar` | 16 | cobrança |
+  | `unit/plataforma/oferta-do-plus` | 15 | cobrança |
+  | `unit/plus/apple-jws` | 22 | cobrança |
+  | `unit/plus/estado-da-loja` | 22 | cobrança |
+  | `unit/plus/loja-contrato` | 17 | cobrança |
+  | `unit/plus/notificacao-das-lojas` | 26 | cobrança |
+  | `unit/plus/verificar-compra` | 15 | cobrança |
+
+  **A subtração não fecha por três**, e vale dizer em vez de ajustar: 2447
+  menos 201 dá 2246, não os 2243 escritos aqui antes. Os arquivos que eu
+  modifiquei não ganharam testes — conferido comparando com `12f9dbb` —, então
+  a diferença está na medição antiga, provavelmente por contar `it.each` como
+  um caso em vez de pelos casos que ele expande. Os números acima são medidos;
+  o antigo não dá mais para auditar.
 - **Falhas reais durante o trabalho**, todas corrigidas:
   - `tests/db/treino-ativo.test.ts` pegou a 0057 apagando a regra do treino
     pendurado de oito horas que a 0047 havia acrescentado.

@@ -392,62 +392,83 @@ criada — não dá para resolver daqui.
 ### Faça a conta antes de decidir
 
 R$ 29 com 15% de comissão da Apple **mais** a taxa do Mercado Pago não são
-R$ 29. Com 10%, muda de novo. O preço do Synse+ foi escolhido sem essas
-comissões na conta, e é uma decisão comercial — não de código.
+R$ 29. Com 10%, muda de novo. E pela compra dentro do app a comissão é de
+10% a 21%, mais 5% de processamento.
 
-### O que já está construído (17/10/2026)
+O preço do Synse+ foi escolhido sem nada disso na conta, e **continua assim**:
+construir a cobrança não revisou o valor. É decisão comercial, não de código,
+e segue em aberto.
 
-O caminho 2 foi escolhido, e as três primeiras camadas estão de pé:
+### A decisão, e o que ela custou construir
 
-| Camada | Estado |
-| --- | --- |
-| Banco com três origens (0061) | **Aplicada em produção**, regras conferidas contra ela |
-| Trava da compra dupla | Pronta: recusa comprar quando já há assinatura viva, dizendo onde ela vive |
-| O app se identifica ao servidor | Pronto: `appendUserAgent: 'SynseApp/1'`, lido no servidor |
-| Decisão de o que oferecer | Pronta: dentro do app, **nunca** o Mercado Pago |
-| Plugin nativo de IAP e Play Billing | **Escrito.** O Kotlin compila contra o Play Billing 7.1.1 e entra no APK; o Swift nunca foi compilado |
-| Verificação de recibo nas lojas | **Não existe** — é o que falta para o botão poder ser ligado |
+**Caminho escolhido: a cobrança da loja ao lado do Mercado Pago** — o que Apple
+e Google exigem hoje no Brasil para conteúdo digital vendido dentro do app.
 
-> **O plugin está instalado e não é usado por ninguém.** `LOJA_DISPONIVEL`
-> continua `false`, de propósito: código escrito não é código verificado, e
-> nenhuma compra deste plugin jamais foi executada — não há conta de loja, não
-> há produto cadastrado e não há aparelho. O que existe é um plugin que
-> compila, com teste que confere que os três lados (TypeScript, Kotlin, Swift)
-> descrevem a mesma interface.
->
-> Para ligar o botão falta, em ordem: a verificação de recibo no servidor, as
-> notificações das duas lojas, os produtos cadastrados nos dois painéis, e
-> **ver uma compra funcionar num aparelho**.
+Os outros dois eram publicar sem vender dentro do app (comissão zero, pior
+conversão) e usar só o pagamento externo nos termos novos (credenciamento nos
+dois programas, e a redação da Google sugere que sozinho pode não ser
+permitido). Ficam registrados porque a decisão pode ser revista.
 
-**E isso já libera publicar.** Enquanto a cobrança da loja não existir, o app
-não oferece compra nenhuma: sem caminho de compra não há infração, e a venda
-segue inteira na web, onde não há comissão. O botão da loja entra depois,
-trocando `LOJA_DISPONIVEL` em `src/lib/plans/oferta-do-plus.ts` — e há teste
-que falha quando essa constante virar `true`, para obrigar quem mudar a olhar o
-resto.
+Construído entre 17 e 19/10/2026, **155 testes**:
 
-Dentro do app, a tela do Synse+ mostra a comparação inteira e **não** mostra
-preço nem botão. Esconder o valor parece exagero, já que ninguém compra ali, mas
-a regra alcança *levar* à compra: preço sem botão é instrução para ir procurar
-onde pagar. Netflix e Spotify não mostram valor dentro do app, e não é timidez.
+| Camada | Onde | Estado |
+| --- | --- | --- |
+| Banco com três origens | migration `0061` | **Aplicada em produção**, regras exercitadas contra ela |
+| Trava da compra dupla | `src/lib/plans/pode-assinar.ts` | Recusa comprar quando já há assinatura viva, dizendo onde ela vive |
+| O app se identifica | `appendUserAgent: 'SynseApp/1'` | Lido no servidor; dentro do app, **nunca** o Mercado Pago |
+| Plugin nativo | `native/synse-plus-billing` | StoreKit 2 e Play Billing 7.1.1. O Kotlin compila na CI e entra no APK; **o Swift nunca foi compilado** |
+| Verificação de recibo da Apple | `apple-jws.ts` | Cadeia conferida contra a `Apple Root CA - G3` fixada no repositório |
+| Verificação no Google | `google-api.ts` | Consulta à Play Developer API com conta de serviço |
+| Notificações das duas lojas | `/api/webhooks/lojas/…` | Renovação, cancelamento, estorno e expiração |
 
-### Os três caminhos
+### As três coisas que mais custaram acertar
 
-1. **Publicar sem vender o Synse+ dentro do app.** Mantém o cadeado e a tabela
-   comparativa, tira o caminho de compra. Menor mudança, comissão zero, pior
-   conversão — e atenção: sem o direito de link externo, nem um "assine no
-   site" pode aparecer.
-2. **Oferecer a cobrança da loja ao lado do Mercado Pago**, que é o que as duas
-   exigem hoje no Brasil. Correto e completo, e de longe o maior trabalho:
-   integrar IAP e Play Billing, validar recibo, e conciliar duas origens de
-   assinatura contra `assinatura_plus` sem o webhook de uma apagar o estado da
-   outra.
-3. **Usar só o pagamento externo**, nos termos novos. Exige credenciar-se nos
-   dois programas, e a redação da Google ("além do") sugere que sozinho pode
-   não ser permitido.
+Valem ser lidas por quem for mexer nisso, porque são erros que **não falham**:
 
-**Isto é decisão sua, não minha** — mexe em preço e em receita. Diga qual
-caminho e eu implemento.
+**1. O recibo emprestado.** Um recibo da App Store é um documento válido que
+qualquer pessoa extrai do próprio aparelho. Verificar a assinatura e parar aí o
+transforma em senha de Synse+: uma pessoa assina, publica o texto num grupo, e
+todos que colarem recebem acesso. O que fecha é a referência da conta, que o
+plugin manda na compra e a loja devolve no recibo — ela tem de ser o perfil de
+quem está pedindo.
+
+**2. A raiz fixada.** A cadeia de certificados vem **dentro** da JWS. Conferir
+"a assinatura combina com o certificado do `x5c`" é conferir que quem assinou
+assinou. Só a comparação com a raiz da Apple guardada no repositório dá valor
+ao resto.
+
+**3. Quem é dono da assinatura.** Com três origens escrevendo na mesma linha,
+uma notificação atrasada da Apple derrubava quem pagava pela web, e uma
+renovação velha do Mercado Pago dava Synse+ de graça a quem já cancelara na
+loja. As três regras da 0061 — fora de ordem não escreve, quem não é dono não
+mexe, compra nova ganha — existem por isso.
+
+### Fase 6 — Ligar a cobrança da loja **VOCÊ**
+
+Só depois das Fases 3 e 4, porque tudo aqui depende das duas contas.
+
+| # | O quê | Onde |
+| --- | --- | --- |
+| 6.1 | Criar o produto `synse_plus_mensal` como assinatura mensal | App Store Connect **e** Play Console. O id tem de ser idêntico nos dois |
+| 6.2 | Conta de serviço do Google Cloud, com a Play Developer API habilitada, convidada na Play Console | JSON inteiro em `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` na Vercel |
+| 6.3 | Notificações da App Store → `https://synse.com.br/api/webhooks/lojas/apple` | App Store Connect → *App Information → App Store Server Notifications* (V2) |
+| 6.4 | RTDN do Google → tópico Pub/Sub → push para `https://synse.com.br/api/webhooks/lojas/google`, com `Authorization: Bearer <segredo>` | Play Console → *Monetização → Configuração* |
+| 6.5 | O mesmo segredo em `GOOGLE_RTDN_SECRET` na Vercel | Sem ele definido, a rota **recusa tudo** |
+| 6.6 | **Ver uma compra funcionar num aparelho** | TestFlight no iPhone, faixa de teste na Play |
+| 6.7 | Virar `LOJA_DISPONIVEL` para `true` | `src/lib/plans/oferta-do-plus.ts` — e há teste que falha nessa hora, de propósito |
+
+> **A 6.6 não tem substituto.** Nenhuma compra deste código jamais foi
+> executada: não há produto cadastrado, não há conta de serviço, e ninguém viu
+> a folha de pagamento abrir. Virar a chave da 6.7 é afirmar que viu.
+
+**E nada disto bloqueia publicar.** Com `LOJA_DISPONIVEL` em `false` o app não
+oferece compra nenhuma — sem caminho de compra não há infração —, e a venda
+segue inteira na web, onde não há comissão.
+
+Dentro do app, a tela do Synse+ mostra a comparação e **não** mostra preço nem
+botão. Esconder o valor parece exagero, já que ninguém compra ali, mas a regra
+alcança *levar* à compra: preço sem botão é instrução para ir procurar onde
+pagar. Netflix e Spotify não mostram valor dentro do app, e não é timidez.
 
 ## Resumo em uma tabela
 
@@ -468,6 +489,11 @@ caminho e eu implemento.
 | 4.5 | Primeiro build iOS | VOCÊ (botão) | ~12 min de cota | Fase 5 |
 | 4.6 | Live Activity num iPhone | VOCÊ + iPhone | — | Fase 5 |
 | 5 | Formulários e envio | VOCÊ | — | loja iOS |
+| 6.1 | Produto `synse_plus_mensal` nos dois painéis | VOCÊ | — | vender no app |
+| 6.2 | Conta de serviço do Google na Vercel | VOCÊ | grátis | Android |
+| 6.3–6.5 | Notificações das duas lojas + `GOOGLE_RTDN_SECRET` | VOCÊ | grátis | renovação e cancelamento |
+| 6.6 | **Ver uma compra funcionar num aparelho** | VOCÊ + aparelho | — | 6.7 |
+| 6.7 | Virar `LOJA_DISPONIVEL` | VOCÊ | — | o botão aparecer |
 
 ---
 
@@ -475,6 +501,12 @@ caminho e eu implemento.
 
 Honestidade sobre o que este roteiro **não** entrega:
 
+- **Nenhuma compra pela loja jamais foi processada.** O código existe inteiro e
+  tem 155 testes; o que ele não tem é uma única execução real. Os testes da
+  Apple geram cadeias de certificados de verdade e provam a lógica — eles não
+  provam que a Apple manda os campos que este código espera.
+- **O Swift do plugin nunca foi compilado.** Não há Mac. O Kotlin compila na CI
+  a cada push; o primeiro build do Codemagic é que vai dizer do outro lado.
 - **Botões da Live Activity** (pular descanso, +30 s). Não implementados:
   exigem `LiveActivityIntent` e um App Group criado no portal da Apple. Fazer
   antes de ver o cartão num iPhone é escrever contra uma suposição.

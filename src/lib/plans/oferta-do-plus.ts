@@ -54,14 +54,24 @@ export type OfertaDoPlus =
 /**
  * A cobrança pela loja está construída e configurada?
  *
- * `false` porque ela **não existe ainda**: falta o plugin nativo de IAP e de
- * Play Billing, a verificação de recibo no servidor e as notificações das duas
- * lojas. Nada disso pode ser verificado sem as contas de loja e um aparelho.
+ * ── `false`, e o motivo mudou ───────────────────────────────────────────────
+ *
+ * Até 19/10/2026 esta constante era `false` porque **o código não existia**.
+ * Hoje ele existe inteiro: plugin nativo nas duas plataformas, verificação de
+ * recibo, notificações das duas lojas, e a 0061 por baixo. São 155 testes.
+ *
+ * Continua `false` por outro motivo, e ele é mais simples: **nada disso
+ * jamais processou uma compra.** Não há produto cadastrado nos painéis, não há
+ * conta de serviço do Google configurada, e ninguém viu a folha de pagamento
+ * abrir num aparelho. Código escrito não é código verificado — e este projeto
+ * já foi mordido duas vezes por essa diferença.
+ *
+ * Quem virar esta chave está afirmando ter visto uma compra funcionar. O que
+ * falta antes está em `docs/publicar-passo-a-passo.md`, na Fase 6.
  *
  * É constante e não variável de ambiente de propósito: isto é capacidade de
  * código, não configuração de instalação. Ligar por variável permitiria ligar
- * em produção antes de o código existir, e aí o app mostraria um botão que não
- * compra nada.
+ * em produção sem que ninguém tivesse testado nada.
  */
 export const LOJA_DISPONIVEL = false
 

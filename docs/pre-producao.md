@@ -56,8 +56,8 @@ npm run env:check
 
 ## Migrations
 
-**Estado em 03/10/2026: 0001 a 0048 aplicadas em produção, nada pendente**,
-confirmado por `/api/health?deep=1` (`appliedMigrations: 42`,
+**Estado em 21/10/2026: tudo até a 0061 aplicado em produção, nada pendente**,
+confirmado por `/api/health?deep=1` (`appliedMigrations: 55`,
 `pendingMigrations: []`).
 
 Esta linha envelhece a cada migration e por isso não é a fonte da verdade: a
@@ -2135,9 +2135,23 @@ haver substituto — não apagado: as telas, o split, a régua de cobrança e o
 schema continuam de pé, e o que sumiu foi só o que dependia de conhecer o
 gateway.
 
-Hoje o único provedor é o simulado. Nenhum centavo se move, em nenhum ambiente,
-e as telas dizem isso em vez de fingir que operam. O resto do SynseHub — alunos,
-check-in, treinos, painel — nunca dependeu disso.
+**Esta seção envelheceu, e a correção é de 21/10/2026.** Ela dizia "hoje o
+único provedor é o simulado; nenhum centavo se move, em nenhum ambiente". Não é
+mais verdade: `/api/health` de produção responde `paymentProvider.emUso:
+"mercadopago"`, com token e segredo de webhook válidos. O Mercado Pago entrou
+como provedor da assinatura do Synse+ e da mensalidade, e **está ligado em
+produção**.
+
+O que continua engavetado é o **marketplace**: `marketplace: false`, nenhum
+split, nenhuma cobrança em nome da academia. É por isso que as duas coisas
+pareciam a mesma e não são — o Synse cobra o aluno direto; cobrar *pela*
+academia é que depende de provedor com split.
+
+A lição para quem ler isto depois: a sonda é a fonte da verdade, e este
+arquivo não. Quando os dois discordarem, o errado é o arquivo.
+
+O resto do SynseHub — alunos, check-in, treinos, painel — nunca dependeu
+disso.
 
 **O que sobreviveu à remoção, e por quê.** A carteira da plataforma e o
 percentual vindo do banco são regra do marketplace, não do Asaas. Continuam em

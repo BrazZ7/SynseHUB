@@ -83,6 +83,61 @@ Depois **Redeploy**, e `identificacaoLegal` vira `true`.
 > que a lei manda publicar, não dado para esconder. Ainda assim, quem decide
 > qual endereço aparece é você, não eu.
 
+## Testar no iPhone hoje, sem pagar nada
+
+A pergunta aparece antes da Fase 4, então a resposta vem antes dela.
+
+O aplicativo do iOS **não existe para instalar** — nem no seu iPhone, nem no de
+ninguém. Não é burocracia pendente: o binário nunca foi compilado, porque
+compilar iOS exige macOS, e a esteira que aluga esse Mac (`codemagic.yaml`)
+depende de certificado que só sai com o Programa de Desenvolvedor da Apple
+pago. Sem os US$ 99, não há `.ipa`, não há TestFlight, não há atalho.
+
+**Mas você pode usar o Synse no iPhone agora**, e quase inteiro, porque o
+aplicativo é uma janela que carrega `synse.com.br` — o mesmo endereço que o
+Safari abre.
+
+### Como
+
+1. Abrir **`https://synse.com.br/app`** no **Safari** (tem de ser o Safari; o
+   Chrome no iPhone não instala na tela inicial).
+2. Botão de compartilhar — o quadrado com a flecha para cima, na barra de baixo.
+3. **Adicionar à Tela de Início** → *Adicionar*.
+
+Fica um ícone do Synse entre os aplicativos. Abre sem barra de endereço, em tela
+cheia, com a cor da marca na barra de status — `display: standalone` no
+`manifest.ts` e `appleWebApp` no `layout.tsx` são o que fazem isso.
+
+### O que funciona assim, e o que não
+
+| Funciona | Não funciona |
+| --- | --- |
+| Todas as telas do aluno, login, treino, dieta, desafios | **Live Activity** e Dynamic Island |
+| Corrida com GPS **com a tela ligada** | Cronômetro de descanso na **tela bloqueada** |
+| Notificação push (iOS 16.4+, só depois de instalado na tela inicial) | GPS em **segundo plano** — o iOS suspende a aba |
+| Pagar o Synse+ pelo Mercado Pago | Haptics do invólucro nativo |
+
+A coluna da direita é exatamente a lista de coisas que exigem código nativo — e
+é também, não por acaso, a resposta do Synse à diretriz 4.2 da Apple (ver 5.1).
+Então o atalho na tela inicial serve para **conferir o produto**: telas, dados,
+fluxo, cobrança. Não serve para conferir o que a Fase 4 existe para entregar, e
+o passo 4.6 continua sem substituto.
+
+> **A cobrança se comporta diferente, e está certo.** O servidor reconhece o app
+> pela marca `SynseApp/1` no *user agent* (`src/lib/plataforma/app-nativo.ts`),
+> que só o invólucro nativo acrescenta. No atalho do Safari ela não existe — o
+> Synse vê um navegador e oferece o Mercado Pago, que é o caminho permitido na
+> web. Não é defeito: é a regra de `oferta-do-plus.ts` funcionando.
+
+### Sideload com Apple ID grátis não resolve
+
+A tentação é assinar um `.ipa` com conta gratuita (Sideloadly, AltStore) e
+pular os US$ 99. Não compensa aqui, por três motivos somados: ainda precisaria
+de um `.ipa`, que precisa do build; a assinatura gratuita vence em **7 dias** e
+pede o computador de novo; e, decisivo, **provisionamento gratuito não assina
+App Groups nem Live Activity** — ou seja, não dá para testar justamente a única
+coisa que o atalho do Safari já não faz.
+
 ## Fase 1 — Android: a chave de assinatura
 
 **Uma vez na vida do produto.** Perder esta chave é não poder mais atualizar o

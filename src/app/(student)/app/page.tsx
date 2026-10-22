@@ -25,6 +25,7 @@ import { Progress } from '@/components/ui/progress'
 import { AppCheckInButton } from '@/features/checkin/app-checkin-button'
 import { getChallengeBoard } from '@/features/challenges/service'
 import { NotificationsBell } from '@/features/notifications/notifications-bell'
+import { CapaDoDia } from '@/features/students/components/capa-do-dia'
 import { getStudentHome } from '@/features/students/app-service'
 import { horaLocal } from '@/features/schedule/week'
 import { getDataSource } from '@/lib/database'
@@ -111,6 +112,13 @@ export default async function StudentHomePage() {
 
         {/* Cartão principal: o treino de hoje */}
         <section className="relative overflow-hidden rounded-2xl bg-synse-gradient-deep p-6 text-white shadow-synse-lg">
+          {/*
+           * A arte vem antes da bolha de propósito: a bolha verde desfocada
+           * fica no mesmo canto de onde desce o feixe de luz da foto, e por
+           * cima ela funde os dois. Atrás, a foto a apagaria.
+           */}
+          <CapaDoDia />
+
           <div
             aria-hidden
             className="pointer-events-none absolute -right-16 -top-16 size-52 rounded-full bg-synse-primary/25 blur-3xl"

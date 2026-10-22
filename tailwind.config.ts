@@ -372,6 +372,62 @@ const config: Config = {
               'translate3d(var(--vx, 200px), var(--vy, -90px), 0) rotate(var(--vg, 200deg)) scale(1.05)',
           },
         },
+        /*
+         * ── A aproximação da foto ───────────────────────────────────────────
+         *
+         * A foto dos halteres não fica parada: ela se aproxima e recua, muito
+         * devagar, como a respiração de quem está entre as séries. É o que dá
+         * profundidade a uma imagem que, parada, lê como papel de parede.
+         *
+         * Começa já em `scale(1.06)` e não em `1`. Não é estética: uma foto
+         * em escala exata não tem para onde se deslocar, e qualquer
+         * `translate` descobriria a borda e mostraria uma faixa vazia do
+         * cartão. A sobra de 6% é o que o passeio consome.
+         *
+         * Só `transform`. A GPU compõe sozinha, e isto fica atrás do texto do
+         * treino de hoje — animar `width` ou `background-position` aqui
+         * forçaria o navegador a redesenhar o cartão inteiro a cada quadro.
+         */
+        aproximar: {
+          from: { transform: 'scale(1.06) translate3d(0, 0, 0)' },
+          to: { transform: 'scale(1.14) translate3d(-1.5%, -1.5%, 0)' },
+        },
+        /*
+         * ── O facho que atravessa ───────────────────────────────────────────
+         *
+         * Na foto há um feixe de luz descendo no canto direito. Este é o
+         * mesmo feixe em movimento: uma faixa clara e inclinada que cruza o
+         * cartão e some.
+         *
+         * **A pausa é o que separa isto de um esqueleto de carregamento.** Uma
+         * faixa clara varrendo um retângulo sem parar é exatamente o que o
+         * `shimmer` logo acima faz para dizer "ainda estou carregando", e num
+         * cartão com conteúdo real aquilo lê como defeito. Por isso o
+         * deslocamento inteiro acontece nos primeiros 30% do ciclo e os 70%
+         * restantes repetem a mesma posição final: a faixa cruza uma vez e o
+         * cartão descansa por vários segundos antes da próxima.
+         *
+         * A opacidade sobe e desce dentro da travessia para a faixa nascer e
+         * morrer no meio do caminho, em vez de aparecer colada na borda.
+         *
+         * **O pico fica em 22%, e esse número foi medido, não escolhido.** A
+         * primeira versão acendia em 8% — e em 8% a faixa ainda está sobre o
+         * véu de leitura, a parte mais escura do cartão, onde luz nenhuma
+         * aparece. A conta: a faixa tem um terço da largura do cartão, então o
+         * centro dela cai em `(-130 + 360f) * 0,33 + 16,5` por cento. Medido no
+         * navegador: 13% da largura aos 10% do ciclo, 61% aos 22%, 82% aos 27%.
+         *
+         * O pico ficou em **26%**, com o centro perto de 78%. Não cai no meio
+         * dos halteres por acaso: o facho corre **embaixo** do véu de leitura,
+         * que é quase opaco até 62% da largura, então acender antes disso é
+         * acender atrás de uma cortina.
+         */
+        facho: {
+          '0%': { opacity: '0', transform: 'translate3d(-130%, 0, 0) skewX(-14deg)' },
+          '12%': { opacity: '0.2' },
+          '26%': { opacity: '0.85' },
+          '30%, 100%': { opacity: '0', transform: 'translate3d(230%, 0, 0) skewX(-14deg)' },
+        },
       },
       animation: {
         /*
@@ -413,6 +469,23 @@ const config: Config = {
          * ganharia da folha de estilos e o toque não conseguiria mudar nada.
          */
         'pulso-do-musculo': 'pulso-do-musculo var(--pulso, 2.6s) ease-in-out infinite',
+        /*
+         * `alternate`: sem ele a foto voltaria ao ponto de partida num salto a
+         * cada volta, e o salto é justamente o que o olho pega num movimento
+         * tão lento. Ida e volta fazem o ciclo ter 36s de verdade.
+         */
+        aproximar: 'aproximar 18s ease-in-out infinite alternate',
+        /*
+         * 11s, dos quais só os três primeiros têm movimento. Ver o quadro.
+         *
+         * `linear`, e não `ease-in-out`: a função de tempo vale **entre cada
+         * par de quadros vizinhos**, e os quadros de 10% e 22% existem só para
+         * a opacidade. Com `ease-in-out` a faixa desacelerava e acelerava de
+         * novo ao cruzar cada um deles — um tranco no meio da travessia, por
+         * causa de quadros que nem falam de posição. Feixe de luz atravessa em
+         * velocidade constante de qualquer forma.
+         */
+        facho: 'facho 11s linear infinite',
       },
     },
   },

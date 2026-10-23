@@ -85,7 +85,26 @@ describe('o resumo encerra o treino', () => {
   )
 
   it('o "Fechar" do resumo chama o encerramento, não só a limpeza', () => {
-    expect(tela).toMatch(/onFechar=\{\(\) => void treino\.concluirTreino\(\)\}/)
+    /*
+     * Aceita argumento. `concluirTreino` passou a receber o relato do treino
+     * (0062), opcional, e cravar `()` vazio aqui quebrava por causa de um
+     * parâmetro novo sem nada a ver com o defeito que este teste prende — que
+     * é o botão não chamar o encerramento.
+     *
+     * O que continua estrito é o alvo: tem de ser `treino.concluirTreino`.
+     */
+    expect(tela).toMatch(/onFechar=\{\([^)]*\) => void treino\.concluirTreino\(/)
+  })
+
+  it('o relato do treino sai do resumo junto com o encerramento', () => {
+    /*
+     * Mesma forma de defeito, um andar acima: com "Enviar" separado de
+     * "Fechar", quem escolhesse o esforço e tocasse em "Fechar" perderia o
+     * relato sem aviso — e não saberia, porque a tela sai de cena. Um botão
+     * só, e o rótulo é que muda.
+     */
+    expect(tela).toMatch(/<BlocoDeRelato/)
+    expect(tela).toMatch(/onFechar\(relato\)/)
   })
 
   it('o resumo é o que a tela mostra quando o treino termina', () => {

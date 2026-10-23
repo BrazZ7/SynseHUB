@@ -514,6 +514,34 @@ export type WorkoutSessionSummary = {
 }
 
 /**
+ * Como o aluno disse que o treino foi.
+ *
+ * Um por sessão, escrito pelo próprio aluno (0062). `effort` é o único campo
+ * obrigatório — a tela aparece quando a pessoa quer sair do app, e cada campo
+ * a mais é gente que não responde.
+ *
+ * `discomfort` é separado do esforço de propósito: dor não é intensidade, e um
+ * treino leve pode machucar o joelho.
+ */
+export type WorkoutFeedback = {
+  sessionId: string
+  studentId: string
+  /** De 1 a 10. O banco recusa fora disso. */
+  effort: number
+  discomfort: boolean
+  note: string | null
+  createdAt: string
+  /** `null` enquanto ninguém da academia leu. */
+  seenAt: string | null
+}
+
+/** O feedback com o treino a que ele se refere — o que o professor lê. */
+export type WorkoutFeedbackEntry = WorkoutFeedback & {
+  performedAt: string
+  planName: string | null
+}
+
+/**
  * Alguém com um treino aberto na academia, agora.
  *
  * Projeção estreita de propósito: nome, treino, quando começou e quantas

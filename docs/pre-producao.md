@@ -56,9 +56,10 @@ npm run env:check
 
 ## Migrations
 
-**Estado em 21/10/2026: tudo até a 0061 aplicado em produção, nada pendente**,
-confirmado por `/api/health?deep=1` (`appliedMigrations: 55`,
-`pendingMigrations: []`).
+**Estado em 23/10/2026: tudo até a 0061 aplicado em produção. A 0062 está
+escrita e ainda não foi colada** — é a primeira pendente desde setembro, e até
+ela entrar o relato do treino simplesmente não aparece (a leitura tolera a
+tabela ausente, como manda a regra de publicar-não-é-migrar).
 
 Esta linha envelhece a cada migration e por isso não é a fonte da verdade: a
 sonda é. Quem quiser saber o que falta abre o endereço, não este arquivo. O que
@@ -1158,6 +1159,21 @@ existem, não para conferir se subiram.
   `plus_subscription_conflicts`. Sem ela, uma notificação atrasada da Apple
   derruba o acesso de quem paga pela web — e uma renovação velha do Mercado
   Pago dá Synse+ de graça a quem já cancelou na loja.
+
+- **0062 (`0062_feedback_do_treino.sql`)** — `workout_session_feedback`: como o
+  aluno diz que o treino foi. Um registro por sessão, com esforço de 1 a 10,
+  marcação de dor ou desconforto e observação opcional. **Só o dono escreve** —
+  nem a academia, ao contrário de `finish_workout_session`: encerrar um treino
+  é operação, dizer que doeu é a voz do aluno. `organization_id` vem da sessão,
+  nunca do cliente. Reenvio da fila offline cai no `on conflict` e atualiza,
+  e relato corrigido volta a ser não lido. Índice parcial só para desconforto
+  não visto, que é a linha que alguém precisa achar hoje.
+
+  Tabela nova e não colunas em `workout_sessions`: o feedback é esparso, aquela
+  é a tabela quente do Treino Ativo, e o ciclo de "visto pelo professor" não é
+  da sessão de treino. `workout_logs.rpe` ficou onde estava — é resto do
+  desenho achatado que o produto já abandonou, e ressuscitar a tabela para
+  aproveitar uma coluna seria desfazer essa escolha.
 
   Não havia instrumentação nenhuma. `grep -rln "analytics|posthog|plausible|
   gtag(" src/` não devolvia nada, e `logger.ts` é registro técnico. Não havia

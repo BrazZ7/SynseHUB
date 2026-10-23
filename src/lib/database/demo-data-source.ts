@@ -118,6 +118,7 @@ import type {
   StudentAtRisk,
   OngoingWorkout,
   WorkoutPreferences,
+  WorkoutFeedbackEntry,
   WorkoutSessionSummary,
   Friend,
   FriendRankRow,
@@ -256,6 +257,14 @@ export class DemoDataSource implements DataSource {
   >()
   /** `sessionId:clientId` já gravados. É o `unique` da 0026, aqui. */
   private readonly demoSetClientIds = new Set<string>()
+  /**
+   * O feedback do treino, por sessão.
+   *
+   * `Map` com a sessão na chave, que é o `primary key (session_id)` da 0062
+   * aqui: reenvio da fila offline sobrescreve em vez de criar um segundo
+   * relato sobre o mesmo treino.
+   */
+  private readonly demoFeedback = new Map<string, WorkoutFeedbackEntry>()
   private demoWorkoutPrefs: WorkoutPreferences = { ...DEFAULT_WORKOUT_PREFERENCES }
   private readonly addedLeads: Lead[] = []
   private readonly leadEdits = new Map<string, Lead>()
@@ -626,6 +635,52 @@ export class DemoDataSource implements DataSource {
             totalReps: 0,
             volumeKg: 0,
           })
+          break
+        }
+
+        /*
+         * O feedback vem **antes** da busca pela sessão aberta, e antes do
+         * `else` lá embaixo, por dois motivos independentes:
+         *
+         *  - ele chega depois do encerramento, então não há sessão aberta
+         *    para achar — procurar uma faria o relato sumir no `break`;
+         *  - e o `else` final trata tudo que não reconhece como encerramento.
+         *    Sem ramo próprio, mandar feedback fecharia o treino do visitante
+         *    — exatamente o que o comentário do `undo` abaixo conta que já
+         *    aconteceu uma vez.
+         */
+        if (mutation.a === 'feedback') {
+          const ultima = [...this.demoWorkoutSessions]
+            .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+            .at(0)
+          if (ultima) {
+            this.demoFeedback.set(ultima.id, {
+              sessionId: ultima.id,
+              studentId: ultima.studentId,
+              effort: mutation.esforco ?? 5,
+              discomfort: mutation.dor ?? false,
+              // Ver a nota em `demo-journal.ts`: a observação não cabe no cookie.
+              note: null,
+              createdAt: new Date().toISOString(),
+              seenAt: null,
+              performedAt: ultima.startedAt,
+              planName: ultima.planName,
+            })
+          }
+          break
+        }
+
+        if (mutation.a === 'feedback-visto') {
+          // Vale para o último relato, que é o único que a demonstração produz.
+          const ultimo = [...this.demoFeedback.values()].sort((a, b) =>
+            b.createdAt.localeCompare(a.createdAt),
+          )[0]
+          if (ultimo && !ultimo.seenAt) {
+            this.demoFeedback.set(ultimo.sessionId, {
+              ...ultimo,
+              seenAt: new Date().toISOString(),
+            })
+          }
           break
         }
 
@@ -2438,6 +2493,59 @@ export class DemoDataSource implements DataSource {
     sessao.completedAt = new Date().toISOString()
     sessao.durationSeconds = durationSeconds
     await appendDemoMutation({ t: 'wsess', a: 'finish' })
+  }
+
+  async setWorkoutFeedback(entrada: {
+    sessionId: string
+    effort: number
+    discomfort: boolean
+    note: string | null
+  }): Promise<void> {
+    const sessao = this.demoWorkoutSessions.find((s) => s.id === entrada.sessionId)
+    // Sem sessão não há feedback — é o `P0002` da função do banco, aqui.
+    if (!sessao) return
+
+    this.demoFeedback.set(entrada.sessionId, {
+      sessionId: entrada.sessionId,
+      studentId: sessao.studentId,
+      effort: entrada.effort,
+      discomfort: entrada.discomfort,
+      note: entrada.note,
+      createdAt: new Date().toISOString(),
+      // Relato novo volta a ser novidade, como o `on conflict` da 0062 faz.
+      seenAt: null,
+      performedAt: sessao.startedAt,
+      planName: sessao.planName,
+    })
+    await appendDemoMutation({
+      t: 'wsess',
+      a: 'feedback',
+      esforco: entrada.effort,
+      dor: entrada.discomfort,
+    })
+  }
+
+  async listWorkoutFeedback(studentId: string, limite: number): Promise<WorkoutFeedbackEntry[]> {
+    return [...this.demoFeedback.values()]
+      .filter((f) => f.studentId === studentId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limite)
+  }
+
+  async marcarFeedbackVisto(sessionId: string): Promise<void> {
+    const feedback = this.demoFeedback.get(sessionId)
+    if (!feedback || feedback.seenAt) return
+    this.demoFeedback.set(sessionId, { ...feedback, seenAt: new Date().toISOString() })
+    /*
+     * Com entrada no diário, e a primeira versão não tinha.
+     *
+     * O raciocínio era economizar um dos 40 lugares do cookie. O efeito,
+     * medido no navegador: o professor marcava como visto, recarregava a
+     * ficha e o aviso voltava — porque a leitura seguinte remonta
+     * `demoFeedback` a partir do diário, e sem esta linha ele nasce de novo
+     * como não lido. Um botão que não gruda é pior que um lugar a menos.
+     */
+    await appendDemoMutation({ t: 'wsess', a: 'feedback-visto' })
   }
 
   async getActiveWorkoutSession(studentId: string): Promise<WorkoutSessionSummary | null> {

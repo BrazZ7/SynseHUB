@@ -77,23 +77,58 @@ export type Comando = {
   fechar: () => void
 }
 
+/**
+ * ── O canal abre quando precisa, e reabre depois de fechado ─────────────────
+ *
+ * Antes o canal era criado aqui em cima, uma vez, e `fechar()` o deixava
+ * inutilizável para sempre. Com `reactStrictMode` — que este projeto liga —
+ * o React monta o efeito, desmonta e monta de novo em desenvolvimento: o
+ * primeiro desmonte chamava `fechar()`, e como o objeto vem de um `useMemo`
+ * por dono, a segunda montagem chamava `anunciar()` no **mesmo canal fechado**.
+ *
+ * Resultado: `InvalidStateError: Channel is closed` subindo como erro não
+ * tratado e derrubando a tela inteira do Treino Ativo para a borda de erro.
+ * Só em desenvolvimento — em produção o efeito monta uma vez —, mas isso
+ * significava que ninguém conseguia abrir o Treino Ativo na própria máquina,
+ * e foi o que impediu de conferir o resumo do treino no navegador.
+ *
+ * Abrir sob demanda resolve sem mudar a política: assumir o comando passa a
+ * funcionar sempre que for chamado, que é o que o nome promete.
+ */
 export function criarComando(dono: string, minhaAba: string): Comando {
   if (typeof BroadcastChannel === 'undefined') {
     return { anunciar: () => {}, ouvir: () => {}, fechar: () => {} }
   }
 
-  const canal = new BroadcastChannel(nomeDoCanal(dono))
+  let canal: BroadcastChannel | null = null
+  /*
+   * Guardado fora do canal porque o canal morre e nasce: quem registrou o
+   * ouvinte uma vez continua ouvindo depois de uma reabertura, sem precisar
+   * chamar `ouvir` de novo.
+   */
+  let aoPerderOComando: (() => void) | null = null
+
+  function abrir(): BroadcastChannel {
+    if (canal) return canal
+    canal = new BroadcastChannel(nomeDoCanal(dono))
+    canal.onmessage = (evento) => {
+      if (aoPerderOComando && perdiOComando(evento.data, dono, minhaAba)) aoPerderOComando()
+    }
+    return canal
+  }
 
   return {
     anunciar: () => {
       const aviso: AvisoDeComando = { tipo: 'assumi', dono, aba: minhaAba }
-      canal.postMessage(aviso)
+      abrir().postMessage(aviso)
     },
     ouvir: (aoPerder) => {
-      canal.onmessage = (evento) => {
-        if (perdiOComando(evento.data, dono, minhaAba)) aoPerder()
-      }
+      aoPerderOComando = aoPerder
+      abrir()
     },
-    fechar: () => canal.close(),
+    fechar: () => {
+      canal?.close()
+      canal = null
+    },
   }
 }

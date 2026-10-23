@@ -3,7 +3,7 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { nomeDoCanal, perdiOComando } from '@/features/active-workout/storage/comando'
+import { criarComando, nomeDoCanal, perdiOComando } from '@/features/active-workout/storage/comando'
 
 /**
  * Qual aba manda no treino — o aceite 13.
@@ -106,5 +106,105 @@ describe('a aba sem comando', () => {
     )
     expect(tela).toMatch(/treino\.comandoEmOutraAba/)
     expect(tela).toMatch(/Treinar nesta aba/)
+  })
+})
+
+/**
+ * `criarComando` com um `BroadcastChannel` de mentira.
+ *
+ * Ela nunca tinha sido testada porque `BroadcastChannel` não existe no Node, e
+ * foi aí que o defeito se escondeu: o canal era criado uma vez e `fechar()` o
+ * deixava inutilizável. Com `reactStrictMode`, o React monta o efeito,
+ * desmonta e monta de novo — o desmonte fechava o canal e a segunda montagem
+ * chamava `anunciar()` nele, com `InvalidStateError` derrubando a tela inteira
+ * do Treino Ativo. Só em desenvolvimento, mas isso é todo dia de quem trabalha
+ * no projeto.
+ */
+class CanalDeMentira {
+  static abertos: CanalDeMentira[] = []
+  fechado = false
+  enviados: unknown[] = []
+  onmessage: ((evento: { data: unknown }) => void) | null = null
+
+  constructor(public readonly nome: string) {
+    CanalDeMentira.abertos.push(this)
+  }
+
+  postMessage(dado: unknown) {
+    // É o que o navegador faz: postar em canal fechado é erro, não silêncio.
+    if (this.fechado) throw new Error('InvalidStateError: Channel is closed')
+    this.enviados.push(dado)
+  }
+
+  close() {
+    this.fechado = true
+  }
+}
+
+describe('o ciclo de vida do canal', () => {
+  function comCanalDeMentira<T>(corpo: () => T): T {
+    const antes = (globalThis as Record<string, unknown>).BroadcastChannel
+    CanalDeMentira.abertos = []
+    ;(globalThis as Record<string, unknown>).BroadcastChannel = CanalDeMentira
+    try {
+      return corpo()
+    } finally {
+      ;(globalThis as Record<string, unknown>).BroadcastChannel = antes
+    }
+  }
+
+  it('anuncia de novo depois de fechado, em vez de estourar', () => {
+    comCanalDeMentira(() => {
+      const comando = criarComando(DONO, MINHA)
+      comando.ouvir(() => {})
+      comando.anunciar()
+      comando.fechar()
+
+      // A segunda montagem do efeito, no StrictMode.
+      expect(() => comando.anunciar()).not.toThrow()
+      expect(CanalDeMentira.abertos).toHaveLength(2)
+      expect(CanalDeMentira.abertos[1].enviados).toEqual([
+        { tipo: 'assumi', dono: DONO, aba: MINHA },
+      ])
+    })
+  })
+
+  it('o ouvinte continua valendo no canal reaberto', () => {
+    comCanalDeMentira(() => {
+      let perdeu = false
+      const comando = criarComando(DONO, MINHA)
+      comando.ouvir(() => {
+        perdeu = true
+      })
+      comando.fechar()
+      comando.anunciar()
+
+      // Outra aba assume, e quem registrou o ouvinte uma vez precisa saber.
+      CanalDeMentira.abertos[1].onmessage?.({ data: anuncio('aba-2') })
+      expect(perdeu).toBe(true)
+    })
+  })
+
+  it('não abre canal nenhum antes de precisar', () => {
+    comCanalDeMentira(() => {
+      criarComando(DONO, MINHA)
+      expect(CanalDeMentira.abertos).toHaveLength(0)
+    })
+  })
+
+  it('sem `BroadcastChannel` no ambiente, não quebra', () => {
+    // Webview antigo: não há aviso entre abas, e o comportamento é o de antes.
+    const antes = (globalThis as Record<string, unknown>).BroadcastChannel
+    delete (globalThis as Record<string, unknown>).BroadcastChannel
+    try {
+      const comando = criarComando(DONO, MINHA)
+      expect(() => {
+        comando.ouvir(() => {})
+        comando.anunciar()
+        comando.fechar()
+      }).not.toThrow()
+    } finally {
+      ;(globalThis as Record<string, unknown>).BroadcastChannel = antes
+    }
   })
 })

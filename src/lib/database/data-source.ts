@@ -44,6 +44,7 @@ import type {
   OngoingWorkout,
   WorkoutPreferences,
   WorkoutAdherenceRow,
+  WorkoutFeedbackEntry,
   WorkoutSessionSummary,
   WorkoutTotals,
   CollectionRule,
@@ -988,6 +989,23 @@ export interface DataSource {
    */
   listActiveWorkoutSessions(organizationId: string): Promise<OngoingWorkout[]>
   listWorkoutSessions(studentId: string, limite: number): Promise<WorkoutSessionSummary[]>
+
+  /**
+   * O aluno diz como o treino foi (0062).
+   *
+   * Idempotente: a fila offline reenvia até receber sucesso, e duas chegadas
+   * do mesmo feedback têm de deixar uma linha.
+   */
+  setWorkoutFeedback(entrada: {
+    sessionId: string
+    effort: number
+    discomfort: boolean
+    note: string | null
+  }): Promise<void>
+  /** O que este aluno mandou, do mais recente para o mais antigo. */
+  listWorkoutFeedback(studentId: string, limite: number): Promise<WorkoutFeedbackEntry[]>
+  /** A academia registra que leu. Primeira vez vale; as seguintes não mexem. */
+  marcarFeedbackVisto(sessionId: string): Promise<void>
   getWorkoutPreferences(userProfileId: string): Promise<WorkoutPreferences>
   saveWorkoutPreferences(
     userProfileId: string,

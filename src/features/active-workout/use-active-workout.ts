@@ -32,7 +32,11 @@ import {
 } from '@/features/active-workout/actions'
 import { faltaEncerrarNoServidor } from '@/features/active-workout/encerramento'
 import { criarComando } from '@/features/active-workout/storage/comando'
-import { resumoDoTreino, type ResumoDoTreino } from '@/features/active-workout/state'
+import {
+  resumoDoTreino,
+  type RelatoDoTreino,
+  type ResumoDoTreino,
+} from '@/features/active-workout/state'
 import { sincronizar } from '@/features/active-workout/sync'
 
 /**
@@ -344,6 +348,7 @@ export function useActiveWorkout(dono: string, preferencias?: Partial<WorkoutSet
         treinosPerdidos: resultado.treinosPerdidos,
         seriesPerdidas: resultado.seriesPerdidas,
         desfazerPerdidos: resultado.desfazerPerdidos,
+        relatosPerdidos: resultado.relatosPerdidos,
       }),
     )
   }, [dono])
@@ -539,7 +544,26 @@ export function useActiveWorkout(dono: string, preferencias?: Partial<WorkoutSet
    * velha, porque `start_workout_session` devolve a que já está aberta.
    */
   const fechar = useCallback(
-    async (status: 'COMPLETED' | 'ABANDONED') => {
+    async (status: 'COMPLETED' | 'ABANDONED', relato?: RelatoDoTreino) => {
+      /*
+       * O relato entra na fila **antes** de `limparSessao`: depois dela não há
+       * mais `sessao.clientId`, e sem ele a operação não sabe a que treino se
+       * refere. A ordem de envio quem resolve é `ordem.ts`, que o põe por
+       * último — então enfileirar aqui, antes do encerramento, é inofensivo.
+       */
+      if (sessao && relato) {
+        await enfileirar({
+          kind: 'FEEDBACK',
+          clientId: id(),
+          dono,
+          sessionClientId: sessao.clientId,
+          effort: relato.effort,
+          discomfort: relato.discomfort,
+          note: relato.note,
+          tentativas: 0,
+        })
+      }
+
       if (sessao && faltaEncerrarNoServidor(sessao, await lerFila(dono), encerradoRef.current)) {
         const agora = Date.now()
         const final = reduzir(sessao, { type: 'FINISH', agora })
@@ -565,8 +589,17 @@ export function useActiveWorkout(dono: string, preferencias?: Partial<WorkoutSet
     [dono, sessao, liveActivity, feedback, empurrarFila],
   )
 
-  /** O "Fechar" do resumo: o treino terminou, e o servidor precisa saber. */
-  const concluirTreino = useCallback(() => fechar('COMPLETED'), [fechar])
+  /**
+   * O "Fechar" do resumo: o treino terminou, e o servidor precisa saber.
+   *
+   * `relato` é opcional porque a escala de esforço é opcional. Quem só quer
+   * sair da tela sai, e isso é de propósito: o resumo aparece no instante em
+   * que a pessoa quer guardar o celular.
+   */
+  const concluirTreino = useCallback(
+    (relato?: RelatoDoTreino) => fechar('COMPLETED', relato),
+    [fechar],
+  )
 
   /**
    * O "Descartar e começar outro" da retomada.

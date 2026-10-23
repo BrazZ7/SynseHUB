@@ -105,6 +105,24 @@ export type PendingOperation =
       status: 'COMPLETED' | 'ABANDONED'
       tentativas: number
     }
+  /**
+   * O relato do treino, que viaja por último.
+   *
+   * Entra na fila como as outras porque o resumo aparece no mesmo lugar em
+   * que a rede costuma faltar: o salão da academia. Mandar direto faria o
+   * relato de quem treinou no subsolo sumir sem aviso — e a pessoa sairia
+   * achando que o professor recebeu.
+   */
+  | {
+      kind: 'FEEDBACK'
+      clientId: string
+      dono: string
+      sessionClientId: string
+      effort: number
+      discomfort: boolean
+      note: string | null
+      tentativas: number
+    }
 
 function abrir(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {

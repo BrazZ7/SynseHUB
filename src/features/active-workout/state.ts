@@ -11,6 +11,20 @@ export const initialActiveWorkoutState: ActiveWorkoutActionState = { status: 'id
 export type ResumoDoTreino = { texto: string; tom: 'neutro' | 'alerta' } | null
 
 /**
+ * O que o aluno conta sobre o treino que acabou de fazer.
+ *
+ * Mora aqui, e não no hook, pela mesma regra que trouxe `ResumoDoTreino`: o
+ * arquivo de actions é `'use server'` e só exporta função assíncrona, então
+ * tipo e constante ficam no `state.ts` irmão.
+ */
+export type RelatoDoTreino = {
+  /** De 1 a 10. */
+  effort: number
+  discomfort: boolean
+  note: string | null
+}
+
+/**
  * O recado da fila do Treino Ativo.
  *
  * A regra que importa é a perda. A fila desiste depois de tentar demais, e
@@ -35,6 +49,15 @@ export function resumoDoTreino(estado: {
    * histórico, em vez de descobrir um número que não reconhece semanas depois.
    */
   desfazerPerdidos?: number
+  /**
+   * Relatos que a fila desistiu de enviar.
+   *
+   * Terceira notícia. O treino está no histórico e as séries também — o que
+   * não saiu do aparelho foi o recado ao professor. Calar aqui faria a pessoa
+   * sair achando que ele foi avisado, que é o pior dos desfechos: ela esperaria
+   * um ajuste que ninguém pediu.
+   */
+  relatosPerdidos?: number
 }): ResumoDoTreino {
   if (estado.treinosPerdidos > 0) {
     const plural = estado.treinosPerdidos > 1
@@ -67,6 +90,20 @@ export function resumoDoTreino(estado: {
       texto: plural
         ? `${estado.desfazerPerdidos} séries que você desfez podem ter ficado no seu histórico. Confira o treino.`
         : 'Uma série que você desfez pode ter ficado no seu histórico. Confira o treino.',
+    }
+  }
+
+  if ((estado.relatosPerdidos ?? 0) > 0) {
+    /*
+     * Por último entre as perdas: quem perdeu o treino inteiro não precisa
+     * ouvir, no mesmo instante, que o relato também não foi.
+     */
+    const plural = (estado.relatosPerdidos ?? 0) > 1
+    return {
+      tom: 'alerta',
+      texto: plural
+        ? `${estado.relatosPerdidos} relatos de treino não chegaram ao seu professor.`
+        : 'Seu relato do treino não chegou ao professor.',
     }
   }
 

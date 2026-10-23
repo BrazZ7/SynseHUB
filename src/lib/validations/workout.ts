@@ -115,3 +115,29 @@ export const workoutPreferencesSchema = z.object({
     .min(0)
     .max(900, 'Quinze minutos é o máximo de descanso padrão.'),
 })
+
+/**
+ * O relato do aluno sobre o treino (0062).
+ *
+ * O teto de 500 caracteres é o mesmo `check` da coluna. Validar aqui não
+ * substitui o banco — dá mensagem em português antes de gastar uma viagem.
+ */
+export const workoutFeedbackSchema = z.object({
+  effort: z.coerce
+    .number()
+    .int('O esforço vai de 1 a 10.')
+    .min(1, 'O esforço vai de 1 a 10.')
+    .max(10, 'O esforço vai de 1 a 10.'),
+  discomfort: z.boolean(),
+  note: z
+    .string()
+    .trim()
+    .max(500, 'A observação cabe em 500 caracteres.')
+    /*
+     * Vazio vira nulo aqui e não no banco: `nullif(btrim(...))` lá dentro faz
+     * o mesmo, e as duas pontas concordando é o que mantém a coluna sem
+     * strings de espaço em branco vindas de qualquer caminho.
+     */
+    .transform((texto) => texto || null)
+    .nullable(),
+})

@@ -1,5 +1,7 @@
 'use client'
 
+import { useState } from 'react'
+
 import Link from 'next/link'
 import {
   Check,
@@ -16,13 +18,14 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { AjustesDoTreino } from '@/features/active-workout/components/ajustes-do-treino'
+import { BlocoDeRelato } from '@/features/active-workout/components/relato-do-treino'
 import {
   duracaoEfetiva,
   exercicioAtual,
   resumo,
 } from '@/features/active-workout/engine/workout-engine'
 import type { PlannedExercise, WorkoutSession } from '@/features/active-workout/engine/types'
-import type { ResumoDoTreino } from '@/features/active-workout/state'
+import type { RelatoDoTreino, ResumoDoTreino } from '@/features/active-workout/state'
 import { useActiveWorkout, useRestCountdown } from '@/features/active-workout/use-active-workout'
 import { usePreferenciasDoTreino } from '@/features/active-workout/use-preferencias-do-treino'
 import { cn, formatNumber } from '@/lib/utils'
@@ -140,7 +143,7 @@ export function ActiveWorkoutScreen({
     return (
       <Resumo
         sessao={sessao}
-        onFechar={() => void treino.concluirTreino()}
+        onFechar={(relato) => void treino.concluirTreino(relato ?? undefined)}
         onDesfazer={treino.podeDesfazer ? () => void treino.desfazer() : undefined}
       />
     )
@@ -194,7 +197,7 @@ function Abertura({
   const series = exercises.reduce((soma, e) => soma + e.sets, 0)
 
   return (
-    <section className="bg-synse-gradient-deep relative overflow-hidden rounded-2xl p-6 text-white shadow-synse-lg">
+    <section className="relative overflow-hidden rounded-2xl bg-synse-gradient-deep p-6 text-white shadow-synse-lg">
       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/70">Treino Ativo</p>
       <h2 className="mt-1 text-2xl font-semibold">{planName}</h2>
       <p className="mt-1 text-sm text-white/80">
@@ -416,8 +419,8 @@ function PainelDescanso({
         <>
           <Cronometro restEndsAt={sessao.restEndsAt} />
           <p className="mt-2 text-sm text-synse-muted">
-            Série concluída: {sessao.setNumber}/{exercicio?.sets} · próxima com{' '}
-            {sessao.currentReps} reps
+            Série concluída: {sessao.setNumber}/{exercicio?.sets} · próxima com {sessao.currentReps}{' '}
+            reps
             {sessao.currentWeight !== null && ` e ${sessao.currentWeight} kg`}
           </p>
 
@@ -480,7 +483,7 @@ function ExercicioConcluido({
   const proximo = sessao.exercises[sessao.exerciseIndex + 1]
 
   return (
-    <section className="border-synse-success/40 bg-synse-success/10 rounded-2xl border p-5 text-center shadow-synse-sm">
+    <section className="rounded-2xl border border-synse-success/40 bg-synse-success/10 p-5 text-center shadow-synse-sm">
       <Check className="mx-auto size-8 text-synse-success" aria-hidden />
       <p className="mt-2 text-lg font-semibold text-synse-text">
         {exercicioAtual(sessao)?.name} concluído
@@ -533,16 +536,14 @@ function ExercicioConcluido({
 function OutraAba({ onAssumir }: { onAssumir: () => void }) {
   return (
     <section
-      className="border-synse-warning/40 bg-synse-warning/10 rounded-2xl border p-5"
+      className="rounded-2xl border border-synse-warning/40 bg-synse-warning/10 p-5"
       role="status"
     >
       <TriangleAlert className="size-6 text-synse-warning" aria-hidden />
-      <p className="mt-2 font-semibold text-synse-text">
-        Seu treino está aberto em outra aba.
-      </p>
+      <p className="mt-2 font-semibold text-synse-text">Seu treino está aberto em outra aba.</p>
       <p className="mt-1 text-sm text-synse-muted">
-        Para não gravar duas versões do mesmo treino, esta aba parou de registrar. Continue na
-        outra aba, ou traga o treino para cá.
+        Para não gravar duas versões do mesmo treino, esta aba parou de registrar. Continue na outra
+        aba, ou traga o treino para cá.
       </p>
       <Button size="lg" onClick={onAssumir} className="mt-4 h-14 w-full">
         Treinar nesta aba
@@ -563,12 +564,7 @@ function OutraAba({ onAssumir }: { onAssumir: () => void }) {
  */
 function Desfazer({ onDesfazer }: { onDesfazer: () => void }) {
   return (
-    <Button
-      variant="ghost"
-      size="sm"
-      onClick={onDesfazer}
-      className="w-full text-synse-muted"
-    >
+    <Button variant="ghost" size="sm" onClick={onDesfazer} className="w-full text-synse-muted">
       <Undo2 className="size-3.5" aria-hidden />
       Desfazer a última série
     </Button>
@@ -598,7 +594,7 @@ function Retomada({
   onDescartar: () => void
 }) {
   return (
-    <section className="border-synse-warning/40 bg-synse-warning/10 rounded-2xl border p-5">
+    <section className="rounded-2xl border border-synse-warning/40 bg-synse-warning/10 p-5">
       <p className="font-semibold text-synse-text">Você tem um treino em andamento.</p>
       <p className="mt-1 text-sm text-synse-muted">
         {sessao.planName} · {sessao.completedSets.length} séries registradas.
@@ -622,14 +618,19 @@ function Resumo({
   onDesfazer,
 }: {
   sessao: WorkoutSession
-  onFechar: () => void
+  onFechar: (relato: RelatoDoTreino | null) => void
   /** Ausente quando não há série para desfazer — treino vazio, por exemplo. */
   onDesfazer?: () => void
 }) {
   const dados = resumo(sessao, sessao.finishedAt ?? Date.now())
+  /*
+   * `useState` direto como `onChange` do bloco: o setter é estável, então o
+   * filho avisa durante o evento em vez de num efeito.
+   */
+  const [relato, setRelato] = useState<RelatoDoTreino | null>(null)
 
   return (
-    <section className="bg-synse-gradient-deep overflow-hidden rounded-2xl p-6 text-white shadow-synse-lg">
+    <section className="overflow-hidden rounded-2xl bg-synse-gradient-deep p-6 text-white shadow-synse-lg">
       <TrendingUp className="size-8" aria-hidden />
       <h2 className="mt-2 text-2xl font-semibold">Treino concluído</h2>
       <p className="text-sm text-white/80">{sessao.planName}</p>
@@ -646,13 +647,23 @@ function Resumo({
         />
       </dl>
 
+      <BlocoDeRelato onChange={setRelato} />
+
       <div className="mt-6 grid grid-cols-1 gap-2">
+        {/*
+         * Um botão só, e o rótulo é que muda.
+         *
+         * Com "Enviar" separado de "Fechar", quem escolhesse o esforço e
+         * tocasse em "Fechar" perderia o relato sem aviso — e não saberia,
+         * porque a tela sai de cena. Aqui o mesmo toque leva as duas coisas,
+         * e o rótulo diz qual das duas está acontecendo.
+         */}
         <Button
           size="lg"
-          onClick={onFechar}
+          onClick={() => onFechar(relato)}
           className="h-12 bg-white font-semibold text-synse-primary hover:bg-white/90"
         >
-          Fechar
+          {relato ? 'Enviar e fechar' : 'Fechar'}
         </Button>
         <Button variant="ghost" asChild className="text-white/80 hover:text-white">
           <Link href="/app/progress">

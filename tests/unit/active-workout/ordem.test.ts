@@ -27,6 +27,29 @@ const desfazer = (clientId: string, serieClientId: string): OperacaoOrdenavel =>
   serieClientId,
 })
 const fim = (clientId: string): OperacaoOrdenavel => ({ kind: 'FINISH', clientId })
+const relato = (clientId: string): OperacaoOrdenavel => ({ kind: 'FEEDBACK', clientId })
+
+/**
+ * Uma operação de cada tipo que existe.
+ *
+ * `Record` com a união na chave de propósito: acrescentar um `kind` em
+ * `PendingOperation` sem acrescentar uma linha aqui **não compila**. É a única
+ * forma de este arquivo acompanhar a união sozinho — e ela importa porque
+ * `ordenarFila` monta a saída filtrando por tipo e concatenando, então um tipo
+ * que ninguém pôs lá dentro some da fila sem erro nenhum: fica guardado no
+ * IndexedDB para sempre, nunca enviado e nunca apagado.
+ *
+ * O teste "não perde nem duplica" logo abaixo usa uma lista escrita à mão e
+ * por isso não pega esse caso — ele protege a remontagem, não a cobertura dos
+ * tipos.
+ */
+const UMA_DE_CADA: Record<OperacaoOrdenavel['kind'], OperacaoOrdenavel> = {
+  START: inicio('i'),
+  SET: serie('s', 10),
+  UNDO: desfazer('u', 's'),
+  FINISH: fim('f'),
+  FEEDBACK: relato('r'),
+}
 
 const ids = (fila: OperacaoOrdenavel[]) => ordenarFila(fila).map((o) => o.clientId)
 
@@ -93,6 +116,23 @@ describe('a ordem da fila', () => {
     expect([...saida].map((o) => o.clientId).sort()).toEqual(
       [...fila].map((o) => o.clientId).sort(),
     )
+  })
+
+  it('nenhum tipo de operação some na reordenação', () => {
+    const fila = Object.values(UMA_DE_CADA)
+    const saida = ordenarFila(fila)
+
+    expect(saida.map((o) => o.kind).sort()).toEqual(fila.map((o) => o.kind).sort())
+  })
+
+  it('o relato do treino vai por último, depois do encerramento', () => {
+    /*
+     * Ele depende da abertura da sessão, não do encerramento — a função do
+     * banco aceita treino aberto de propósito. Ir no fim é o lugar em que
+     * isso é verdade sem precisar de regra nova.
+     */
+    const saida = ordenarFila([relato('r'), fim('f'), serie('s', 10), inicio('i')])
+    expect(saida.map((o) => o.kind)).toEqual(['START', 'SET', 'FINISH', 'FEEDBACK'])
   })
 
   it('não muda a fila que recebeu', () => {

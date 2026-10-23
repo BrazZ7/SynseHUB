@@ -96,4 +96,46 @@ describe('o resumo da fila de treino', () => {
       /^Um registro/,
     )
   })
+
+  it('avisa quando o relato não chegou ao professor', () => {
+    /*
+     * Terceira notícia, e a mais fácil de calar por engano: o treino está no
+     * histórico e as séries também, então nada parece errado. Calar faria a
+     * pessoa sair achando que o professor foi avisado — e esperar um ajuste
+     * que ninguém pediu.
+     */
+    const resumo = resumoDoTreino({
+      pendentes: 0,
+      treinosPerdidos: 0,
+      seriesPerdidas: 0,
+      relatosPerdidos: 1,
+    })
+    expect(resumo?.tom).toBe('alerta')
+    expect(resumo?.texto).toMatch(/relato/i)
+    expect(resumo?.texto).toMatch(/professor/i)
+    // Não pode sugerir que faltou treino: o histórico está certo.
+    expect(resumo?.texto).not.toMatch(/histórico/i)
+  })
+
+  it('no plural conta quantos relatos', () => {
+    expect(
+      resumoDoTreino({
+        pendentes: 0,
+        treinosPerdidos: 0,
+        seriesPerdidas: 0,
+        relatosPerdidos: 2,
+      })?.texto,
+    ).toMatch(/^2 relatos/)
+  })
+
+  it('a série perdida tem precedência sobre o relato perdido', () => {
+    expect(
+      resumoDoTreino({
+        pendentes: 0,
+        treinosPerdidos: 0,
+        seriesPerdidas: 1,
+        relatosPerdidos: 1,
+      })?.texto,
+    ).toMatch(/^Uma série/)
+  })
 })

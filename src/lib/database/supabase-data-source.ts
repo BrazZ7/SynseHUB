@@ -118,6 +118,7 @@ import type {
   StudentAtRisk,
   OngoingWorkout,
   WorkoutPreferences,
+  WorkoutFeedbackEntry,
   WorkoutSessionSummary,
   Friend,
   FriendRankRow,
@@ -2846,6 +2847,63 @@ export class SupabaseDataSource implements DataSource {
           .limit(limite),
       )) ?? []
     return rows.map((row) => this.mapWorkoutSession(row))
+  }
+
+  async setWorkoutFeedback(entrada: {
+    sessionId: string
+    effort: number
+    discomfort: boolean
+    note: string | null
+  }): Promise<void> {
+    const { error } = await this.client.rpc('set_workout_feedback', {
+      p_session_id: entrada.sessionId,
+      p_effort: entrada.effort,
+      p_discomfort: entrada.discomfort,
+      p_note: entrada.note,
+    })
+    if (error) this.fail('setWorkoutFeedback', error)
+  }
+
+  async listWorkoutFeedback(studentId: string, limite: number): Promise<WorkoutFeedbackEntry[]> {
+    /*
+     * A sessão vem junto porque o feedback sozinho não diz de que treino é, e
+     * "esforço 9" sem saber se foi o treino de perna ou o de braço não ajuda
+     * ninguém a ajustar carga.
+     */
+    const rows =
+      (await this.select<Row[]>(
+        'listWorkoutFeedback',
+        this.client
+          .from('workout_session_feedback')
+          .select(
+            'session_id, student_id, effort, discomfort, note, created_at, seen_at, workout_sessions(started_at, workout_plans(name))',
+          )
+          .eq('student_id', studentId)
+          .order('created_at', { ascending: false })
+          .limit(limite),
+      )) ?? []
+
+    return rows.map((row) => ({
+      sessionId: row.session_id,
+      studentId: row.student_id,
+      effort: Number(row.effort),
+      discomfort: Boolean(row.discomfort),
+      note: row.note ?? null,
+      createdAt: row.created_at,
+      seenAt: row.seen_at ?? null,
+      /*
+       * `started_at` do treino, e não `created_at` do feedback: o aluno pode
+       * mandar o relato horas depois, quando o aparelho voltar a ter rede. O
+       * professor quer saber de que treino se fala.
+       */
+      performedAt: row.workout_sessions?.started_at ?? row.created_at,
+      planName: row.workout_sessions?.workout_plans?.name ?? null,
+    }))
+  }
+
+  async marcarFeedbackVisto(sessionId: string): Promise<void> {
+    const { error } = await this.client.rpc('marcar_feedback_visto', { p_session_id: sessionId })
+    if (error) this.fail('marcarFeedbackVisto', error)
   }
 
   async getWorkoutPreferences(userProfileId: string): Promise<WorkoutPreferences> {

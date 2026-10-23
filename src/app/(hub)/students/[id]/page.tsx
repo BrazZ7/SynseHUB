@@ -34,6 +34,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { SEMANAS_DO_GRAFICO } from '@/features/workouts/ganho-de-carga'
+import { FeedbackDoAluno } from '@/features/workouts/feedback-do-aluno'
 import { requireHubSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 import { seAindaNaoMigrou } from '@/lib/database/pending-migration'
@@ -67,6 +68,11 @@ const JANELA_DA_BALANCA = '1a' as const
  * concluir que o histórico acaba onde a tabela acaba.
  */
 const PESAGENS_NA_FICHA = 30
+/*
+ * Oito relatos. A ficha mostra o que ainda cabe ajustar — relato de dois meses
+ * atrás já virou histórico, e uma lista longa esconde o de ontem.
+ */
+const RELATOS_NA_FICHA = 8
 
 /** Depois disso não é mais "agora". O mesmo corte da 0047. */
 const OITO_HORAS = 8 * 60 * 60 * 1000
@@ -91,6 +97,15 @@ export default async function StudentProfilePage({ params }: { params: Params })
   const canSeeFinance = can(session.role, 'finance:read')
   const canSeeHealth = can(session.role, 'assessments:read')
   const canSeeNutrition = can(session.role, 'nutrition:read')
+  /*
+   * O relato do treino fica atrás de `workouts:read`, e não de
+   * `assessments:read`. Quem recebe o recado é quem ajusta a carga: a recepção
+   * não tem `workouts:read` e não deve ler "senti dor no ombro"; a
+   * nutricionista tem `assessments:read` mas não `workouts:read`, e dor em
+   * exercício não é assunto dela.
+   */
+  const canSeeWorkouts = can(session.role, 'workouts:read')
+  const canWriteWorkouts = can(session.role, 'workouts:write')
   const canWriteNutrition = can(session.role, 'nutrition:write')
 
   /*
@@ -121,6 +136,7 @@ export default async function StudentProfilePage({ params }: { params: Params })
     seriePesagens,
     treinoEmAndamento,
     dietas,
+    relatosDoTreino,
   ] = await Promise.all([
     canSeeFinance
       ? dataSource.getChargesForStudent(session.organizationId, student.id, { pageSize: 24 })
@@ -192,6 +208,14 @@ export default async function StudentProfilePage({ params }: { params: Params })
       ? dataSource
           .listNutritionPlansForStudent(session.organizationId, student.id)
           .catch(seAindaNaoMigrou([]))
+      : Promise.resolve([]),
+    /*
+     * `seAindaNaoMigrou` porque a 0062 pode não ter sido colada ainda: a
+     * Vercel publica no push e o SQL vai à mão. Sem isto a ficha inteira
+     * abriria vazia por causa de uma tabela que ninguém olhou.
+     */
+    canSeeWorkouts
+      ? dataSource.listWorkoutFeedback(student.id, RELATOS_NA_FICHA).catch(seAindaNaoMigrou([]))
       : Promise.resolve([]),
   ])
   const autorizacaoDoCorpo = autorizacaoDoAluno(
@@ -473,6 +497,17 @@ export default async function StudentProfilePage({ params }: { params: Params })
 
         {/* ── Treinos ── */}
         <TabsContent value="workouts" className="space-y-4">
+          {/*
+           * Antes dos planos atribuídos de propósito: o que o aluno disse é o
+           * que muda o que vem a seguir, e um relato de dor embaixo de três
+           * cartões de plano é um relato que ninguém lê.
+           */}
+          <FeedbackDoAluno
+            relatos={relatosDoTreino}
+            studentId={student.id}
+            podeMarcar={canWriteWorkouts}
+          />
+
           {assignments.length === 0 ? (
             <EmptyState
               icon={Dumbbell}

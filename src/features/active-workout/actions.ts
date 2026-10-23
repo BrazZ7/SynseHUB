@@ -5,7 +5,7 @@ import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 import { AppError, toUserMessage } from '@/lib/errors'
 import { logger } from '@/lib/logger'
-import { workoutPreferencesSchema } from '@/lib/validations/workout'
+import { workoutFeedbackSchema, workoutPreferencesSchema } from '@/lib/validations/workout'
 import type { WorkoutPreferences } from '@/types/domain'
 
 /**
@@ -138,6 +138,53 @@ export async function finishWorkoutSessionAction(
   } catch (error) {
     if (!(error instanceof AppError)) {
       logger.error('workout:finish_failed', { error: String(error) })
+    }
+    return { ok: false, erro: toUserMessage(error) }
+  }
+}
+
+/**
+ * Como o treino foi, do aluno para o professor.
+ *
+ * Mesma forma das outras: quem chama é a fila, não um formulário, e o retorno
+ * diz só se pode apagar da fila ou tentar de novo.
+ *
+ * A validação aqui é pela mensagem. Quem recusa de verdade é
+ * `set_workout_feedback` (0062), que confere o dono pelo `auth.uid()` e a
+ * escala pelo `check` da coluna — e é a camada que não dá para contornar.
+ */
+export async function enviarFeedbackDoTreinoAction(entrada: {
+  sessionId: string
+  effort: number
+  discomfort: boolean
+  note: string | null
+}): Promise<SyncResult> {
+  try {
+    await requireStudentSession()
+
+    const analisado = workoutFeedbackSchema.safeParse(entrada)
+    if (!analisado.success) {
+      return { ok: false, erro: analisado.error.issues[0]?.message ?? 'Relato inválido.' }
+    }
+
+    const dataSource = await getDataSource()
+    await dataSource.setWorkoutFeedback({
+      sessionId: entrada.sessionId,
+      ...analisado.data,
+    })
+    /*
+     * O log guarda o esforço e a marcação de dor, **nunca a observação**: ela
+     * é relato de saúde escrito pela pessoa, e log é o lugar errado para isso.
+     */
+    logger.info('workout:feedback_enviado', {
+      sessionId: entrada.sessionId,
+      effort: analisado.data.effort,
+      discomfort: analisado.data.discomfort,
+    })
+    return { ok: true }
+  } catch (error) {
+    if (!(error instanceof AppError)) {
+      logger.error('workout:feedback_falhou', { error: String(error) })
     }
     return { ok: false, erro: toUserMessage(error) }
   }

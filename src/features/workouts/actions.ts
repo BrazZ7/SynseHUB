@@ -373,3 +373,37 @@ export async function assignWorkoutAction(
     return { status: 'error', message: toUserMessage(error) }
   }
 }
+
+/**
+ * A academia registra que leu o relato do aluno.
+ *
+ * `workouts:write` e não `workouts:read`: marcar como visto é escrita, e é o
+ * que faz o relato sair da fila de quem precisa olhar. Quem só lê a ficha não
+ * deve conseguir limpar o aviso de outra pessoa.
+ *
+ * A RLS confere de novo pela academia — `marcar_feedback_visto` (0062) recusa
+ * sessão que não seja da organização dona do relato. Duas camadas: esta dá
+ * mensagem boa, a de baixo é a que não dá para contornar.
+ */
+export async function marcarFeedbackVistoAction(
+  sessionId: string,
+  studentId: string,
+): Promise<{ ok: boolean; erro?: string }> {
+  const session = await requireHubSession()
+
+  try {
+    requirePermission(session, 'workouts:write')
+
+    const dataSource = await getDataSource()
+    await dataSource.marcarFeedbackVisto(sessionId)
+    logger.info('workout:feedback_visto', { sessionId, por: session.userProfileId })
+
+    revalidatePath(`/students/${studentId}`)
+    return { ok: true }
+  } catch (error) {
+    if (!(error instanceof AppError)) {
+      logger.error('workout:feedback_visto_falhou', { sessionId, error: String(error) })
+    }
+    return { ok: false, erro: toUserMessage(error) }
+  }
+}

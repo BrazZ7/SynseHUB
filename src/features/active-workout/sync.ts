@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  enviarFeedbackDoTreinoAction,
   finishWorkoutSessionAction,
   logWorkoutSetAction,
   startWorkoutSessionAction,
@@ -45,6 +46,15 @@ export type SyncOutcome = {
    * para conferir o histórico.
    */
   desfazerPerdidos: number
+  /**
+   * Relatos que a fila desistiu de enviar.
+   *
+   * Terceira notícia, e diferente das duas. O histórico está certo: o que não
+   * chegou foi o recado ao professor. Somar nas séries mandaria a pessoa
+   * procurar um treino que está lá, e calar a faria sair achando que o
+   * professor foi avisado.
+   */
+  relatosPerdidos: number
   sessionId: string | null
 }
 
@@ -66,10 +76,17 @@ export async function expurgar(fila: PendingOperation[]): Promise<{
   treinosPerdidos: number
   seriesPerdidas: number
   desfazerPerdidos: number
+  relatosPerdidos: number
 }> {
   const esgotadas = fila.filter((operacao) => operacao.tentativas >= MAX_TENTATIVAS)
   if (!esgotadas.length) {
-    return { restante: fila, treinosPerdidos: 0, seriesPerdidas: 0, desfazerPerdidos: 0 }
+    return {
+      restante: fila,
+      treinosPerdidos: 0,
+      seriesPerdidas: 0,
+      desfazerPerdidos: 0,
+      relatosPerdidos: 0,
+    }
   }
 
   const sessoesPerdidas = new Set(
@@ -96,6 +113,7 @@ export async function expurgar(fila: PendingOperation[]): Promise<{
      * procurar um treino que está lá.
      */
     desfazerPerdidos: condenadas.filter((operacao) => operacao.kind === 'UNDO').length,
+    relatosPerdidos: condenadas.filter((operacao) => operacao.kind === 'FEEDBACK').length,
   }
 }
 
@@ -118,6 +136,7 @@ export async function sincronizar(
     treinosPerdidos,
     seriesPerdidas,
     desfazerPerdidos,
+    relatosPerdidos,
   } = await expurgar(await lerFila(dono))
   let sessionId = sessionIdConhecido
   let enviadas = 0
@@ -154,6 +173,7 @@ export async function sincronizar(
     treinosPerdidos,
     seriesPerdidas,
     desfazerPerdidos,
+    relatosPerdidos,
     sessionId,
   }
 }
@@ -182,5 +202,13 @@ async function executar(operacao: PendingOperation, sessionId: string | null) {
 
     case 'FINISH':
       return finishWorkoutSessionAction(sessionId!, operacao.durationSeconds, operacao.status)
+
+    case 'FEEDBACK':
+      return enviarFeedbackDoTreinoAction({
+        sessionId: sessionId!,
+        effort: operacao.effort,
+        discomfort: operacao.discomfort,
+        note: operacao.note,
+      })
   }
 }

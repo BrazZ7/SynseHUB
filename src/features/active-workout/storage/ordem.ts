@@ -22,7 +22,15 @@
  *   2. as séries, na ordem em que foram concluídas;
  *   3. cada desfazer logo atrás da série que ele desfaz;
  *   4. o desfazer cuja série já subiu, depois de todas as séries;
- *   5. o encerramento, por último.
+ *   5. o encerramento;
+ *   6. o relato do treino, por último.
+ *
+ * **Esta função descarta o que não reconhece.** Ela monta a saída filtrando
+ * por tipo e concatenando as listas, então uma operação de tipo novo que
+ * ninguém acrescentou aqui não aparece no resultado: fica guardada no
+ * IndexedDB para sempre, nunca é enviada e nunca é apagada, sem erro em lugar
+ * nenhum. `tests/unit/active-workout/ordem.test.ts` prende isso comparando
+ * entrada e saída.
  *
  * O desfazer viaja atrás da própria série, e não por carimbo de tempo, porque
  * o relógio do aparelho não é monotônico: ele volta atrás com fuso, com NTP e
@@ -32,7 +40,7 @@
 
 /** O mínimo que uma operação precisa ter para entrar na ordem. */
 export type OperacaoOrdenavel = {
-  kind: 'START' | 'SET' | 'UNDO' | 'FINISH'
+  kind: 'START' | 'SET' | 'UNDO' | 'FINISH' | 'FEEDBACK'
   clientId: string
   /** Só em `SET`: o instante em que a série foi concluída. */
   completedAt?: number
@@ -43,6 +51,7 @@ export type OperacaoOrdenavel = {
 export function ordenarFila<T extends OperacaoOrdenavel>(fila: T[]): T[] {
   const inicios = fila.filter((operacao) => operacao.kind === 'START')
   const fins = fila.filter((operacao) => operacao.kind === 'FINISH')
+  const relatos = fila.filter((operacao) => operacao.kind === 'FEEDBACK')
   const desfazeres = fila.filter((operacao) => operacao.kind === 'UNDO')
   const series = fila
     .filter((operacao) => operacao.kind === 'SET')
@@ -66,5 +75,11 @@ export function ordenarFila<T extends OperacaoOrdenavel>(fila: T[]): T[] {
     (desfazer) => !series.some((serie) => serie.clientId === desfazer.serieClientId),
   )
 
-  return [...inicios, ...meio, ...orfaos, ...fins]
+  /*
+   * O relato depois do encerramento. Ele não depende do encerramento para o
+   * banco — `set_workout_feedback` aceita sessão aberta de propósito —, mas
+   * depende da abertura, e ir no fim é o único lugar em que isso é verdade
+   * sem precisar de regra nova.
+   */
+  return [...inicios, ...meio, ...orfaos, ...fins, ...relatos]
 }

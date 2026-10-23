@@ -260,11 +260,23 @@ export type DemoMutation =
        * 40 entradas corta as mais antigas: se o `set` tivesse sido removido, o
        * `undo` sozinho faria o painel contar série negativa.
        */
-      a: 'start' | 'set' | 'undo' | 'finish'
+      a: 'start' | 'set' | 'undo' | 'finish' | 'feedback' | 'feedback-visto'
       /** Só no `start`. */
       id?: string
       plano?: string | null
       at?: string
+      /**
+       * Só no `feedback`: a escala de esforço e a marcação de desconforto.
+       *
+       * **A observação não entra**, e isso é por tamanho. O diário é um
+       * cookie, as entradas têm uns 25 bytes cada e o teto é 40 — um texto de
+       * até 500 caracteres numa entrada comeria metade do orçamento e cortaria
+       * as séries mais antigas do visitante para carregar um texto que só a
+       * demonstração veria. Em produção nada disso existe: a observação é
+       * coluna no banco.
+       */
+      esforco?: number
+      dor?: boolean
     }
   | {
       /** Sino aberto: tudo criado antes deste instante conta como lido. */

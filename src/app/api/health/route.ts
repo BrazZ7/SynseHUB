@@ -215,6 +215,7 @@ const MIGRATIONS_ESPERADAS = [
   '0061_assinatura_de_tres_origens.sql',
   '0062_feedback_do_treino.sql',
   '0063_entrada_guiada.sql',
+  '0064_historico_integrado.sql',
 ]
 
 async function schemaReadiness() {
@@ -769,6 +770,7 @@ async function schemaReadiness() {
     '0061_assinatura_de_tres_origens.sql',
     '0062_feedback_do_treino.sql',
     '0063_entrada_guiada.sql',
+    '0064_historico_integrado.sql',
   )
 
   return {

@@ -567,6 +567,36 @@ export type StudentIntake = {
 }
 
 /**
+ * Um acontecimento na linha do tempo do aluno (0064).
+ *
+ * Quatro origens numa lista só: treino, corrida, presença e pesagem. Cada tipo
+ * usa os números que fazem sentido para ele e deixa os outros nulos — é o
+ * formato que a função do banco devolve, e achatá-lo aqui em quatro tipos
+ * separados só moveria o `switch` de lugar.
+ */
+export type TimelineKind = 'TREINO' | 'CORRIDA' | 'CHECKIN' | 'PESAGEM'
+
+export type TimelineEntry = {
+  kind: TimelineKind
+  /** O id na tabela de origem. É metade do cursor, e o elo para a tela do item. */
+  refId: string
+  happenedAt: string
+  /** Nome do plano no treino, título da corrida. Nulo nos outros. */
+  title: string | null
+  durationSeconds: number | null
+  distanceMeters: number | null
+  volumeKg: number | null
+  setsCount: number | null
+  weightKg: number | null
+  /** Do relato do treino (0062), quando o aluno mandou. */
+  effort: number | null
+  discomfort: boolean | null
+}
+
+/** Onde a próxima página começa. O par, e não só a data — ver a 0064. */
+export type TimelineCursor = { at: string; id: string }
+
+/**
  * Alguém com um treino aberto na academia, agora.
  *
  * Projeção estreita de propósito: nome, treino, quando começou e quantas

@@ -56,11 +56,13 @@ npm run env:check
 
 ## Migrations
 
-**Estado em 23/10/2026: tudo até a 0061 aplicado em produção. A 0062 e a 0063
-estão escritas e ainda não foram coladas** — são as primeiras pendentes desde
-setembro. Até entrarem, o relato do treino e a entrada guiada simplesmente não
-aparecem: as duas leituras toleram a tabela ausente, como manda a regra de
-publicar-não-é-migrar, e sem tabela ninguém é desviado para o questionário.
+**Estado em 23/10/2026: tudo até a 0061 aplicado em produção. A 0062, a 0063 e
+a 0064 estão escritas e ainda não foram coladas** — são as primeiras pendentes
+desde setembro. Até entrarem, o relato do treino, a entrada guiada e o
+histórico integrado simplesmente não aparecem: as três leituras toleram a
+tabela ou a função ausente, como manda a regra de publicar-não-é-migrar.
+Ninguém é desviado para o questionário e o histórico abre vazio — que é o
+estado honesto, e não uma página de erro.
 
 Esta linha envelhece a cada migration e por isso não é a fonte da verdade: a
 sonda é. Quem quiser saber o que falta abre o endereço, não este arquivo. O que
@@ -1191,6 +1193,24 @@ existem, não para conferir se subiram.
   responde depois tem a recusa limpa. Uma trava de banco garante que
   `completed_at` só existe com as três respostas — sem ela, a ficha do
   professor mostraria "respondeu" ao lado de três traços.
+
+- **0064 (`0064_historico_integrado.sql`)** — `student_timeline`: treino,
+  corrida, presença e pesagem numa consulta só, paginada por cursor. Sem
+  tabela nova; é função sobre o que já existe.
+
+  No banco e não juntando quatro leituras na aplicação **por causa da
+  paginação**: trazer vinte de cada origem e cortar dá o resultado certo na
+  primeira página e errado em todas as seguintes. O cursor é o par
+  `(data, id)` — só a data pularia o segundo evento de um mesmo instante, e
+  com quatro origens instante repetido acontece.
+
+  Duas chaves, e isso aparece na tela: treino e presença pendem da matrícula,
+  corrida e pesagem pendem da pessoa (0016). Quem treinou em outra academia vê
+  as corridas daquela época e não vê os treinos.
+
+  **Só o próprio aluno executa.** A academia não entra: o peso tem
+  consentimento próprio (0032) e a corrida tem privacidade por atividade
+  (0016), e uma função que o staff pudesse chamar passaria por cima das duas.
 
   Não havia instrumentação nenhuma. `grep -rln "analytics|posthog|plausible|
   gtag(" src/` não devolvia nada, e `logger.ts` é registro técnico. Não havia

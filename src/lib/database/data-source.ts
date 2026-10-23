@@ -47,6 +47,8 @@ import type {
   StudentExperience,
   StudentGoal,
   StudentIntake,
+  TimelineCursor,
+  TimelineEntry,
   WorkoutFeedbackEntry,
   WorkoutSessionSummary,
   WorkoutTotals,
@@ -758,10 +760,7 @@ export interface DataSource {
    * treinos do app e a tela inicial do app. O teto aqui é o número de
    * atribuições de um aluno, não o tamanho da academia.
    */
-  listWorkoutPlansByIds(
-    organizationId: string,
-    planIds: readonly string[],
-  ): Promise<WorkoutPlan[]>
+  listWorkoutPlansByIds(organizationId: string, planIds: readonly string[]): Promise<WorkoutPlan[]>
   /** Quantos exercícios a biblioteca tem — contado pelo banco. */
   countExercises(organizationId: string): Promise<number>
   getWorkoutPlan(organizationId: string, planId: string): Promise<WorkoutPlan | null>
@@ -1025,6 +1024,17 @@ export interface DataSource {
   }): Promise<void>
   /** "Depois". Grava a recusa para a tela não voltar a cada abertura. */
   skipStudentIntake(): Promise<void>
+
+  /**
+   * A linha do tempo do aluno autenticado (0064).
+   *
+   * Não recebe aluno: a função do banco resolve por `auth.uid()`. Ela lê peso
+   * e corrida, e um parâmetro de aluno seria porta para o histórico alheio.
+   *
+   * O cursor é o par `(data, id)`. Só a data pularia o segundo evento de um
+   * mesmo instante — e com quatro origens, instante repetido acontece.
+   */
+  listStudentTimeline(limite: number, cursor?: TimelineCursor | null): Promise<TimelineEntry[]>
   getWorkoutPreferences(userProfileId: string): Promise<WorkoutPreferences>
   saveWorkoutPreferences(
     userProfileId: string,

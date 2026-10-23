@@ -121,6 +121,8 @@ import type {
   StudentExperience,
   StudentGoal,
   StudentIntake,
+  TimelineCursor,
+  TimelineEntry,
   WorkoutFeedbackEntry,
   WorkoutSessionSummary,
   Friend,
@@ -2694,7 +2696,10 @@ export class SupabaseDataSource implements DataSource {
       }
     } catch (erro) {
       if (!isPendingMigration(erro)) {
-        logger.warn('evento:nao_registrado', { nome: evento.nome, erro: String(erro).slice(0, 120) })
+        logger.warn('evento:nao_registrado', {
+          nome: evento.nome,
+          erro: String(erro).slice(0, 120),
+        })
       }
     }
   }
@@ -2945,6 +2950,37 @@ export class SupabaseDataSource implements DataSource {
   async skipStudentIntake(): Promise<void> {
     const { error } = await this.client.rpc('skip_student_intake', {})
     if (error) this.fail('skipStudentIntake', error)
+  }
+
+  async listStudentTimeline(
+    limite: number,
+    cursor?: TimelineCursor | null,
+  ): Promise<TimelineEntry[]> {
+    const { data, error } = await this.client.rpc('student_timeline', {
+      p_limit: limite,
+      p_before_at: cursor?.at ?? null,
+      p_before_id: cursor?.id ?? null,
+    })
+    if (error) this.fail('listStudentTimeline', error)
+
+    return ((data ?? []) as Row[]).map((row) => ({
+      kind: row.kind,
+      refId: row.ref_id,
+      happenedAt: row.happened_at,
+      title: row.title ?? null,
+      durationSeconds: row.duration_seconds ?? null,
+      /*
+       * `numeric` chega como texto no PostgREST — é assim que ele evita perder
+       * precisão em número grande. Converter é o que impede `"5000.00" + 1`
+       * virar `"5000.001"` na tela. O `numero` já existia no arquivo.
+       */
+      distanceMeters: numero(row.distance_meters),
+      volumeKg: numero(row.volume_kg),
+      setsCount: row.sets_count ?? null,
+      weightKg: numero(row.weight_kg),
+      effort: row.effort ?? null,
+      discomfort: row.discomfort ?? null,
+    }))
   }
 
   async getWorkoutPreferences(userProfileId: string): Promise<WorkoutPreferences> {

@@ -40,10 +40,7 @@ import { DEMO_ORG_ID, getDemoDataset } from '@/lib/database/demo-seed'
 import { AVALIACOES_NA_FICHA } from '@/features/assessments/janela'
 import { RECEITAS_POR_PAGINA } from '@/features/nutrition/receitas-por-pagina'
 import { FICHAS_POR_PAGINA } from '@/features/workouts/por-pagina'
-import {
-  ganhoMaisTreinado,
-  type RegistroDeCarga,
-} from '@/features/workouts/ganho-de-carga'
+import { ganhoMaisTreinado, type RegistroDeCarga } from '@/features/workouts/ganho-de-carga'
 import {
   ACADEMIAS_NO_RESUMO,
   ACADEMIAS_POR_PAGINA,
@@ -121,6 +118,8 @@ import type {
   StudentExperience,
   StudentGoal,
   StudentIntake,
+  TimelineCursor,
+  TimelineEntry,
   WorkoutFeedbackEntry,
   WorkoutSessionSummary,
   Friend,
@@ -691,7 +690,10 @@ export class DemoDataSource implements DataSource {
 
         const aberta = this.demoWorkoutSessions.find((s) => s.status === 'IN_PROGRESS')
         if (!aberta) break
-        if (mutation.a === 'set') aberta.totalSets += 1
+        if (mutation.a === 'set') {
+          aberta.totalSets += 1
+          aberta.volumeKg += mutation.vol ?? 0
+        }
         /*
          * `undo` precisa do próprio ramo. O `else` de antes tratava tudo que
          * não era `start` nem `set` como encerramento — uma série desfeita
@@ -701,10 +703,13 @@ export class DemoDataSource implements DataSource {
          * mais antigas: o `set` correspondente pode já ter saído da lista, e
          * série negativa no painel é pior que uma série a menos.
          */
-        else if (mutation.a === 'undo') aberta.totalSets = Math.max(aberta.totalSets - 1, 0)
-        else {
+        else if (mutation.a === 'undo') {
+          aberta.totalSets = Math.max(aberta.totalSets - 1, 0)
+          aberta.volumeKg = Math.max(aberta.volumeKg - (mutation.vol ?? 0), 0)
+        } else {
           aberta.status = 'COMPLETED'
           aberta.completedAt = new Date().toISOString()
+          aberta.durationSeconds = mutation.dur ?? aberta.durationSeconds
         }
         break
       }
@@ -712,7 +717,9 @@ export class DemoDataSource implements DataSource {
         const anterior = this.demoIntake
         this.demoIntake = {
           studentId: this.db.studentIdForApp,
-          goal: mutation.pulou ? (anterior?.goal ?? null) : ((mutation.goal as StudentGoal) ?? null),
+          goal: mutation.pulou
+            ? (anterior?.goal ?? null)
+            : ((mutation.goal as StudentGoal) ?? null),
           experience: mutation.pulou
             ? (anterior?.experience ?? null)
             : ((mutation.experiencia as StudentExperience) ?? null),
@@ -1003,9 +1010,10 @@ export class DemoDataSource implements DataSource {
     organizationIds: readonly string[] | null,
     limite = ACADEMIAS_NO_RESUMO,
   ): Promise<ResumoDaAcademia[]> {
-    const alvos = (organizationIds
-      ? this.todasAsAcademias().filter((o) => organizationIds.includes(o.id))
-      : this.todasAsAcademias()
+    const alvos = (
+      organizationIds
+        ? this.todasAsAcademias().filter((o) => organizationIds.includes(o.id))
+        : this.todasAsAcademias()
     ).slice(0, Math.max(1, limite))
 
     return alvos.map((organizacao) => {
@@ -2470,7 +2478,11 @@ export class DemoDataSource implements DataSource {
       sessao.totalSets = series.length
       sessao.totalReps = series.reduce((a, b) => a + b.reps, 0)
       sessao.volumeKg = Math.round(series.reduce((a, b) => a + (b.weight ?? 0) * b.reps, 0))
-      await appendDemoMutation({ t: 'wsess', a: 'set' })
+      await appendDemoMutation({
+        t: 'wsess',
+        a: 'set',
+        vol: Math.round((input.weight ?? 0) * input.repsCompleted),
+      })
     }
     return chave
   }
@@ -2492,6 +2504,7 @@ export class DemoDataSource implements DataSource {
     const indice = series.findIndex((serie) => serie.clientId === serieClientId)
     if (indice < 0) return false
 
+    const saindo = series[indice]
     series.splice(indice, 1)
     this.demoSetLogs.set(sessionId, series)
     this.demoSetClientIds.delete(`${sessionId}:${serieClientId}`)
@@ -2500,7 +2513,12 @@ export class DemoDataSource implements DataSource {
     sessao.totalReps = series.reduce((a, b) => a + b.reps, 0)
     sessao.volumeKg = Math.round(series.reduce((a, b) => a + (b.weight ?? 0) * b.reps, 0))
 
-    await appendDemoMutation({ t: 'wsess', a: 'undo' })
+    // O mesmo volume que o `set` somou, para o replay subtrair o que entrou.
+    await appendDemoMutation({
+      t: 'wsess',
+      a: 'undo',
+      vol: Math.round((saindo.weight ?? 0) * saindo.reps),
+    })
     return true
   }
 
@@ -2514,7 +2532,12 @@ export class DemoDataSource implements DataSource {
     sessao.status = status
     sessao.completedAt = new Date().toISOString()
     sessao.durationSeconds = durationSeconds
-    await appendDemoMutation({ t: 'wsess', a: 'finish' })
+    /*
+     * A duração vai junto. Sem ela, o replay fechava a sessão sem
+     * `durationSeconds` e o histórico mostrava o treino sem o tempo — enquanto
+     * o resumo, que sai do estado local, mostrava. Mesma lacuna do volume.
+     */
+    await appendDemoMutation({ t: 'wsess', a: 'finish', dur: durationSeconds })
   }
 
   async setWorkoutFeedback(entrada: {
@@ -2607,6 +2630,115 @@ export class DemoDataSource implements DataSource {
       skippedAt: this.demoIntake?.skippedAt ?? new Date().toISOString(),
     }
     await appendDemoMutation({ t: 'intake', pulou: true })
+  }
+
+  /**
+   * A linha do tempo na demonstração.
+   *
+   * Aqui a junção é em memória, e em produção é SQL (0064). Não é
+   * inconsistência: lá o motivo de estar no banco é a paginação sobre quatro
+   * tabelas que crescem — trazer vinte de cada e cortar dá certo na primeira
+   * página e errado nas seguintes. Aqui o conjunto inteiro cabe na memória do
+   * processo, então ordenar tudo e cortar **é** a resposta exata.
+   *
+   * O que precisa bater entre os dois é a saída: mesmas origens, mesma ordem,
+   * mesmo cursor de par. É o que os testes de banco cobrem de um lado e o
+   * agrupamento da tela do outro.
+   */
+  async listStudentTimeline(
+    limite: number,
+    cursor?: TimelineCursor | null,
+  ): Promise<TimelineEntry[]> {
+    // O helper que já existe: o dataset base, não o índice.
+    const perfil = this.perfilDoAlunoDoApp()
+    const studentId = this.db.studentIdForApp
+
+    const [corridas, presencas, pesagens] = await Promise.all([
+      this.listActivities(perfil, { limit: 200 }),
+      this.listCheckInsForStudent(DEMO_ORG_ID, studentId, 200),
+      this.listBodyMeasurements('tudo', { pageSize: 200 }),
+    ])
+
+    const entradas: TimelineEntry[] = [
+      ...this.demoWorkoutSessions
+        .filter((s) => s.studentId === studentId && s.status === 'COMPLETED')
+        .map((s) => {
+          const relato = this.demoFeedback.get(s.id)
+          return {
+            kind: 'TREINO' as const,
+            refId: s.id,
+            happenedAt: s.completedAt ?? s.startedAt,
+            title: s.planName,
+            durationSeconds: s.durationSeconds,
+            distanceMeters: null,
+            volumeKg: s.volumeKg,
+            setsCount: s.totalSets,
+            weightKg: null,
+            effort: relato?.effort ?? null,
+            discomfort: relato?.discomfort ?? null,
+          }
+        }),
+      ...corridas.map((a) => ({
+        kind: 'CORRIDA' as const,
+        refId: a.id,
+        happenedAt: a.startedAt,
+        title: a.title ?? null,
+        durationSeconds: a.movingSeconds || null,
+        distanceMeters: a.distanceMeters,
+        volumeKg: null,
+        setsCount: null,
+        weightKg: null,
+        effort: null,
+        discomfort: null,
+      })),
+      ...presencas.map((c) => ({
+        kind: 'CHECKIN' as const,
+        refId: c.id,
+        happenedAt: c.checkedInAt,
+        title: null,
+        durationSeconds: null,
+        distanceMeters: null,
+        volumeKg: null,
+        setsCount: null,
+        weightKg: null,
+        effort: null,
+        discomfort: null,
+      })),
+      ...pesagens.rows
+        .filter((p) => p.weightKg != null)
+        .map((p) => ({
+          kind: 'PESAGEM' as const,
+          /*
+           * `clientId` quando não há `id`: a pesagem nasce no aparelho e só
+           * ganha id do banco depois. Na demonstração o `clientId` é a
+           * identidade de verdade — é por ele que a gravação do visitante
+           * vence a da semente.
+           */
+          refId: p.id ?? p.clientId,
+          happenedAt: p.measuredAt,
+          title: null,
+          durationSeconds: null,
+          distanceMeters: null,
+          volumeKg: null,
+          setsCount: null,
+          weightKg: p.weightKg,
+          effort: null,
+          discomfort: null,
+        })),
+    ]
+
+    // Mesma ordem total do SQL: data desc, e o id desempata.
+    const ordenadas = entradas.sort(
+      (a, b) => b.happenedAt.localeCompare(a.happenedAt) || b.refId.localeCompare(a.refId),
+    )
+
+    const depoisDoCursor = cursor
+      ? ordenadas.filter(
+          (e) => e.happenedAt < cursor.at || (e.happenedAt === cursor.at && e.refId < cursor.id),
+        )
+      : ordenadas
+
+    return depoisDoCursor.slice(0, Math.min(Math.max(limite || 20, 1), 100))
   }
 
   async getActiveWorkoutSession(studentId: string): Promise<WorkoutSessionSummary | null> {
@@ -4432,8 +4564,7 @@ export class DemoDataSource implements DataSource {
      * produção e cairia no genérico na demonstração: o defeito que a
      * demonstração existe para revelar seria justamente o invisível nela.
      */
-    const recusa = (code: string, mensagem: string) =>
-      Object.assign(new Error(mensagem), { code })
+    const recusa = (code: string, mensagem: string) => Object.assign(new Error(mensagem), { code })
 
     const evento = this.db.eventos.find((e) => e.id === input.eventId)
     if (!evento) throw recusa('P0002', 'Evento não encontrado.')
@@ -4453,9 +4584,7 @@ export class DemoDataSource implements DataSource {
     }
 
     const cpf = input.taxId.replace(/\D/g, '')
-    const jaInscrito = this.inscricoesDoDiario().some(
-      (i) => i.ev === evento.id && i.cpf === cpf,
-    )
+    const jaInscrito = this.inscricoesDoDiario().some((i) => i.ev === evento.id && i.cpf === cpf)
     if (jaInscrito) {
       throw recusa(
         '23505',
@@ -4474,9 +4603,9 @@ export class DemoDataSource implements DataSource {
      * consulta de quem não tem conta, e previsível seria dar a inscrição de
      * um a quem adivinhar a do outro.
      */
-    const cod = Array.from({ length: 16 }, () =>
-      Math.floor(Math.random() * 16).toString(16),
-    ).join('')
+    const cod = Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join(
+      '',
+    )
 
     await appendDemoMutation({
       t: 'insc',

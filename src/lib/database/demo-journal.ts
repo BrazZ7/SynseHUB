@@ -266,6 +266,17 @@ export type DemoMutation =
       plano?: string | null
       at?: string
       /**
+       * Só no `set` e no `undo`: o volume daquela série, em quilos.
+       *
+       * Sem ele, o replay reconstruía a sessão com volume zero — e o visitante
+       * via "5.592 kg" no resumo do treino, que sai do estado local, e nada no
+       * histórico, que sai daqui. Um número por série; o `undo` carrega o
+       * mesmo para subtrair o que somou.
+       */
+      vol?: number
+      /** Só no `finish`: a duração efetiva, em segundos. */
+      dur?: number
+      /**
        * Só no `feedback`: a escala de esforço e a marcação de desconforto.
        *
        * **A observação não entra**, e isso é por tamanho. O diário é um

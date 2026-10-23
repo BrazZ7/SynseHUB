@@ -1,0 +1,71 @@
+/*
+ * O módulo Android do plugin de saúde.
+ *
+ * Espelha o de `synse-workout-activity`, com duas diferenças que importam:
+ * `minSdkVersion 28`, porque a biblioteca do Health Connect não compila abaixo
+ * disso, e a dependência `androidx.health.connect:connect-client`, que é a
+ * própria API.
+ */
+ext {
+    capacitorVersion = System.getenv('CAPACITOR_VERSION')
+    androidxCoreVersion = project.hasProperty('androidxCoreVersion') ? rootProject.ext.androidxCoreVersion : '1.17.0'
+    healthConnectVersion = project.hasProperty('healthConnectVersion') ? rootProject.ext.healthConnectVersion : '1.1.0-alpha12'
+}
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.13.0'
+        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.21'
+    }
+}
+
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+android {
+    namespace = "br.com.synse.health"
+    compileSdk = project.hasProperty('compileSdkVersion') ? rootProject.ext.compileSdkVersion : 36
+
+    defaultConfig {
+        /*
+         * 28 e não 26: `androidx.health.connect:connect-client` declara
+         * `minSdk 28`, e o Gradle recusa a fusão do manifesto abaixo disso. O
+         * app do Synse tem `minSdk 26` por causa do Treino Ativo, então este
+         * plugin é o piso mais alto do projeto — por isso `isAvailable()`
+         * devolve `UNSUPPORTED_PLATFORM` em vez de o app não instalar.
+         */
+        minSdkVersion 28
+        targetSdkVersion project.hasProperty('targetSdkVersion') ? rootProject.ext.targetSdkVersion : 36
+        versionCode 1
+        versionName "0.1.0"
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+
+    kotlinOptions {
+        jvmTarget = '21'
+    }
+
+    lintOptions {
+        abortOnError false
+    }
+}
+
+repositories {
+    google()
+    mavenCentral()
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation project(':capacitor-android')
+    implementation "androidx.core:core-ktx:$androidxCoreVersion"
+    implementation "androidx.health.connect:connect-client:$healthConnectVersion"
+}

@@ -1,0 +1,344 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==========================================================================
+   Synse Design Tokens
+   Natureza + tecnologia + saúde + confiança + inovação.
+   ========================================================================== */
+
+/*
+ * ── A Manrope, hospedada aqui ────────────────────────────────────────────────
+ *
+ * Antes vinha do Google Fonts por uma tag `link`. Três motivos para trazer:
+ *
+ * 1. **Um pedido a menos, a um terceiro.** Toda visita abria conexão com
+ *    `fonts.googleapis.com` e `fonts.gstatic.com` antes de desenhar texto. Num
+ *    produto que promete privacidade na própria política, o endereço IP de
+ *    cada aluno ia para o Google só para buscar letra.
+ * 2. **O cartão de compartilhar depende dela.** O desenho no `canvas` pede a
+ *    fonte pelo nome; se ela ainda não chegou, a imagem sai com a tipografia
+ *    do celular de cada um. Servida do mesmo domínio, chega junto com o resto.
+ * 3. **Uma dependência externa a menos** entre o app e a primeira pintura.
+ *
+ * Arquivo variável: um por subconjunto cobre de 400 a 700, então são dois
+ * arquivos no total, 40 KB somados. O `unicode-range` é o que faz o navegador
+ * buscar o `latin-ext` só quando aparece um caractere que o `latin` não tem —
+ * é o mesmo recorte que o Google servia. Sem ele, ou todo mundo baixa peso a
+ * mais, ou um nome com "ł" deixa de ser desenhado.
+ *
+ * Manrope está sob a SIL Open Font License 1.1. O texto da licença vai junto,
+ * em `public/fonts/Manrope-OFL.txt` — é o que a licença exige de quem
+ * redistribui.
+ */
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/manrope-latin.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/manrope-latin-ext.woff2') format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+@layer base {
+  :root {
+    /* Superfícies */
+    --synse-bg: #f5faf8;
+    --synse-surface: #ffffff;
+    --synse-surface-2: #eef6f3;
+
+    /* Profundidade da marca */
+    --synse-dark: #062e2a;
+    --synse-dark-2: #083d38;
+
+    /* Cores primárias */
+    --synse-primary: #00a98f;
+    --synse-primary-light: #38d6b4;
+    --synse-cyan: #22c7d8;
+    --synse-mint: #bff5e5;
+
+    /* Texto */
+    --synse-text: #102b29;
+    --synse-muted: #69817d;
+
+    /* Estrutura */
+    --synse-border: rgba(16, 43, 41, 0.1);
+
+    /* Semânticas — deliberadamente dessaturadas */
+    --synse-success: #21b573;
+    --synse-warning: #e7a52b;
+    --synse-danger: #e45858;
+
+    /* Raios */
+    --radius-sm: 0.5rem;
+    --radius-md: 0.75rem;
+    --radius-lg: 1rem;
+    --radius-xl: 1.25rem;
+    --radius-2xl: 1.75rem;
+  }
+
+  .dark {
+    --synse-bg: #041d1b;
+    --synse-surface: #082925;
+    --synse-surface-2: #0c3631;
+
+    --synse-dark: #010e0d;
+    --synse-dark-2: #041d1b;
+
+    --synse-primary: #17c4a5;
+    --synse-primary-light: #4fe3c3;
+    --synse-cyan: #35d6e6;
+    --synse-mint: #9fe9d5;
+
+    --synse-text: #e6f5f1;
+    --synse-muted: #8faaa4;
+
+    --synse-border: rgba(191, 245, 229, 0.12);
+
+    --synse-success: #35c886;
+    --synse-warning: #f0b955;
+    --synse-danger: #f07272;
+  }
+
+  * {
+    @apply border-synse-border;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-synse-bg text-synse-text antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Acessibilidade: foco sempre visível e consistente */
+  :focus-visible {
+    @apply outline-none ring-2 ring-synse-primary ring-offset-2 ring-offset-synse-bg;
+  }
+
+  ::selection {
+    background: var(--synse-mint);
+    color: var(--synse-dark);
+  }
+
+  /* Respeita quem prefere menos movimento */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* Superfície padrão: bordas suaves, sombra discreta, sem excesso de contorno */
+  .synse-panel {
+    @apply rounded-xl border border-synse-border bg-synse-surface shadow-synse-sm;
+  }
+
+  /* Glassmorphism discreto — usado apenas em áreas institucionais e no App */
+  .synse-glass {
+    @apply rounded-2xl border border-white/15 bg-white/10 backdrop-blur-xl;
+  }
+
+  .synse-gradient-text {
+    @apply bg-synse-gradient bg-clip-text text-transparent;
+  }
+
+  /*
+   * ── Vidro com LED ─────────────────────────────────────────────────────────
+   *
+   * A primeira tentativa foi um anel de néon saturado com brilho para fora.
+   * O dono do produto reprovou, e com razão: aquilo é um tubo aceso em volta
+   * do cartão. Na referência a luz **bate no vidro** — ela entra pela borda e
+   * se espalha para dentro, e o painel é translúcido o bastante para pegar um
+   * degradê.
+   *
+   * São quatro coisas, e nenhuma delas é um contorno:
+   *
+   * 1. **O painel** ganha um degradê diagonal: mais claro no canto de cima à
+   *    esquerda, transparente no meio, acendendo de novo embaixo à direita. É
+   *    isso que faz parecer uma placa de vidro pegando luz, e não uma caixa
+   *    pintada.
+   * 2. **O fio** é fraco e desigual — um `::before` de 1px recortado em anel
+   *    pela composição de duas máscaras. Metade da opacidade da versão
+   *    anterior: vidro reflete, não emite.
+   * 3. **O brilho para dentro**: uma sombra interna larga, que é a luz da
+   *    borda vazando no miolo. Era isto que faltava, e é o que diferencia
+   *    vidro iluminado de retângulo com contorno.
+   * 4. **Uma sombra escura embaixo**, discreta, que descola o cartão do fundo.
+   *
+   * ── Cuidado com `shadow-*` do Tailwind ──────────────────────────────────
+   *
+   * As utilitárias do Tailwind são emitidas depois da camada de componentes,
+   * então um `shadow-synse-sm` no mesmo elemento **apaga** o `box-shadow`
+   * daqui inteiro — o fio e o brilho interno somem e sobra só o degradê.
+   * Aconteceu em quatro cartões e não dava para ver sem comparar um ao lado do
+   * outro. Quem usar `.vidro-led` não põe `shadow-*`: a sombra de apoio já
+   * está aqui.
+   *
+   * Nada anima e não há `backdrop-filter`. Vidro de verdade pediria
+   * `backdrop-blur`, mas com dezoito cartões sobre um fundo que rola, o
+   * compositor refaria o desfoque a cada quadro — foi assim que a navegação
+   * ficou pesada antes. O degradê no painel faz o mesmo trabalho de graça.
+   */
+  .vidro-led {
+    position: relative;
+    border-color: transparent;
+    background-image:
+      radial-gradient(
+        130% 100% at 100% 100%,
+        color-mix(in srgb, var(--synse-primary) 10%, transparent) 0%,
+        transparent 58%
+      ),
+      linear-gradient(
+        152deg,
+        color-mix(in srgb, var(--synse-mint) 9%, transparent) 0%,
+        transparent 46%,
+        transparent 100%
+      );
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, var(--synse-primary) 12%, transparent),
+      0 10px 28px -20px rgb(0 0 0 / 0.75);
+  }
+
+  .vidro-led::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    padding: 1px;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(
+      152deg,
+      color-mix(in srgb, var(--synse-mint) 50%, transparent) 0%,
+      color-mix(in srgb, var(--synse-primary) 30%, transparent) 26%,
+      color-mix(in srgb, var(--synse-primary) 22%, transparent) 62%,
+      color-mix(in srgb, var(--synse-primary) 45%, transparent) 100%
+    );
+    /* O anel: pinta a caixa toda, desconta o miolo, sobra a moldura. */
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    mask-composite: exclude;
+  }
+
+  .dark .vidro-led {
+    box-shadow:
+      /* o fio */
+      inset 0 0 0 1px color-mix(in srgb, var(--synse-primary) 15%, transparent),
+      /* a luz que entra pela borda de cima e escorre para dentro */ inset 0 1px 0 0
+        color-mix(in srgb, var(--synse-mint) 20%, transparent),
+      inset 0 0 30px -16px color-mix(in srgb, var(--synse-primary) 62%, transparent),
+      /* o cartão descolado do fundo */ 0 12px 32px -22px rgb(0 0 0 / 0.9);
+  }
+
+  /*
+   * ── A costura entre a arte e a página ─────────────────────────────────────
+   *
+   * As capas sangram até a borda da tela e precisam terminar em algum lugar.
+   * A primeira versão era um degradê linear de 64px do transparente até a cor
+   * da página — e no tema escuro funciona, porque a arte é escura e o fundo
+   * também: a passagem é curta e ninguém percebe.
+   *
+   * No tema claro o mesmo degradê vira uma **tarja cinza**. Não tem como
+   * escurecer uma arte quase preta até um fundo quase branco sem atravessar o
+   * cinza; isso é aritmética de cor, não erro de ajuste. O que dá para mudar é
+   * o formato da travessia: uma rampa curta e linear tem começo e fim
+   * visíveis, e o olho lê um retângulo colado por cima da foto.
+   *
+   * Então a rampa fica longa e com a curva suavizada nas duas pontas. Começa
+   * quase sem tocar na imagem, acelera no meio e chega exata na cor da página
+   * na última linha. Não há aresta em cima nem embaixo, e o que sobra o olho
+   * lê como a foto se apagando — que é um jeito normal de uma imagem acabar.
+   *
+   * As paradas usam `color-mix` sobre `--synse-bg` de propósito: assim a
+   * costura acompanha o tema sem precisar de duas regras. Quem usar esta
+   * classe põe ela **fora** de qualquer `.dark` que envolva a arte, senão
+   * `--synse-bg` resolve para o escuro e o tema claro termina numa faixa
+   * preta.
+   */
+  .costura-com-a-pagina {
+    background-image: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--synse-bg) 0%, transparent) 0%,
+      color-mix(in srgb, var(--synse-bg) 6%, transparent) 18%,
+      color-mix(in srgb, var(--synse-bg) 20%, transparent) 36%,
+      color-mix(in srgb, var(--synse-bg) 45%, transparent) 55%,
+      color-mix(in srgb, var(--synse-bg) 72%, transparent) 72%,
+      color-mix(in srgb, var(--synse-bg) 91%, transparent) 86%,
+      color-mix(in srgb, var(--synse-bg) 99%, transparent) 96%,
+      var(--synse-bg) 100%
+    );
+  }
+
+  /*
+   * ── O véu da trilha ───────────────────────────────────────────────────────
+   *
+   * A arte da trilha tem um rastro aceso que atravessa o quadro na diagonal, e
+   * texto branco em cima dele some. Um degradê de três paradas não resolve:
+   * o ponto do meio cai em 50%, e a coluna de texto vai até 64% — justo a
+   * faixa onde o rastro está mais claro.
+   *
+   * Então as paradas são explícitas, e a queda é brusca. O véu fica quase
+   * opaco até onde a coluna de texto termina, por volta de 62%, e aí despenca:
+   * aos 86% já quase não existe, e o alfinete no alto da trilha aparece com a
+   * luz que tem. Uma queda suave espalharia o escurecimento pelo lado direito
+   * e apagaria justamente a parte da arte que vale a pena mostrar. Foi medido na tela: com o véu fraco, a frase de
+   * três linhas do desafio do mês passava por cima do rastro e desaparecia.
+   *
+   * A cor é fixa, e não uma ficha do tema, porque a arte é noturna nos dois
+   * temas — no claro o cartão é uma ilha escura de propósito.
+   */
+  .veu-da-trilha {
+    background-image: linear-gradient(
+      to right,
+      color-mix(in srgb, #02100f 96%, transparent) 0%,
+      color-mix(in srgb, #02100f 92%, transparent) 50%,
+      color-mix(in srgb, #02100f 86%, transparent) 62%,
+      color-mix(in srgb, #02100f 42%, transparent) 73%,
+      color-mix(in srgb, #02100f 14%, transparent) 86%,
+      color-mix(in srgb, #02100f 6%, transparent) 100%
+    );
+  }
+
+  /* Scrollbar leve */
+  .synse-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--synse-border) transparent;
+  }
+  .synse-scroll::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .synse-scroll::-webkit-scrollbar-thumb {
+    background-color: var(--synse-border);
+    border-radius: 999px;
+  }
+}

@@ -1,0 +1,344 @@
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║ O pacote do Android, assinado                                            ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+#
+# ── Por que aqui e não no Codemagic ─────────────────────────────────────────
+#
+# Android compila em Linux — ao contrário do iOS, que exige hardware Apple por
+# licença. Este repositório é público, e Actions é gratuito e sem cota em
+# repositório público. Os 500 minutos de macOS do Codemagic ficam inteiros para
+# o iOS, que é onde eles fazem falta.
+#
+# ── O que este workflow produz ──────────────────────────────────────────────
+#
+#   app-release.aab   o que a Play Console aceita
+#   app-release.apk   para instalar direto num aparelho e testar
+#
+# Os dois assinados com a chave de upload, e a assinatura é **conferida** antes
+# de o artefato ser publicado: o Gradle entrega um pacote sem assinatura com um
+# aviso no log quando não acha a chave, e a Play recusa isso depois — longe
+# daqui, quando você já achou que tinha terminado.
+#
+# **Não envia para a Play Console.** A conta ainda não existe no projeto, e o
+# primeiro envio precisa da ficha da loja preenchida de qualquer jeito. O passo
+# está escrito no fim, desligado, com o que falta.
+#
+# ── Os quatro segredos ──────────────────────────────────────────────────────
+#
+# Em Settings → Secrets and variables → Actions → New repository secret:
+#
+#   ANDROID_KEYSTORE_BASE64     o .jks inteiro em base64
+#   ANDROID_KEYSTORE_PASSWORD   senha do keystore
+#   ANDROID_KEY_ALIAS           alias da chave
+#   ANDROID_KEY_PASSWORD        senha da chave
+#
+# O keystore é binário, por isso base64. Para gerar o texto a colar:
+#
+#   base64 -w 0 android/keystore.jks     # Linux
+#   base64 -i android/keystore.jks       # macOS
+#
+# **Perder essa chave significa não poder mais atualizar o app.** Guarde o .jks
+# e as senhas fora do repositório e fora daqui — num gerenciador de senhas, com
+# cópia. O GitHub guarda o segredo cifrado e não o devolve: ele serve para
+# assinar, não para fazer backup.
+#
+# Em repositório público, o segredo **não** é entregue a workflow disparado por
+# pull request de fork — então ninguém abre um PR para roubar sua chave. Mas o
+# log do build é público: nenhum passo aqui imprime segredo nenhum, e manter
+# isso é parte da revisão de qualquer mudança neste arquivo.
+
+name: Android — pacote assinado
+
+# ── Os gatilhos, e por que são estes ────────────────────────────────────────
+#
+# **O pacote é sempre manual.** Gerar um AAB assinado é decidir publicar, e
+# essa decisão é humana. Automatizar por tag parece elegante e tem uma pegadinha
+# conhecida: `paths` junto de `tags` no mesmo `push` faz o gatilho da tag não
+# disparar, porque uma tag não tem "arquivos alterados" para o filtro comparar.
+# Em vez de escrever um gatilho que falha na única vez em que seria usado, o
+# release fica no botão. Dá para acrescentar a tag depois, num `push` separado.
+#
+# **A compilação é automática**, e só quando o nativo muda. Mexer num componente
+# React não precisa recompilar o Android: o aplicativo carrega a aplicação
+# publicada (`server.url`), não um pacote de arquivos.
+on:
+  # Actions → este workflow → Run workflow.
+  workflow_dispatch:
+    inputs:
+      versao:
+        description: 'Nome da versão (vazio = o `version` do package.json)'
+        required: false
+        default: ''
+  # Um gatilho só, de propósito. Ver a nota abaixo.
+  push:
+    branches:
+      - '**'
+    paths:
+      - 'android/**'
+      - 'native/**'
+      - 'capacitor.config.ts'
+      - 'mobile/**'
+      - 'package-lock.json'
+      - '.github/workflows/android.yml'
+
+# ── Por que não tem `pull_request` ──────────────────────────────────────────
+#
+# Tinha, e duplicava: branch com PR aberto dispara `push` **e** `pull_request`
+# no mesmo commit, e o mesmo debug compilou em dois runners.
+#
+# A primeira tentativa de arrumar foi `concurrency` por trabalho, para os dois
+# runs caírem no mesmo grupo e um cancelar o outro. **Não funcionou, e vale
+# saber por quê:** `github.ref` não é a mesma coisa nos dois eventos — no push é
+# `refs/heads/<branch>`, no pull_request é `refs/pull/<n>/merge`. Grupos
+# diferentes, nada se cancelou. Dá para costurar com
+# `${{ github.head_ref || github.ref_name }}`, mas aí quem é cancelado depende
+# de qual evento chegou primeiro, e no dia em que o run do PR perde a corrida o
+# check dele aparece cancelado — que não é verde e segura o merge.
+#
+# Então: só `push`, em todo branch. Conferido no PR #1, com os dois runs no ar:
+# os jobs do run de `push` **já aparecem como check do pull request**. O
+# `pull_request` não acrescentava cobertura nenhuma; acrescentava um build.
+#
+# O que se perde é PR vindo de fork, que o `push` não alcança. Este repositório
+# nunca teve um, e não tem outra verificação de CI que o alcance — quando tiver
+# colaborador de fora, é aqui que isso volta, com `pull_request` e o `paths`
+# repetido (o GitHub Actions **não** suporta anchor de YAML: `&nativo`/`*nativo`
+# faz o parser recusar o arquivo).
+
+# O agrupamento é **por trabalho**, não do workflow inteiro, porque os dois
+# querem coisas opostas: o guarda deve ser cancelado por um push mais novo (só
+# a cabeça do branch interessa) e o pacote **nunca** pode ser cancelado. Num
+# grupo único do workflow, um push mataria um release em andamento na mesma
+# referência, e o pacote morreria no meio sem motivo aparente. Ver cada
+# trabalho.
+
+# O mínimo. Este workflow lê o código e não escreve nada no repositório.
+permissions:
+  contents: read
+
+jobs:
+  pacote:
+    name: AAB e APK assinados
+    # Só no botão. Ver a nota dos gatilhos, acima.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Um release de cada vez por referência, e **nunca** cancelado: nada que
+    # chegue depois tem o direito de matar um pacote de loja no meio.
+    concurrency:
+      group: android-pacote-${{ github.ref }}
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Java
+        # 21 porque é o que o AGP 8.13 usa aqui, e é a versão com que este
+        # build foi verificado.
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Dependências do node
+        # Obrigatório mesmo sem empacotar o site: o `cap sync` lê os plugins de
+        # `node_modules`, e são seis.
+        run: npm ci
+
+      - name: Pacotes do SDK do Android
+        # A imagem do runner traz o SDK, mas não necessariamente a plataforma
+        # 36 e as build-tools 36 que este projeto pede (`variables.gradle`).
+        # Pedir explicitamente é barato e remove a dependência da imagem do mês.
+        run: |
+          set -e
+          # Do PATH quando a imagem o expõe, do caminho explícito quando não —
+          # a imagem do runner muda de mês em mês e isto não deveria depender
+          # dela.
+          SDK=$(command -v sdkmanager || echo "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager")
+          yes 2>/dev/null | "$SDK" --licenses > /dev/null || true
+          "$SDK" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: A chave de assinatura
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -e
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::Falta o segredo ANDROID_KEYSTORE_BASE64."
+            echo "Sem ele o Gradle entrega um pacote **sem assinatura**, com um aviso"
+            echo "no log, e a Play Console recusa depois. Melhor parar aqui."
+            echo "Como gerar está no cabeçalho de .github/workflows/android.yml."
+            exit 1
+          fi
+          # Fora do diretório de trabalho: assim o keystore não entra em
+          # artefato, em cache de Gradle nem em `git status` por acidente.
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          # Nenhum `echo` do conteúdo. O log deste repositório é público.
+          echo "Keystore decodificado ($(stat -c%s "$RUNNER_TEMP/upload.jks") bytes)."
+
+      - name: Número e nome da versão
+        env:
+          ENTRADA: ${{ inputs.versao }}
+          EXECUCAO: ${{ github.run_number }}
+          # Deslocamento para quando o contador do Actions ficar atrás do que já
+          # subiu na Play — recriar o workflow zera o contador, e a Play recusa
+          # versionCode menor que o último enviado. Defina a variável
+          # `ANDROID_VERSION_CODE_OFFSET` em Settings → Variables para levantar
+          # o piso sem mexer neste arquivo.
+          DESLOCAMENTO: ${{ vars.ANDROID_VERSION_CODE_OFFSET || 0 }}
+        run: |
+          set -e
+          # `run_number` sobe a cada execução e nunca repete: é o que a Play
+          # exige do versionCode, que não pode repetir nem diminuir.
+          CODIGO=$(( EXECUCAO + DESLOCAMENTO ))
+          NOME="${ENTRADA:-$(node -p "require('./package.json').version")}"
+          echo "SYNSE_VERSION_CODE=$CODIGO" >> "$GITHUB_ENV"
+          echo "SYNSE_VERSION_NAME=$NOME" >> "$GITHUB_ENV"
+          echo "versionCode $CODIGO · versionName $NOME"
+
+      - name: Sincronizar o Capacitor
+        # Copia `mobile/www` (a tela de falha de conexão) e a configuração para
+        # dentro do projeto nativo. O app carrega a aplicação publicada, então
+        # não há `next build` aqui.
+        run: npx cap sync android
+
+      - name: Compilar o AAB e o APK
+        env:
+          SYNSE_KEYSTORE_FILE: ${{ runner.temp }}/upload.jks
+          SYNSE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          SYNSE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          SYNSE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        working-directory: android
+        # `--no-daemon`: o runner é descartado no fim, e daemon só serve para a
+        # segunda execução que nunca vem.
+        run: ./gradlew bundleRelease assembleRelease --no-daemon
+
+      - name: Conferir que os pacotes estão assinados
+        # A conferência que importa, e a razão de ela existir: sem chave, o
+        # `build.gradle` avisa no log e entrega o pacote **sem assinatura**.
+        # Verde aqui com pacote sem assinatura é a Play recusando daqui a uma
+        # hora, quando você já achou que tinha terminado.
+        working-directory: android
+        run: |
+          set -e
+          APK=app/build/outputs/apk/release/app-release.apk
+          AAB=app/build/outputs/bundle/release/app-release.aab
+
+          # Sem chave o Gradle não só deixa de assinar: ele troca o nome do
+          # arquivo para `app-release-unsigned.apk`. Conferido aqui, rodando o
+          # build sem as variáveis — ele termina em verde. Sem este teste a
+          # falha ainda apareceria, mas como "arquivo não encontrado" do
+          # apksigner, que não diz o que aconteceu.
+          if [ ! -f "$APK" ]; then
+            echo "::error::Não saiu APK assinado em $APK."
+            ls -1 app/build/outputs/apk/release/ || true
+            exit 1
+          fi
+          [ -f "$AAB" ] || { echo "::error::Não saiu AAB em $AAB."; exit 1; }
+
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$APK"
+          echo "APK assinado."
+
+          # O AAB é assinado no esquema do jar; `apksigner` não o lê.
+          if jarsigner -verify "$AAB" | grep -q "jar verified"; then
+            echo "AAB assinado."
+          else
+            echo "::error::O AAB saiu sem assinatura. A Play Console vai recusar."
+            jarsigner -verify "$AAB" | head -5
+            exit 1
+          fi
+
+          # E a versão que entrou é a que foi pedida.
+          "$ANDROID_HOME/build-tools/36.0.0/aapt2" dump badging "$APK" | head -1
+
+      - name: Guardar os pacotes
+        uses: actions/upload-artifact@v4
+        with:
+          name: synse-android-${{ env.SYNSE_VERSION_NAME }}-${{ env.SYNSE_VERSION_CODE }}
+          path: |
+            android/app/build/outputs/bundle/release/app-release.aab
+            android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          # Artefato de repositório público é baixável por qualquer um. São
+          # pacotes assinados de release, feitos para distribuição — mas 90 dias
+          # de histórico de build não precisam ficar públicos.
+          retention-days: 14
+
+      - name: Apagar a chave
+        # `always`: também quando o build falha. O runner é descartado de
+        # qualquer jeito; isto é para não depender disso.
+        if: always()
+        run: rm -f "$RUNNER_TEMP/upload.jks"
+
+      # ── O envio para a Play Console ───────────────────────────────────────
+      #
+      # Deliberadamente ausente. Para ligar, precisa de três coisas que o
+      # projeto ainda não tem:
+      #
+      #   1. Conta na Play Console (US$ 25, uma vez) e o app registrado com o
+      #      id `br.com.synse.app`.
+      #   2. Uma conta de serviço do Google Cloud com acesso à Play Developer
+      #      API, convidada na Play Console com permissão de release.
+      #   3. O JSON dessa conta num segredo, e uma action de upload.
+      #
+      # E o **primeiro** envio de um app novo não pode ser feito por API: a
+      # Play exige que a primeira versão suba pelo painel, com a ficha da loja
+      # preenchida. Automatizar antes disso é escrever um passo que falha na
+      # única vez em que ele seria usado.
+
+  compilar:
+    name: Compila (sem assinar)
+    # O guarda do código nativo. Não assina e não guarda nada: só responde
+    # "o Kotlin ainda compila?" quando alguém mexe no nativo.
+    #
+    # Existe por causa do iOS: a Live Activity passou meses chamando um tipo
+    # que não existia, e ninguém soube porque nada daquilo era compilado. Build
+    # de debug não precisa de chave nenhuma — o Android assina com a chave de
+    # depuração que ele mesmo gera.
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # Um push novo cancela o guarda do commit anterior no mesmo branch, que é o
+    # que se quer: o que interessa é a cabeça compilar, não o histórico.
+    concurrency:
+      group: android-compilar-${{ github.ref }}
+      cancel-in-progress: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - run: npm ci
+
+      - name: Pacotes do SDK do Android
+        run: |
+          set -e
+          # Do PATH quando a imagem o expõe, do caminho explícito quando não —
+          # a imagem do runner muda de mês em mês e isto não deveria depender
+          # dela.
+          SDK=$(command -v sdkmanager || echo "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager")
+          yes 2>/dev/null | "$SDK" --licenses > /dev/null || true
+          "$SDK" "platforms;android-36" "build-tools;36.0.0"
+
+      - run: npx cap sync android
+
+      - name: Compilar o debug
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon

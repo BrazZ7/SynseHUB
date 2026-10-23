@@ -1,0 +1,70 @@
+/*
+ * O módulo Android do plugin.
+ *
+ * Faltava, e o Gradle recusou o build com "No variants exist" — o erro não diz
+ * "falta o build.gradle", diz que o projeto não expõe nada para consumir, que é
+ * a mesma coisa vista do outro lado. Foi o build de verdade que encontrou; um
+ * `cap sync` passa sem isto porque ele só copia arquivo.
+ *
+ * As versões vêm do projeto pai quando existem. Fixar aqui faria o plugin
+ * brigar com o app a cada atualização do Capacitor.
+ */
+ext {
+    capacitorVersion = System.getenv('CAPACITOR_VERSION')
+    androidxCoreVersion = project.hasProperty('androidxCoreVersion') ? rootProject.ext.androidxCoreVersion : '1.17.0'
+}
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.13.0'
+        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.21'
+    }
+}
+
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+android {
+    namespace = "com.synse.workout"
+    compileSdk = project.hasProperty('compileSdkVersion') ? rootProject.ext.compileSdkVersion : 36
+
+    defaultConfig {
+        /*
+         * 26 e não 24: `NotificationChannel` e `startForegroundService` são da
+         * API 26. Abaixo disso o serviço do treino não existe — e é melhor o
+         * Gradle recusar aqui que o aparelho recusar em campo.
+         */
+        minSdkVersion 26
+        targetSdkVersion project.hasProperty('targetSdkVersion') ? rootProject.ext.targetSdkVersion : 36
+        versionCode 1
+        versionName "0.1.0"
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+
+    kotlinOptions {
+        jvmTarget = '21'
+    }
+
+    lintOptions {
+        abortOnError false
+    }
+}
+
+repositories {
+    google()
+    mavenCentral()
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation project(':capacitor-android')
+    implementation "androidx.core:core-ktx:$androidxCoreVersion"
+}

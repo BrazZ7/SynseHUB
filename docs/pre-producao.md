@@ -56,10 +56,11 @@ npm run env:check
 
 ## Migrations
 
-**Estado em 23/10/2026: tudo até a 0061 aplicado em produção. A 0062 está
-escrita e ainda não foi colada** — é a primeira pendente desde setembro, e até
-ela entrar o relato do treino simplesmente não aparece (a leitura tolera a
-tabela ausente, como manda a regra de publicar-não-é-migrar).
+**Estado em 23/10/2026: tudo até a 0061 aplicado em produção. A 0062 e a 0063
+estão escritas e ainda não foram coladas** — são as primeiras pendentes desde
+setembro. Até entrarem, o relato do treino e a entrada guiada simplesmente não
+aparecem: as duas leituras toleram a tabela ausente, como manda a regra de
+publicar-não-é-migrar, e sem tabela ninguém é desviado para o questionário.
 
 Esta linha envelhece a cada migration e por isso não é a fonte da verdade: a
 sonda é. Quem quiser saber o que falta abre o endereço, não este arquivo. O que
@@ -1174,6 +1175,22 @@ existem, não para conferir se subiram.
   da sessão de treino. `workout_logs.rpe` ficou onde estava — é resto do
   desenho achatado que o produto já abandonou, e ressuscitar a tabela para
   aproveitar uma coluna seria desfazer essa escolha.
+
+- **0063 (`0063_entrada_guiada.sql`)** — `student_intake`: o que o aluno declara
+  ao entrar. Objetivo, experiência e dias por semana, um registro por
+  matrícula. É o que o planejamento semanal e o resumo semanal vão consumir, e
+  é por isso que vem antes dos dois.
+
+  Separado de `students.goal`, que é texto livre preenchido **pela academia** no
+  cadastro: autores diferentes, e os dois podem divergir de propósito. A
+  política do staff é **só `select`**, ao contrário da maioria das tabelas —
+  objetivo declarado é a voz do aluno, e a anotação do professor já tem lugar.
+
+  `skipped_at` é a razão de a tela não voltar a cada abertura: ele separa
+  "ainda não perguntei" de "já perguntei e a pessoa disse depois". Quem pula e
+  responde depois tem a recusa limpa. Uma trava de banco garante que
+  `completed_at` só existe com as três respostas — sem ela, a ficha do
+  professor mostraria "respondeu" ao lado de três traços.
 
   Não havia instrumentação nenhuma. `grep -rln "analytics|posthog|plausible|
   gtag(" src/` não devolvia nada, e `logger.ts` é registro técnico. Não havia

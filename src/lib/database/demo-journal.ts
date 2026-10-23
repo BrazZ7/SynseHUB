@@ -279,6 +279,21 @@ export type DemoMutation =
       dor?: boolean
     }
   | {
+      /**
+       * A entrada guiada respondida ou pulada na demonstração (0063).
+       *
+       * Vale uma entrada do diário, ao contrário do que eu decidi primeiro com
+       * o "visto" do relato: sem ela, o visitante responde as três perguntas,
+       * navega, e a tela volta — que é exatamente o obstáculo que `skipped_at`
+       * existe para impedir. Carga pequena: dois rótulos curtos e um número.
+       */
+      t: 'intake'
+      goal?: string | null
+      experiencia?: string | null
+      dias?: number | null
+      pulou?: boolean
+    }
+  | {
       /** Sino aberto: tudo criado antes deste instante conta como lido. */
       t: 'notifread'
       at: string
@@ -432,6 +447,7 @@ const TIPOS_ACEITOS: Record<DemoMutation['t'], true> = {
   consent: true,
   friend: true,
   insc: true,
+  intake: true,
 }
 
 function decode(raw: string): DemoMutation[] {

@@ -44,6 +44,9 @@ import type {
   OngoingWorkout,
   WorkoutPreferences,
   WorkoutAdherenceRow,
+  StudentExperience,
+  StudentGoal,
+  StudentIntake,
   WorkoutFeedbackEntry,
   WorkoutSessionSummary,
   WorkoutTotals,
@@ -1006,6 +1009,22 @@ export interface DataSource {
   listWorkoutFeedback(studentId: string, limite: number): Promise<WorkoutFeedbackEntry[]>
   /** A academia registra que leu. Primeira vez vale; as seguintes não mexem. */
   marcarFeedbackVisto(sessionId: string): Promise<void>
+
+  /**
+   * O que o aluno declarou ao entrar (0063). `null` quando nunca abriu a tela.
+   *
+   * A distinção entre `null` e uma linha com `skippedAt` é o que a porta do
+   * `/app` usa: nunca perguntei contra já perguntei e a pessoa disse depois.
+   */
+  getStudentIntake(studentId: string): Promise<StudentIntake | null>
+  /** O aluno responde. A matrícula sai do `auth.uid()`, não daqui. */
+  setStudentIntake(entrada: {
+    goal: StudentGoal
+    experience: StudentExperience
+    daysPerWeek: number
+  }): Promise<void>
+  /** "Depois". Grava a recusa para a tela não voltar a cada abertura. */
+  skipStudentIntake(): Promise<void>
   getWorkoutPreferences(userProfileId: string): Promise<WorkoutPreferences>
   saveWorkoutPreferences(
     userProfileId: string,

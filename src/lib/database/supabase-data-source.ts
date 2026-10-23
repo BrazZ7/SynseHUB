@@ -118,6 +118,9 @@ import type {
   StudentAtRisk,
   OngoingWorkout,
   WorkoutPreferences,
+  StudentExperience,
+  StudentGoal,
+  StudentIntake,
   WorkoutFeedbackEntry,
   WorkoutSessionSummary,
   Friend,
@@ -2904,6 +2907,44 @@ export class SupabaseDataSource implements DataSource {
   async marcarFeedbackVisto(sessionId: string): Promise<void> {
     const { error } = await this.client.rpc('marcar_feedback_visto', { p_session_id: sessionId })
     if (error) this.fail('marcarFeedbackVisto', error)
+  }
+
+  async getStudentIntake(studentId: string): Promise<StudentIntake | null> {
+    const row = await this.select<Row>(
+      'getStudentIntake',
+      this.client
+        .from('student_intake')
+        .select('student_id, goal, experience, days_per_week, completed_at, skipped_at')
+        .eq('student_id', studentId)
+        .maybeSingle(),
+    )
+    if (!row) return null
+    return {
+      studentId: row.student_id,
+      goal: row.goal ?? null,
+      experience: row.experience ?? null,
+      daysPerWeek: row.days_per_week ?? null,
+      completedAt: row.completed_at ?? null,
+      skippedAt: row.skipped_at ?? null,
+    }
+  }
+
+  async setStudentIntake(entrada: {
+    goal: StudentGoal
+    experience: StudentExperience
+    daysPerWeek: number
+  }): Promise<void> {
+    const { error } = await this.client.rpc('set_student_intake', {
+      p_goal: entrada.goal,
+      p_experience: entrada.experience,
+      p_days_per_week: entrada.daysPerWeek,
+    })
+    if (error) this.fail('setStudentIntake', error)
+  }
+
+  async skipStudentIntake(): Promise<void> {
+    const { error } = await this.client.rpc('skip_student_intake', {})
+    if (error) this.fail('skipStudentIntake', error)
   }
 
   async getWorkoutPreferences(userProfileId: string): Promise<WorkoutPreferences> {

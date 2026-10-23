@@ -141,3 +141,24 @@ export const workoutFeedbackSchema = z.object({
     .transform((texto) => texto || null)
     .nullable(),
 })
+
+/**
+ * A entrada guiada do aluno (0063).
+ *
+ * Os valores são os mesmos enums do banco. Repetir a lista aqui não é
+ * duplicação ociosa: é o que transforma um valor inventado em mensagem em
+ * português, em vez de um erro de enum do Postgres chegando cru na tela.
+ */
+export const studentIntakeSchema = z.object({
+  goal: z.enum(['EMAGRECER', 'GANHAR_MASSA', 'CONDICIONAMENTO', 'SAUDE'], {
+    message: 'Escolha um objetivo.',
+  }),
+  experience: z.enum(['NUNCA_TREINEI', 'VOLTANDO', 'TREINO_SEMPRE'], {
+    message: 'Escolha sua experiência.',
+  }),
+  daysPerWeek: z.coerce
+    .number()
+    .int('Dias por semana vai em número inteiro.')
+    .min(1, 'De 1 a 7 dias por semana.')
+    .max(7, 'De 1 a 7 dias por semana.'),
+})

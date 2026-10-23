@@ -118,6 +118,9 @@ import type {
   StudentAtRisk,
   OngoingWorkout,
   WorkoutPreferences,
+  StudentExperience,
+  StudentGoal,
+  StudentIntake,
   WorkoutFeedbackEntry,
   WorkoutSessionSummary,
   Friend,
@@ -265,6 +268,8 @@ export class DemoDataSource implements DataSource {
    * relato sobre o mesmo treino.
    */
   private readonly demoFeedback = new Map<string, WorkoutFeedbackEntry>()
+  /** A entrada guiada do visitante (0063). `null` é "nunca abriu a tela". */
+  private demoIntake: StudentIntake | null = null
   private demoWorkoutPrefs: WorkoutPreferences = { ...DEFAULT_WORKOUT_PREFERENCES }
   private readonly addedLeads: Lead[] = []
   private readonly leadEdits = new Map<string, Lead>()
@@ -700,6 +705,23 @@ export class DemoDataSource implements DataSource {
         else {
           aberta.status = 'COMPLETED'
           aberta.completedAt = new Date().toISOString()
+        }
+        break
+      }
+      case 'intake': {
+        const anterior = this.demoIntake
+        this.demoIntake = {
+          studentId: this.db.studentIdForApp,
+          goal: mutation.pulou ? (anterior?.goal ?? null) : ((mutation.goal as StudentGoal) ?? null),
+          experience: mutation.pulou
+            ? (anterior?.experience ?? null)
+            : ((mutation.experiencia as StudentExperience) ?? null),
+          daysPerWeek: mutation.pulou ? (anterior?.daysPerWeek ?? null) : (mutation.dias ?? null),
+          completedAt: mutation.pulou
+            ? (anterior?.completedAt ?? null)
+            : (anterior?.completedAt ?? new Date().toISOString()),
+          // Uma resposta depois de um "depois" limpa a recusa, como no banco.
+          skippedAt: mutation.pulou ? new Date().toISOString() : null,
         }
         break
       }
@@ -2546,6 +2568,45 @@ export class DemoDataSource implements DataSource {
      * como não lido. Um botão que não gruda é pior que um lugar a menos.
      */
     await appendDemoMutation({ t: 'wsess', a: 'feedback-visto' })
+  }
+
+  async getStudentIntake(studentId: string): Promise<StudentIntake | null> {
+    if (!this.demoIntake || this.demoIntake.studentId !== studentId) return null
+    return this.demoIntake
+  }
+
+  async setStudentIntake(entrada: {
+    goal: StudentGoal
+    experience: StudentExperience
+    daysPerWeek: number
+  }): Promise<void> {
+    this.demoIntake = {
+      studentId: this.db.studentIdForApp,
+      goal: entrada.goal,
+      experience: entrada.experience,
+      daysPerWeek: entrada.daysPerWeek,
+      completedAt: this.demoIntake?.completedAt ?? new Date().toISOString(),
+      // Respondeu depois de pular: a resposta vale mais, como no `on conflict`.
+      skippedAt: null,
+    }
+    await appendDemoMutation({
+      t: 'intake',
+      goal: entrada.goal,
+      experiencia: entrada.experience,
+      dias: entrada.daysPerWeek,
+    })
+  }
+
+  async skipStudentIntake(): Promise<void> {
+    this.demoIntake = {
+      studentId: this.db.studentIdForApp,
+      goal: this.demoIntake?.goal ?? null,
+      experience: this.demoIntake?.experience ?? null,
+      daysPerWeek: this.demoIntake?.daysPerWeek ?? null,
+      completedAt: this.demoIntake?.completedAt ?? null,
+      skippedAt: this.demoIntake?.skippedAt ?? new Date().toISOString(),
+    }
+    await appendDemoMutation({ t: 'intake', pulou: true })
   }
 
   async getActiveWorkoutSession(studentId: string): Promise<WorkoutSessionSummary | null> {

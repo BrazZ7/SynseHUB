@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { redirect } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import {
@@ -27,8 +28,10 @@ import { getChallengeBoard } from '@/features/challenges/service'
 import { NotificationsBell } from '@/features/notifications/notifications-bell'
 import { CapaDoDia } from '@/features/students/components/capa-do-dia'
 import { getStudentHome } from '@/features/students/app-service'
+import { precisaDaEntradaGuiada } from '@/features/students/entrada/state'
 import { horaLocal } from '@/features/schedule/week'
 import { getDataSource } from '@/lib/database'
+import { seAindaNaoMigrou } from '@/lib/database/pending-migration'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { StreakFlame } from '@/features/students/streak-flame'
 import { calcularSequencia } from '@/features/students/streak'
@@ -39,7 +42,7 @@ export const metadata: Metadata = { title: 'Hoje' }
 export default async function StudentHomePage() {
   const session = await requireStudentSession()
   const agora = new Date()
-  const [home, challenges, aulas, conteudos, organizacao, checkIns] = await Promise.all([
+  const [home, challenges, aulas, conteudos, organizacao, checkIns, entrada] = await Promise.all([
     getStudentHome(session.organizationId, session.studentId),
     getChallengeBoard(session),
     getDataSource().then((dataSource) =>
@@ -67,7 +70,30 @@ export default async function StudentHomePage() {
     getDataSource().then((dataSource) =>
       dataSource.listCheckInsForStudent(session.organizationId, session.studentId, 180),
     ),
+    /*
+     * Dentro do `Promise.all`, e não antes dele: ler em série acrescentaria
+     * uma ida ao banco a **toda** abertura da tela mais vista do produto, para
+     * decidir algo que só muda o caminho na primeira. Aqui a consulta anda
+     * junto com as outras seis e o desvio acontece depois.
+     *
+     * `seAindaNaoMigrou` porque a 0063 pode não ter sido colada ainda; sem
+     * ela, a tela de hoje quebraria inteira por causa de uma tabela que ainda
+     * não existe. Sem tabela, ninguém é desviado — que é o certo: perguntar
+     * sem ter onde gravar seria perder a resposta.
+     */
+    getDataSource().then((dataSource) =>
+      dataSource.getStudentIntake(session.studentId).catch(seAindaNaoMigrou(null)),
+    ),
   ])
+
+  /*
+   * A porta da entrada guiada.
+   *
+   * Desvia só quem nunca respondeu **e** nunca pulou — a regra mora em
+   * `precisaDaEntradaGuiada`, com teste próprio, porque um engano aqui prende
+   * a pessoa fora da tela de hoje a cada abertura.
+   */
+  if (precisaDaEntradaGuiada(entrada)) redirect('/app/comecar')
 
   const sequencia = calcularSequencia(checkIns, {
     fuso: organizacao?.timezone ?? 'America/Sao_Paulo',

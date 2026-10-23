@@ -542,6 +542,31 @@ export type WorkoutFeedbackEntry = WorkoutFeedback & {
 }
 
 /**
+ * O que o aluno declara ao entrar (0063).
+ *
+ * Três perguntas, um toque cada. É o que o planejamento semanal e o resumo
+ * semanal vão consumir — e é por isso que esta vem antes dos dois.
+ *
+ * Separado de `students.goal`, que é texto livre preenchido **pela academia**
+ * no cadastro: autores diferentes, e sobrescrever um com o outro apagaria a
+ * anotação do professor ou poria palavra na boca do aluno.
+ */
+export type StudentGoal = 'EMAGRECER' | 'GANHAR_MASSA' | 'CONDICIONAMENTO' | 'SAUDE'
+export type StudentExperience = 'NUNCA_TREINEI' | 'VOLTANDO' | 'TREINO_SEMPRE'
+
+export type StudentIntake = {
+  studentId: string
+  /** Nulos enquanto a pessoa só pulou. */
+  goal: StudentGoal | null
+  experience: StudentExperience | null
+  daysPerWeek: number | null
+  /** Quando respondeu as três. O banco garante que não há metade. */
+  completedAt: string | null
+  /** Quando disse "depois". É o que faz a tela parar de aparecer. */
+  skippedAt: string | null
+}
+
+/**
  * Alguém com um treino aberto na academia, agora.
  *
  * Projeção estreita de propósito: nome, treino, quando começou e quantas

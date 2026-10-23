@@ -34,6 +34,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { SEMANAS_DO_GRAFICO } from '@/features/workouts/ganho-de-carga'
+import { DeclaracaoDoAluno } from '@/features/students/entrada/declaracao-do-aluno'
 import { FeedbackDoAluno } from '@/features/workouts/feedback-do-aluno'
 import { requireHubSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
@@ -137,6 +138,7 @@ export default async function StudentProfilePage({ params }: { params: Params })
     treinoEmAndamento,
     dietas,
     relatosDoTreino,
+    entradaDoAluno,
   ] = await Promise.all([
     canSeeFinance
       ? dataSource.getChargesForStudent(session.organizationId, student.id, { pageSize: 24 })
@@ -217,6 +219,10 @@ export default async function StudentProfilePage({ params }: { params: Params })
     canSeeWorkouts
       ? dataSource.listWorkoutFeedback(student.id, RELATOS_NA_FICHA).catch(seAindaNaoMigrou([]))
       : Promise.resolve([]),
+    // Mesma permissão do relato: é com isto que se monta o treino.
+    canSeeWorkouts
+      ? dataSource.getStudentIntake(student.id).catch(seAindaNaoMigrou(null))
+      : Promise.resolve(null),
   ])
   const autorizacaoDoCorpo = autorizacaoDoAluno(
     autorizacoesDoCorpo,
@@ -507,6 +513,12 @@ export default async function StudentProfilePage({ params }: { params: Params })
             studentId={student.id}
             podeMarcar={canWriteWorkouts}
           />
+
+          {/*
+           * Depois do relato e antes dos planos: o relato é o que pede ação
+           * hoje, a declaração é o contexto de tudo que vem abaixo.
+           */}
+          <DeclaracaoDoAluno intake={entradaDoAluno} />
 
           {assignments.length === 0 ? (
             <EmptyState

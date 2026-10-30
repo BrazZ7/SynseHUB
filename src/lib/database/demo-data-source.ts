@@ -78,6 +78,8 @@ import type {
   ActivitySplit,
   ActivitySummary,
   AppNotification,
+  NotificationCategory,
+  NotificationPreference,
   Assessment,
   BaselineChallenge,
   ConsentState,
@@ -269,6 +271,13 @@ export class DemoDataSource implements DataSource {
   private readonly demoFeedback = new Map<string, WorkoutFeedbackEntry>()
   /** A entrada guiada do visitante (0063). `null` é "nunca abriu a tela". */
   private demoIntake: StudentIntake | null = null
+  /**
+   * As categorias que o visitante desligou (0065).
+   *
+   * Só o que ele mexeu — ausência é ligado, como no banco. É por isso que é
+   * um `Map` e não seis booleanos: o estado inicial não tem linha nenhuma.
+   */
+  private readonly demoPrefsDeAviso = new Map<NotificationCategory, boolean>()
   private demoWorkoutPrefs: WorkoutPreferences = { ...DEFAULT_WORKOUT_PREFERENCES }
   private readonly addedLeads: Lead[] = []
   private readonly leadEdits = new Map<string, Lead>()
@@ -730,6 +739,10 @@ export class DemoDataSource implements DataSource {
           // Uma resposta depois de um "depois" limpa a recusa, como no banco.
           skippedAt: mutation.pulou ? new Date().toISOString() : null,
         }
+        break
+      }
+      case 'npref': {
+        this.demoPrefsDeAviso.set(mutation.cat as NotificationCategory, mutation.on)
         break
       }
       case 'notifread': {
@@ -4452,15 +4465,32 @@ export class DemoDataSource implements DataSource {
       }
     }
 
-    return notifications
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .map((item) => ({
-        ...item,
-        readAt:
-          this.notificationsReadAt && this.notificationsReadAt >= item.createdAt
-            ? this.notificationsReadAt
-            : null,
-      }))
+    return (
+      notifications
+        /*
+         * O filtro das preferências (0065).
+         *
+         * Em produção ele vive em `notify_profiles`, no instante em que o
+         * aviso é **escrito**. Aqui o aviso não é escrito: a demonstração o
+         * deriva de cobranças e treinos a cada leitura, então o único lugar
+         * possível é na saída.
+         *
+         * O que precisa bater entre os dois é o que a pessoa vê — e sem isto
+         * o interruptor da tela não faria nada na demonstração, que é o
+         * defeito do "botão que não gruda" pela terceira vez nesta esteira.
+         *
+         * `!== false` e não `=== true`: ausência é ligado, como no banco.
+         */
+        .filter((item) => this.demoPrefsDeAviso.get(item.category) !== false)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .map((item) => ({
+          ...item,
+          readAt:
+            this.notificationsReadAt && this.notificationsReadAt >= item.createdAt
+              ? this.notificationsReadAt
+              : null,
+        }))
+    )
   }
 
   // ── Consentimento ──────────────────────────────────────────────────────────
@@ -4680,6 +4710,18 @@ export class DemoDataSource implements DataSource {
 
   async listNotifications(userProfileId: string, limit = 20): Promise<AppNotification[]> {
     return this.buildNotifications(userProfileId).slice(0, limit)
+  }
+
+  async listNotificationPreferences(_userProfileId: string): Promise<NotificationPreference[]> {
+    return [...this.demoPrefsDeAviso.entries()].map(([category, enabled]) => ({
+      category,
+      enabled,
+    }))
+  }
+
+  async setNotificationPreference(category: NotificationCategory, enabled: boolean): Promise<void> {
+    this.demoPrefsDeAviso.set(category, enabled)
+    await appendDemoMutation({ t: 'npref', cat: category, on: enabled })
   }
 
   async countUnreadNotifications(userProfileId: string): Promise<number> {

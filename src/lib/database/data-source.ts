@@ -15,6 +15,8 @@ import type {
   ActivitySplit,
   ActivitySummary,
   AppNotification,
+  NotificationCategory,
+  NotificationPreference,
   Assessment,
   AssessmentQueueRow,
   AssessmentQueueSummary,
@@ -1366,6 +1368,16 @@ export interface DataSource {
   countUnreadNotifications(userProfileId: string): Promise<number>
   /** Marca como lidos todos os avisos não lidos da pessoa. Devolve quantos. */
   markNotificationsRead(userProfileId: string): Promise<number>
+
+  /**
+   * O que a pessoa desligou (0065). Só o que ela mexeu; o resto é ligado.
+   *
+   * A academia não lê isto, e é a única tabela de aluno assim: saber que
+   * alguém silenciou "cobrança" é informação para cobrar por fora.
+   */
+  listNotificationPreferences(userProfileId: string): Promise<NotificationPreference[]>
+  /** Liga ou desliga uma categoria. O perfil sai do `auth.uid()`, não daqui. */
+  setNotificationPreference(category: NotificationCategory, enabled: boolean): Promise<void>
 
   /*
    * Convite de equipe

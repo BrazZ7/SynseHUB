@@ -1150,6 +1150,18 @@ export type Consent = {
 export type NotificationCategory = 'PAYMENT' | 'WORKOUT' | 'GYM' | 'CONTENT' | 'PROGRAM' | 'SYSTEM'
 
 /**
+ * O que a pessoa escolheu receber, por categoria (0065).
+ *
+ * Só as categorias que ela mexeu aparecem: **sem linha é ligado**. É o estado
+ * de toda conta que existia antes da migration, e é por isso que a tela parte
+ * de "tudo ligado" em vez de exigir um preenchimento inicial.
+ */
+export type NotificationPreference = {
+  category: NotificationCategory
+  enabled: boolean
+}
+
+/**
  * Aviso destinado a uma pessoa, não a uma organização.
  *
  * Quem escreve é o banco, por gatilho (migration 0012). A aplicação só lê e

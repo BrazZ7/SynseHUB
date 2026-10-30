@@ -79,6 +79,8 @@ import type {
   ActivitySplit,
   ActivitySummary,
   AppNotification,
+  NotificationCategory,
+  NotificationPreference,
   Assessment,
   BaselineChallenge,
   ChallengeEntry,
@@ -5379,6 +5381,27 @@ export class SupabaseDataSource implements DataSource {
     const { data, error } = await this.client.rpc('mark_notifications_read')
     if (error) this.fail('markNotificationsRead', error)
     return Number(data ?? 0)
+  }
+
+  async listNotificationPreferences(userProfileId: string): Promise<NotificationPreference[]> {
+    const rows =
+      (await this.select<Row[]>(
+        'listNotificationPreferences',
+        this.client
+          .from('notification_preferences')
+          .select('category, enabled')
+          .eq('user_profile_id', userProfileId),
+      )) ?? []
+
+    return rows.map((row) => ({ category: row.category, enabled: row.enabled }))
+  }
+
+  async setNotificationPreference(category: NotificationCategory, enabled: boolean): Promise<void> {
+    const { error } = await this.client.rpc('set_notification_preference', {
+      p_category: category,
+      p_enabled: enabled,
+    })
+    if (error) this.fail('setNotificationPreference', error)
   }
 
   // ── Desafios base ──────────────────────────────────────────────────────────

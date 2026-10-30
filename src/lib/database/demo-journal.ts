@@ -305,6 +305,18 @@ export type DemoMutation =
       pulou?: boolean
     }
   | {
+      /**
+       * Uma categoria de aviso ligada ou desligada (0065).
+       *
+       * Vale uma entrada do diário: sem ela, o visitante desliga "cobrança",
+       * navega, e os avisos de cobrança voltam — o interruptor que não gruda,
+       * que já apareceu duas vezes nesta esteira.
+       */
+      t: 'npref'
+      cat: string
+      on: boolean
+    }
+  | {
       /** Sino aberto: tudo criado antes deste instante conta como lido. */
       t: 'notifread'
       at: string
@@ -459,6 +471,7 @@ const TIPOS_ACEITOS: Record<DemoMutation['t'], true> = {
   friend: true,
   insc: true,
   intake: true,
+  npref: true,
 }
 
 function decode(raw: string): DemoMutation[] {

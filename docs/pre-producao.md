@@ -56,15 +56,23 @@ npm run env:check
 
 ## Migrations
 
-**Estado em 30/10/2026: tudo até a 0064 aplicado em produção, nada pendente**,
-confirmado por `/api/health?deep=1` (`appliedMigrations: 58`,
-`pendingMigrations: []`).
+**Estado em 30/10/2026: tudo até a 0064 aplicado em produção. A 0065 está
+escrita e ainda não foi colada.** O que está no ar foi confirmado por
+`/api/health?deep=1` (`appliedMigrations: 58`, `pendingMigrations: []`) antes
+de a 0065 existir.
 
 A 0062, a 0063 e a 0064 foram aplicadas em 30/10, e conferidas depois: RLS
 ligada com política explícita nas duas tabelas novas, `anon` sem execução em
 nenhuma das cinco funções, `search_path` fixo em todas, e o `revoke` do PUBLIC
-valendo — que é o buraco que `create or replace function` abre e que já custou
-caro uma vez, na 0061.
+valendo.
+
+Sobre esse último: a nota antiga dizia que `create or replace function` reabre
+o EXECUTE para o PUBLIC. **Está errado** — conferido no Postgres em 30/10,
+substituir função existente preserva o ACL. O que nasce aberto é função
+**nova**, e foi isso que aconteceu na 0061: `set_plus_subscription` ganhou um
+sétimo argumento, e assinatura nova é outra função, com o grant padrão. A
+lição continua valendo, com o motivo certo: **toda assinatura nova precisa do
+seu `revoke`.**
 
 Os avisos do linter do Supabase não cresceram com elas: as cinco aparecem só em
 "executável por quem está logado", junto com as outras 104 RPCs do projeto, que
@@ -1221,6 +1229,24 @@ existem, não para conferir se subiram.
   **Só o próprio aluno executa.** A academia não entra: o peso tem
   consentimento próprio (0032) e a corrida tem privacidade por atividade
   (0016), e uma função que o staff pudesse chamar passaria por cima das duas.
+
+- **0065 (`0065_preferencias_de_aviso.sql`)** — `notification_preferences`: o
+  que cada pessoa quer receber, por categoria.
+
+  O filtro vive dentro de `notify_profiles` (0012), que é o **ponto único** por
+  onde todo aviso do produto nasce — nove gatilhos hoje, e os que vierem ganham
+  o filtro sem ninguém lembrar. A alternativa era conferir em cada gatilho:
+  nove lugares para acertar, e o décimo esquecido manda assim mesmo.
+
+  **Sem linha é ligado.** Nenhuma conta existente muda de comportamento quando
+  esta migration entra, e não há o que preencher.
+
+  `SYSTEM` não aparece na tela — é a categoria de conta e segurança, e nenhum
+  gatilho a emite hoje. O banco aceita a preferência para ela; a trava é da
+  lista da tela, com teste que obriga a decisão a ser consciente.
+
+  **A academia não lê esta tabela**, e é a única de aluno assim: saber que
+  alguém silenciou "cobrança" é informação para cobrar por fora.
 
   Não havia instrumentação nenhuma. `grep -rln "analytics|posthog|plausible|
   gtag(" src/` não devolvia nada, e `logger.ts` é registro técnico. Não havia

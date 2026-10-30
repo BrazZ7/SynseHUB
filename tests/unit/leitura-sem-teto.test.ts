@@ -47,6 +47,8 @@ const ARQUIVO = join(RAIZ, 'src/lib/database/supabase-data-source.ts')
 /** O conjunto é limitado pelo próprio domínio: não há o que paginar. */
 const LIMITADA_PELO_DOMINIO: Record<string, string> = {
   listStaff: 'a equipe de uma academia — dezenas, e a tela mostra todas de propósito',
+  listNotificationPreferences:
+    'no máximo seis linhas: a chave é (perfil, categoria) e a categoria tem `check` de seis valores (0065)',
   listPlans: 'os planos de uma academia — punhado',
   listCollectionRules: 'a régua de cobrança — punhado de etapas',
   listarSumidos: 'recorta por `.in(id, …)` com os ids da página: no máximo `pageSize`',
@@ -54,10 +56,8 @@ const LIMITADA_PELO_DOMINIO: Record<string, string> = {
     'recorta por `.in(student_id, …)` com os alunos perguntados: no máximo os da tela',
   listWorkoutPlansByIds:
     'recorta por `.in(id, …)` com as fichas perguntadas: no máximo as de um aluno',
-  listBillingSettings:
-    'recorta por `.in(organization_id, …)`: no máximo as academias do resumo',
-  academiasPorPlano:
-    'quatro linhas, uma por plano — e o `comoEra` é a lista de academias ativas',
+  listBillingSettings: 'recorta por `.in(organization_id, …)`: no máximo as academias do resumo',
+  academiasPorPlano: 'quatro linhas, uma por plano — e o `comoEra` é a lista de academias ativas',
   listWorkoutExercises: 'os exercícios de uma ficha — dezenas',
   listExercises:
     'o catálogo da Synse, que só a Synse publica: nada no produto escreve em `exercises`',
@@ -265,8 +265,8 @@ describe('a reclassificação de `listExercises` continua verdadeira', () => {
 
   it('e o guarda da escrita enxerga uma escrita de verdade — o controle', () => {
     const isca = "this.client.from('exercises').insert({ name: 'x' })"
-    const achou = [...isca.matchAll(/\.from\('exercises'\)([\s\S]{0,200})/g)].filter(
-      ([, depois]) => /\.(insert|update|upsert|delete)\(/.test(depois),
+    const achou = [...isca.matchAll(/\.from\('exercises'\)([\s\S]{0,200})/g)].filter(([, depois]) =>
+      /\.(insert|update|upsert|delete)\(/.test(depois),
     )
     expect(achou).toHaveLength(1)
   })

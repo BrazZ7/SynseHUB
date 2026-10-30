@@ -56,13 +56,23 @@ npm run env:check
 
 ## Migrations
 
-**Estado em 23/10/2026: tudo até a 0061 aplicado em produção. A 0062, a 0063 e
-a 0064 estão escritas e ainda não foram coladas** — são as primeiras pendentes
-desde setembro. Até entrarem, o relato do treino, a entrada guiada e o
-histórico integrado simplesmente não aparecem: as três leituras toleram a
-tabela ou a função ausente, como manda a regra de publicar-não-é-migrar.
-Ninguém é desviado para o questionário e o histórico abre vazio — que é o
-estado honesto, e não uma página de erro.
+**Estado em 30/10/2026: tudo até a 0064 aplicado em produção, nada pendente**,
+confirmado por `/api/health?deep=1` (`appliedMigrations: 58`,
+`pendingMigrations: []`).
+
+A 0062, a 0063 e a 0064 foram aplicadas em 30/10, e conferidas depois: RLS
+ligada com política explícita nas duas tabelas novas, `anon` sem execução em
+nenhuma das cinco funções, `search_path` fixo em todas, e o `revoke` do PUBLIC
+valendo — que é o buraco que `create or replace function` abre e que já custou
+caro uma vez, na 0061.
+
+Os avisos do linter do Supabase não cresceram com elas: as cinco aparecem só em
+"executável por quem está logado", junto com as outras 104 RPCs do projeto, que
+é o padrão. Nenhuma em `anon`, nenhuma com `search_path` solto.
+
+**Consequência que vale saber:** com a 0063 no ar, a entrada guiada passou a
+desviar **todo aluno que abrir o app** e ainda não respondeu nem pulou — os
+existentes também, não só os novos. São dois toques para sair.
 
 Esta linha envelhece a cada migration e por isso não é a fonte da verdade: a
 sonda é. Quem quiser saber o que falta abre o endereço, não este arquivo. O que

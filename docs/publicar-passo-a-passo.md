@@ -38,13 +38,13 @@ antes de virar 12, e quem decide é a Play, não este documento.
 
 ## Fase 0 — O site no ar: **já está**, menos uma coisa
 
-Conferido em 17/10/2026 contra `https://synse.com.br/api/health?deep=1`:
+Conferido em 30/10/2026 contra `https://synse.com.br/api/health?deep=1`:
 
 | Item | Estado |
 | --- | --- |
 | Site no ar | **Sim**, HTTP 200, `environment: production` |
 | Supabase ligado | **Sim**, projeto `SynseHUB` em `sa-east-1` |
-| Migrations | **54 aplicadas, `pendingMigrations: []`** |
+| Migrations | **58 aplicadas, `pendingMigrations: []`** — a 0062, a 0063 e a 0064 entraram em 30/10 |
 | Sondas de schema | Todas presentes |
 | Cobrança agendada, limitador | Ligados |
 | **Identificação legal** | **Não** — `identificacaoLegal: false` |

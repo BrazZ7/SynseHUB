@@ -56,27 +56,64 @@ npm run env:check
 
 ## Migrations
 
-**Estado em 30/10/2026: tudo até a 0064 aplicado em produção. A 0065 está
-escrita e ainda não foi colada.** O que está no ar foi confirmado por
-`/api/health?deep=1` (`appliedMigrations: 58`, `pendingMigrations: []`) antes
-de a 0065 existir.
+**Estado em 30/10/2026: tudo até a 0065 aplicado em produção.** Confirmado por
+`/api/health?deep=1`: `appliedMigrations: 59`, `pendingMigrations: []`, e
+nenhuma sonda de formato com `present: false`.
 
-A 0062, a 0063 e a 0064 foram aplicadas em 30/10, e conferidas depois: RLS
-ligada com política explícita nas duas tabelas novas, `anon` sem execução em
-nenhuma das cinco funções, `search_path` fixo em todas, e o `revoke` do PUBLIC
-valendo.
+A 0062, a 0063, a 0064 e a 0065 foram aplicadas em 30/10, e conferidas depois:
+RLS ligada com política explícita nas três tabelas novas, `anon` sem execução
+em nenhuma das sete funções, `search_path` fixo em todas, e o `revoke` do
+PUBLIC valendo.
 
-Sobre esse último: a nota antiga dizia que `create or replace function` reabre
-o EXECUTE para o PUBLIC. **Está errado** — conferido no Postgres em 30/10,
-substituir função existente preserva o ACL. O que nasce aberto é função
-**nova**, e foi isso que aconteceu na 0061: `set_plus_subscription` ganhou um
-sétimo argumento, e assinatura nova é outra função, com o grant padrão. A
-lição continua valendo, com o motivo certo: **toda assinatura nova precisa do
-seu `revoke`.**
+A 0065 foi conferida também pelo comportamento, e não só pela forma — ela
+troca `notify_profiles`, que é por onde passa todo aviso do produto. Três
+chamadas reais em produção, dentro de um bloco que termina em `raise exception`
+para se desfazer: sem linha de preferência o aviso **passa** (ausência é
+ligado), com a categoria desligada ele é **barrado**, e outra categoria da
+mesma pessoa **continua chegando**. Os 1060 avisos da tabela ficaram 1060, e a
+tabela de preferências ficou vazia — ninguém tem linha, então nenhuma conta
+mudou de comportamento, que era o projeto.
 
-Os avisos do linter do Supabase não cresceram com elas: as cinco aparecem só em
-"executável por quem está logado", junto com as outras 104 RPCs do projeto, que
-é o padrão. Nenhuma em `anon`, nenhuma com `search_path` solto.
+E pelos olhos de duas pessoas reais, do mesmo jeito reversível: a dona A vê a
+própria linha, a dona B **não vê** a de A, `anon` não vê nada,
+`set_notification_preference` chamada com o token de B grava no perfil de B (e
+não no que o cliente mandar), e o `insert` direto na tabela como `authenticated`
+volta `42501`.
+
+Sobre o `revoke` do PUBLIC: a nota antiga dizia que `create or replace
+function` reabre o EXECUTE para o PUBLIC. **Está errado** — conferido no
+Postgres em 30/10, substituir função existente preserva o ACL. A 0065 deu a
+prova em produção: `notify_profiles` foi substituída e o ACL continuou
+`postgres=X | service_role=X`, sem `anon` e sem `authenticated`. O que nasce
+aberto é função **nova**, e foi isso que aconteceu na 0061:
+`set_plus_subscription` ganhou um sétimo argumento, e assinatura nova é outra
+função, com o grant padrão. A lição continua valendo, com o motivo certo:
+**toda assinatura nova precisa do seu `revoke`.**
+
+Os avisos do linter do Supabase não cresceram com elas: as sete aparecem só em
+"executável por quem está logado", junto com as outras RPCs do projeto (105 no
+total), que é o padrão. A lista de `anon` ficou em 43, o mesmo número de antes
+da 0062 — nenhuma das novas entrou lá. Nenhuma com `search_path` solto, e
+`notification_preferences` não aparece em "RLS ligada sem política".
+
+### Um `grant` padrão do Supabase que o projeto já contorna em cinco tabelas
+
+Conferindo a 0065 apareceu isto, que **não é dela** e vale ficar escrito:
+`authenticated` tem `TRUNCATE` em 69 das 74 tabelas do `public`. É o
+`grant all on all tables` padrão do Supabase, e TRUNCATE **não passa por RLS**
+— quem o executasse esvaziaria a tabela inteira, de todos os inquilinos.
+
+As cinco que escapam são as que já tiveram `revoke` mais largo em alguma
+migration: `payment_account_secrets`, `consent_documents`, `schema_migrations`,
+`staff_invites` e `plus_subscription_conflicts`.
+
+**Por que não é um buraco aberto hoje:** `authenticated` é `NOLOGIN` e sem
+`BYPASSRLS` — só se chega nele por `set role` a partir do `authenticator`, e o
+PostgREST não expõe TRUNCATE: a API REST faz CRUD e chama função, não SQL
+arbitrário. Então é higiene, não incidente. Mas é higiene de uma linha por
+tabela, e a convenção das cinco mostra que o projeto já decidiu de que lado
+fica. Candidato a uma migration própria que resolva as 69 de uma vez, em vez de
+cada tabela nova lembrar sozinha.
 
 **Consequência que vale saber:** com a 0063 no ar, a entrada guiada passou a
 desviar **todo aluno que abrir o app** e ainda não respondeu nem pulou — os

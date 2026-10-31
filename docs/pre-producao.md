@@ -56,14 +56,13 @@ npm run env:check
 
 ## Migrations
 
-**Estado em 30/10/2026: tudo até a 0065 aplicado em produção.** Confirmado por
-`/api/health?deep=1`: `appliedMigrations: 59`, `pendingMigrations: []`, e
+**Estado em 31/10/2026: tudo até a 0066 aplicado em produção.** Confirmado por
+`/api/health?deep=1`: `appliedMigrations: 60`, `pendingMigrations: []`, e
 nenhuma sonda de formato com `present: false`.
 
-A 0062, a 0063, a 0064 e a 0065 foram aplicadas em 30/10, e conferidas depois:
-RLS ligada com política explícita nas três tabelas novas, `anon` sem execução
-em nenhuma das sete funções, `search_path` fixo em todas, e o `revoke` do
-PUBLIC valendo.
+Da 0062 à 0066, aplicadas em 30 e 31/10 e conferidas depois: RLS ligada com
+política explícita nas três tabelas novas, `anon` sem execução em nenhuma das
+oito funções, `search_path` fixo em todas, e o `revoke` do PUBLIC valendo.
 
 A 0065 foi conferida também pelo comportamento, e não só pela forma — ela
 troca `notify_profiles`, que é por onde passa todo aviso do produto. Três
@@ -80,6 +79,23 @@ própria linha, a dona B **não vê** a de A, `anon` não vê nada,
 não no que o cliente mandar), e o `insert` direto na tabela como `authenticated`
 volta `42501`.
 
+A 0066 teve a mesma conferência, e a parte que importava era o fuso. Com um
+aluno real, dentro de um bloco que se desfaz: um treino às 22h de domingo —
+`2026-10-26 01:00 UTC`, que em UTC **é segunda** — caiu na semana `2026-10-19`,
+a que terminou naquele domingo, e não na seguinte. Na semana corrente,
+`days_trained` contou a presença e **não** a corrida (as duas chaves da 0016),
+`weight_kg` veio preenchido só na semana com pesagem, `avg_effort` só na semana
+com relato, e `target_days` veio da entrada guiada nas duas linhas. O teto
+respondeu 1, 12 e 12 para pedidos de 1, 12 e 10 000 semanas.
+
+Isolamento, também reversível: A vê o próprio treino, B **não vê** o de A, uma
+conta logada sem matrícula soma zero — e não o total de todo mundo, que é o
+risco real de uma função `security definer` — e `anon` recebe `42501`.
+
+Antes dela, produção tinha **zero treinos concluídos**: o resumo de todo aluno
+é duas linhas de zeros, que é o estado honesto e o caso que o `generate_series`
+existe para cobrir.
+
 Sobre o `revoke` do PUBLIC: a nota antiga dizia que `create or replace
 function` reabre o EXECUTE para o PUBLIC. **Está errado** — conferido no
 Postgres em 30/10, substituir função existente preserva o ACL. A 0065 deu a
@@ -90,8 +106,8 @@ aberto é função **nova**, e foi isso que aconteceu na 0061:
 função, com o grant padrão. A lição continua valendo, com o motivo certo:
 **toda assinatura nova precisa do seu `revoke`.**
 
-Os avisos do linter do Supabase não cresceram com elas: as sete aparecem só em
-"executável por quem está logado", junto com as outras RPCs do projeto (105 no
+Os avisos do linter do Supabase não cresceram com elas: as oito aparecem só em
+"executável por quem está logado", junto com as outras RPCs do projeto (106 no
 total), que é o padrão. A lista de `anon` ficou em 43, o mesmo número de antes
 da 0062 — nenhuma das novas entrou lá. Nenhuma com `search_path` solto, e
 `notification_preferences` não aparece em "RLS ligada sem política".

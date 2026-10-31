@@ -1,4 +1,5 @@
 import { diaLocal } from '@/features/students/streak'
+import { duracao, pesoEmKg, quilometros } from '@/features/students/numeros'
 import type { TimelineCursor, TimelineEntry, TimelineKind } from '@/types/domain'
 
 /**
@@ -75,30 +76,6 @@ export function proximoCursor(
 }
 
 /**
- * A duração, ou `null` quando ela não chega a um minuto.
- *
- * Abaixo de 60s o arredondamento dava **"0 min"** — vi no histórico de um
- * treino encerrado em vinte segundos. O número é verdadeiro e lê como
- * defeito; a linha já tem séries e volume para dizer o que aconteceu, e uma
- * parte a menos é melhor que uma parte que parece erro.
- */
-function minutos(segundos: number): string | null {
-  if (segundos < 60) return null
-  const h = Math.floor(segundos / 3600)
-  const m = Math.round((segundos % 3600) / 60)
-  return h > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${m} min`
-}
-
-function quilometros(metros: number): string {
-  /*
-   * Uma casa decimal. `5000` vira `5 km` e não `5.0 km`: o zero à direita é
-   * ruído numa lista que a pessoa rola.
-   */
-  const km = metros / 1000
-  return `${km.toFixed(1).replace(/\.0$/, '').replace('.', ',')} km`
-}
-
-/**
  * A linha de resumo de um acontecimento.
  *
  * Um item por pedaço, para a tela juntar com separador. Vazio quando não há
@@ -110,7 +87,7 @@ export function resumoDaEntrada(entrada: TimelineEntry): string[] {
 
   switch (entrada.kind) {
     case 'TREINO': {
-      const tempo = entrada.durationSeconds ? minutos(entrada.durationSeconds) : null
+      const tempo = duracao(entrada.durationSeconds)
       if (tempo) partes.push(tempo)
       if (entrada.setsCount) partes.push(`${entrada.setsCount} séries`)
       if (entrada.volumeKg) partes.push(`${Math.round(entrada.volumeKg)} kg de volume`)
@@ -119,13 +96,13 @@ export function resumoDaEntrada(entrada: TimelineEntry): string[] {
     }
     case 'CORRIDA': {
       if (entrada.distanceMeters) partes.push(quilometros(entrada.distanceMeters))
-      const tempo = entrada.durationSeconds ? minutos(entrada.durationSeconds) : null
+      const tempo = duracao(entrada.durationSeconds)
       if (tempo) partes.push(tempo)
       break
     }
     case 'PESAGEM': {
       if (entrada.weightKg != null) {
-        partes.push(`${entrada.weightKg.toFixed(1).replace('.', ',')} kg`)
+        partes.push(pesoEmKg(entrada.weightKg))
       }
       break
     }

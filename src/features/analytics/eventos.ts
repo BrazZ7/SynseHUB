@@ -130,7 +130,8 @@ export const EVENTOS: readonly Evento[] = [
   },
   {
     nome: 'RESUMO_CONSULTADO',
-    significado: 'A pessoa abriu um resumo. O rótulo diz qual.',
+    significado:
+      'A pessoa abriu um resumo. O rótulo diz qual: PROGRESSO é a tela de progresso, SEMANA é o resumo semanal em /app/semana (0066). Até a 0066 o rótulo SEMANA estava declarado e nada o emitia.',
     origem: 'src/app/(student)/app/progress/page.tsx',
     rotulos: ['SEMANA', 'PROGRESSO'],
   },

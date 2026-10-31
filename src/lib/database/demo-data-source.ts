@@ -37,6 +37,9 @@ import type {
   StudentListItem,
 } from '@/lib/database/data-source'
 import { DEMO_ORG_ID, getDemoDataset } from '@/lib/database/demo-seed'
+import { TIMEZONE } from '@/config/app'
+import { diaLocal } from '@/features/students/streak'
+import { inicioDaSemanaLocal, semanasRecentes } from '@/features/students/semana'
 import { AVALIACOES_NA_FICHA } from '@/features/assessments/janela'
 import { RECEITAS_POR_PAGINA } from '@/features/nutrition/receitas-por-pagina'
 import { FICHAS_POR_PAGINA } from '@/features/workouts/por-pagina'
@@ -122,6 +125,7 @@ import type {
   StudentIntake,
   TimelineCursor,
   TimelineEntry,
+  WeekSummary,
   WorkoutFeedbackEntry,
   WorkoutSessionSummary,
   Friend,
@@ -2752,6 +2756,85 @@ export class DemoDataSource implements DataSource {
       : ordenadas
 
     return depoisDoCursor.slice(0, Math.min(Math.max(limite || 20, 1), 100))
+  }
+
+  /**
+   * O resumo semanal, derivado da linha do tempo da própria demonstração.
+   *
+   * Reaproveitar `listStudentTimeline` não é economia de código: é a garantia
+   * de que o resumo e o histórico da demonstração contam **os mesmos
+   * eventos**. Montar o resumo de outra fonte deixaria as duas telas
+   * discordando sobre a mesma semana, e numa demonstração ninguém tem como
+   * conferir qual está certa.
+   *
+   * O agrupamento por semana vem de `semana.ts`, que tem teste comparando esta
+   * conta com a do SQL evento por evento.
+   */
+  async listStudentWeekSummary(semanas: number): Promise<WeekSummary[]> {
+    const organizacao = await this.getOrganization(DEMO_ORG_ID)
+    const fuso = organizacao?.timezone ?? TIMEZONE
+    const quantas = Math.min(Math.max(semanas || 2, 1), 12)
+
+    /*
+     * Teto alto de propósito: o histórico pede cem por página, mas aqui a
+     * pergunta é "tudo o que cabe nas semanas pedidas". Doze semanas de quem
+     * treina todo dia e corre dão algo na casta das centenas, e a
+     * demonstração inteira é menor que isso.
+     */
+    const eventos = await this.listStudentTimeline(100)
+    const entrada = await this.getStudentIntake(this.db.studentIdForApp)
+
+    const porSemana = new Map<string, TimelineEntry[]>()
+    for (const evento of eventos) {
+      const chave = inicioDaSemanaLocal(evento.happenedAt, fuso)
+      const lista = porSemana.get(chave)
+      if (lista) lista.push(evento)
+      else porSemana.set(chave, [evento])
+    }
+
+    return semanasRecentes(new Date(), fuso, quantas).map((weekStart) => {
+      const dela = porSemana.get(weekStart) ?? []
+      const treinos = dela.filter((e) => e.kind === 'TREINO')
+      const corridas = dela.filter((e) => e.kind === 'CORRIDA')
+      const presencas = dela.filter((e) => e.kind === 'CHECKIN')
+      const pesagens = dela.filter((e) => e.kind === 'PESAGEM')
+
+      /*
+       * Dias distintos de treino e presença, sem a corrida — as duas chaves da
+       * 0016, como no SQL. Misturar aqui e não lá faria a demonstração mostrar
+       * um número que produção nunca mostra.
+       */
+      const dias = new Set(
+        [...treinos, ...presencas].map((e) => diaLocal(new Date(e.happenedAt), fuso)),
+      )
+
+      const relatos = treinos.filter((e) => e.effort != null)
+      const soma = (lista: TimelineEntry[], campo: (e: TimelineEntry) => number | null) =>
+        lista.reduce((total, e) => total + (campo(e) ?? 0), 0)
+
+      return {
+        weekStart,
+        daysTrained: dias.size,
+        workouts: treinos.length,
+        workoutSeconds: soma(treinos, (e) => e.durationSeconds),
+        volumeKg: soma(treinos, (e) => e.volumeKg),
+        setsCount: soma(treinos, (e) => e.setsCount),
+        runs: corridas.length,
+        runSeconds: soma(corridas, (e) => e.durationSeconds),
+        distanceMeters: soma(corridas, (e) => e.distanceMeters),
+        checkIns: presencas.length,
+        // Média dos relatos, não dos treinos: treino sem relato não é zero.
+        avgEffort: relatos.length
+          ? Math.round((soma(relatos, (e) => e.effort) / relatos.length) * 10) / 10
+          : null,
+        /*
+         * A última pesagem da semana. `listStudentTimeline` já devolve do mais
+         * recente para o mais antigo, então a primeira é a última no tempo.
+         */
+        weightKg: pesagens[0]?.weightKg ?? null,
+        targetDays: entrada?.daysPerWeek ?? null,
+      }
+    })
   }
 
   async getActiveWorkoutSession(studentId: string): Promise<WorkoutSessionSummary | null> {

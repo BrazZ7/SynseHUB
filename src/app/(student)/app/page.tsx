@@ -5,6 +5,7 @@ import Link from 'next/link'
 import {
   ArrowRight,
   CalendarDays,
+  CalendarRange,
   Droplets,
   Dumbbell,
   Footprints,
@@ -31,7 +32,6 @@ import { getStudentHome } from '@/features/students/app-service'
 import { precisaDaEntradaGuiada } from '@/features/students/entrada/state'
 import { horaLocal } from '@/features/schedule/week'
 import { getDataSource } from '@/lib/database'
-import { seAindaNaoMigrou } from '@/lib/database/pending-migration'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { StreakFlame } from '@/features/students/streak-flame'
 import { calcularSequencia } from '@/features/students/streak'
@@ -42,7 +42,7 @@ export const metadata: Metadata = { title: 'Hoje' }
 export default async function StudentHomePage() {
   const session = await requireStudentSession()
   const agora = new Date()
-  const [home, challenges, aulas, conteudos, organizacao, checkIns, entrada] = await Promise.all([
+  const [home, challenges, aulas, conteudos, organizacao, checkIns] = await Promise.all([
     getStudentHome(session.organizationId, session.studentId),
     getChallengeBoard(session),
     getDataSource().then((dataSource) =>
@@ -70,20 +70,6 @@ export default async function StudentHomePage() {
     getDataSource().then((dataSource) =>
       dataSource.listCheckInsForStudent(session.organizationId, session.studentId, 180),
     ),
-    /*
-     * Dentro do `Promise.all`, e não antes dele: ler em série acrescentaria
-     * uma ida ao banco a **toda** abertura da tela mais vista do produto, para
-     * decidir algo que só muda o caminho na primeira. Aqui a consulta anda
-     * junto com as outras seis e o desvio acontece depois.
-     *
-     * `seAindaNaoMigrou` porque a 0063 pode não ter sido colada ainda; sem
-     * ela, a tela de hoje quebraria inteira por causa de uma tabela que ainda
-     * não existe. Sem tabela, ninguém é desviado — que é o certo: perguntar
-     * sem ter onde gravar seria perder a resposta.
-     */
-    getDataSource().then((dataSource) =>
-      dataSource.getStudentIntake(session.studentId).catch(seAindaNaoMigrou(null)),
-    ),
   ])
 
   /*
@@ -93,7 +79,15 @@ export default async function StudentHomePage() {
    * `precisaDaEntradaGuiada`, com teste próprio, porque um engano aqui prende
    * a pessoa fora da tela de hoje a cada abertura.
    */
-  if (precisaDaEntradaGuiada(entrada)) redirect('/app/comecar')
+  /*
+   * `home.intake` e não uma leitura própria: esta tela lia a entrada guiada
+   * para decidir o desvio, e `getStudentHome` passou a precisar da mesma linha
+   * para a meta da semana (0066). Uma leitura serve aos dois — duas seriam a
+   * mesma pergunta feita duas vezes na tela mais aberta do produto.
+   *
+   * A tolerância a tabela ausente mora lá dentro, onde a leitura ficou.
+   */
+  if (precisaDaEntradaGuiada(home.intake)) redirect('/app/comecar')
 
   const sequencia = calcularSequencia(checkIns, {
     fuso: organizacao?.timezone ?? 'America/Sao_Paulo',
@@ -211,7 +205,15 @@ export default async function StudentHomePage() {
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
           <ProgressRing value={home.weeklyGoal.percentage} size={104} caption="da meta" />
           <p className="text-center text-xs text-synse-muted">
-            Meta semanal
+            {/*
+              "Últimos 7 dias", e não "Meta semanal".
+              
+              O número é de sete dias corridos — hoje e os seis anteriores —, e
+              o resumo semanal (0066) mede a semana de segunda a domingo. Com os
+              dois chamados de "semana", quem vê 3 aqui e 2 lá acha que um dos
+              dois está errado. O rótulo passa a dizer qual janela é esta.
+            */}
+            Últimos 7 dias
             {/*
               "dias treinados", e não "treinos": o número conta dias distintos
               com check-in ou treino concluído. Dizia "treinos" e contava
@@ -221,6 +223,19 @@ export default async function StudentHomePage() {
             <span className="mt-0.5 block text-sm font-medium text-synse-text">
               {home.weeklyGoal.done} de {home.weeklyGoal.target} dias treinados
             </span>
+            {/*
+              De onde vem a meta. Quem declarou na entrada guiada não precisa
+              de aviso; quem não declarou precisa saber que o número é nosso e
+              que dá para mudar.
+            */}
+            {!home.weeklyGoal.declarada && (
+              <Link
+                href="/app/comecar"
+                className="mt-1 block text-[11px] text-synse-primary underline-offset-2 hover:underline"
+              >
+                Meta padrão · definir a sua
+              </Link>
+            )}
           </p>
         </div>
 
@@ -239,6 +254,29 @@ export default async function StudentHomePage() {
           </div>
         </div>
       </section>
+
+      {/*
+        A porta do resumo semanal, logo abaixo dos dois indicadores.
+        
+        Aqui e não no menu: é a pergunta que nasce ao ver o anel — "e a semana
+        fechada, como foi?". Uma linha, porque o resumo não é o motivo de
+        alguém abrir o app; é o que se olha depois de treinar.
+      */}
+      <Link
+        href="/app/semana"
+        className="flex items-center justify-between rounded-2xl border border-synse-border bg-synse-surface p-4 shadow-synse-sm transition-colors hover:bg-synse-surface-2"
+      >
+        <span className="flex items-center gap-3">
+          <CalendarRange className="size-5 shrink-0 text-synse-primary" aria-hidden />
+          <span className="min-w-0">
+            <span className="block text-sm font-medium text-synse-text">Sua semana</span>
+            <span className="block text-xs text-synse-muted">
+              De segunda a domingo, contra a semana passada
+            </span>
+          </span>
+        </span>
+        <ArrowRight className="size-4 shrink-0 text-synse-muted" aria-hidden />
+      </Link>
 
       {/* Aulas — some enquanto a grade da academia estiver vazia */}
       {(minhaProximaAula || proximaDaGrade) && (

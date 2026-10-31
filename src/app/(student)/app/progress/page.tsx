@@ -1,8 +1,10 @@
 import type { Metadata } from 'next'
 
+import Link from 'next/link'
+
 import { SEMANAS_DO_GRAFICO } from '@/features/workouts/ganho-de-carga'
 import { BotaoCompartilhar } from '@/features/share/share-button'
-import { Activity, Dumbbell, TrendingUp, Trophy } from 'lucide-react'
+import { Activity, ArrowRight, Dumbbell, TrendingUp, Trophy } from 'lucide-react'
 
 import { ProgressLineChart } from '@/components/synse/charts/progress-line-chart'
 import { ChartCard } from '@/components/synse/chart-card'
@@ -95,14 +97,28 @@ export default async function StudentProgressPage() {
         alguém aqui.
       */}
       <section className="flex items-center gap-5 rounded-2xl border border-synse-border bg-synse-surface p-5 shadow-synse-sm">
-        <ProgressRing value={home.weeklyGoal.percentage} size={96} caption="semana" />
+        <ProgressRing value={home.weeklyGoal.percentage} size={96} caption="7 dias" />
         <div className="min-w-0 space-y-1">
+          {/*
+            "dias treinados" e "últimos 7 dias": dizia "treinos" e o número
+            conta **dias distintos** com check-in ou treino, e a janela é de
+            sete dias corridos — não a semana de segunda a domingo, que é a do
+            resumo semanal. Dois rótulos iguais para duas janelas diferentes
+            fazem a pessoa achar que um dos números está errado.
+          */}
           <p className="text-sm font-medium text-synse-text">
-            {home.weeklyGoal.done} de {home.weeklyGoal.target} treinos
+            {home.weeklyGoal.done} de {home.weeklyGoal.target} dias treinados
           </p>
           <p className="text-xs text-synse-muted">
-            {home.monthlyCheckIns} check-ins registrados neste mês.
+            Últimos 7 dias · {home.monthlyCheckIns} check-ins neste mês.
           </p>
+          <Link
+            href="/app/semana"
+            className="inline-flex items-center gap-1 text-xs font-medium text-synse-primary"
+          >
+            Ver o resumo da semana
+            <ArrowRight className="size-3.5" aria-hidden />
+          </Link>
         </div>
       </section>
 

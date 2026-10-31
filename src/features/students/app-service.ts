@@ -6,10 +6,12 @@ import {
   inicioDoDiaLocal,
   inicioDoMesLocal,
 } from '@/features/students/janelas'
+import { metaDaSemana, percentualDaMeta } from '@/features/students/semana'
+import { seAindaNaoMigrou } from '@/lib/database/pending-migration'
 import { TIMEZONE } from '@/config/app'
 import { getDataSource } from '@/lib/database'
 import { daysBetween } from '@/lib/utils'
-import type { Charge, WorkoutPlan } from '@/types/domain'
+import type { Charge, StudentIntake, WorkoutPlan } from '@/types/domain'
 
 /** Dados consolidados da tela Hoje do Synse App. */
 export type StudentHomeData = {
@@ -18,13 +20,26 @@ export type StudentHomeData = {
   planName: string | null
   todayWorkout: (WorkoutPlan & { exerciseCount: number }) | null
   /**
-   * Dias treinados na semana, não registros.
+   * Dias treinados nos **últimos sete dias**, não registros.
    *
    * Dois check-ins no mesmo dia são um dia treinado; check-in na recepção e
    * Treino Ativo no mesmo dia também. Contar registros era a contagem duplicada
    * que o pedido manda evitar.
+   *
+   * ── Sete dias corridos, e não a semana civil ──────────────────────────────
+   *
+   * Esta janela é "hoje e os seis anteriores", e a do resumo semanal (0066) é
+   * a semana de segunda a domingo. São duas perguntas diferentes e as duas
+   * valem: esta nunca zera, e a do resumo fecha um ciclo.
+   *
+   * O risco é a tela — e não a conta: dois números parecidos com rótulos
+   * iguais seriam lidos como o mesmo número. Por isso o rótulo aqui diz
+   * "últimos 7 dias", e o do resumo diz a semana com as datas.
+   *
+   * `target` é o que o aluno declarou na entrada guiada (0063); `declarada`
+   * diz se foi ele quem escolheu, para a tela não fingir que escolheu.
    */
-  weeklyGoal: { done: number; target: number; percentage: number }
+  weeklyGoal: { done: number; target: number; percentage: number; declarada: boolean }
   monthlyCheckIns: number
   checkedInToday: boolean
   nextCharge: Charge | null
@@ -33,9 +48,15 @@ export type StudentHomeData = {
   loadExercise: { id: string; nome: string } | null
   programDay: { current: number; total: number; percentage: number }
   lastCheckInAt: string | null
+  /**
+   * O que o aluno declarou na entrada guiada, ou nulo.
+   *
+   * Devolvido daqui porque a tela de hoje já precisava dele para o desvio da
+   * entrada guiada e lia por conta própria: agora é uma leitura só, usada
+   * pelos dois — o desvio e a meta.
+   */
+  intake: StudentIntake | null
 }
-
-const WEEKLY_TARGET = 5
 
 export async function getStudentHome(
   organizationId: string,
@@ -43,7 +64,8 @@ export async function getStudentHome(
 ): Promise<StudentHomeData> {
   const dataSource = await getDataSource()
 
-  const [student, assignments, checkIns, treinos, nextCharge, cargas] = await Promise.all([
+  const [student, assignments, checkIns, treinos, nextCharge, cargas, intake] =
+    await Promise.all([
     dataSource.getStudent(organizationId, studentId),
     dataSource.listAssignmentsForStudent(organizationId, studentId),
     dataSource.listCheckInsForStudent(organizationId, studentId, 90),
@@ -67,6 +89,15 @@ export async function getStudentHome(
      * carga" congelava num valor antigo sem nada na tela indicando isso.
      */
     dataSource.getLoadProgress(organizationId, studentId),
+    /*
+     * A entrada guiada, dentro do lote: ela decide a **meta** da semana, e
+     * ler em série acrescentaria uma ida ao banco a toda abertura da tela mais
+     * vista do produto.
+     *
+     * `seAindaNaoMigrou` porque a 0063 pode não ter sido colada: sem a tabela,
+     * `intake` é nulo e a meta cai no padrão, que é o comportamento de antes.
+     */
+    dataSource.getStudentIntake(studentId).catch(seAindaNaoMigrou(null)),
   ])
 
   /*
@@ -148,6 +179,8 @@ export async function getStudentHome(
   const firstLoad = cargas.primeira
   const loadGain = currentLoad != null && firstLoad != null ? currentLoad - firstLoad : null
 
+  const meta = metaDaSemana(intake?.daysPerWeek)
+
   // Programa Synse 30: derivado da data de matrícula, ciclo de 30 dias.
   const enrolledDays = student ? daysBetween(student.enrolledAt) : 0
   const programCurrent = (enrolledDays % 30) + 1
@@ -157,10 +190,19 @@ export async function getStudentHome(
     synseId: student?.synseId ?? '',
     planName: student?.planName ?? null,
     todayWorkout: todayPlan ? { ...todayPlan, exerciseCount: exercises.length } : null,
+    /*
+     * A meta é a declarada, e não mais um 5 cravado aqui.
+     *
+     * Quem respondeu "três dias por semana" na entrada guiada e treinou três
+     * via 60% e um anel pela metade: a tela chamava de fracasso a semana que a
+     * pessoa cumpriu. Sem resposta, cai em `META_PADRAO` e a tela diz que é
+     * padrão.
+     */
     weeklyGoal: {
       done: weeklyDone,
-      target: WEEKLY_TARGET,
-      percentage: Math.min(100, Math.round((weeklyDone / WEEKLY_TARGET) * 100)),
+      target: meta.dias,
+      percentage: percentualDaMeta(weeklyDone, meta.dias),
+      declarada: meta.declarada,
     },
     monthlyCheckIns,
     checkedInToday,
@@ -175,5 +217,6 @@ export async function getStudentHome(
       percentage: Math.round((programCurrent / 30) * 100),
     },
     lastCheckInAt: checkIns[0]?.checkedInAt ?? null,
+    intake,
   }
 }

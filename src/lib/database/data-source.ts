@@ -51,6 +51,7 @@ import type {
   StudentIntake,
   TimelineCursor,
   TimelineEntry,
+  WeekSummary,
   WorkoutFeedbackEntry,
   WorkoutSessionSummary,
   WorkoutTotals,
@@ -1037,6 +1038,17 @@ export interface DataSource {
    * mesmo instante — e com quatro origens, instante repetido acontece.
    */
   listStudentTimeline(limite: number, cursor?: TimelineCursor | null): Promise<TimelineEntry[]>
+
+  /**
+   * O resumo semanal do aluno autenticado (0066), mais recente primeiro.
+   *
+   * Não recebe aluno, pela mesma razão do histórico: a função é
+   * `security definer` e lê peso e corrida.
+   *
+   * `semanas` tem teto de doze no banco, e a tela pede duas — a atual e a
+   * anterior, que é a comparação que o resumo faz.
+   */
+  listStudentWeekSummary(semanas: number): Promise<WeekSummary[]>
   getWorkoutPreferences(userProfileId: string): Promise<WorkoutPreferences>
   saveWorkoutPreferences(
     userProfileId: string,

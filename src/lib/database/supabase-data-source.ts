@@ -125,6 +125,7 @@ import type {
   StudentIntake,
   TimelineCursor,
   TimelineEntry,
+  WeekSummary,
   WorkoutFeedbackEntry,
   WorkoutSessionSummary,
   Friend,
@@ -2982,6 +2983,35 @@ export class SupabaseDataSource implements DataSource {
       weightKg: numero(row.weight_kg),
       effort: row.effort ?? null,
       discomfort: row.discomfort ?? null,
+    }))
+  }
+
+  async listStudentWeekSummary(semanas: number): Promise<WeekSummary[]> {
+    const { data, error } = await this.client.rpc('student_week_summary', { p_weeks: semanas })
+    if (error) this.fail('listStudentWeekSummary', error)
+
+    return ((data ?? []) as Row[]).map((row) => ({
+      /*
+       * `week_start` é `date` no banco e chega como 'YYYY-MM-DD'. Fica texto:
+       * virar `Date` aqui o levaria para meia-noite UTC, e formatar isso no
+       * fuso de Brasília mostraria o **domingo** anterior como início da
+       * semana — um dia de erro em todo rótulo da tela.
+       */
+      weekStart: row.week_start,
+      daysTrained: row.days_trained ?? 0,
+      workouts: row.workouts ?? 0,
+      workoutSeconds: row.workout_seconds ?? 0,
+      // `numeric` vem como texto do PostgREST, para não perder precisão.
+      volumeKg: numero(row.volume_kg) ?? 0,
+      setsCount: row.sets_count ?? 0,
+      runs: row.runs ?? 0,
+      runSeconds: row.run_seconds ?? 0,
+      distanceMeters: numero(row.distance_meters) ?? 0,
+      checkIns: row.check_ins ?? 0,
+      // Estes dois continuam nulos quando faltam: ausência não é zero.
+      avgEffort: numero(row.avg_effort),
+      weightKg: numero(row.weight_kg),
+      targetDays: row.target_days ?? null,
     }))
   }
 

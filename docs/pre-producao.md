@@ -1285,6 +1285,41 @@ existem, não para conferir se subiram.
   **A academia não lê esta tabela**, e é a única de aluno assim: saber que
   alguém silenciou "cobrança" é informação para cobrar por fora.
 
+- **0066 (`0066_resumo_da_semana.sql`)** — `student_week_summary(p_weeks)`: a
+  semana fechada do aluno, uma linha por semana.
+
+  Dias treinados, treinos, volume, séries, tempo, corridas, distância,
+  check-ins, esforço médio e a última pesagem da semana. Mais recente primeiro,
+  teto de doze semanas.
+
+  **A semana é a da academia, no fuso dela.** `date_trunc('week', ... at time
+  zone org_timezone(...))`, que começa na segunda. Em UTC o treino de domingo
+  às 22h cai na segunda — isto é, muda de semana —, e com ele tudo o que
+  acontece depois das 21h: metade da semana de quem treina à noite. É o motivo
+  de a conta estar no banco e não na aplicação.
+
+  **A semana vazia vem com zeros.** As semanas saem de `generate_series` e os
+  números entram por `left join`. Sem isso, quem não treinou nesta semana não
+  receberia linha, e a tela mostraria a semana passada no lugar — dizer que a
+  pessoa treinou quando ela não treinou é o pior erro possível num resumo.
+
+  `days_trained` não inclui corrida, e isso é as duas chaves da 0016: treino e
+  presença pendem da matrícula, corrida pende da pessoa. A corrida aparece
+  inteira, em `runs` e `distance_meters`.
+
+  `avg_effort` e `weight_kg` ficam **nulos** quando faltam: zero diria "esforço
+  nenhum" e "não mudei de peso", que são afirmações.
+
+  **Consequência na tela:** `WEEKLY_TARGET = 5`, cravado em `app-service.ts`,
+  deu lugar a `days_per_week` da entrada guiada (0063). Quem declarou três dias
+  e treinou três via 60% e um anel pela metade. Sem resposta, a meta cai no
+  padrão de cinco **e a tela diz que é padrão**, com atalho para definir a sua.
+
+  O anel da home mede sete dias corridos e o resumo mede a semana civil — duas
+  perguntas diferentes, as duas válidas. Os rótulos passaram a dizer qual é
+  qual ("Últimos 7 dias" contra "27/10 a 02/11"), porque dois números parecidos
+  com o mesmo nome são lidos como um deles estando errado.
+
   Não havia instrumentação nenhuma. `grep -rln "analytics|posthog|plausible|
   gtag(" src/` não devolvia nada, e `logger.ts` é registro técnico. Não havia
   como responder à pergunta mais básica deste produto: **quantos treinos

@@ -597,6 +597,48 @@ export type TimelineEntry = {
 export type TimelineCursor = { at: string; id: string }
 
 /**
+ * Uma semana fechada do aluno (0066).
+ *
+ * Os números são do banco, e a semana é a da academia — segunda a domingo, no
+ * fuso dela. Em UTC o treino de domingo à noite vira segunda, isto é, muda de
+ * semana; é o motivo de esta conta não ser feita aqui.
+ *
+ * ── Nulo e zero não são a mesma coisa ───────────────────────────────────────
+ *
+ * `avgEffort` e `weightKg` são nulos quando não houve relato nem pesagem
+ * naquela semana. Zero diria "esforço nenhum" e "não mudei de peso", que são
+ * afirmações — e a ausência de registro não afirma nada.
+ *
+ * `targetDays` é nulo para quem não respondeu a entrada guiada (0063). A tela
+ * cai num padrão e **diz** que caiu, em vez de inventar uma meta.
+ */
+export type WeekSummary = {
+  /** A segunda-feira da semana, 'YYYY-MM-DD' no fuso da academia. */
+  weekStart: string
+  /**
+   * Dias distintos com treino concluído ou check-in.
+   *
+   * Dias, e não registros: dois check-ins no mesmo dia são um dia. A corrida
+   * **não** entra aqui — ela pende da pessoa, e treino e presença pendem da
+   * matrícula (as duas chaves da 0016). Ela tem `runs` e `distanceMeters`.
+   */
+  daysTrained: number
+  workouts: number
+  workoutSeconds: number
+  volumeKg: number
+  setsCount: number
+  runs: number
+  runSeconds: number
+  distanceMeters: number
+  checkIns: number
+  avgEffort: number | null
+  /** A última pesagem daquela semana. Nulo quando a pessoa não se pesou. */
+  weightKg: number | null
+  /** Dias por semana que o aluno declarou na entrada guiada. */
+  targetDays: number | null
+}
+
+/**
  * Alguém com um treino aberto na academia, agora.
  *
  * Projeção estreita de propósito: nome, treino, quando começou e quantas

@@ -161,6 +161,21 @@ const config: Config = {
           '100%': { transform: 'translateX(100%)' },
         },
         /*
+         * ── A plataforma do lobby ───────────────────────────────────────────
+         *
+         * O disco aceso sob quem está na academia. Respira devagar: é presença,
+         * não alerta — um pisca-pisca no nome de quatro amigos transforma o
+         * lobby numa árvore de Natal e cansa em dez segundos.
+         *
+         * Só `opacity` e `transform`, que a GPU compõe sem refazer layout.
+         * A variação começa em 0.55 e não em 0, pelo mesmo motivo do músculo
+         * aceso: um disco que apaga por completo lê como falha de conexão.
+         */
+        plataforma: {
+          '0%, 100%': { opacity: '0.55', transform: 'scale(0.97)' },
+          '50%': { opacity: '1', transform: 'scale(1.03)' },
+        },
+        /*
          * ── A queda d'água ──────────────────────────────────────────────────
          *
          * Um fio de luz que desce e recomeça. Só `transform`: a GPU compõe
@@ -430,6 +445,7 @@ const config: Config = {
         },
       },
       animation: {
+        plataforma: 'plataforma 3.4s ease-in-out infinite',
         /*
          * 160ms, e não 260ms.
          *

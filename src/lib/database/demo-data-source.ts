@@ -134,6 +134,8 @@ import type {
   PresenceState,
   Squad,
   SquadMember,
+  SquadPing,
+  SquadPingKind,
   SquadRsvp,
   SquadSession,
   TimelineEntry,
@@ -315,6 +317,8 @@ export class DemoDataSource implements DataSource {
    * recebia um erro ao tocar. Visto no navegador.
    */
   private demoCancelados = new Set<string>()
+  /** Os recados que o visitante mandou. Os da semente são fixos. */
+  private demoRecados: Array<{ id: string; kind: SquadPingKind; criadoEm: string }> = []
   /**
    * As categorias que o visitante desligou (0065).
    *
@@ -806,6 +810,12 @@ export class DemoDataSource implements DataSource {
           this.demoRsvp.set(mutation.id, mutation.r as SquadRsvp)
         } else if (mutation.a === 'cancelar' && mutation.id) {
           this.demoCancelados.add(mutation.id)
+        } else if (mutation.a === 'ping' && mutation.k && mutation.id && mutation.at) {
+          this.demoRecados.push({
+            id: mutation.id,
+            kind: mutation.k as SquadPingKind,
+            criadoEm: mutation.at,
+          })
         }
         break
       }
@@ -3184,6 +3194,56 @@ export class DemoDataSource implements DataSource {
      */
     this.demoCancelados.add(sessionId)
     await appendDemoMutation({ t: 'sq', a: 'cancelar', id: sessionId })
+  }
+
+  async listSquadPings(squadId: string, limite: number): Promise<SquadPing[]> {
+    if (squadId !== DEMO_SQUAD_ID) return []
+    const esquadrao = this.esquadraoDaDemonstracao()
+    const eu = this.students().find((s) => s.id === this.db.studentIdForApp)
+    const agora = Date.now()
+
+    /*
+     * Dois recados da semente, para o painel não abrir vazio — é a parte do
+     * lobby que mostra o que ele é. Eles ficam com minutos atrás de propósito:
+     * recado com hora redonda lê como enfeite.
+     */
+    const semeados: SquadPing[] = esquadrao.companheiros.slice(0, 2).map((c, i) => ({
+      id: `ping_demo_${i}`,
+      profileId: c.perfil,
+      nome: c.nome,
+      kind: (i === 0 ? 'BORA' : 'CHEGANDO') as SquadPingKind,
+      criadoEm: new Date(agora - (12 - i * 5) * 60_000).toISOString(),
+      souEu: false,
+    }))
+
+    const meus: SquadPing[] = this.demoRecados.map((r) => ({
+      id: r.id,
+      profileId: this.perfilDoAlunoDoApp(),
+      nome: eu?.name ?? 'Você',
+      kind: r.kind,
+      criadoEm: r.criadoEm,
+      souEu: true,
+    }))
+
+    const doze = new Date(agora - 12 * 3_600_000).toISOString()
+    return [...semeados, ...meus]
+      .filter((r) => r.criadoEm > doze)
+      .sort((a, b) => a.criadoEm.localeCompare(b.criadoEm))
+      .slice(-Math.min(Math.max(limite || 20, 1), 30))
+  }
+
+  async sendSquadPing(squadId: string, kind: SquadPingKind): Promise<boolean> {
+    if (squadId !== DEMO_SQUAD_ID) return false
+
+    // O mesmo limite do banco: um a cada vinte segundos, por pessoa.
+    const limite = new Date(Date.now() - 20_000).toISOString()
+    if (this.demoRecados.some((r) => r.criadoEm > limite)) return false
+
+    const id = `ping_${generateSynseId().slice(4).toLowerCase()}`
+    const criadoEm = new Date().toISOString()
+    this.demoRecados.push({ id, kind, criadoEm })
+    await appendDemoMutation({ t: 'sq', a: 'ping', id, k: kind, at: criadoEm })
+    return true
   }
 
   async getActiveWorkoutSession(studentId: string): Promise<WorkoutSessionSummary | null> {

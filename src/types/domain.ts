@@ -1098,6 +1098,30 @@ export type SquadSession = {
   minhaResposta: SquadRsvp | null
 }
 
+/**
+ * Um recado do esquadrão (0069).
+ *
+ * Vocabulário fechado, e não conversa. A diferença não é de tamanho: com seis
+ * frases prontas não há como ofender ninguém, não há o que moderar, e não há
+ * texto livre de menor de idade numa tabela que ninguém auditou.
+ */
+export type SquadPingKind =
+  | 'BORA'
+  | 'CHEGANDO'
+  | 'ATRASADO'
+  | 'HOJE_NAO'
+  | 'MANDOU_BEM'
+  | 'TREINO_NOVO'
+
+export type SquadPing = {
+  id: string
+  profileId: string
+  nome: string
+  kind: SquadPingKind
+  criadoEm: string
+  souEu: boolean
+}
+
 export type Recipe = {
   id: string
   title: string

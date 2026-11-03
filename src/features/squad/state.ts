@@ -1,4 +1,9 @@
-import type { PresenceState, SquadMember, SquadSession } from '@/types/domain'
+import type {
+  PresenceState,
+  SquadMember,
+  SquadPingKind,
+  SquadSession,
+} from '@/types/domain'
 
 /**
  * ── A lógica do lobby, fora da tela ─────────────────────────────────────────
@@ -7,6 +12,17 @@ import type { PresenceState, SquadMember, SquadSession } from '@/types/domain'
  * mora a chance de errar de um jeito que ninguém vê: quem aparece no topo,
  * quem entra no ranking, e o que a tela escreve para quem não autorizou.
  */
+
+/**
+ * Quantas pessoas cabem num esquadrão.
+ *
+ * O mesmo número vive em `squad_limite()` (0068), que é quem **manda** — a
+ * entrada é recusada lá. Aqui ele serve para a tela desenhar as vagas e
+ * escrever "cabem mais 4", e `tests/db/esquadrao.test.ts` confere que os dois
+ * continuam iguais. Dois números diferentes fariam a tela convidar para uma
+ * vaga que o banco recusa.
+ */
+export const LIMITE_DO_ESQUADRAO = 8
 
 /**
  * O vocabulário fechado do lobby.
@@ -133,6 +149,94 @@ export function quando(iso: string, agora = new Date()): string {
   const semana = data.toLocaleDateString('pt-BR', { weekday: 'long' })
   const curta = data.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
   return `${semana}, ${curta} às ${horaCurta}`
+}
+
+/**
+ * Os seis recados, e o que cada um diz na tela.
+ *
+ * Seis e não sessenta: a lista precisa caber numa linha de botões e ser lida
+ * de relance. Cada um existe porque é uma frase que alguém manda no grupo de
+ * mensagens hoje — e não porque "seria legal ter".
+ */
+export const RECADOS: ReadonlyArray<{
+  valor: SquadPingKind
+  /** O que o botão mostra. Curto, porque são seis lado a lado. */
+  botao: string
+  /** O que aparece na bolha, com o nome de quem mandou na frente. */
+  frase: string
+}> = [
+  { valor: 'BORA', botao: 'Bora!', frase: 'Bora treinar?' },
+  { valor: 'CHEGANDO', botao: 'Chegando', frase: 'Estou chegando!' },
+  { valor: 'ATRASADO', botao: 'Atrasei', frase: 'Vou atrasar um pouco.' },
+  { valor: 'HOJE_NAO', botao: 'Hoje não', frase: 'Hoje não vou conseguir.' },
+  { valor: 'MANDOU_BEM', botao: 'Mandou bem', frase: 'Mandou bem! 👏' },
+  { valor: 'TREINO_NOVO', botao: 'Treino novo', frase: 'Olha o treino que eu mandei.' },
+]
+
+/** A frase de um recado. Vazia para um tipo que a tela não conhece. */
+export function fraseDoRecado(kind: SquadPingKind): string {
+  return RECADOS.find((r) => r.valor === kind)?.frase ?? ''
+}
+
+/**
+ * "agora", "há 12 min", "há 3 h".
+ *
+ * O relógio do recado é curto de propósito: ele vive doze horas, então nunca
+ * precisa dizer dia. E "agora" abaixo de um minuto porque "há 0 min" é o
+ * mesmo defeito do "0 min" do histórico — número verdadeiro que lê como erro.
+ */
+export function haQuantoTempo(iso: string, agora = new Date()): string {
+  const minutos = Math.floor((agora.getTime() - new Date(iso).getTime()) / 60_000)
+  if (minutos < 1) return 'agora'
+  if (minutos < 60) return `há ${minutos} min`
+  return `há ${Math.floor(minutos / 60)} h`
+}
+
+/**
+ * Quantos estão prontos, e quem falta.
+ *
+ * "Pronto" é quem chegou ou já está treinando — a mesma régua de
+ * `contarNaAcademia`, porque a barra de baixo e o número de cima não podem
+ * discordar na mesma tela.
+ *
+ * `faltam` traz **no máximo dois nomes**: "aguardando Lucas" é informação,
+ * "aguardando Lucas, Ana, Caio, Duda e mais 3" é uma lista que ninguém lê.
+ */
+export function prontidao(membros: readonly SquadMember[]): {
+  prontos: number
+  total: number
+  faltam: string[]
+  restantes: number
+} {
+  const estaPronto = (m: SquadMember) => m.presenca === 'CHEGUEI' || m.presenca === 'TREINANDO'
+  /*
+   * Você fica de fora da lista de quem falta. "Aguardando Sofia" para a
+   * própria Sofia é a tela cobrando de quem está olhando — e ela já sabe, o
+   * botão grande ao lado diz. Visto no navegador.
+   */
+  const pendentes = membros.filter((m) => !estaPronto(m) && !m.souEu)
+
+  return {
+    prontos: membros.filter(estaPronto).length,
+    total: membros.length,
+    faltam: pendentes.slice(0, 2).map((m) => m.nome.split(' ')[0]),
+    restantes: Math.max(0, pendentes.length - 2),
+  }
+}
+
+/**
+ * "Sofia", "Sofia e Paulo", "Sofia, Paulo e mais 2".
+ *
+ * Dois nomes pedem "e"; três ou mais pedem vírgula antes do "e". Juntar tudo
+ * com " e " dava "Sofia e Paulo e mais 1", com dois "e" na mesma frase —
+ * visto no navegador antes desta função existir.
+ */
+export function listaDeNomes(nomes: readonly string[], restantes: number): string {
+  const partes = [...nomes]
+  if (restantes > 0) partes.push(`mais ${restantes}`)
+  if (partes.length === 0) return ''
+  if (partes.length === 1) return partes[0]
+  return `${partes.slice(0, -1).join(', ')} e ${partes.at(-1)}`
 }
 
 /** As iniciais para o avatar, quando não há foto. */

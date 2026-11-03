@@ -1,14 +1,14 @@
 import type { Metadata } from 'next'
 
 import { BackLink } from '@/components/synse/back-link'
-import { ColunaDeLeitura } from '@/components/synse/duas-colunas'
 import { PageHeader } from '@/components/synse/page-header'
 import { Lobby } from '@/features/squad/lobby'
 import { SemEsquadrao } from '@/features/squad/sem-esquadrao'
+import { LIMITE_DO_ESQUADRAO } from '@/features/squad/state'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 import { seAindaNaoMigrou } from '@/lib/database/pending-migration'
-import type { Squad, SquadMember, SquadSession } from '@/types/domain'
+import type { Squad, SquadMember, SquadPing, SquadSession } from '@/types/domain'
 
 export const metadata: Metadata = { title: 'Esquadrão' }
 
@@ -30,20 +30,25 @@ export default async function EsquadraoPage() {
 
   if (!esquadrao) {
     return (
-      <ColunaDeLeitura className="animate-fade-in-up space-y-4">
+      <div className="animate-fade-in-up space-y-4">
         <BackLink href="/app" label="Hoje" />
         <PageHeader
           title="Esquadrão"
           description="O grupo que treina junto: quem chegou, o que está marcado e a semana de todo mundo."
         />
         <SemEsquadrao />
-      </ColunaDeLeitura>
+      </div>
     )
   }
 
-  const [membros, sessoes, fichas] = await Promise.all([
+  const [membros, sessoes, recados, fichas] = await Promise.all([
     dataSource.getSquadLobby(esquadrao.id).catch(seAindaNaoMigrou<SquadMember[]>([])),
     dataSource.listSquadSessions(esquadrao.id, SESSOES).catch(seAindaNaoMigrou<SquadSession[]>([])),
+    /*
+     * Os recados são da 0069, uma migration depois do esquadrão: eles podem
+     * faltar com o resto já no ar, e o painel vazio é o estado honesto.
+     */
+    dataSource.listSquadPings(esquadrao.id, 20).catch(seAindaNaoMigrou<SquadPing[]>([])),
     /*
      * As fichas que esta pessoa pode mandar — as atribuídas a ela. O banco
      * ainda confere que a ficha é de uma academia dela (0068); esta lista é
@@ -65,7 +70,7 @@ export default async function EsquadraoPage() {
   const eu = membros.find((m) => m.souEu)
 
   return (
-    <ColunaDeLeitura className="animate-fade-in-up space-y-4">
+    <div className="animate-fade-in-up space-y-4">
       <BackLink href="/app" label="Hoje" />
       <PageHeader
         title={esquadrao.nome}
@@ -76,9 +81,11 @@ export default async function EsquadraoPage() {
         esquadrao={esquadrao}
         membros={membros}
         sessoes={sessoes}
+        recados={recados}
         fichas={fichas}
         meuPerfilId={eu?.profileId ?? ''}
+        capacidade={LIMITE_DO_ESQUADRAO}
       />
-    </ColunaDeLeitura>
+    </div>
   )
 }

@@ -6,7 +6,7 @@ import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 import { AppError, toUserMessage } from '@/lib/errors'
 import { logger } from '@/lib/logger'
-import type { PresenceState, SquadRsvp } from '@/types/domain'
+import type { PresenceState, SquadPingKind, SquadRsvp } from '@/types/domain'
 
 /**
  * ── As portas do lobby ──────────────────────────────────────────────────────
@@ -138,4 +138,26 @@ export async function cancelarTreinoDoEsquadraoAction(sessionId: string): Promis
     const dataSource = await getDataSource()
     await dataSource.cancelSquadSession(sessionId)
   })
+}
+
+/**
+ * Manda um recado do vocabulário fechado.
+ *
+ * `mandou: false` não é erro: é o limite de um a cada vinte segundos, e a tela
+ * só desfaz o recado otimista em silêncio.
+ */
+export async function mandarRecadoAction(
+  squadId: string,
+  kind: SquadPingKind,
+): Promise<Resposta & { mandou?: boolean }> {
+  try {
+    await requireStudentSession()
+    const dataSource = await getDataSource()
+    const mandou = await dataSource.sendSquadPing(squadId, kind)
+    revalidatePath('/app/esquadrao')
+    return { ok: true, mandou }
+  } catch (error) {
+    if (!(error instanceof AppError)) logger.error('esquadrao:recado_falhou', { error: String(error) })
+    return { ok: false, erro: toUserMessage(error) }
+  }
 }

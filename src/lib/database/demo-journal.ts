@@ -337,7 +337,7 @@ export type DemoMutation =
        * diário vive num cookie. `a` diz qual é a ação.
        */
       t: 'sq'
-      a: 'pres' | 'marcar' | 'rsvp' | 'cancelar'
+      a: 'pres' | 'marcar' | 'rsvp' | 'cancelar' | 'ping'
       /** Presença: o estado, ou nulo para apagar. */
       st?: string | null
       /** Treino marcado: id, quando, título e ficha. */
@@ -347,6 +347,8 @@ export type DemoMutation =
       pl?: string | null
       /** Resposta ao treino. */
       r?: string
+      /** Recado: o tipo dele. */
+      k?: string
     }
   | {
       /** Sino aberto: tudo criado antes deste instante conta como lido. */

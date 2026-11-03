@@ -1403,6 +1403,25 @@ existem, não para conferir se subiram.
   escrita agora, e é mais estreita de propósito: a ficha tem de ser de uma
   academia em que quem manda está matriculado ou é da equipe.
 
+- **0069 (`0069_recados_do_esquadrao.sql`)** — `squad_pings`: seis frases
+  prontas no lugar onde a referência de desenho tem um chat.
+
+  **Não é chat, e a diferença é de natureza, não de tamanho.** Com uma lista
+  fechada não há como ofender ninguém, não há o que moderar, e não há texto
+  livre de menor de idade numa tabela que ninguém auditou. Se um dia houver
+  chat de verdade, ele precisa vir com denúncia, bloqueio e alguém que leia —
+  trocar esta tabela por uma de texto livre sem as três é a mudança que não
+  pode acontecer em silêncio.
+
+  **Recado não vira aviso no sino.** Um aviso por recado transformaria "tô
+  chegando" em notificação no celular de quatro pessoas, e em uma semana todo
+  mundo desligaria a categoria `SQUAD` inteira — levando junto o aviso de
+  treino marcado, que é o que importa.
+
+  Limite de um a cada vinte segundos por pessoa, e passar dele **não é erro**:
+  devolve `false` e a tela desfaz o recado em silêncio. Validade de doze horas,
+  filtrada na leitura como a presença.
+
   Não havia instrumentação nenhuma. `grep -rln "analytics|posthog|plausible|
   gtag(" src/` não devolvia nada, e `logger.ts` é registro técnico. Não havia
   como responder à pergunta mais básica deste produto: **quantos treinos

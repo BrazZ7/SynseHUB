@@ -22,7 +22,15 @@ import type { Squad } from '@/types/domain'
  * antigo): nesse caso o código continua na tela para ler em voz alta, que é
  * como ele vai ser usado na maioria das vezes mesmo.
  */
-export function CodigoDoEsquadrao({ esquadrao, souDono }: { esquadrao: Squad; souDono: boolean }) {
+export function CodigoDoEsquadrao({
+  esquadrao,
+  souDono,
+  capacidade,
+}: {
+  esquadrao: Squad
+  souDono: boolean
+  capacidade: number
+}) {
   const [copiado, setCopiado] = useState(false)
   const [confirmando, setConfirmando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
@@ -42,8 +50,11 @@ export function CodigoDoEsquadrao({ esquadrao, souDono }: { esquadrao: Squad; so
     <section className="rounded-2xl border border-synse-border bg-synse-surface p-4 shadow-synse-sm">
       <p className="text-sm font-semibold text-synse-text">Chamar alguém</p>
       <p className="mt-0.5 text-xs text-synse-muted">
-        Passe este código. Cabem {8 - esquadrao.membros}{' '}
-        {8 - esquadrao.membros === 1 ? 'pessoa' : 'pessoas'} ainda.
+        Passe este código. {capacidade - esquadrao.membros > 0
+          ? `Cabem mais ${capacidade - esquadrao.membros} ${
+              capacidade - esquadrao.membros === 1 ? 'pessoa' : 'pessoas'
+            }.`
+          : 'O esquadrão está cheio.'}
       </p>
 
       <div className="mt-3 flex items-center gap-2">

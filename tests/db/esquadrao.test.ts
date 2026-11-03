@@ -1,6 +1,8 @@
 import type { Client } from 'pg'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
+import { LIMITE_DO_ESQUADRAO } from '@/features/squad/state'
+
 import { ALPHA, BETA, applyMigrations, asUser, connect, databaseAvailable, seedTwoGyms } from './helpers'
 
 /**
@@ -173,6 +175,7 @@ beforeEach(async () => {
     delete from workout_sessions;
     delete from check_ins;
     delete from notification_preferences;
+    delete from squad_pings;
   `)
 })
 
@@ -221,6 +224,21 @@ describe.skipIf(!temBanco)('formar o esquadrão', () => {
     expect(await entrar(codigo, AUTH.bia)).toBe(id)
     expect(await entrar(codigo, AUTH.bia)).toBe(id)
     expect(await lobby(id, AUTH.ana)).toHaveLength(2)
+  })
+
+  it('o teto do banco e o da tela são o mesmo número', async () => {
+    /*
+     * `squad_limite()` manda — é ele que recusa a entrada. `LIMITE_DO_ESQUADRAO`
+     * é o que a tela usa para desenhar as vagas e escrever "cabem mais 4".
+     * Dois números diferentes fariam a tela convidar para uma vaga que o banco
+     * recusa, e o convidado levaria a culpa.
+     */
+    const [{ squad_limite: doBanco }] = await asUser<{ squad_limite: number }>(
+      client,
+      AUTH.ana,
+      'select squad_limite() as squad_limite',
+    )
+    expect(doBanco).toBe(LIMITE_DO_ESQUADRAO)
   })
 
   it('oito é o teto', async () => {
@@ -643,6 +661,106 @@ describe.skipIf(!temBanco)('a semana do esquadrão', () => {
       [ALPHA.orgId, aluno.ana],
     )
     expect((await lobby(id, AUTH.ana))[0].dias_na_semana).toBe(1)
+  })
+})
+
+describe.skipIf(!temBanco)('os recados', () => {
+  const mandar = (squadId: string, kind: string, quem: string) =>
+    asUser<{ send_squad_ping: boolean }>(
+      client,
+      quem,
+      `select send_squad_ping($1,$2) as send_squad_ping`,
+      [squadId, kind],
+    ).then((r) => r[0].send_squad_ping)
+
+  const recados = (squadId: string, quem: string) =>
+    asUser<{ nome: string; kind: string; sou_eu: boolean }>(
+      client,
+      quem,
+      `select nome, kind, sou_eu from list_squad_pings($1, 20)`,
+      [squadId],
+    )
+
+  it('chegam para o esquadrão, do mais antigo para o mais novo', async () => {
+    const id = await criar('Os Quatro')
+    await entrar(await codigoDe(id), AUTH.bia)
+
+    expect(await mandar(id, 'BORA', AUTH.ana)).toBe(true)
+    expect(await mandar(id, 'CHEGANDO', AUTH.bia)).toBe(true)
+
+    const lista = await recados(id, AUTH.bia)
+    // Ordem de conversa: o último fica embaixo, que é onde o olho procura.
+    expect(lista.map((r) => r.kind)).toEqual(['BORA', 'CHEGANDO'])
+    expect(lista.map((r) => r.nome)).toEqual(['ana', 'bia'])
+    expect(lista.map((r) => r.sou_eu)).toEqual([false, true])
+  })
+
+  it('o mesmo dedo duas vezes não enche o painel', async () => {
+    /*
+     * Vinte segundos. E passar do limite não é erro: devolve `false` e a tela
+     * não reclama — dizer "espere 14 segundos" para quem tocou duas vezes sem
+     * querer é transformar engano de dedo em mensagem de erro.
+     */
+    const id = await criar('Os Quatro')
+    expect(await mandar(id, 'BORA', AUTH.ana)).toBe(true)
+    expect(await mandar(id, 'BORA', AUTH.ana)).toBe(false)
+    expect(await recados(id, AUTH.ana)).toHaveLength(1)
+  })
+
+  it('o limite é por pessoa, não por esquadrão', async () => {
+    const id = await criar('Os Quatro')
+    await entrar(await codigoDe(id), AUTH.bia)
+    expect(await mandar(id, 'BORA', AUTH.ana)).toBe(true)
+    // A Bia não paga pelo recado da Ana.
+    expect(await mandar(id, 'CHEGANDO', AUTH.bia)).toBe(true)
+  })
+
+  it('recado de ontem não aparece hoje', async () => {
+    const id = await criar('Os Quatro')
+    await mandar(id, 'BORA', AUTH.ana)
+    await client.query(
+      `update squad_pings set created_at = now() - interval '13 hours' where squad_id = $1`,
+      [id],
+    )
+    expect(await recados(id, AUTH.ana)).toHaveLength(0)
+  })
+
+  it('recado inventado é recusado', async () => {
+    const id = await criar('Os Quatro')
+    await expect(mandar(id, 'XINGAMENTO', AUTH.ana)).rejects.toThrow(/recado desconhecido/i)
+  })
+
+  it('quem é de fora não manda nem lê', async () => {
+    const id = await criar('Os Quatro')
+    await mandar(id, 'BORA', AUTH.ana)
+
+    await expect(mandar(id, 'BORA', AUTH.forasteiro)).rejects.toThrow(
+      /não está neste esquadrão/i,
+    )
+    expect(await recados(id, AUTH.forasteiro)).toHaveLength(0)
+    expect(await asUser(client, AUTH.forasteiro, 'select * from squad_pings')).toHaveLength(0)
+  })
+
+  it('ninguém escreve direto na tabela', async () => {
+    const id = await criar('Os Quatro')
+    await expect(
+      asUser(client, AUTH.ana, `insert into squad_pings (squad_id, user_profile_id, kind)
+        values ($1,$2,'BORA')`, [id, perfil.ana]),
+    ).rejects.toThrow(/permission denied/i)
+  })
+
+  it('recado não vira aviso no sino', async () => {
+    /*
+     * Um aviso por recado transformaria "tô chegando" em notificação no
+     * celular de quatro pessoas, e em uma semana todo mundo desligaria a
+     * categoria SQUAD inteira — levando junto o aviso de treino marcado.
+     */
+    const id = await criar('Os Quatro')
+    await entrar(await codigoDe(id), AUTH.bia)
+    await client.query('delete from notifications')
+
+    await mandar(id, 'BORA', AUTH.ana)
+    expect(await avisosDe(perfil.bia)).toHaveLength(0)
   })
 })
 

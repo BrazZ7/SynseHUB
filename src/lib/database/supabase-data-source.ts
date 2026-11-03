@@ -128,6 +128,8 @@ import type {
   PresenceState,
   Squad,
   SquadMember,
+  SquadPing,
+  SquadPingKind,
   SquadRsvp,
   SquadSession,
   TimelineCursor,
@@ -3149,6 +3151,32 @@ export class SupabaseDataSource implements DataSource {
   async cancelSquadSession(sessionId: string): Promise<void> {
     const { error } = await this.client.rpc('cancel_squad_session', { p_session_id: sessionId })
     if (error) this.fail('cancelSquadSession', error)
+  }
+
+  async listSquadPings(squadId: string, limite: number): Promise<SquadPing[]> {
+    const { data, error } = await this.client.rpc('list_squad_pings', {
+      p_squad_id: squadId,
+      p_limite: limite,
+    })
+    if (error) this.fail('listSquadPings', error)
+
+    return ((data ?? []) as Row[]).map((row) => ({
+      id: row.id,
+      profileId: row.perfil_id,
+      nome: row.nome,
+      kind: row.kind,
+      criadoEm: row.criado_em,
+      souEu: Boolean(row.sou_eu),
+    }))
+  }
+
+  async sendSquadPing(squadId: string, kind: SquadPingKind): Promise<boolean> {
+    const { data, error } = await this.client.rpc('send_squad_ping', {
+      p_squad_id: squadId,
+      p_kind: kind,
+    })
+    if (error) this.fail('sendSquadPing', error)
+    return Boolean(data)
   }
 
   async getWorkoutPreferences(userProfileId: string): Promise<WorkoutPreferences> {

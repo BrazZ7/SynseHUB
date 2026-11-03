@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest'
 
 import {
   PRESENCAS,
+  RECADOS,
   contarNaAcademia,
+  fraseDoRecado,
+  haQuantoTempo,
+  listaDeNomes,
+  prontidao,
   foraDoRanking,
   iniciais,
   ordenarLobby,
@@ -11,7 +16,7 @@ import {
   rankingDaSemana,
   rotuloDaPresenca,
 } from '@/features/squad/state'
-import type { PresenceState, SquadMember, SquadSession } from '@/types/domain'
+import type { SquadMember, SquadSession } from '@/types/domain'
 
 /**
  * A lógica do lobby (0068).
@@ -228,6 +233,86 @@ describe('quando o treino é', () => {
   it('hora quebrada aparece inteira', () => {
     const agora = new Date(2026, 10, 4, 12, 0, 0)
     expect(quando(emHoras(agora, 7.5).toISOString(), agora)).toBe('Hoje às 19:30')
+  })
+})
+
+describe('a prontidão', () => {
+  it('conta quem chegou e quem está treinando', () => {
+    const membros = [
+      membro({ nome: 'ana', presenca: 'CHEGUEI' }),
+      membro({ nome: 'bia', presenca: 'TREINANDO' }),
+      membro({ nome: 'caio', presenca: 'A_CAMINHO' }),
+      membro({ nome: 'duda' }),
+    ]
+    const p = prontidao(membros)
+    expect(p.prontos).toBe(2)
+    expect(p.total).toBe(4)
+  })
+
+  it('você fica de fora da lista de quem falta', () => {
+    /*
+     * "Aguardando Sofia" para a própria Sofia é a tela cobrando de quem está
+     * olhando — e ela já sabe, o botão grande ao lado diz.
+     */
+    const membros = [
+      membro({ nome: 'eu', souEu: true }),
+      membro({ nome: 'bia', presenca: 'CHEGUEI' }),
+      membro({ nome: 'caio' }),
+    ]
+    expect(prontidao(membros).faltam).toEqual(['caio'])
+  })
+
+  it('no máximo dois nomes, e o resto vira contagem', () => {
+    // "aguardando Lucas, Ana, Caio, Duda e mais 3" é uma lista que ninguém lê.
+    const membros = ['a', 'b', 'c', 'd', 'e'].map((n) => membro({ nome: n }))
+    const p = prontidao(membros)
+    expect(p.faltam).toEqual(['a', 'b'])
+    expect(p.restantes).toBe(3)
+  })
+
+  it('só o primeiro nome, para caber na linha', () => {
+    expect(prontidao([membro({ nome: 'Paulo Nascimento' })]).faltam).toEqual(['Paulo'])
+  })
+})
+
+describe('a lista de nomes', () => {
+  it('dois nomes pedem "e"; três pedem vírgula antes dele', () => {
+    /*
+     * Juntar tudo com " e " dava "Sofia e Paulo e mais 1", com dois "e" na
+     * mesma frase.
+     */
+    expect(listaDeNomes(['Sofia'], 0)).toBe('Sofia')
+    expect(listaDeNomes(['Sofia', 'Paulo'], 0)).toBe('Sofia e Paulo')
+    expect(listaDeNomes(['Sofia', 'Paulo'], 1)).toBe('Sofia, Paulo e mais 1')
+  })
+
+  it('só a contagem, quando não há nome', () => {
+    expect(listaDeNomes([], 3)).toBe('mais 3')
+    expect(listaDeNomes([], 0)).toBe('')
+  })
+})
+
+describe('os recados', () => {
+  it('são seis, e cada um tem botão curto e frase', () => {
+    // Seis porque precisam caber numa linha e ser lidos de relance.
+    expect(RECADOS).toHaveLength(6)
+    for (const r of RECADOS) {
+      expect(r.botao.length).toBeLessThanOrEqual(12)
+      expect(r.frase.length).toBeGreaterThan(5)
+    }
+  })
+
+  it('a frase sai do vocabulário', () => {
+    expect(fraseDoRecado('BORA')).toBe('Bora treinar?')
+    expect(fraseDoRecado('CHEGANDO')).toBe('Estou chegando!')
+  })
+
+  it('o relógio é curto, e abaixo de um minuto é "agora"', () => {
+    // "há 0 min" é o mesmo defeito do "0 min" do histórico.
+    const agora = new Date('2026-11-04T12:00:00Z')
+    expect(haQuantoTempo('2026-11-04T11:59:40Z', agora)).toBe('agora')
+    expect(haQuantoTempo('2026-11-04T11:48:00Z', agora)).toBe('há 12 min')
+    expect(haQuantoTempo('2026-11-04T09:00:00Z', agora)).toBe('há 3 h')
   })
 })
 

@@ -54,6 +54,8 @@ import type {
   PresenceState,
   Squad,
   SquadMember,
+  SquadPing,
+  SquadPingKind,
   SquadRsvp,
   SquadSession,
   TimelineCursor,
@@ -1286,6 +1288,10 @@ export interface DataSource {
   }): Promise<string>
   answerSquadSession(sessionId: string, resposta: SquadRsvp): Promise<void>
   cancelSquadSession(sessionId: string): Promise<void>
+  /** Os recados das últimas 12 horas, em ordem de leitura. */
+  listSquadPings(squadId: string, limite: number): Promise<SquadPing[]>
+  /** Manda um recado. `false` quando o limite de um a cada 20s barrou. */
+  sendSquadPing(squadId: string, kind: SquadPingKind): Promise<boolean>
   /**
    * Um item publicado, com o corpo — o que a lista não traz.
    *

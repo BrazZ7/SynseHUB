@@ -125,6 +125,11 @@ import type {
   StudentIntake,
   FavoriteEntry,
   FavoriteIds,
+  PresenceState,
+  Squad,
+  SquadMember,
+  SquadRsvp,
+  SquadSession,
   TimelineCursor,
   TimelineEntry,
   WeekSummary,
@@ -3015,6 +3020,135 @@ export class SupabaseDataSource implements DataSource {
       weightKg: numero(row.weight_kg),
       targetDays: row.target_days ?? null,
     }))
+  }
+
+  // ── O esquadrão (0068) ────────────────────────────────────────────────────
+  async listSquads(): Promise<Squad[]> {
+    const { data, error } = await this.client.rpc('my_squads')
+    if (error) this.fail('listSquads', error)
+
+    return ((data ?? []) as Row[]).map((row) => ({
+      id: row.id,
+      nome: row.nome,
+      codigo: row.codigo,
+      papel: row.papel,
+      membros: row.membros ?? 0,
+      presentes: row.presentes ?? 0,
+      proximaEm: row.proxima_em ?? null,
+    }))
+  }
+
+  async getSquadLobby(squadId: string): Promise<SquadMember[]> {
+    const { data, error } = await this.client.rpc('squad_lobby', { p_squad_id: squadId })
+    if (error) this.fail('getSquadLobby', error)
+
+    return ((data ?? []) as Row[]).map((row) => ({
+      profileId: row.perfil_id,
+      nome: row.nome,
+      synseId: row.synse_id,
+      avatarUrl: row.avatar_url ?? null,
+      papel: row.papel,
+      souEu: Boolean(row.sou_eu),
+      entrouEm: row.entrou_em,
+      presenca: row.presenca ?? null,
+      presencaEm: row.presenca_em ?? null,
+      /*
+       * `?? null` e não `?? 0`: sem consentimento o banco manda nulo, e zero
+       * aqui viraria uma afirmação sobre a semana de quem não autorizou.
+       */
+      diasNaSemana: row.dias_na_semana ?? null,
+      noRanking: Boolean(row.no_ranking),
+    }))
+  }
+
+  async listSquadSessions(squadId: string, limite: number): Promise<SquadSession[]> {
+    const { data, error } = await this.client.rpc('list_squad_sessions', {
+      p_squad_id: squadId,
+      p_limite: limite,
+    })
+    if (error) this.fail('listSquadSessions', error)
+
+    return ((data ?? []) as Row[]).map((row) => ({
+      id: row.id,
+      startsAt: row.starts_at,
+      title: row.title ?? null,
+      workoutPlanId: row.workout_plan_id ?? null,
+      planoNome: row.plano_nome ?? null,
+      criadoPor: row.criado_por,
+      criadoPorNome: row.criado_por_nome ?? null,
+      cancelado: Boolean(row.cancelado),
+      vou: row.vou ?? 0,
+      talvez: row.talvez ?? 0,
+      naoVou: row.nao_vou ?? 0,
+      minhaResposta: row.minha_resposta ?? null,
+    }))
+  }
+
+  async createSquad(nome: string): Promise<string> {
+    const { data, error } = await this.client.rpc('create_squad', { p_name: nome })
+    if (error) this.fail('createSquad', error)
+    return data as string
+  }
+
+  async joinSquad(codigo: string): Promise<string> {
+    const { data, error } = await this.client.rpc('join_squad', { p_code: codigo })
+    if (error) this.fail('joinSquad', error)
+    return data as string
+  }
+
+  async leaveSquad(squadId: string): Promise<void> {
+    const { error } = await this.client.rpc('leave_squad', { p_squad_id: squadId })
+    if (error) this.fail('leaveSquad', error)
+  }
+
+  async renameSquad(squadId: string, nome: string): Promise<void> {
+    const { error } = await this.client.rpc('rename_squad', {
+      p_squad_id: squadId,
+      p_name: nome,
+    })
+    if (error) this.fail('renameSquad', error)
+  }
+
+  async removeSquadMember(squadId: string, profileId: string): Promise<void> {
+    const { error } = await this.client.rpc('remove_squad_member', {
+      p_squad_id: squadId,
+      p_profile_id: profileId,
+    })
+    if (error) this.fail('removeSquadMember', error)
+  }
+
+  async setPresence(estado: PresenceState | null): Promise<void> {
+    const { error } = await this.client.rpc('set_presence', { p_state: estado })
+    if (error) this.fail('setPresence', error)
+  }
+
+  async scheduleSquadSession(entrada: {
+    squadId: string
+    startsAt: string
+    title?: string | null
+    workoutPlanId?: string | null
+  }): Promise<string> {
+    const { data, error } = await this.client.rpc('schedule_squad_session', {
+      p_squad_id: entrada.squadId,
+      p_starts_at: entrada.startsAt,
+      p_title: entrada.title ?? null,
+      p_workout_plan_id: entrada.workoutPlanId ?? null,
+    })
+    if (error) this.fail('scheduleSquadSession', error)
+    return data as string
+  }
+
+  async answerSquadSession(sessionId: string, resposta: SquadRsvp): Promise<void> {
+    const { error } = await this.client.rpc('answer_squad_session', {
+      p_session_id: sessionId,
+      p_answer: resposta,
+    })
+    if (error) this.fail('answerSquadSession', error)
+  }
+
+  async cancelSquadSession(sessionId: string): Promise<void> {
+    const { error } = await this.client.rpc('cancel_squad_session', { p_session_id: sessionId })
+    if (error) this.fail('cancelSquadSession', error)
   }
 
   async getWorkoutPreferences(userProfileId: string): Promise<WorkoutPreferences> {

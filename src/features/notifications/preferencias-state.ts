@@ -48,6 +48,11 @@ export const CATEGORIAS_NA_TELA: ReadonlyArray<{ valor: NotificationCategory } &
     rotulo: 'Programas',
     ajuda: 'Seus programas guiados e desafios',
   },
+  {
+    valor: 'SQUAD',
+    rotulo: 'Esquadrão',
+    ajuda: 'Treino marcado pelo grupo e quem entrou',
+  },
 ]
 
 /**

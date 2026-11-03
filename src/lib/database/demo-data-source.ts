@@ -41,6 +41,10 @@ import { casaTermo } from '@/features/content/busca'
 import { TIMEZONE } from '@/config/app'
 import { diaLocal } from '@/features/students/streak'
 import { inicioDaSemanaLocal, semanasRecentes } from '@/features/students/semana'
+
+/** O esquadrão fixo da demonstração, e o treino que já está marcado nele. */
+const DEMO_SQUAD_ID = 'squad_demo_synse'
+const DEMO_SQUAD_SESSION_ID = 'sqs_demo_quinta'
 import { AVALIACOES_NA_FICHA } from '@/features/assessments/janela'
 import { RECEITAS_POR_PAGINA } from '@/features/nutrition/receitas-por-pagina'
 import { FICHAS_POR_PAGINA } from '@/features/workouts/por-pagina'
@@ -127,6 +131,11 @@ import type {
   TimelineCursor,
   FavoriteEntry,
   FavoriteIds,
+  PresenceState,
+  Squad,
+  SquadMember,
+  SquadRsvp,
+  SquadSession,
   TimelineEntry,
   WeekSummary,
   WorkoutFeedbackEntry,
@@ -284,6 +293,28 @@ export class DemoDataSource implements DataSource {
    * de exclusividade escrita de outro jeito.
    */
   private demoFavoritos = new Set<string>()
+  /*
+   * O esquadrão da demonstração: presença do visitante, treinos que ele marcou
+   * e as respostas dele. Os outros três membros são da semente e não se mexem
+   * — ver `DEMO_SQUAD_ID`.
+   */
+  private demoPresenca: PresenceState | null = null
+  private demoSessoesDoEsquadrao: Array<{
+    id: string
+    startsAt: string
+    title: string | null
+    workoutPlanId: string | null
+    cancelado: boolean
+  }> = []
+  private demoRsvp = new Map<string, SquadRsvp>()
+  /*
+   * Os treinos cancelados, por id — inclusive o semeado.
+   *
+   * Sem este conjunto, o visitante via o botão "Cancelar" no treino da
+   * semente (ele é o dono do esquadrão, e dono cancela o de qualquer um) e
+   * recebia um erro ao tocar. Visto no navegador.
+   */
+  private demoCancelados = new Set<string>()
   /**
    * As categorias que o visitante desligou (0065).
    *
@@ -756,6 +787,26 @@ export class DemoDataSource implements DataSource {
       }
       case 'npref': {
         this.demoPrefsDeAviso.set(mutation.cat as NotificationCategory, mutation.on)
+        break
+      }
+      case 'sq': {
+        if (mutation.a === 'pres') {
+          this.demoPresenca = (mutation.st ?? null) as PresenceState | null
+        } else if (mutation.a === 'marcar' && mutation.id && mutation.at) {
+          this.demoSessoesDoEsquadrao.push({
+            id: mutation.id,
+            startsAt: mutation.at,
+            title: mutation.ti ?? null,
+            workoutPlanId: mutation.pl ?? null,
+            cancelado: false,
+          })
+          // Quem marca já vai, como no banco.
+          this.demoRsvp.set(mutation.id, 'VOU')
+        } else if (mutation.a === 'rsvp' && mutation.id && mutation.r) {
+          this.demoRsvp.set(mutation.id, mutation.r as SquadRsvp)
+        } else if (mutation.a === 'cancelar' && mutation.id) {
+          this.demoCancelados.add(mutation.id)
+        }
         break
       }
       case 'fav': {
@@ -2850,6 +2901,289 @@ export class DemoDataSource implements DataSource {
         targetDays: entrada?.daysPerWeek ?? null,
       }
     })
+  }
+
+  // ── O esquadrão, na demonstração ──────────────────────────────────────────
+  /**
+   * ── Um esquadrão fixo, e o visitante já está dentro ────────────────────────
+   *
+   * Criar e entrar por código não funcionam aqui, e isso é escolha: entrar por
+   * código exigiria um segundo visitante real do outro lado, e criar deixaria
+   * o visitante sozinho num grupo vazio — que é o contrário do que a tela tem
+   * para mostrar. O que a demonstração entrega é **o lobby funcionando**: três
+   * amigos com estados diferentes, um treino marcado, e tudo o que o visitante
+   * tocar gruda pelo diário.
+   *
+   * Os três não se mexem. Fingir que o Caio acabou de chegar enquanto alguém
+   * olha a tela seria simular atividade que não existe — o mesmo motivo de a
+   * demonstração não inventar treino em andamento.
+   */
+  private esquadraoDaDemonstracao(): {
+    id: string
+    nome: string
+    codigo: string
+    companheiros: Array<{ perfil: string; nome: string; presenca: PresenceState | null }>
+  } {
+    const outros = this.students()
+      .filter((s) => s.id !== this.db.studentIdForApp && s.userProfileId)
+      .slice(0, 3)
+
+    /*
+     * Estados fixos e escolhidos: um a caminho, um já na academia, um sem
+     * aviso. É o que mostra que a coluna de presença tem mais de um valor sem
+     * precisar que o visitante espere nada acontecer.
+     */
+    const estados: Array<PresenceState | null> = ['CHEGUEI', 'A_CAMINHO', null]
+
+    return {
+      id: DEMO_SQUAD_ID,
+      nome: 'Quinta de Perna',
+      codigo: 'SYNSE1',
+      companheiros: outros.map((s, i) => ({
+        perfil: s.userProfileId as string,
+        nome: s.name,
+        presenca: estados[i] ?? null,
+      })),
+    }
+  }
+
+  async listSquads(): Promise<Squad[]> {
+    const esquadrao = this.esquadraoDaDemonstracao()
+    const presentes =
+      esquadrao.companheiros.filter((c) => c.presenca !== null).length +
+      (this.demoPresenca ? 1 : 0)
+
+    const proxima = this.sessoesDoEsquadrao()
+      .filter((s) => !s.cancelado && s.startsAt >= new Date().toISOString())
+      .map((s) => s.startsAt)
+      .sort()[0]
+
+    return [
+      {
+        id: esquadrao.id,
+        nome: esquadrao.nome,
+        codigo: esquadrao.codigo,
+        papel: 'OWNER',
+        membros: esquadrao.companheiros.length + 1,
+        presentes,
+        proximaEm: proxima ?? null,
+      },
+    ]
+  }
+
+  async getSquadLobby(squadId: string): Promise<SquadMember[]> {
+    const esquadrao = this.esquadraoDaDemonstracao()
+    // A mesma fronteira do banco: id de outro esquadrão devolve nada.
+    if (squadId !== esquadrao.id) return []
+
+    const eu = this.students().find((s) => s.id === this.db.studentIdForApp)
+    const agora = new Date().toISOString()
+
+    const meusDias = await this.diasTreinadosNaSemana(this.db.studentIdForApp)
+
+    return [
+      {
+        profileId: this.perfilDoAlunoDoApp(),
+        nome: eu?.name ?? 'Você',
+        synseId: eu?.synseId ?? '',
+        avatarUrl: null,
+        papel: 'OWNER' as const,
+        souEu: true,
+        entrouEm: agora,
+        presenca: this.demoPresenca,
+        presencaEm: this.demoPresenca ? agora : null,
+        diasNaSemana: meusDias,
+        noRanking: false,
+      },
+      ...(await Promise.all(
+        esquadrao.companheiros.map(async (c, i) => {
+          const aluno = this.students().find((s) => s.userProfileId === c.perfil)
+          /*
+           * O terceiro não autorizou o ranking, de propósito: sem alguém
+           * nessa situação, a tela que explica "não autorizou aparecer" nunca
+           * seria vista por quem está avaliando o produto.
+           */
+          const consentiu = i < 2
+          return {
+            profileId: c.perfil,
+            nome: c.nome,
+            synseId: aluno?.synseId ?? '',
+            avatarUrl: null,
+            papel: 'MEMBER' as const,
+            souEu: false,
+            entrouEm: agora,
+            presenca: c.presenca,
+            presencaEm: c.presenca ? agora : null,
+            diasNaSemana: consentiu ? await this.diasTreinadosNaSemana(aluno?.id ?? '') : null,
+            noRanking: consentiu,
+          }
+        }),
+      )),
+    ]
+  }
+
+  /** Dias distintos com treino concluído ou check-in nesta semana. */
+  private async diasTreinadosNaSemana(studentId: string): Promise<number> {
+    if (!studentId) return 0
+    const inicio = inicioDaSemanaLocal(new Date(), TIMEZONE)
+    const dias = new Set<string>()
+
+    for (const sessao of this.demoWorkoutSessions) {
+      if (sessao.studentId !== studentId || sessao.status !== 'COMPLETED') continue
+      const quando = sessao.completedAt ?? sessao.startedAt
+      if (inicioDaSemanaLocal(quando, TIMEZONE) === inicio) {
+        dias.add(diaLocal(new Date(quando), TIMEZONE))
+      }
+    }
+    for (const check of this.db.checkIns) {
+      if (check.studentId !== studentId) continue
+      if (inicioDaSemanaLocal(check.checkedInAt, TIMEZONE) === inicio) {
+        dias.add(diaLocal(new Date(check.checkedInAt), TIMEZONE))
+      }
+    }
+    return dias.size
+  }
+
+  /** O treino semeado mais os que o visitante marcou. */
+  private sessoesDoEsquadrao() {
+    const amanha = new Date()
+    amanha.setDate(amanha.getDate() + 1)
+    amanha.setHours(19, 0, 0, 0)
+
+    return [
+      {
+        id: DEMO_SQUAD_SESSION_ID,
+        startsAt: amanha.toISOString(),
+        title: 'Perna, como sempre',
+        workoutPlanId: null,
+        cancelado: false,
+      },
+      ...this.demoSessoesDoEsquadrao,
+    ].map((s) => ({ ...s, cancelado: s.cancelado || this.demoCancelados.has(s.id) }))
+  }
+
+  async listSquadSessions(squadId: string, limite: number): Promise<SquadSession[]> {
+    if (squadId !== DEMO_SQUAD_ID) return []
+    const esquadrao = this.esquadraoDaDemonstracao()
+    const eu = this.students().find((s) => s.id === this.db.studentIdForApp)
+    const ontem = new Date(Date.now() - 86_400_000).toISOString()
+
+    return this.sessoesDoEsquadrao()
+      .filter((s) => s.startsAt >= ontem)
+      .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
+      .slice(0, Math.min(Math.max(limite || 10, 1), 50))
+      .map((s) => {
+        const minha = this.demoRsvp.get(s.id) ?? null
+        const semeada = s.id === DEMO_SQUAD_SESSION_ID
+        /*
+         * Na semeada os companheiros já responderam; na que o visitante
+         * marcou, só ele. Mostrar "3 confirmados" num treino criado agora
+         * seria simular resposta que ninguém deu.
+         */
+        const dosOutros = semeada ? esquadrao.companheiros.length - 1 : 0
+        return {
+          id: s.id,
+          startsAt: s.startsAt,
+          title: s.title,
+          workoutPlanId: s.workoutPlanId,
+          planoNome: null,
+          /*
+           * O treino semeado é da companheira, e não do visitante: dizer
+           * "marcado por Patrícia" e ao mesmo tempo tratá-lo como do
+           * visitante é a contradição que apareceu na tela.
+           *
+           * O botão de cancelar continua aparecendo — o visitante é o dono do
+           * esquadrão, e dono cancela o de qualquer um —, e agora o
+           * cancelamento funciona de verdade.
+           */
+          criadoPor: semeada
+            ? (esquadrao.companheiros[0]?.perfil ?? this.perfilDoAlunoDoApp())
+            : this.perfilDoAlunoDoApp(),
+          criadoPorNome: semeada ? (esquadrao.companheiros[0]?.nome ?? null) : (eu?.name ?? null),
+          cancelado: s.cancelado,
+          vou: dosOutros + (minha === 'VOU' ? 1 : 0),
+          talvez: minha === 'TALVEZ' ? 1 : 0,
+          naoVou: minha === 'NAO_VOU' ? 1 : 0,
+          minhaResposta: minha,
+        }
+      })
+  }
+
+  async createSquad(): Promise<string> {
+    throw new AppError(
+      'DEMO_ESQUADRAO_FIXO',
+      'Na demonstração o esquadrão já existe, com três amigos dentro. Criar o seu funciona na conta de verdade.',
+      400,
+    )
+  }
+
+  async joinSquad(): Promise<string> {
+    throw new AppError(
+      'DEMO_ESQUADRAO_FIXO',
+      'Entrar por código precisa de outra pessoa do outro lado. Na demonstração você já está num esquadrão.',
+      400,
+    )
+  }
+
+  async leaveSquad(): Promise<void> {
+    throw new AppError(
+      'DEMO_ESQUADRAO_FIXO',
+      'Sair deixaria a demonstração sem o lobby para mostrar.',
+      400,
+    )
+  }
+
+  async renameSquad(): Promise<void> {
+    throw new AppError('DEMO_ESQUADRAO_FIXO', 'O nome do esquadrão é fixo na demonstração.', 400)
+  }
+
+  async removeSquadMember(): Promise<void> {
+    throw new AppError('DEMO_ESQUADRAO_FIXO', 'Os três amigos são da demonstração.', 400)
+  }
+
+  async setPresence(estado: PresenceState | null): Promise<void> {
+    this.demoPresenca = estado
+    await appendDemoMutation({ t: 'sq', a: 'pres', st: estado })
+  }
+
+  async scheduleSquadSession(entrada: {
+    squadId: string
+    startsAt: string
+    title?: string | null
+    workoutPlanId?: string | null
+  }): Promise<string> {
+    const id = `sqs_${generateSynseId().slice(4).toLowerCase()}`
+    this.demoSessoesDoEsquadrao.push({
+      id,
+      startsAt: entrada.startsAt,
+      title: entrada.title ?? null,
+      workoutPlanId: entrada.workoutPlanId ?? null,
+      cancelado: false,
+    })
+    this.demoRsvp.set(id, 'VOU')
+    await appendDemoMutation({
+      t: 'sq',
+      a: 'marcar',
+      id,
+      at: entrada.startsAt,
+      ti: entrada.title ?? null,
+      pl: entrada.workoutPlanId ?? null,
+    })
+    return id
+  }
+
+  async answerSquadSession(sessionId: string, resposta: SquadRsvp): Promise<void> {
+    this.demoRsvp.set(sessionId, resposta)
+    await appendDemoMutation({ t: 'sq', a: 'rsvp', id: sessionId, r: resposta })
+  }
+
+  async cancelSquadSession(sessionId: string): Promise<void> {
+    /*
+     * Qualquer treino do esquadrão, inclusive o semeado: o visitante é o dono,
+     * e dono cancela o de qualquer um — a mesma regra da 0068.
+     */
+    this.demoCancelados.add(sessionId)
+    await appendDemoMutation({ t: 'sq', a: 'cancelar', id: sessionId })
   }
 
   async getActiveWorkoutSession(studentId: string): Promise<WorkoutSessionSummary | null> {

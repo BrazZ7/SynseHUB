@@ -219,6 +219,7 @@ const MIGRATIONS_ESPERADAS = [
   '0065_preferencias_de_aviso.sql',
   '0066_resumo_da_semana.sql',
   '0067_favoritos_e_busca.sql',
+  '0068_esquadrao.sql',
 ]
 
 async function schemaReadiness() {
@@ -777,6 +778,7 @@ async function schemaReadiness() {
     '0065_preferencias_de_aviso.sql',
     '0066_resumo_da_semana.sql',
     '0067_favoritos_e_busca.sql',
+    '0068_esquadrao.sql',
   )
 
   return {

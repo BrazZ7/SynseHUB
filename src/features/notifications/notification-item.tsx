@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { BadgeDollarSign, Bell, Building2, Dumbbell, Sparkles, Trophy } from 'lucide-react'
+import { BadgeDollarSign, Bell, Building2, Dumbbell, Sparkles, Trophy, Users } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 import type { AppNotification, NotificationCategory } from '@/types/domain'
@@ -11,6 +11,7 @@ const ICONS: Record<NotificationCategory, typeof Bell> = {
   CONTENT: Sparkles,
   PROGRAM: Trophy,
   SYSTEM: Bell,
+  SQUAD: Users,
 }
 
 /**

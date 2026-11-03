@@ -51,6 +51,11 @@ import type {
   StudentIntake,
   FavoriteEntry,
   FavoriteIds,
+  PresenceState,
+  Squad,
+  SquadMember,
+  SquadRsvp,
+  SquadSession,
   TimelineCursor,
   TimelineEntry,
   WeekSummary,
@@ -1251,6 +1256,36 @@ export interface DataSource {
   listFavorites(limite: number): Promise<FavoriteEntry[]>
   /** Só os ids, para a lista desenhar o coração cheio sem uma segunda leitura. */
   listFavoriteIds(): Promise<FavoriteIds>
+
+  // ── O esquadrão (0068) ──────────────────────────────────────────────────
+  /*
+   * Nenhum destes recebe o perfil de quem chama: todos resolvem por
+   * `auth.uid()` no banco, como o histórico e o resumo. Aqui a razão é mais
+   * direta — são funções `security definer` que leem gente, e um parâmetro de
+   * pessoa seria a porta para o lobby alheio.
+   */
+  /** Meus esquadrões, com o que a lista mostra sem abrir cada um. */
+  listSquads(): Promise<Squad[]>
+  /** Quem está no esquadrão, como está agora, e a semana de cada um. */
+  getSquadLobby(squadId: string): Promise<SquadMember[]>
+  /** Os treinos marcados: os que vêm, e os de ontem. */
+  listSquadSessions(squadId: string, limite: number): Promise<SquadSession[]>
+  createSquad(nome: string): Promise<string>
+  /** Entra pelo código. Entrar duas vezes devolve o mesmo esquadrão. */
+  joinSquad(codigo: string): Promise<string>
+  leaveSquad(squadId: string): Promise<void>
+  renameSquad(squadId: string, nome: string): Promise<void>
+  removeSquadMember(squadId: string, profileId: string): Promise<void>
+  /** `null` apaga a presença — é o "já fui" sem um quinto estado. */
+  setPresence(estado: PresenceState | null): Promise<void>
+  scheduleSquadSession(entrada: {
+    squadId: string
+    startsAt: string
+    title?: string | null
+    workoutPlanId?: string | null
+  }): Promise<string>
+  answerSquadSession(sessionId: string, resposta: SquadRsvp): Promise<void>
+  cancelSquadSession(sessionId: string): Promise<void>
   /**
    * Um item publicado, com o corpo — o que a lista não traz.
    *

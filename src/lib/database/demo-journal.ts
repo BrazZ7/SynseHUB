@@ -330,6 +330,25 @@ export type DemoMutation =
       on: boolean
     }
   | {
+      /**
+       * Esquadrão (0068): presença, treino marcado e resposta, num tipo só.
+       *
+       * Um tipo e não três, pelo mesmo orçamento de bytes da amizade: o
+       * diário vive num cookie. `a` diz qual é a ação.
+       */
+      t: 'sq'
+      a: 'pres' | 'marcar' | 'rsvp' | 'cancelar'
+      /** Presença: o estado, ou nulo para apagar. */
+      st?: string | null
+      /** Treino marcado: id, quando, título e ficha. */
+      id?: string
+      at?: string
+      ti?: string | null
+      pl?: string | null
+      /** Resposta ao treino. */
+      r?: string
+    }
+  | {
       /** Sino aberto: tudo criado antes deste instante conta como lido. */
       t: 'notifread'
       at: string
@@ -486,6 +505,7 @@ const TIPOS_ACEITOS: Record<DemoMutation['t'], true> = {
   intake: true,
   npref: true,
   fav: true,
+  sq: true,
 }
 
 function decode(raw: string): DemoMutation[] {

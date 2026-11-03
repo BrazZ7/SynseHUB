@@ -1367,6 +1367,42 @@ existem, não para conferir se subiram.
   produção, e o e-book da plataforma lia-se como publicação da academia. Na
   demonstração aparecia, porque lá o dono vem do conjunto de dados.
 
+- **0068 (`0068_esquadrao.sql`)** — o lobby de treino: `training_squads`,
+  `squad_members`, `member_presence`, `squad_sessions` e `squad_session_rsvp`.
+
+  Um grupo de até oito pessoas, com código de convite, que **atravessa
+  academia** — a chave é a pessoa, como na amizade (0037). Nada de academia
+  cruza o esquadrão: o que o grupo vê de cada um é presença, resposta ao
+  treino marcado e, só com consentimento, os dias treinados na semana.
+
+  **A presença expira na leitura.** `member_presence` nasce com `expires_at`
+  de quatro horas, e a consulta filtra — sem agendador e sem o modo de falhar
+  clássico desta tela, que é o grupo inteiro aparecendo "na academia" às três
+  da manhã.
+
+  **Sem conversa livre, e é decisão.** O lobby fala por estado de presença,
+  resposta e título da sessão. Academia tem aluno menor de idade, e um grupo
+  que se forma por código é gente que pode não se conhecer: texto livre aí é
+  superfície de moderação sem denúncia, sem bloqueio e sem quem leia.
+
+  **O ranking respeita o consentimento da 0037.** Entrar no grupo não é
+  autorizar a publicação do próprio número; sem `RANKING_VISIBILITY` a pessoa
+  aparece no lobby e sem o número, e a tela conta quantos são sem dizer quem.
+
+  **Categoria `SQUAD` nos avisos.** Entra nas duas listas de `check` —
+  `notifications` e `notification_preferences` — e, por passar por
+  `notify_profiles`, ganha o interruptor da 0065 de graça. Categoria própria e
+  não `WORKOUT`: quem silencia o grupo dos amigos raramente quer silenciar o
+  treino que o professor atribuiu.
+
+  **Uma armadilha que o teste pegou:** a primeira versão conferia a ficha de
+  treino com uma função `security invoker` auxiliar, para herdar a RLS de
+  `workout_plans`. Não funciona — função chamada de dentro de uma
+  `security definer` roda com o privilégio da definer, e "invoker" passa a
+  significar o dono. A ficha da academia concorrente entrava. A regra está
+  escrita agora, e é mais estreita de propósito: a ficha tem de ser de uma
+  academia em que quem manda está matriculado ou é da equipe.
+
   Não havia instrumentação nenhuma. `grep -rln "analytics|posthog|plausible|
   gtag(" src/` não devolvia nada, e `logger.ts` é registro técnico. Não havia
   como responder à pergunta mais básica deste produto: **quantos treinos

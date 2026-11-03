@@ -1030,6 +1030,74 @@ export type FavoriteEntry = {
  */
 export type FavoriteIds = { content: string[]; recipes: string[] }
 
+/**
+ * ── O esquadrão (0068) ──────────────────────────────────────────────────────
+ *
+ * O lobby de treino: um grupo de até oito pessoas, com código de convite, que
+ * atravessa academia — a chave é a pessoa, como na amizade (0037).
+ */
+export type SquadRole = 'OWNER' | 'MEMBER'
+
+/**
+ * O estado de presença de alguém, agora.
+ *
+ * `null` é ausência de estado, e não um quinto valor: quem nunca avisou e quem
+ * avisou há seis horas chegam aqui iguais, porque a presença expira na leitura.
+ */
+export type PresenceState = 'A_CAMINHO' | 'CHEGUEI' | 'TREINANDO' | 'TERMINEI'
+
+export type Squad = {
+  id: string
+  nome: string
+  /** O código de convite. Só quem está dentro o enxerga. */
+  codigo: string
+  papel: SquadRole
+  membros: number
+  /** Quantos estão com presença viva agora — o número que faz abrir o app. */
+  presentes: number
+  /** Quando é o próximo treino marcado, ou `null`. */
+  proximaEm: string | null
+}
+
+export type SquadMember = {
+  profileId: string
+  nome: string
+  synseId: string
+  avatarUrl: string | null
+  papel: SquadRole
+  souEu: boolean
+  entrouEm: string
+  presenca: PresenceState | null
+  presencaEm: string | null
+  /**
+   * Dias treinados nesta semana, ou `null` sem consentimento.
+   *
+   * Nulo e zero são coisas diferentes: zero é uma semana parada, nulo é uma
+   * pessoa que não autorizou publicar o número dela (0037). A tela escreve as
+   * duas de jeitos diferentes.
+   */
+  diasNaSemana: number | null
+  noRanking: boolean
+}
+
+export type SquadRsvp = 'VOU' | 'TALVEZ' | 'NAO_VOU'
+
+export type SquadSession = {
+  id: string
+  startsAt: string
+  title: string | null
+  /** A ficha que alguém mandou junto — é o "enviar treino". */
+  workoutPlanId: string | null
+  planoNome: string | null
+  criadoPor: string
+  criadoPorNome: string | null
+  cancelado: boolean
+  vou: number
+  talvez: number
+  naoVou: number
+  minhaResposta: SquadRsvp | null
+}
+
 export type Recipe = {
   id: string
   title: string
@@ -1226,7 +1294,15 @@ export type Consent = {
 // Notificações
 // ---------------------------------------------------------------------------
 
-export type NotificationCategory = 'PAYMENT' | 'WORKOUT' | 'GYM' | 'CONTENT' | 'PROGRAM' | 'SYSTEM'
+export type NotificationCategory =
+  | 'PAYMENT'
+  | 'WORKOUT'
+  | 'GYM'
+  | 'CONTENT'
+  | 'PROGRAM'
+  | 'SYSTEM'
+  /** Esquadrão (0068): alguém entrou, treino marcado. */
+  | 'SQUAD'
 
 /**
  * O que a pessoa escolheu receber, por categoria (0065).

@@ -13,6 +13,7 @@ import {
   Salad,
   Sparkles,
   Trophy,
+  Users,
   Wallet,
 } from 'lucide-react'
 
@@ -254,6 +255,27 @@ export default async function StudentHomePage() {
           </div>
         </div>
       </section>
+
+      {/*
+        O esquadrão, acima do resumo: ele é sobre **agora** — quem está na
+        academia neste minuto —, e o resumo é sobre a semana que passou. O que
+        é de agora fica mais perto do topo.
+      */}
+      <Link
+        href="/app/esquadrao"
+        className="flex items-center justify-between rounded-2xl border border-synse-border bg-synse-surface p-4 shadow-synse-sm transition-colors hover:bg-synse-surface-2"
+      >
+        <span className="flex items-center gap-3">
+          <Users className="size-5 shrink-0 text-synse-primary" aria-hidden />
+          <span className="min-w-0">
+            <span className="block text-sm font-medium text-synse-text">Seu esquadrão</span>
+            <span className="block text-xs text-synse-muted">
+              Quem chegou, o que está marcado
+            </span>
+          </span>
+        </span>
+        <ArrowRight className="size-4 shrink-0 text-synse-muted" aria-hidden />
+      </Link>
 
       {/*
         A porta do resumo semanal, logo abaixo dos dois indicadores.

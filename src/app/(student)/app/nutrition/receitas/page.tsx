@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { CookingPot } from 'lucide-react'
+import { CookingPot, Heart } from 'lucide-react'
 
 import { BackLink } from '@/components/synse/back-link'
 import { EmptyState } from '@/components/synse/empty-state'
@@ -13,6 +13,9 @@ import {
   CartaoDeReceitaTrancada,
   rotuloDaCategoria,
 } from '@/features/recipes/recipe-pieces'
+import { SearchInput } from '@/components/synse/search-input'
+import { BotaoFavorito } from '@/features/content/botao-favorito'
+import { seAindaNaoMigrou } from '@/lib/database/pending-migration'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 import { CATEGORIAS_LISTA, ordemDaCategoria } from '@/lib/validations/recipe'
@@ -32,7 +35,7 @@ export const metadata: Metadata = { title: 'Receitas' }
  * a prateleira trancada depois. Quem chegou veio buscar o que comer hoje, e
  * topar primeiro com o que não pode abrir é o que faz paywall irritar.
  */
-type Search = Promise<{ categoria?: string; page?: string }>
+type Search = Promise<{ categoria?: string; page?: string; q?: string }>
 
 /**
  * ── Por que a categoria virou filtro ────────────────────────────────────────
@@ -52,23 +55,43 @@ export default async function RecipesPage({ searchParams }: { searchParams: Sear
   await requireStudentSession()
   const dataSource = await getDataSource()
 
-  const { categoria: categoriaBruta, page } = await searchParams
+  const { categoria: categoriaBruta, page, q } = await searchParams
   const categoria = CATEGORIAS_LISTA.find((c) => c === categoriaBruta?.toUpperCase()) ?? null
   const pagina = Math.max(1, Number.parseInt(page ?? '1', 10) || 1)
+  const termo = (q ?? '').trim()
+  const buscando = termo !== ''
 
-  const [lista, trancadas] = await Promise.all([
+  const [lista, achadas, trancadas, favoritos] = await Promise.all([
     dataSource.listRecipes({
       ...(categoria ? { categoria } : {}),
       page: pagina,
       pageSize: RECEITAS_POR_PAGINA,
     }),
     /*
+     * ── Buscar e navegar são dois modos, e só um roda por vez ─────────────
+     *
+     * Com termo, o resultado vem inteiro (até 50) e sem páginas: uma busca que
+     * devolve meia dúzia não precisa de paginação, e paginar sobre ela
+     * esconderia resultado atrás de um botão que ninguém espera ali.
+     *
+     * Sem termo, continua a navegação por refeição com páginas, que é como a
+     * tela sempre funcionou.
+     *
+     * `seAindaNaoMigrou` porque `search_recipes` é da 0067.
+     */
+    buscando
+      ? dataSource.searchRecipes(termo, 50).catch(seAindaNaoMigrou<Recipe[] | null>(null))
+      : Promise.resolve(null),
+    /*
      * Vem vazia para quem assina — essas receitas já estão na lista acima,
      * com o preparo. Quem decide é `receitas_trancadas` (0044), não esta tela.
      */
     dataSource.listLockedRecipes(),
+    dataSource.listFavoriteIds().catch(seAindaNaoMigrou({ content: [], recipes: [] })),
   ])
-  const receitas = lista.rows
+
+  const receitas = achadas ?? lista.rows
+  const guardadas = new Set(favoritos.recipes)
 
   /*
    * Agrupadas por refeição, e não numa lista corrida.
@@ -102,9 +125,32 @@ export default async function RecipesPage({ searchParams }: { searchParams: Sear
         description="O que cozinhar, com a lista de compras já pronta."
       />
 
-      <FichasDeCategoria atual={categoria} />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SearchInput placeholder="Buscar por prato ou ingrediente…" />
+        <Link
+          href="/app/favoritos"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-synse-primary"
+        >
+          <Heart className="size-4" aria-hidden />
+          Guardadas
+        </Link>
+      </div>
 
-      {receitas.length === 0 && trancadas.length === 0 ? (
+      {/* As refeições somem durante a busca: o resultado já é o recorte. */}
+      {!buscando && <FichasDeCategoria atual={categoria} />}
+
+      {buscando && receitas.length === 0 ? (
+        /*
+         * "Nada encontrado" e "nenhuma receita ainda" são respostas
+         * diferentes. Trocá-las faz a pessoa achar que o catálogo está vazio
+         * quando ela só escreveu uma palavra que não casa.
+         */
+        <EmptyState
+          icon={CookingPot}
+          title="Nada com esse termo"
+          description={`Nenhuma receita casa com "${termo}". Tente o nome do prato ou um ingrediente.`}
+        />
+      ) : receitas.length === 0 && trancadas.length === 0 ? (
         <EmptyState
           icon={CookingPot}
           title="Nenhuma receita ainda"
@@ -118,14 +164,26 @@ export default async function RecipesPage({ searchParams }: { searchParams: Sear
             </h2>
             <div className={cn('space-y-3', GRADE_DE_ITENS)}>
               {itens.map((receita) => (
-                <CartaoDeReceita key={receita.id} receita={receita} />
+                <div key={receita.id} className="relative">
+                  <CartaoDeReceita receita={receita} />
+                  {/* Fora do elo, como no acervo: botão dentro de `<a>` é inválido. */}
+                  <BotaoFavorito
+                    recipeId={receita.id}
+                    inicial={guardadas.has(receita.id)}
+                    titulo={receita.title}
+                    className="absolute right-2 top-2"
+                  />
+                </div>
               ))}
             </div>
           </section>
         ))
       )}
 
-      <Pagination page={pagina} pageSize={RECEITAS_POR_PAGINA} total={lista.total} />
+      {/* Busca não pagina: o resultado já vem inteiro, até cinquenta. */}
+      {!buscando && (
+        <Pagination page={pagina} pageSize={RECEITAS_POR_PAGINA} total={lista.total} />
+      )}
 
       {trancadas.length > 0 && (
         /* Depois do que dá para cozinhar, nunca antes. Como no acervo. */

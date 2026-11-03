@@ -1336,6 +1336,37 @@ existem, não para conferir se subiram.
   qual ("Últimos 7 dias" contra "27/10 a 02/11"), porque dois números parecidos
   com o mesmo nome são lidos como um deles estando errado.
 
+- **0067 (`0067_favoritos_e_busca.sql`)** — `content_favorites`, o `toggle`, as
+  duas leituras e as duas buscas.
+
+  **Nenhuma função é `security definer`**, e é a decisão central desta
+  migration. Quem decide o que cada pessoa enxerga de conteúdo já são
+  `content_read` (0039) e `recipes_read` (0044), cadeado do Synse+ incluído.
+  Com `invoker`, o `exists` do `toggle` passa pela RLS e favoritar o que a
+  pessoa não vê é recusado sem esta migration saber uma linha sobre cadeado.
+
+  **Uma tabela com duas chaves estrangeiras** e `check (num_nonnulls(...) = 1)`,
+  em vez de duas tabelas ou de um par (tipo, id) solto: duas tabelas seriam a
+  mesma regra escrita duas vezes, e um par sem referência deixaria favorito
+  apontando para receita apagada.
+
+  **A escrita direta fica aberta**, ao contrário da 0062 e da 0065 — a política
+  `for all` com `with check` amarra a pessoa, e fechar obrigaria a função a ser
+  `definer` e a reimplementar a visibilidade. O que sobra de superfície está
+  escrito no SQL: dá para gravar um favorito para si apontando para um id que
+  não se enxerga, e isso não devolve nada.
+
+  `casa_termo` exige que **cada palavra** case, e não o termo inteiro: é o que
+  faz "treino casa" encontrar "Treino em casa sem equipamento". Sem acento,
+  como a busca de exercícios da 0021.
+
+  **Um defeito corrigido de passagem:** `search_published_content` devolve
+  `organizacao_id`, que `published_content` não devolvia. O mapeamento da
+  aplicação carimbava todos os itens com a academia de quem pediu, então o selo
+  "Acervo Synse" — decidido por `organizationId === null` — nunca aparecia em
+  produção, e o e-book da plataforma lia-se como publicação da academia. Na
+  demonstração aparecia, porque lá o dono vem do conjunto de dados.
+
   Não havia instrumentação nenhuma. `grep -rln "analytics|posthog|plausible|
   gtag(" src/` não devolvia nada, e `logger.ts` é registro técnico. Não havia
   como responder à pergunta mais básica deste produto: **quantos treinos

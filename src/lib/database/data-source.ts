@@ -49,6 +49,8 @@ import type {
   StudentExperience,
   StudentGoal,
   StudentIntake,
+  FavoriteEntry,
+  FavoriteIds,
   TimelineCursor,
   TimelineEntry,
   WeekSummary,
@@ -1219,6 +1221,36 @@ export interface DataSource {
   deleteContent(organizationId: string, contentId: string): Promise<void>
   /** O que está publicado, para o aluno. Fixado primeiro, depois o recente. */
   listPublishedContent(organizationId: string, limite: number): Promise<ContentItem[]>
+  /**
+   * A mesma lista, filtrada por texto (0067).
+   *
+   * Função separada no banco e método separado aqui, em vez de um parâmetro a
+   * mais em `listPublishedContent`: acrescentar argumento à função do Postgres
+   * criaria uma **segunda** função de mesmo nome, e aí toda chamada com dois
+   * argumentos ficaria ambígua.
+   *
+   * Termo vazio devolve tudo, como em `search_exercises` — assim a tela tem um
+   * caminho só, com ou sem busca.
+   */
+  searchPublishedContent(
+    organizationId: string,
+    termo: string,
+    limite: number,
+  ): Promise<ContentItem[]>
+  /** As receitas filtradas por texto: título, descrição, ingrediente e tag. */
+  searchRecipes(termo: string, limite: number): Promise<Recipe[]>
+
+  /**
+   * Guarda ou desguarda, e devolve como ficou.
+   *
+   * Um alvo só por chamada — conteúdo **ou** receita. O banco recusa os dois,
+   * e o tipo aqui não consegue recusar sozinho: quem garante é a função.
+   */
+  toggleFavorite(alvo: { contentId?: string; recipeId?: string }): Promise<boolean>
+  /** O que a pessoa guardou e ainda pode ver, mais recente primeiro. */
+  listFavorites(limite: number): Promise<FavoriteEntry[]>
+  /** Só os ids, para a lista desenhar o coração cheio sem uma segunda leitura. */
+  listFavoriteIds(): Promise<FavoriteIds>
   /**
    * Um item publicado, com o corpo — o que a lista não traz.
    *

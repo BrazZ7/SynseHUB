@@ -37,6 +37,7 @@ import type {
   StudentListItem,
 } from '@/lib/database/data-source'
 import { DEMO_ORG_ID, getDemoDataset } from '@/lib/database/demo-seed'
+import { casaTermo } from '@/features/content/busca'
 import { TIMEZONE } from '@/config/app'
 import { diaLocal } from '@/features/students/streak'
 import { inicioDaSemanaLocal, semanasRecentes } from '@/features/students/semana'
@@ -124,6 +125,8 @@ import type {
   StudentGoal,
   StudentIntake,
   TimelineCursor,
+  FavoriteEntry,
+  FavoriteIds,
   TimelineEntry,
   WeekSummary,
   WorkoutFeedbackEntry,
@@ -275,6 +278,12 @@ export class DemoDataSource implements DataSource {
   private readonly demoFeedback = new Map<string, WorkoutFeedbackEntry>()
   /** A entrada guiada do visitante (0063). `null` é "nunca abriu a tela". */
   private demoIntake: StudentIntake | null = null
+  /*
+   * Os favoritos do visitante. Chave `c:<id>` ou `r:<id>` num conjunto só,
+   * espelhando a tabela única da 0067 — duas listas aqui seriam a mesma regra
+   * de exclusividade escrita de outro jeito.
+   */
+  private demoFavoritos = new Set<string>()
   /**
    * As categorias que o visitante desligou (0065).
    *
@@ -747,6 +756,12 @@ export class DemoDataSource implements DataSource {
       }
       case 'npref': {
         this.demoPrefsDeAviso.set(mutation.cat as NotificationCategory, mutation.on)
+        break
+      }
+      case 'fav': {
+        const chave = `${mutation.k}:${mutation.id}`
+        if (mutation.on) this.demoFavoritos.add(chave)
+        else this.demoFavoritos.delete(chave)
         break
       }
       case 'notifread': {
@@ -3434,6 +3449,131 @@ export class DemoDataSource implements DataSource {
 
   async listPublishedContent(organizationId: string, limite: number): Promise<ContentItem[]> {
     return (await this.publicados(organizationId)).slice(0, limite)
+  }
+
+  /**
+   * A busca do acervo, na demonstração.
+   *
+   * Em cima de `publicados()`, que é a mesma origem da lista sem busca: assim
+   * as duas telas nunca discordam sobre o que existe. A regra de casamento vem
+   * de `casaTermo`, com teste comparando-a com a do SQL.
+   */
+  async searchPublishedContent(
+    organizationId: string,
+    termo: string,
+    limite: number,
+  ): Promise<ContentItem[]> {
+    const tudo = await this.publicados(organizationId)
+    return tudo
+      .filter((item) =>
+        casaTermo(
+          `${item.title} ${item.summary ?? ''} ${item.body ?? ''}`,
+          termo ?? '',
+        ),
+      )
+      .slice(0, Math.min(Math.max(limite || 50, 1), 200))
+  }
+
+  async searchRecipes(termo: string, limite: number): Promise<Recipe[]> {
+    return this.receitasVisiveis()
+      .slice()
+      .sort((a, b) => a.category.localeCompare(b.category) || a.title.localeCompare(b.title))
+      .filter((r) =>
+        casaTermo(
+          // Ingrediente e tag entram, como no SQL: "o que eu faço com granola".
+          `${r.title} ${r.description ?? ''} ${r.ingredients.join(' ')} ${r.tags.join(' ')}`,
+          termo ?? '',
+        ),
+      )
+      .slice(0, Math.min(Math.max(limite || 50, 1), 200))
+  }
+
+  // ── Favoritos ──────────────────────────────────────────────────────────────
+  /*
+   * O visitante guarda o que quiser, e o diário leva entre as requisições. Sem
+   * isso o coração acenderia e apagaria na navegação seguinte — o "botão que
+   * não gruda", que já apareceu três vezes nesta esteira.
+   */
+  async toggleFavorite(alvo: { contentId?: string; recipeId?: string }): Promise<boolean> {
+    // Um dos dois, como o `check` da tabela — e conferido antes de montar a
+    // chave, senão `r:undefined` entraria no conjunto sem ninguém reclamar.
+    if (Number(Boolean(alvo.contentId)) + Number(Boolean(alvo.recipeId)) !== 1) {
+      throw new AppError(
+        'FAVORITO_INVALIDO',
+        'Informe um conteúdo ou uma receita, não os dois.',
+        400,
+      )
+    }
+    const chave = alvo.contentId ? `c:${alvo.contentId}` : `r:${alvo.recipeId}`
+
+    const ligado = !this.demoFavoritos.has(chave)
+    if (ligado) this.demoFavoritos.add(chave)
+    else this.demoFavoritos.delete(chave)
+
+    await appendDemoMutation({
+      t: 'fav',
+      k: alvo.contentId ? 'c' : 'r',
+      id: (alvo.contentId ?? alvo.recipeId) as string,
+      on: ligado,
+    })
+    return ligado
+  }
+
+  async listFavorites(limite: number): Promise<FavoriteEntry[]> {
+    const conteudos = await this.publicados(DEMO_ORG_ID)
+    const receitas = this.receitasVisiveis()
+
+    const entradas: FavoriteEntry[] = []
+    for (const chave of this.demoFavoritos) {
+      const [tipo, id] = [chave.slice(0, 1), chave.slice(2)]
+      if (tipo === 'c') {
+        /*
+         * Só o que ainda dá para ver, como o `inner join` da 0067: conteúdo
+         * despublicado e item do Synse+ de quem não assina somem da lista e
+         * continuam guardados.
+         */
+        const item = conteudos.find((c) => c.id === id)
+        if (!item) continue
+        entradas.push({
+          kind: 'CONTEUDO',
+          refId: item.id,
+          title: item.title,
+          subtitle: item.summary,
+          imageUrl: item.coverUrl,
+          badge: item.type,
+          favoritedAt: item.publishedAt ?? new Date().toISOString(),
+        })
+      } else {
+        const receita = receitas.find((r) => r.id === id)
+        if (!receita) continue
+        entradas.push({
+          kind: 'RECEITA',
+          refId: receita.id,
+          title: receita.title,
+          subtitle: receita.description,
+          imageUrl: receita.imageUrl,
+          badge: receita.category,
+          favoritedAt: new Date().toISOString(),
+        })
+      }
+    }
+
+    /*
+     * O diário é uma lista em ordem de gravação, e o `Set` preserva essa
+     * ordem: o último guardado é o último do conjunto. A tela quer o contrário,
+     * então a lista é invertida — é o que mais se aproxima do
+     * `order by favorited_at desc` do SQL sem inventar um instante por
+     * favorito, que o cookie não tem espaço para guardar.
+     */
+    return entradas.reverse().slice(0, Math.min(Math.max(limite || 60, 1), 200))
+  }
+
+  async listFavoriteIds(): Promise<FavoriteIds> {
+    const chaves = [...this.demoFavoritos]
+    return {
+      content: chaves.filter((k) => k.startsWith('c:')).map((k) => k.slice(2)),
+      recipes: chaves.filter((k) => k.startsWith('r:')).map((k) => k.slice(2)),
+    }
   }
 
   async getPublishedContent(

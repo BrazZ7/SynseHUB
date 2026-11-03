@@ -317,6 +317,19 @@ export type DemoMutation =
       on: boolean
     }
   | {
+      /**
+       * Um favorito ligado ou desligado (0067).
+       *
+       * `k` é o tipo — 'c' de conteúdo, 'r' de receita — em uma letra, pelo
+       * mesmo orçamento de bytes que fez a amizade caber num tipo só: o diário
+       * vive num cookie.
+       */
+      t: 'fav'
+      k: 'c' | 'r'
+      id: string
+      on: boolean
+    }
+  | {
       /** Sino aberto: tudo criado antes deste instante conta como lido. */
       t: 'notifread'
       at: string
@@ -472,6 +485,7 @@ const TIPOS_ACEITOS: Record<DemoMutation['t'], true> = {
   insc: true,
   intake: true,
   npref: true,
+  fav: true,
 }
 
 function decode(raw: string): DemoMutation[] {

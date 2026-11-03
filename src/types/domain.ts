@@ -993,6 +993,43 @@ export type ProgramaTrancado = {
  * texto para número — a tela mostra o que vier, sem exigir um conjunto fixo de
  * macros que a próxima receita contrariaria.
  */
+/**
+ * Algo que a pessoa guardou para voltar (0067).
+ *
+ * Conteúdo e receita na mesma forma, como a linha do tempo faz com as quatro
+ * origens: a pergunta é "o que eu guardei", e separar em duas listas obrigaria
+ * a lembrar em qual delas estava.
+ *
+ * ── O que não aparece aqui ──────────────────────────────────────────────────
+ *
+ * A lista vem de uma função `security invoker`, então ela já chega filtrada
+ * pela RLS: some o que a pessoa deixou de poder ver — conteúdo despublicado,
+ * item do Synse+ de quem deixou de assinar, academia de onde ela saiu. A linha
+ * continua no banco e reaparece quando o acesso volta.
+ */
+export type FavoriteKind = 'CONTEUDO' | 'RECEITA'
+
+export type FavoriteEntry = {
+  kind: FavoriteKind
+  /** O id na tabela de origem, e o elo para a tela do item. */
+  refId: string
+  title: string
+  subtitle: string | null
+  imageUrl: string | null
+  /** Tipo do conteúdo ou categoria da receita — o rótulo do cartão. */
+  badge: string
+  favoritedAt: string
+}
+
+/**
+ * Só os ids guardados, para a lista desenhar o coração cheio.
+ *
+ * Leitura separada da de cima porque a pergunta é outra: a tela de acervo
+ * precisa saber **quais destes** estão guardados, e trazer título e capa de
+ * tudo outra vez para isso seria pagar a leitura duas vezes.
+ */
+export type FavoriteIds = { content: string[]; recipes: string[] }
+
 export type Recipe = {
   id: string
   title: string

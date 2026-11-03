@@ -1,11 +1,15 @@
 import type { Metadata } from 'next'
-import { ChevronRight, Library, Pin } from 'lucide-react'
+import Link from 'next/link'
+import { Heart, Library, Pin } from 'lucide-react'
 
 import { BackLink } from '@/components/synse/back-link'
 import { EmptyState } from '@/components/synse/empty-state'
 import { ListLink } from '@/components/synse/list-link'
 import { PageHeader } from '@/components/synse/page-header'
 import { Badge } from '@/components/ui/badge'
+import { SearchInput } from '@/components/synse/search-input'
+import { BotaoFavorito } from '@/features/content/botao-favorito'
+import { seAindaNaoMigrou } from '@/lib/database/pending-migration'
 import { requireStudentSession } from '@/lib/auth/require-session'
 import { getDataSource } from '@/lib/database'
 import { CartaoTrancado, ChamadaDoPlus } from '@/features/content/vitrine'
@@ -16,18 +20,42 @@ import { GRADE_DE_ITENS } from '@/components/synse/duas-colunas'
 
 export const metadata: Metadata = { title: 'Conteúdos' }
 
-export default async function StudentContentPage() {
+const POR_PAGINA = 50
+
+export default async function StudentContentPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>
+}) {
   const session = await requireStudentSession()
   const dataSource = await getDataSource()
-  const [itens, trancados] = await Promise.all([
-    dataSource.listPublishedContent(session.organizationId, 50),
+  const termo = ((await searchParams).q ?? '').trim()
+
+  const [achados, trancados, favoritos] = await Promise.all([
+    /*
+     * A busca, com queda para a lista de sempre.
+     *
+     * `searchPublishedContent` é da 0067 e pode não ter sido colada: nesse
+     * intervalo `null` leva à `listPublishedContent`, que existe desde a 0031.
+     * A tela continua de pé e só a busca não filtra — bem melhor que uma
+     * página de erro por causa de uma função que ainda não existe.
+     */
+    dataSource
+      .searchPublishedContent(session.organizationId, termo, POR_PAGINA)
+      .catch(seAindaNaoMigrou(null)),
     /*
      * A vitrine vem vazia para quem assina — esses itens já estão na lista
      * acima, com o corpo. Quem decide é `acervo_trancado` (0041), não esta
      * tela.
      */
     dataSource.listLockedShowcase(),
+    dataSource.listFavoriteIds().catch(seAindaNaoMigrou({ content: [], recipes: [] })),
   ])
+
+  const itens =
+    achados ?? (await dataSource.listPublishedContent(session.organizationId, POR_PAGINA))
+  const guardados = new Set(favoritos.content)
+  const buscando = termo !== ''
 
   return (
     <div className="animate-fade-in-up space-y-5">
@@ -43,7 +71,29 @@ export default async function StudentContentPage() {
         description="O que a sua academia publicou e o acervo do Synse."
       />
 
-      {itens.length === 0 && trancados.length === 0 ? (
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SearchInput placeholder="Buscar no acervo…" />
+        <Link
+          href="/app/favoritos"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-synse-primary"
+        >
+          <Heart className="size-4" aria-hidden />
+          Guardados
+        </Link>
+      </div>
+
+      {buscando && itens.length === 0 ? (
+        /*
+         * "Nada encontrado" e "nada publicado" são respostas diferentes, e
+         * trocá-las faz a pessoa achar que a academia nunca publicou nada —
+         * quando ela só escreveu uma palavra que não casa.
+         */
+        <EmptyState
+          icon={Library}
+          title="Nada com esse termo"
+          description={`Nenhum conteúdo casa com "${termo}". Tente outra palavra.`}
+        />
+      ) : itens.length === 0 && trancados.length === 0 ? (
         <EmptyState
           icon={Library}
           title="Nada publicado ainda"
@@ -65,12 +115,19 @@ export default async function StudentContentPage() {
                * agora abre na tela de leitura, que é onde ele tem companhia —
                * o texto do item.
                */
-              <ListLink
-                key={item.id}
-                href={`/app/content/${item.id}`}
-                className="block rounded-2xl border border-synse-border bg-synse-surface p-4 shadow-synse-sm transition-colors hover:border-synse-primary/40"
-              >
-                <div className="flex items-start justify-between gap-2">
+              /*
+               * O coração fica **fora** do elo, e não dentro.
+               *
+               * Botão dentro de `<a>` é HTML inválido e o leitor de tela
+               * anuncia um alvo dentro do outro — o mesmo motivo que tirou o
+               * "Abrir" daqui. A solução é o cartão inteiro continuar sendo o
+               * elo e o coração morar na camada de cima, posicionado no canto.
+               */
+              <div key={item.id} className="relative">
+                <ListLink
+                  href={`/app/content/${item.id}`}
+                  className="block rounded-2xl border border-synse-border bg-synse-surface p-4 pr-14 shadow-synse-sm transition-colors hover:border-synse-primary/40"
+                >
                   <div className="flex flex-wrap items-center gap-1.5">
                     <Badge variant="primary">{TIPOS[item.type as TipoConteudo] ?? item.type}</Badge>
                     {/*
@@ -79,23 +136,27 @@ export default async function StudentContentPage() {
                      * "Emerson Braz" na linha de cima. O selo diz de onde vem.
                      */}
                     {item.organizationId === null && <Badge variant="outline">Acervo Synse</Badge>}
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1.5">
                     {item.pinned && (
                       <Pin className="size-4 text-synse-primary" aria-label="Fixado" />
                     )}
-                    <ChevronRight className="size-4 text-synse-muted" aria-hidden />
                   </div>
-                </div>
 
-                <h2 className="mt-2 font-semibold text-synse-text">{item.title}</h2>
-                {item.summary && <p className="mt-1 text-sm text-synse-muted">{item.summary}</p>}
+                  <h2 className="mt-2 font-semibold text-synse-text">{item.title}</h2>
+                  {item.summary && <p className="mt-1 text-sm text-synse-muted">{item.summary}</p>}
 
-                <p className="mt-2 text-xs text-synse-muted">
-                  {item.publishedAt && formatDate(item.publishedAt)}
-                  {assinatura && ` · ${assinatura}`}
-                </p>
-              </ListLink>
+                  <p className="mt-2 text-xs text-synse-muted">
+                    {item.publishedAt && formatDate(item.publishedAt)}
+                    {assinatura && ` · ${assinatura}`}
+                  </p>
+                </ListLink>
+
+                <BotaoFavorito
+                  contentId={item.id}
+                  inicial={guardados.has(item.id)}
+                  titulo={item.title}
+                  className="absolute right-2 top-2"
+                />
+              </div>
             )
           })}
         </div>

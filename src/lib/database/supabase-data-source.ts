@@ -123,6 +123,8 @@ import type {
   StudentExperience,
   StudentGoal,
   StudentIntake,
+  FavoriteEntry,
+  FavoriteIds,
   TimelineCursor,
   TimelineEntry,
   WeekSummary,
@@ -3410,6 +3412,93 @@ export class SupabaseDataSource implements DataSource {
       authorName: row.autor ?? null,
       createdAt: row.publicado_em ?? new Date().toISOString(),
     }))
+  }
+
+  async searchPublishedContent(
+    organizationId: string,
+    termo: string,
+    limite: number,
+  ): Promise<ContentItem[]> {
+    const { data, error } = await this.client.rpc('search_published_content', {
+      p_organization_id: organizationId,
+      p_termo: termo ?? '',
+      p_limite: limite,
+    })
+    if (error) {
+      /*
+       * Diferente de `listPublishedContent`, que engole o erro e devolve lista
+       * vazia: aqui a 0067 pode não ter sido colada ainda, e quem decide o que
+       * mostrar nesse intervalo é a tela, com `seAindaNaoMigrou`. Engolir aqui
+       * esconderia a migration pendente atrás de "nada publicado".
+       */
+      this.fail('searchPublishedContent', error)
+    }
+
+    return ((data as Row[]) ?? []).map((row) => ({
+      id: row.id,
+      /*
+       * O dono de verdade, e não o de quem pediu. A lista antiga carimbava
+       * todos com a academia de quem chamou, e o selo "Acervo Synse" — que a
+       * tela decide por `organizationId === null` — nunca aparecia.
+       */
+      organizationId: row.organizacao_id ?? null,
+      type: row.tipo,
+      title: row.titulo,
+      summary: row.resumo ?? null,
+      body: null,
+      coverUrl: row.capa_url ?? null,
+      mediaUrl: row.midia_url ?? null,
+      visibility: 'ORGANIZATION' as const,
+      publishedAt: row.publicado_em ?? null,
+      pinned: Boolean(row.fixado),
+      authorStaffId: null,
+      authorName: row.autor ?? null,
+      createdAt: row.publicado_em ?? new Date().toISOString(),
+    }))
+  }
+
+  async searchRecipes(termo: string, limite: number): Promise<Recipe[]> {
+    const { data, error } = await this.client.rpc('search_recipes', {
+      p_termo: termo ?? '',
+      p_limite: limite,
+    })
+    if (error) this.fail('searchRecipes', error)
+    return ((data ?? []) as Row[]).map((r) => this.mapReceita(r))
+  }
+
+  async toggleFavorite(alvo: { contentId?: string; recipeId?: string }): Promise<boolean> {
+    const { data, error } = await this.client.rpc('toggle_content_favorite', {
+      p_content_id: alvo.contentId ?? null,
+      p_recipe_id: alvo.recipeId ?? null,
+    })
+    if (error) this.fail('toggleFavorite', error)
+    return Boolean(data)
+  }
+
+  async listFavorites(limite: number): Promise<FavoriteEntry[]> {
+    const { data, error } = await this.client.rpc('student_favorites', { p_limite: limite })
+    if (error) this.fail('listFavorites', error)
+
+    return ((data ?? []) as Row[]).map((row) => ({
+      kind: row.kind,
+      refId: row.ref_id,
+      title: row.title,
+      subtitle: row.subtitle ?? null,
+      imageUrl: row.image_url ?? null,
+      badge: row.badge,
+      favoritedAt: row.favorited_at,
+    }))
+  }
+
+  async listFavoriteIds(): Promise<FavoriteIds> {
+    const { data, error } = await this.client.rpc('student_favorite_ids')
+    if (error) this.fail('listFavoriteIds', error)
+
+    const linhas = (data ?? []) as Row[]
+    return {
+      content: linhas.map((l) => l.content_id).filter((id): id is string => Boolean(id)),
+      recipes: linhas.map((l) => l.recipe_id).filter((id): id is string => Boolean(id)),
+    }
   }
 
   /**

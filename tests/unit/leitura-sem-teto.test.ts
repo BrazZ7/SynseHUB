@@ -49,6 +49,8 @@ const LIMITADA_PELO_DOMINIO: Record<string, string> = {
   listStaff: 'a equipe de uma academia — dezenas, e a tela mostra todas de propósito',
   listNotificationPreferences:
     'no máximo sete linhas: a chave é (perfil, categoria) e a categoria tem `check` de sete valores (0065, mais SQUAD na 0068)',
+  listRoutineBlocks:
+    'no máximo trinta linhas: `upsert_routine_block` recusa a trigésima primeira, e a RLS da 0070 só devolve as da própria pessoa',
   listPlans: 'os planos de uma academia — punhado',
   listCollectionRules: 'a régua de cobrança — punhado de etapas',
   listarSumidos: 'recorta por `.in(id, …)` com os ids da página: no máximo `pageSize`',

@@ -1122,6 +1122,45 @@ export type SquadPing = {
   souEu: boolean
 }
 
+/**
+ * ── Meu plano (0070) ────────────────────────────────────────────────────────
+ *
+ * A rotina da pessoa: acordar, trabalhar, comer, beber água, treinar, dormir,
+ * com a meta escrita por cima para dizer para quê.
+ *
+ * **A academia não vê nada disto.** Horário de trabalho e hora de dormir são
+ * retrato da vida privada, e a política da 0070 não tem ramo para staff.
+ */
+export type RoutineKind =
+  | 'AGUA'
+  | 'REFEICAO'
+  | 'TREINO'
+  | 'TRABALHO'
+  | 'SONO'
+  | 'PAUSA'
+  | 'ESTUDO'
+
+export type RoutinePlan = {
+  /** A meta, em uma frase. Nulo para quem ainda não escreveu. */
+  goal: string | null
+  /** Âncoras do dia, 'HH:MM'. Nulas enquanto não forem definidas. */
+  wakeAt: string | null
+  sleepAt: string | null
+}
+
+export type RoutineBlock = {
+  id: string
+  kind: RoutineKind
+  /** Nome próprio do bloco — "Almoço", "Expediente". Nulo usa o do tipo. */
+  title: string | null
+  /** 'HH:MM', hora local de quem fez o plano. */
+  atTime: string
+  /** Dias em ISO: 1 é segunda, 7 é domingo — como o resto do projeto. */
+  days: number[]
+  /** A pessoa quer ser avisada deste bloco. */
+  remind: boolean
+}
+
 export type Recipe = {
   id: string
   title: string

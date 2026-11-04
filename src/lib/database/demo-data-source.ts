@@ -132,6 +132,9 @@ import type {
   FavoriteEntry,
   FavoriteIds,
   PresenceState,
+  RoutineBlock,
+  RoutineKind,
+  RoutinePlan,
   Squad,
   SquadMember,
   SquadPing,
@@ -317,6 +320,15 @@ export class DemoDataSource implements DataSource {
    * recebia um erro ao tocar. Visto no navegador.
    */
   private demoCancelados = new Set<string>()
+  /*
+   * O plano do visitante. A semente traz uma rotina pronta — sem ela a tela
+   * abre vazia e quem está avaliando o produto não vê o que ela faz — e tudo
+   * o que o visitante mexer entra por cima, pelo diário.
+   */
+  private demoPlano: RoutinePlan | null = null
+  private demoBlocos: RoutineBlock[] | null = null
+  private demoBlocosApagados = new Set<string>()
+
   /** Os recados que o visitante mandou. Os da semente são fixos. */
   private demoRecados: Array<{ id: string; kind: SquadPingKind; criadoEm: string }> = []
   /**
@@ -816,6 +828,33 @@ export class DemoDataSource implements DataSource {
             kind: mutation.k as SquadPingKind,
             criadoEm: mutation.at,
           })
+        }
+        break
+      }
+      case 'plano': {
+        if (mutation.a === 'meta') {
+          this.demoPlano = {
+            goal: mutation.g ?? null,
+            wakeAt: mutation.w ?? null,
+            sleepAt: mutation.sl ?? null,
+          }
+        } else if (mutation.a === 'bloco' && mutation.id && mutation.k && mutation.h) {
+          this.semearBlocos()
+          const bloco: RoutineBlock = {
+            id: mutation.id,
+            kind: mutation.k as RoutineKind,
+            title: mutation.ti ?? null,
+            atTime: mutation.h,
+            days: mutation.d ?? [1, 2, 3, 4, 5, 6, 7],
+            remind: mutation.r ?? true,
+          }
+          const lista = this.demoBlocos as RoutineBlock[]
+          const i = lista.findIndex((b) => b.id === bloco.id)
+          if (i >= 0) lista[i] = bloco
+          else lista.push(bloco)
+        } else if (mutation.a === 'apagar' && mutation.id) {
+          this.semearBlocos()
+          this.demoBlocosApagados.add(mutation.id)
         }
         break
       }
@@ -3244,6 +3283,119 @@ export class DemoDataSource implements DataSource {
     this.demoRecados.push({ id, kind, criadoEm })
     await appendDemoMutation({ t: 'sq', a: 'ping', id, k: kind, at: criadoEm })
     return true
+  }
+
+  // ── Meu plano, na demonstração ────────────────────────────────────────────
+  /**
+   * Uma rotina pronta, para a tela não abrir vazia.
+   *
+   * Quem está avaliando o produto precisa ver o que a tela faz; um plano em
+   * branco só mostra um botão de criar. Os horários são de uma pessoa que
+   * trabalha das 9h às 18h e treina depois — o caso mais comum, e o que torna
+   * o lembrete das 10h compreensível de relance.
+   *
+   * O que o visitante mexer entra por cima, pelo diário, e grava.
+   */
+  private semearBlocos(): void {
+    if (this.demoBlocos) return
+    const b = (
+      id: string,
+      kind: RoutineKind,
+      atTime: string,
+      title: string | null,
+      days: number[] = [1, 2, 3, 4, 5],
+      remind = true,
+    ): RoutineBlock => ({ id: `plano_${id}`, kind, atTime, title, days, remind })
+
+    this.demoBlocos = [
+      b('acordar', 'PAUSA', '06:30', 'Acordar e alongar', [1, 2, 3, 4, 5, 6, 7]),
+      b('cafe', 'REFEICAO', '07:00', 'Café da manhã', [1, 2, 3, 4, 5, 6, 7]),
+      b('trabalho', 'TRABALHO', '09:00', 'Expediente', [1, 2, 3, 4, 5], false),
+      b('agua1', 'AGUA', '10:00', null),
+      b('almoco', 'REFEICAO', '12:30', 'Almoço', [1, 2, 3, 4, 5, 6, 7]),
+      b('agua2', 'AGUA', '15:00', null),
+      b('treino', 'TREINO', '19:00', 'Treino', [1, 3, 5]),
+      b('jantar', 'REFEICAO', '21:00', 'Jantar', [1, 2, 3, 4, 5, 6, 7]),
+      b('sono', 'SONO', '23:00', 'Dormir', [1, 2, 3, 4, 5, 6, 7]),
+    ]
+  }
+
+  async getRoutinePlan(): Promise<RoutinePlan | null> {
+    return (
+      this.demoPlano ?? {
+        goal: 'Treinar 3× por semana e dormir 7 horas',
+        wakeAt: '06:30',
+        sleepAt: '23:00',
+      }
+    )
+  }
+
+  async setRoutinePlan(plano: RoutinePlan): Promise<void> {
+    this.demoPlano = plano
+    await appendDemoMutation({
+      t: 'plano',
+      a: 'meta',
+      g: plano.goal,
+      w: plano.wakeAt,
+      sl: plano.sleepAt,
+    })
+  }
+
+  async listRoutineBlocks(): Promise<RoutineBlock[]> {
+    this.semearBlocos()
+    return (this.demoBlocos as RoutineBlock[])
+      .filter((b) => !this.demoBlocosApagados.has(b.id))
+      .slice()
+      .sort((a, b) => a.atTime.localeCompare(b.atTime))
+  }
+
+  async saveRoutineBlock(
+    bloco: Omit<RoutineBlock, 'id'> & { id?: string | null },
+  ): Promise<string> {
+    this.semearBlocos()
+    const lista = this.demoBlocos as RoutineBlock[]
+
+    // O mesmo teto do banco: trinta blocos é rotina detalhada, não lista de
+    // tarefas sem fim.
+    if (!bloco.id && lista.filter((b) => !this.demoBlocosApagados.has(b.id)).length >= 30) {
+      throw new AppError(
+        'PLANO_CHEIO',
+        'Seu plano já tem 30 blocos. Apague um para criar outro.',
+        400,
+      )
+    }
+
+    const id = bloco.id ?? `plano_${generateSynseId().slice(4).toLowerCase()}`
+    const novo: RoutineBlock = {
+      id,
+      kind: bloco.kind,
+      title: bloco.title,
+      atTime: bloco.atTime,
+      days: bloco.days,
+      remind: bloco.remind,
+    }
+    const i = lista.findIndex((b) => b.id === id)
+    if (i >= 0) lista[i] = novo
+    else lista.push(novo)
+    this.demoBlocosApagados.delete(id)
+
+    await appendDemoMutation({
+      t: 'plano',
+      a: 'bloco',
+      id,
+      k: novo.kind,
+      h: novo.atTime,
+      ti: novo.title,
+      d: novo.days,
+      r: novo.remind,
+    })
+    return id
+  }
+
+  async deleteRoutineBlock(id: string): Promise<void> {
+    this.semearBlocos()
+    this.demoBlocosApagados.add(id)
+    await appendDemoMutation({ t: 'plano', a: 'apagar', id })
   }
 
   async getActiveWorkoutSession(studentId: string): Promise<WorkoutSessionSummary | null> {

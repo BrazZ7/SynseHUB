@@ -4,11 +4,13 @@ import {
   BarChart3,
   Briefcase,
   Building2,
+  ChevronRight,
   Flame,
   KeyRound,
   LogOut,
   ShieldCheck,
   Star,
+  Target,
   TriangleAlert,
   Trophy,
   Zap,
@@ -229,6 +231,29 @@ export default async function StudentProfilePage({
           previa={jardim === 'previa'}
         />
       </LinhaInteira>
+
+      {/*
+        A porta do plano, logo depois da capa.
+        
+        Alta na tela de propósito: "meu plano" é o que a pessoa vem **fazer**
+        no perfil, e o resto — conquistas, recordes, medalhas — é o que ela vem
+        **ver**. O que se faz fica antes do que se olha.
+      */}
+      <Link
+        href="/app/plano"
+        className="vidro-led flex items-center justify-between rounded-2xl border border-synse-border bg-synse-surface p-4 transition-colors hover:bg-synse-surface-2"
+      >
+        <span className="flex items-center gap-3">
+          <Target className="size-5 shrink-0 text-synse-primary" aria-hidden />
+          <span className="min-w-0">
+            <span className="block text-sm font-medium text-synse-text">Meu plano</span>
+            <span className="block text-xs text-synse-muted">
+              Sua meta e a rotina do dia — só você vê
+            </span>
+          </span>
+        </span>
+        <ChevronRight className="size-4 shrink-0 text-synse-muted" aria-hidden />
+      </Link>
 
       {/* ── Três marcadores ──────────────────────────────────────────────── */}
       <section className="grid grid-cols-3 gap-3">

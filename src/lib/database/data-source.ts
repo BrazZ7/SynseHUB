@@ -52,6 +52,8 @@ import type {
   FavoriteEntry,
   FavoriteIds,
   PresenceState,
+  RoutineBlock,
+  RoutinePlan,
   Squad,
   SquadMember,
   SquadPing,
@@ -1292,6 +1294,19 @@ export interface DataSource {
   listSquadPings(squadId: string, limite: number): Promise<SquadPing[]>
   /** Manda um recado. `false` quando o limite de um a cada 20s barrou. */
   sendSquadPing(squadId: string, kind: SquadPingKind): Promise<boolean>
+
+  // ── Meu plano (0070) ────────────────────────────────────────────────────
+  /*
+   * Nenhum destes recebe perfil: a identidade sai de `auth.uid()`. E nenhum
+   * tem par do lado do hub, de propósito — a academia não lê a rotina de
+   * ninguém.
+   */
+  getRoutinePlan(): Promise<RoutinePlan | null>
+  setRoutinePlan(plano: RoutinePlan): Promise<void>
+  listRoutineBlocks(): Promise<RoutineBlock[]>
+  /** Cria quando `id` é nulo, edita quando não. Devolve o id. */
+  saveRoutineBlock(bloco: Omit<RoutineBlock, 'id'> & { id?: string | null }): Promise<string>
+  deleteRoutineBlock(id: string): Promise<void>
   /**
    * Um item publicado, com o corpo — o que a lista não traz.
    *

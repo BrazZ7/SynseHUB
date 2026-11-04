@@ -351,6 +351,27 @@ export type DemoMutation =
       k?: string
     }
   | {
+      /**
+       * Meu plano (0070): a meta, as âncoras e os blocos da rotina.
+       *
+       * Um tipo só com a ação dentro, como o esquadrão — o diário vive num
+       * cookie e cada chave nova custa bytes num orçamento apertado.
+       */
+      t: 'plano'
+      a: 'meta' | 'bloco' | 'apagar'
+      /** Meta: a frase e as âncoras. */
+      g?: string | null
+      w?: string | null
+      sl?: string | null
+      /** Bloco: id, tipo, hora, nome, dias e se lembra. */
+      id?: string
+      k?: string
+      h?: string
+      ti?: string | null
+      d?: number[]
+      r?: boolean
+    }
+  | {
       /** Sino aberto: tudo criado antes deste instante conta como lido. */
       t: 'notifread'
       at: string
@@ -508,6 +529,7 @@ const TIPOS_ACEITOS: Record<DemoMutation['t'], true> = {
   npref: true,
   fav: true,
   sq: true,
+  plano: true,
 }
 
 function decode(raw: string): DemoMutation[] {

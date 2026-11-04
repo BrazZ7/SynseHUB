@@ -126,6 +126,8 @@ import type {
   FavoriteEntry,
   FavoriteIds,
   PresenceState,
+  RoutineBlock,
+  RoutinePlan,
   Squad,
   SquadMember,
   SquadPing,
@@ -3179,6 +3181,72 @@ export class SupabaseDataSource implements DataSource {
     return Boolean(data)
   }
 
+  // ── Meu plano (0070) ──────────────────────────────────────────────────────
+  async getRoutinePlan(): Promise<RoutinePlan | null> {
+    const row = await this.select<Row>(
+      'getRoutinePlan',
+      this.client.from('routine_plans').select('goal, wake_at, sleep_at').maybeSingle(),
+    )
+    if (!row) return null
+    return {
+      goal: row.goal ?? null,
+      /*
+       * `HH:MM` e não `HH:MM:SS`: o `time` do Postgres chega com segundos, e
+       * um `<input type="time">` com "06:00:00" é recusado em silêncio pelo
+       * navegador — o campo abre vazio e a pessoa acha que nunca salvou.
+       */
+      wakeAt: horaCurta(row.wake_at),
+      sleepAt: horaCurta(row.sleep_at),
+    }
+  }
+
+  async setRoutinePlan(plano: RoutinePlan): Promise<void> {
+    const { error } = await this.client.rpc('set_routine_plan', {
+      p_goal: plano.goal,
+      p_wake_at: plano.wakeAt,
+      p_sleep_at: plano.sleepAt,
+    })
+    if (error) this.fail('setRoutinePlan', error)
+  }
+
+  async listRoutineBlocks(): Promise<RoutineBlock[]> {
+    const { data, error } = await this.client
+      .from('routine_blocks')
+      .select('id, kind, title, at_time, days, remind')
+      .order('at_time', { ascending: true })
+
+    if (error) this.fail('listRoutineBlocks', error)
+
+    return ((data ?? []) as Row[]).map((row) => ({
+      id: row.id,
+      kind: row.kind,
+      title: row.title ?? null,
+      atTime: horaCurta(row.at_time) ?? '00:00',
+      days: (row.days ?? []) as number[],
+      remind: Boolean(row.remind),
+    }))
+  }
+
+  async saveRoutineBlock(
+    bloco: Omit<RoutineBlock, 'id'> & { id?: string | null },
+  ): Promise<string> {
+    const { data, error } = await this.client.rpc('upsert_routine_block', {
+      p_id: bloco.id ?? null,
+      p_kind: bloco.kind,
+      p_at_time: bloco.atTime,
+      p_title: bloco.title,
+      p_days: bloco.days,
+      p_remind: bloco.remind,
+    })
+    if (error) this.fail('saveRoutineBlock', error)
+    return data as string
+  }
+
+  async deleteRoutineBlock(id: string): Promise<void> {
+    const { error } = await this.client.rpc('delete_routine_block', { p_id: id })
+    if (error) this.fail('deleteRoutineBlock', error)
+  }
+
   async getWorkoutPreferences(userProfileId: string): Promise<WorkoutPreferences> {
     const row = await this.select<Row>(
       'getWorkoutPreferences',
@@ -6145,6 +6213,17 @@ function mapTotals(row: Row | undefined): WorkoutTotals {
     averageRestSeconds: row?.descanso_medio_seg == null ? null : Number(row.descanso_medio_seg),
     distinctExercises: Number(row?.exercicios_distintos ?? 0),
   }
+}
+
+/**
+ * `time` do Postgres vira 'HH:MM', e nulo continua nulo.
+ *
+ * O banco devolve 'HH:MM:SS'. Um `<input type="time">` com segundos é recusado
+ * em silêncio pelo navegador: o campo abre vazio, e a pessoa conclui que o que
+ * ela salvou não salvou.
+ */
+function horaCurta(v: unknown): string | null {
+  return typeof v === 'string' && v.length >= 5 ? v.slice(0, 5) : null
 }
 
 /** Numérico do Postgres vira número, e nulo continua nulo. */

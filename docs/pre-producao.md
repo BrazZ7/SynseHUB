@@ -1422,6 +1422,34 @@ existem, não para conferir se subiram.
   devolve `false` e a tela desfaz o recado em silêncio. Validade de doze horas,
   filtrada na leitura como a presença.
 
+- **0070 (`0070_meu_plano.sql`)** — `routine_plans` e `routine_blocks`: a meta
+  em uma frase e a rotina do dia inteiro.
+
+  **A academia não vê nada disto**, e é a decisão central. Horário de trabalho,
+  hora de dormir e de comer são retrato da vida privada: a política é
+  `user_profile_id = auth_profile_id()` e ponto, sem ramo para `is_org_staff`.
+  Se um dia alguém quiser mostrar a rotina ao professor, isso é consentimento
+  novo e explícito, como o do peso (0032) e o do ranking (0037).
+
+  **Sem `REMEDIO` no vocabulário.** Medicação é dado de saúde com regra própria
+  — consentimento, retenção, quem pode ver —, e convidar para digitá-la num
+  campo que nasceu para "almoço" é recolher dado sensível pela porta dos
+  fundos.
+
+  `at_time` é `time` e não `timestamptz`: "10h" é dez horas no relógio da
+  pessoa, todo dia. O fuso entra na comparação, não na gravação — e
+  `routine_reminders_due` calcula o dia da semana **no fuso de cada um**,
+  porque às 23h50 de segunda em Brasília já é terça em UTC.
+
+  `routine_reminders_due` é a **única leitura do projeto que atravessa
+  pessoas**, e por isso é revogada também de `authenticated`: só a chave de
+  serviço chega nela.
+
+  **Uma armadilha que o teste pegou:** `array_length('{}', 1)` é **nulo**, não
+  zero — e um `check` que avalia para nulo **passa**. O arranjo de dias vazio
+  entrava, criando um bloco que nunca dispara e fica no plano parecendo
+  configurado. Resolvido com `coalesce(array_length(days, 1), 0)`.
+
   Não havia instrumentação nenhuma. `grep -rln "analytics|posthog|plausible|
   gtag(" src/` não devolvia nada, e `logger.ts` é registro técnico. Não havia
   como responder à pergunta mais básica deste produto: **quantos treinos

@@ -1,0 +1,90 @@
+'use server'
+
+import { requireStudentSession } from '@/lib/auth/require-session'
+import { getDataSource } from '@/lib/database'
+import { AppError, notFound, toUserMessage } from '@/lib/errors'
+import { logger } from '@/lib/logger'
+import { cobrancaIndisponivel, getPaymentProvider } from '@/lib/payments'
+import { rateLimit } from '@/lib/rate-limit'
+import { createPixSchema } from '@/lib/validations/payment'
+import type { PaymentActionState } from '@/features/payments/state'
+
+/**
+ * Gera o PIX da própria mensalidade, a partir do Synse App.
+ *
+ * A cobrança precisa pertencer ao aluno da sessão — o vínculo é verificado no
+ * servidor, nunca aceito do formulário.
+ */
+export async function createStudentPixAction(
+  _state: PaymentActionState,
+  formData: FormData,
+): Promise<PaymentActionState> {
+  const session = await requireStudentSession()
+
+  try {
+    /*
+     * A trava do servidor, e não só do botão. O painel desabilita a ação, mas
+     * desabilitar é UI: quem chamar a server action direto tem de receber a
+     * mesma recusa, senão a pessoa sai daqui com um BR Code que o banco nega.
+     */
+    if (cobrancaIndisponivel()) {
+      return {
+        status: 'error',
+        message:
+          'A cobrança por PIX está desligada enquanto conectamos o novo provedor de pagamento. Procure a recepção da sua academia.',
+      }
+    }
+
+    const parsed = createPixSchema.safeParse({ chargeId: formData.get('chargeId') })
+    if (!parsed.success) return { status: 'error', message: 'Cobrança inválida.' }
+
+    const limit = await rateLimit(`student-pix:${session.studentId}`, 10, 60_000)
+    if (!limit.allowed) {
+      return { status: 'error', message: 'Aguarde um instante antes de gerar outro código.' }
+    }
+
+    const dataSource = await getDataSource()
+    /*
+     * Uma consulta por id, com `student_id` dentro dela — e não o histórico
+     * inteiro varrido na aplicação. A varredura dependia de a cobrança estar
+     * na resposta, e a resposta pode vir cortada pelo teto do PostgREST sem
+     * dar erro: o aluno quitando uma dívida velha recebia "cobrança não
+     * encontrada" para algo que a tela estava mostrando a ele.
+     *
+     * O `studentId` continua sendo a conferência de dono. Mudou só quem a faz:
+     * o banco, pela cláusula, em vez de um `find` sobre o que chegou.
+     */
+    const charge = await dataSource.getStudentCharge(
+      session.organizationId,
+      session.studentId,
+      parsed.data.chargeId,
+    )
+    if (!charge) throw notFound('cobrança')
+
+    const provider = getPaymentProvider()
+    const pix = await provider.createPix({
+      providerCustomerId: session.studentId,
+      amount: charge.amount,
+      dueDate: charge.dueDate,
+      description: charge.description,
+      externalReference: charge.id,
+    })
+
+    logger.info('payments:student_pix', {
+      organizationId: session.organizationId,
+      studentId: session.studentId,
+      chargeId: charge.id,
+    })
+
+    return {
+      status: 'success',
+      message: 'PIX gerado.',
+      pix: { payload: pix.pix.payload, expiresAt: pix.pix.expiresAt },
+    }
+  } catch (error) {
+    if (!(error instanceof AppError)) {
+      logger.error('payments:student_pix_failed', { error: String(error) })
+    }
+    return { status: 'error', message: toUserMessage(error) }
+  }
+}

@@ -1,0 +1,192 @@
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║ Os lembretes do plano                                                    ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+#
+# A pessoa escreve "às 10h, beber água" em Meu plano. Este workflow é quem
+# acorda e faz o aviso sair. Sem ele a tela do plano continua inteira e
+# **nenhum lembrete chega** — é a única peça que faltava.
+#
+# ── Por que Actions, e não Vercel Cron ──────────────────────────────────────
+#
+# O plano Hobby da Vercel aceita agendamento diário, e nada mais frequente: as
+# duas expressões em `vercel.json` são de uma vez por dia, de propósito. Uma
+# linha de cinco em cinco minutos ali faria o deploy inteiro falhar, e a tela
+# do plano cairia junto com o resto do app por causa de um agendamento que o
+# plano não aceita. Cron na Vercel aqui custaria o Pro (US$ 20/mês) para
+# executar uma requisição que leva um segundo.
+#
+# Actions é gratuito e sem cota em repositório público, e já está onde o código
+# está. O preço é a precisão, e ela é tratada abaixo.
+#
+# ── O atraso, e por que ele deixou de importar ──────────────────────────────
+#
+# O agendador do GitHub não é pontual: cinco minutos é o intervalo mínimo que
+# ele aceita, e a própria documentação avisa que uma execução agendada pode
+# sair atrasada — mais ainda na hora cheia, que é quando o mundo todo agenda.
+# Execução em fila pode até ser descartada quando a carga está alta.
+#
+# Com a 0070 isso não tinha saída. A rota olhava "o que venceu nos últimos N
+# minutos" e a janela tinha de casar com o intervalo:
+#
+#   * janela igual ao intervalo → a execução das 10h15 que sai 10h25 cobre de
+#     10h10 a 10h25, e **ninguém** cobre 10h00–10h10. O aviso não chega, e
+#     nada registra que não chegou.
+#   * janela maior que o intervalo → cada bloco é visto três vezes, e a pessoa
+#     recebe "Hora de beber água" três vezes.
+#
+# A 0071 fechou isso: `routine_reminders_due` reivindica em vez de só ler —
+# devolve o bloco e marca a entrega na mesma instrução, atomicamente. Chamar de
+# novo na mesma janela devolve vazio, e duas execuções simultâneas entregam
+# uma. Por isso aqui a janela (15 minutos, o padrão da rota) é maior que o
+# intervalo (5) **de propósito**: é essa folga que absorve o atraso.
+#
+# Resultado: cabem 10 minutos de atraso do agendador sem perder nem repetir
+# nada. Atraso maior que 15 minutos descarta aquele lembrete, e isso é escolha
+# — "beber água" chegando uma hora depois não é lembrete, é ruído.
+#
+# ── Só o branch padrão ──────────────────────────────────────────────────────
+#
+# **`schedule` do GitHub Actions só dispara a partir do branch padrão.** Este
+# arquivo num branch de trabalho não agenda nada, por mais correto que esteja:
+# os lembretes começam a sair quando ele chega ao branch padrão, e não antes.
+# O botão (`workflow_dispatch`) funciona de qualquer branch, e serve para
+# conferir antes.
+#
+# ── Workflow agendado dorme sozinho ────────────────────────────────────────
+#
+# O GitHub **desativa** agendamento em repositório sem atividade por 60 dias, e
+# avisa por e-mail antes. Num repositório em desenvolvimento isso não acontece;
+# num que ficou parado, acontece em silêncio — e aí os lembretes param sem
+# ninguém mexer em nada. Se um dia este projeto ficar dois meses sem commit, é
+# aqui que se olha primeiro: Actions → este workflow → "Enable workflow".
+#
+# ── O segredo ───────────────────────────────────────────────────────────────
+#
+# Em Settings → Secrets and variables → Actions → New repository secret:
+#
+#   CRON_SECRET   o **mesmo** valor que está na Vercel
+#
+# É o mesmo segredo que protege `/api/cron/billing` e `/api/cron/schedule`.
+# Sem ele a rota responde 404 — para quem não deveria estar ali, ela não
+# existe —, e sem ele aqui o passo para com uma mensagem dizendo o que falta,
+# em vez de ficar verde chamando um endereço que recusa tudo.
+#
+# O log deste repositório é público. Nenhum passo imprime o segredo: ele entra
+# em `curl` por arquivo de configuração, nunca na linha de comando nem na
+# saída, e o arquivo é apagado no fim. Manter isso é parte da revisão de
+# qualquer mudança aqui.
+#
+# ── O endereço ──────────────────────────────────────────────────────────────
+#
+# `SYNSE_APP_URL`, em Settings → Variables (variável, não segredo: o endereço
+# do site é público). Sem ela, `https://synse.com.br`.
+
+name: Lembretes do plano
+
+on:
+  schedule:
+    # De cinco em cinco minutos — o mínimo que o Actions aceita. A janela de 15
+    # da rota é o que absorve o atraso; ver a nota acima.
+    - cron: '*/5 * * * *'
+  # Actions → este workflow → Run workflow. Funciona de qualquer branch, e é
+  # como se confere a configuração antes de o agendamento valer.
+  workflow_dispatch:
+    inputs:
+      minutos:
+        description: 'Janela em minutos (vazio = 15, o padrão da rota)'
+        required: false
+        default: ''
+
+# Lê nada e escreve nada no repositório: só faz uma requisição para fora.
+permissions: {}
+
+concurrency:
+  # Uma execução de cada vez, e **nunca** cancelada: cancelar no meio deixaria
+  # avisos reivindicados sem terem sido enviados. Duas ao mesmo tempo são
+  # inofensivas (a 0071 garante), mas uma por vez é mais fácil de ler no log.
+  group: lembretes
+  cancel-in-progress: false
+
+jobs:
+  avisar:
+    name: Chamar a rota dos lembretes
+    runs-on: ubuntu-latest
+    # Um GET que leva um segundo. Cinco minutos é folga de sobra, e o teto
+    # existe para uma execução pendurada não segurar a fila da `concurrency`.
+    timeout-minutes: 5
+
+    steps:
+      # Sem `checkout`: este trabalho não precisa do código, só do endereço e
+      # do segredo. Clonar o repositório a cada cinco minutos seria 288 clones
+      # por dia para não usar nenhum arquivo.
+      - name: Chamar
+        env:
+          SEGREDO: ${{ secrets.CRON_SECRET }}
+          BASE: ${{ vars.SYNSE_APP_URL || 'https://synse.com.br' }}
+          MINUTOS: ${{ inputs.minutos }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${SEGREDO:-}" ]; then
+            echo "::error::Falta o segredo CRON_SECRET."
+            echo "Sem ele a rota responde 404 e nenhum lembrete sai. Cadastre em"
+            echo "Settings → Secrets and variables → Actions com o mesmo valor que"
+            echo "está na Vercel. Como está escrito no cabeçalho deste arquivo."
+            exit 1
+          fi
+
+          URL="$BASE/api/cron/lembretes"
+          if [ -n "${MINUTOS:-}" ]; then
+            URL="$URL?minutos=$MINUTOS"
+          fi
+          echo "GET $URL"
+
+          # ── Por que arquivo de configuração, e não `-H` ─────────────────────
+          #
+          # O cabeçalho carrega o segredo. Em `-H "Authorization: Bearer $X"`
+          # ele aparece na linha de comando do processo; o Actions mascara
+          # segredos registrados na saída, mas depender só do mascaramento é
+          # depender de uma rede de segurança para não cair. Pelo `--config` o
+          # valor nunca sai do arquivo, e o arquivo é apagado no fim.
+          CONF="$RUNNER_TEMP/lembretes.curlrc"
+          umask 077
+          printf 'header = "Authorization: Bearer %s"\n' "$SEGREDO" > "$CONF"
+          trap 'rm -f "$CONF"' EXIT
+
+          CORPO="$RUNNER_TEMP/resposta.json"
+          # `--fail-with-body` para o corpo do erro aparecer no log: sem ele, um
+          # 500 vira "exit 22" e some a razão. `--retry` cobre o cold start da
+          # função e a instabilidade de rede, que não são motivo para alarme —
+          # e repetir é seguro **porque** a 0071 reivindica: uma tentativa que
+          # morreu depois de entregar não entrega de novo.
+          #
+          # **Sem `--retry-all-errors`, e isso é deliberado.** Com ele, um 404
+          # — que é o que a rota responde a segredo errado — era tentado quatro
+          # vezes, levava quinze segundos e enchia o log com o mesmo erro
+          # repetido, de cinco em cinco minutos, para sempre. Segredo errado não
+          # é transitório. `--retry` sozinho cobre 5xx, 408 e 429, e
+          # `--retry-connrefused` cobra a função que ainda está subindo.
+          CODIGO=$(curl --config "$CONF" \
+            --silent --show-error --fail-with-body \
+            --retry 3 --retry-delay 5 --retry-connrefused \
+            --max-time 60 \
+            --output "$CORPO" \
+            --write-out '%{http_code}' \
+            "$URL") || {
+              echo "::error::A rota dos lembretes respondeu $CODIGO."
+              # O corpo da rota não leva o que a pessoa escreveu nem para quem
+              # foi — só números e o motivo da falha. Pode ir para log público.
+              head -c 2000 "$CORPO" || true
+              echo
+              if [ "$CODIGO" = "404" ]; then
+                echo "404 é o que a rota responde para quem não está autorizado:"
+                echo "o CRON_SECRET daqui não é o mesmo que está na Vercel."
+              fi
+              exit 1
+            }
+
+          # O resumo no log: reivindicados é quantos venceram e saíram marcados,
+          # entregues é quantos tinham celular inscrito para receber. A
+          # diferença entre os dois é gente sem notificação ligada, não falha.
+          cat "$CORPO"
+          echo

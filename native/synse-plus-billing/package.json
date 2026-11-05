@@ -1,0 +1,26 @@
+{
+  "name": "@synse/plus-billing",
+  "version": "0.1.0",
+  "description": "Cobrança do Synse+ pelas lojas: StoreKit 2 (iOS) e Play Billing (Android)",
+  "main": "dist/plugin.cjs.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
+  "private": true,
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    },
+    "android": {
+      "src": "android"
+    }
+  },
+  "peerDependencies": {
+    "@capacitor/core": ">=6.0.0"
+  },
+  "files": [
+    "dist/",
+    "ios/",
+    "android/",
+    "Package.swift"
+  ]
+}

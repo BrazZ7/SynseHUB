@@ -393,3 +393,334 @@ describe.skipIf(!temBanco)('o que o agendador enxerga', () => {
     ).rejects.toThrow(/permission denied/i)
   })
 })
+
+describe.skipIf(!temBanco)('a entrega, uma vez por ocorrência (0071)', () => {
+  /**
+   * Por que isto existe, em uma frase: o agendador atrasa.
+   *
+   * A 0070 pedia que a janela casasse com a frequência de quem chama, e nenhum
+   * agendador gratuito cumpre isso — o GitHub Actions aceita cinco minutos de
+   * intervalo e sai com atraso. Janela igual ao intervalo perdia avisos; janela
+   * maior mandava o mesmo aviso três vezes. A 0071 reivindica em vez de só ler,
+   * e estes testes são a prova de que ela reivindica **uma vez**.
+   */
+
+  const vencendo = (minutos = 15, teto?: number) =>
+    client
+      .query(`select * from routine_reminders_due($1, coalesce($2, 500))`, [minutos, teto ?? null])
+      .then((r) => r.rows as Array<{ block_id: string; kind: string; at_time: string }>)
+
+  /** Um bloco marcado para `minutos` atrás, no relógio de São Paulo. */
+  const blocoAtrasado = async (minutos: number) => {
+    const { rows } = await client.query(
+      `select ((now() at time zone 'America/Sao_Paulo') - make_interval(mins => $1))::time::text as t,
+              extract(isodow from (now() at time zone 'America/Sao_Paulo')
+                      - make_interval(mins => $1))::smallint as dia`,
+      [minutos],
+    )
+    const { rows: novo } = await client.query(
+      `insert into routine_blocks (user_profile_id, kind, at_time, days, remind)
+       values ($1,'AGUA',$2,array[$3]::smallint[],true) returning id`,
+      [perfilAna, rows[0].t, rows[0].dia],
+    )
+    return novo[0].id as string
+  }
+
+  const marcados = () =>
+    client
+      .query(`select count(*)::int as n from routine_blocks where last_reminded_at is not null`)
+      .then((r) => r.rows[0].n as number)
+
+  it('chamar duas vezes entrega uma vez', async () => {
+    /*
+     * O defeito que isto impede é o que a pessoa sente: "Hora de beber água"
+     * três vezes entre 10h00 e 10h15, porque o agendador roda de cinco em
+     * cinco minutos e a janela olha quinze para trás.
+     */
+    await blocoAtrasado(5)
+
+    expect(await vencendo(15)).toHaveLength(1)
+    expect(await vencendo(15)).toHaveLength(0)
+    expect(await vencendo(15)).toHaveLength(0)
+  })
+
+  it('o que foi entregue fica marcado, e só ele', async () => {
+    await blocoAtrasado(5)
+    await blocoAtrasado(90) // fora da janela
+    await vencendo(15)
+    expect(await marcados()).toBe(1)
+  })
+
+  it('a ocorrência seguinte volta a disparar', async () => {
+    /*
+     * O contrário do teste acima, e a razão de a comparação ser com a
+     * **ocorrência** e não com "há menos de N minutos": amanhã às 10h o mesmo
+     * bloco tem de avisar de novo. Aqui o ontem é simulado puxando a marca um
+     * dia para trás, que é o que o relógio faria sozinho.
+     */
+    await blocoAtrasado(5)
+    expect(await vencendo(15)).toHaveLength(1)
+
+    await client.query(
+      `update routine_blocks set last_reminded_at = last_reminded_at - interval '1 day'`,
+    )
+    expect(await vencendo(15)).toHaveLength(1)
+  })
+
+  it('a janela não passa de 60 minutos, mesmo pedindo mais', async () => {
+    /*
+     * O limite não é arredondamento: é ele que garante que a ocorrência de
+     * ontem e a de hoje — as duas candidatas — nunca caiam na mesma janela, e
+     * portanto que um bloco não apareça duas vezes na mesma resposta.
+     */
+    await blocoAtrasado(90)
+    expect(await vencendo(10_000)).toHaveLength(0)
+
+    await client.query('delete from routine_blocks')
+    await blocoAtrasado(50)
+    expect(await vencendo(10_000)).toHaveLength(1)
+  })
+
+  it('o teto corta sem reivindicar o que não entregou', async () => {
+    /*
+     * ── O defeito que isto impede ─────────────────────────────────────────
+     *
+     * A rota tinha o teto em memória: pedia tudo e cortava em 500. Com
+     * reivindicação isso vira perda silenciosa — a linha 501 sairia marcada
+     * como avisada sem ninguém avisar, e aquele lembrete nunca mais voltaria.
+     * O teto precisa estar na mesma instrução que marca.
+     */
+    const antigo = await blocoAtrasado(7)
+    await blocoAtrasado(6)
+    await blocoAtrasado(5)
+
+    const primeira = await vencendo(15, 1)
+    expect(primeira).toHaveLength(1)
+    // O mais atrasado primeiro: é o que ainda tem chance de significar algo.
+    expect(primeira[0].block_id).toBe(antigo)
+    expect(await marcados()).toBe(1)
+
+    // E os outros dois continuam devendo, na execução seguinte.
+    expect(await vencendo(15, 10)).toHaveLength(2)
+    expect(await marcados()).toBe(3)
+  })
+
+  it('o teto não é gasto por quem já foi avisado', async () => {
+    /*
+     * ── O que a mutação encontrou ─────────────────────────────────────────
+     *
+     * A condição de "já avisei esta ocorrência?" aparece duas vezes: no CTE
+     * que escolhe e no `update` que marca. Tirar a do CTE não duplicava aviso
+     * nenhum — a do `update` segurava —, e por isso a mutação sobreviveu à
+     * primeira rodada. Mas ela muda outra coisa, e esta importa: sem o filtro
+     * no CTE, o bloco já avisado **ocupa uma vaga do teto**, é descartado
+     * depois pelo `update`, e o bloco que ainda devia aviso fica para a
+     * execução seguinte. Numa janela cheia, o lembrete some sem explicação.
+     */
+    const velho = await blocoAtrasado(9)
+    await vencendo(15) // o velho sai e fica marcado
+    expect(await marcados()).toBe(1)
+
+    const novo = await blocoAtrasado(4)
+    const lista = await vencendo(15, 1)
+    expect(lista).toHaveLength(1)
+    expect(lista[0].block_id).toBe(novo)
+    void velho
+  })
+
+  it('quem não tem academia tem fuso de São Paulo', async () => {
+    /*
+     * A rotina é da vida, não da matrícula: quem nunca se matriculou em
+     * academia nenhuma tem plano igual, e o fuso dele vem do padrão. Sem este
+     * caso, trocar o padrão por UTC passava em branco — todas as outras
+     * pessoas do teste são alunas de uma academia que já é de São Paulo.
+     */
+    const { rows: perfil } = await client.query(
+      `insert into user_profiles (name, email) values ('Sem academia', $1) returning id`,
+      [`solta-${Date.now()}@plano.test`],
+    )
+    const { rows } = await client.query(
+      `select ((now() at time zone 'America/Sao_Paulo') - interval '5 minutes')::time::text as t,
+              extract(isodow from (now() at time zone 'America/Sao_Paulo'))::smallint as dia`,
+    )
+    await client.query(
+      `insert into routine_blocks (user_profile_id, kind, at_time, days)
+       values ($1,'SONO',$2,array[$3]::smallint[])`,
+      [perfil[0].id, rows[0].t, rows[0].dia],
+    )
+
+    const lista = await client.query<{ fuso: string; kind: string }>(
+      'select * from routine_reminders_due(15, 500)',
+    )
+    expect(lista.rows.map((l) => l.kind)).toEqual(['SONO'])
+    expect(lista.rows[0].fuso).toBe('America/Sao_Paulo')
+  })
+
+  it('o bloco das 23h55 dispara depois da meia-noite', async () => {
+    /*
+     * ── O defeito que isto impede, e por que ele era invisível ────────────
+     *
+     * A 0070 comparava `agora::time >= at_time`. À 00h05, 00h05 não é maior
+     * que 23h55 — então o bloco de sono às 23h55 só tinha janela até a
+     * meia-noite. Com agendador atrasado, ele nunca saía, e nada registrava
+     * isso: o aviso simplesmente não chegava.
+     *
+     * Este caso só acontece nos minutos seguintes à meia-noite local, e não há
+     * como pôr o relógio do servidor ali. É por isso que a aritmética mora em
+     * `routine_block_due_at`, que recebe o instante como argumento — assim o
+     * caso vira uma linha de teste em vez de uma esperança.
+     *
+     * 2026-11-03 é terça (isodow 2) e 2026-11-04 é quarta (3).
+     */
+    const venceEm = (agora: string, at: string, dias: number[], minutos = 15) =>
+      client
+        .query(
+          /*
+           * Lido de volta no relógio de São Paulo, e não em UTC: o que o teste
+           * afirma é "venceu às 23h55 de terça **para a pessoa**", e em UTC
+           * isso aparece como 02h55 de quarta — verdadeiro e ilegível.
+           */
+          `select (routine_block_due_at($1::timestamptz, 'America/Sao_Paulo', $2::time,
+                                        $3::smallint[], $4)
+                   at time zone 'America/Sao_Paulo')::text as quando`,
+          [agora, at, dias, minutos],
+        )
+        .then((r) => r.rows[0].quando as string | null)
+
+    // Terça 23h55, visto à 00h05 de quarta: venceu dez minutos atrás.
+    expect(await venceEm('2026-11-04 00:05:00-03', '23:55', [2])).toMatch(
+      /^2026-11-03 23:55:00/,
+    )
+
+    // O mesmo horário, marcado só para quarta: a ocorrência de quarta ainda
+    // não chegou, e a de terça não é dia dele.
+    expect(await venceEm('2026-11-04 00:05:00-03', '23:55', [3])).toBeNull()
+
+    /*
+     * E domingo é 7, não 0. A conferência precisa de uma data fixa: numa
+     * quinta-feira, `extract(dow ...)` e `extract(isodow ...)` concordam, e
+     * trocar um pelo outro passaria em branco seis dias por semana.
+     * 2026-11-01 é domingo; 2026-11-02, segunda.
+     */
+    expect(await venceEm('2026-11-02 00:05:00-03', '23:55', [7])).toMatch(
+      /^2026-11-01 23:55:00/,
+    )
+
+    // O caso comum, no meio do dia, continua valendo.
+    expect(await venceEm('2026-11-04 10:05:00-03', '10:00', [3])).toMatch(
+      /^2026-11-04 10:00:00/,
+    )
+    // E o que venceu antes da janela, não.
+    expect(await venceEm('2026-11-04 10:05:00-03', '09:00', [3])).toBeNull()
+  })
+
+  it('nem o ajudante da conta é alcançável por quem está logado', async () => {
+    // Ele não revela nada — é aritmética sobre os argumentos —, mas função nova
+    // nasce com `execute` para `public`, e foi assim que a 0061 vazou.
+    await expect(
+      asUser(
+        client,
+        AUTH_ANA,
+        `select routine_block_due_at(now(),'America/Sao_Paulo','10:00','{1}',15)`,
+      ),
+    ).rejects.toThrow(/permission denied/i)
+  })
+
+  it('o agendador que escreve continua fora do alcance de quem está logado', async () => {
+    await expect(
+      asUser(client, AUTH_ANA, 'select * from routine_reminders_due(15, 500)'),
+    ).rejects.toThrow(/permission denied/i)
+    await expect(
+      asUser(client, ALPHA.authId, 'select * from routine_reminders_due(15, 500)'),
+    ).rejects.toThrow(/permission denied/i)
+  })
+
+  it('o lembrete de uma pessoa não marca o da outra', async () => {
+    /*
+     * A reivindicação é por linha, e a linha tem dono. Um `update` sem o `id`
+     * certo marcaria a rotina alheia como avisada e a calaria pelo resto do
+     * dia — e isso não apareceria em teste nenhum dos de cima.
+     */
+    const { rows } = await client.query(
+      `select ((now() at time zone 'America/Sao_Paulo') - interval '5 minutes')::time::text as t,
+              extract(isodow from (now() at time zone 'America/Sao_Paulo'))::smallint as dia`,
+    )
+    await client.query(
+      `insert into routine_blocks (user_profile_id, kind, at_time, days)
+       values ($1,'AGUA',$2,array[$3]::smallint[]), ($4,'REFEICAO',$2,array[$3]::smallint[])`,
+      [perfilAna, rows[0].t, rows[0].dia, perfilBia],
+    )
+
+    const lista = await vencendo(15)
+    expect(lista).toHaveLength(2)
+    const { rows: donos } = await client.query(
+      `select count(distinct user_profile_id)::int as n from routine_blocks
+        where last_reminded_at is not null`,
+    )
+    expect(donos[0].n).toBe(2)
+  })
+
+  it('duas execuções ao mesmo tempo entregam uma vez', async () => {
+    /*
+     * ── A corrida, e por que ela acontece de verdade ──────────────────────
+     *
+     * Agendador atrasado mais agendador no horário são duas execuções ao mesmo
+     * tempo, e isso não é hipótese: é o comportamento documentado de quem
+     * agenda de cinco em cinco minutos e às vezes sai com dez de atraso.
+     *
+     * ── O que este teste pegou ────────────────────────────────────────────
+     *
+     * A primeira versão da 0071 filtrava `last_reminded_at` apenas no CTE e
+     * marcava com `where b.id = d.id`. Parecia atômico e não era: em
+     * `read committed`, quando um `update` tropeça numa linha travada e a
+     * outra transação confirma, o Postgres reavalia **o `where` do `update`**
+     * contra a versão nova — e aquele `where` só perguntava pelo id. A
+     * segunda execução mandava o aviso de novo.
+     *
+     * Aqui a primeira transação fica aberta de propósito, segurando a trava, e
+     * a segunda espera nela. Sem a condição repetida no `update`, a segunda
+     * leva a linha e este teste falha.
+     */
+    await blocoAtrasado(5)
+
+    const outro = await connect()
+    try {
+      await client.query('begin')
+      const primeira = await client.query('select * from routine_reminders_due(15, 500)')
+      expect(primeira.rows).toHaveLength(1)
+
+      // Disparada sem esperar: ela vai travar na linha até o `commit` abaixo.
+      await outro.query('begin')
+      const segunda = outro.query('select * from routine_reminders_due(15, 500)')
+
+      /*
+       * ── Esperar a trava, e não confiar na ordem das mensagens ──────────
+       *
+       * Sem isto o teste passava sem testar nada, e a mutação provou: se o
+       * `commit` chega ao servidor antes da segunda consulta, ela abre o
+       * instantâneo **depois** da marca e devolve vazio por motivo nenhum.
+       * Aqui o teste só segue quando o servidor confirma que alguém está
+       * esperando uma trava.
+       */
+      const travou = async () => {
+        for (let tentativa = 0; tentativa < 200; tentativa += 1) {
+          const { rows } = await client.query(
+            `select count(*)::int as n from pg_stat_activity
+              where wait_event_type = 'Lock' and query like '%routine_reminders_due%'`,
+          )
+          if (rows[0].n > 0) return true
+          await new Promise((pronto) => setTimeout(pronto, 25))
+        }
+        return false
+      }
+      expect(await travou()).toBe(true)
+
+      await client.query('commit')
+      expect((await segunda).rows).toHaveLength(0)
+      await outro.query('commit')
+    } finally {
+      await client.query('rollback').catch(() => {})
+      await outro.end()
+    }
+  })
+})

@@ -245,6 +245,11 @@ grant execute on function delete_routine_block(uuid) to authenticated, service_r
  *
  * ── A janela, e não o instante ──────────────────────────────────────────────
  *
+ * **Lido depois da 0071? Esta parte não vale mais.** A 0071 substituiu esta
+ * função: ela reivindica em vez de responder, e chamar duas vezes na mesma
+ * janela não manda duas vezes. O texto abaixo fica como registro do que se
+ * pensava aqui, e do que o agendador real cobrou.
+ *
  * O agendador não acorda no segundo exato. Ele pergunta "o que venceu nos
  * últimos N minutos" e manda; chamar duas vezes na mesma janela manda duas
  * vezes, e é por isso que quem chama guarda o que já mandou. A função não

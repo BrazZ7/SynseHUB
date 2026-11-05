@@ -1441,14 +1441,83 @@ existem, não para conferir se subiram.
   `routine_reminders_due` calcula o dia da semana **no fuso de cada um**,
   porque às 23h50 de segunda em Brasília já é terça em UTC.
 
-  `routine_reminders_due` é a **única leitura do projeto que atravessa
+  `routine_reminders_due` é a **única função do projeto que atravessa
   pessoas**, e por isso é revogada também de `authenticated`: só a chave de
-  serviço chega nela.
+  serviço chega nela. (A 0071 a transformou de leitura em reivindicação, e aí
+  ela passou a escrever também — o mesmo cadeado, com mais motivo.)
 
   **Uma armadilha que o teste pegou:** `array_length('{}', 1)` é **nulo**, não
   zero — e um `check` que avalia para nulo **passa**. O arranjo de dias vazio
   entrava, criando um bloco que nunca dispara e fica no plano parecendo
   configurado. Resolvido com `coalesce(array_length(days, 1), 0)`.
+
+- **0071 (`0071_lembrete_entregue.sql`)** — a entrega do lembrete, uma vez por
+  ocorrência. `routine_blocks.last_reminded_at` e `routine_reminders_due`
+  deixando de ser leitura: ela **reivindica** — devolve o bloco e marca a
+  entrega na mesma instrução.
+
+  **O que a 0070 não resolvia, em números.** Ela pedia que a janela casasse com
+  a frequência de quem chama. Nenhum agendador gratuito cumpre isso: o GitHub
+  Actions aceita cinco minutos de intervalo e atrasa alguns. Com janela igual
+  ao intervalo, a execução das 10h15 que sai 10h25 cobre de 10h10 a 10h25 e
+  **ninguém** cobre 10h00–10h10 — o aviso de beber água das 10h não chega, e
+  nada registra que não chegou. Com janela maior, o mesmo bloco é visto três
+  vezes e a pessoa recebe três avisos. Não havia terceira opção enquanto a
+  função só respondia sobre horário.
+
+  **É uma coluna, não a tabela que a 0070 recusou.** A 0070 escreveu que
+  guardar o que já foi mandado exigiria "uma tabela de entregas que cresce para
+  sempre" — exigiria, e é justamente o que não está aqui. O que está é um
+  `timestamptz` por bloco, sobrescrito. A pergunta "já mandei este?" virou "a
+  última entrega é anterior à **ocorrência** de hoje?", e comparar com a
+  ocorrência é o que faz o bloco voltar a disparar amanhã sem acumular nada.
+
+  **A corrida que quase passou:** a condição de "já avisei esta ocorrência?"
+  aparece duas vezes, no CTE que escolhe e no `where` do `update` que marca, e
+  a repetição não é redundância. Em `read committed`, quando um `update`
+  tropeça numa linha travada por outra transação e aquela confirma, o Postgres
+  reavalia **o `where` do próprio `update`** contra a versão nova — não o do
+  CTE, calculado no instantâneo do início. Com `where b.id = d.id` sozinho, a
+  segunda execução do agendador reavaliava "o id é o mesmo?", via que sim, e
+  mandava o aviso de novo. A mutação pegou, e pegou também um teste que passava
+  sem testar: ele não esperava a trava acontecer, e quando o `commit` chegava
+  primeiro a segunda consulta devolvia vazio por motivo nenhum.
+
+  **O teto desceu para dentro da função.** A rota cortava em memória, com
+  `slice(0, 500)`. Com reivindicação isso vira perda silenciosa: o aviso 501
+  sairia marcado como entregue sem ninguém entregar, e não voltaria nunca. E
+  mesmo o filtro no CTE importa para o teto — sem ele, um bloco já avisado
+  ocupa vaga e o que ainda devia aviso fica para a execução seguinte.
+
+  **Um defeito de meia-noite que a 0070 tinha.** Ela comparava
+  `agora::time >= at_time`: à 00h05, 00h05 não é maior que 23h55, então um
+  bloco de sono às 23h55 só tinha janela até a meia-noite e, com agendador
+  atrasado, nunca saía. Agora a comparação é entre instantes, com a ocorrência
+  de ontem e a de hoje como candidatas. A aritmética mora em
+  `routine_block_due_at`, que recebe o instante **como argumento** — este caso
+  só acontece nos minutos seguintes à meia-noite local, e não há como pôr o
+  relógio do servidor ali num teste.
+
+  A janela é limitada a 60 minutos **no banco**, e o limite não é
+  arredondamento: é ele que garante que as duas candidatas nunca caiam na mesma
+  janela.
+
+  **O preço, escrito para não ser descoberto num defeito:** reivindica antes de
+  entregar. Push que falhar depois da marca perde aquele aviso em vez de
+  repetir. Para "beber água" às 10h, um lembrete perdido é melhor que o mesmo
+  lembrete três vezes — e a ordem contrária devolveria a corrida.
+
+  Quem dispara: `.github/workflows/lembretes.yml`, de 5 em 5 minutos, com o
+  `CRON_SECRET` que já protege as outras duas rotas de cron. **`schedule` do
+  Actions só vale a partir do branch padrão** — este arquivo num branch de
+  trabalho não agenda nada. E o GitHub desativa agendamento em repositório sem
+  atividade por 60 dias: se um dia os lembretes pararem sem ninguém mexer em
+  nada, é aí que se olha.
+
+  `tests/db/meu-plano.test.ts` subiu de 18 para 30 testes. Doze mutações, três
+  sobreviveram à primeira rodada e cada uma cobrou um teste que faltava: a
+  corrida, o teto gasto por quem já foi avisado, e o fuso padrão de quem não
+  tem academia nenhuma. Todas mortas na segunda.
 
   Não havia instrumentação nenhuma. `grep -rln "analytics|posthog|plausible|
   gtag(" src/` não devolvia nada, e `logger.ts` é registro técnico. Não havia
@@ -2275,6 +2344,46 @@ garante uma mensalidade por ciclo.
 dia de vencimento só é cobrado no mês seguinte — treina de graça nesses dias. O
 contrário (cobrar o mês inteiro de quem entrou no dia 28) é pior, então essa é a
 escolha provisória. Proporcional é decisão de negócio.
+
+## Os lembretes do plano
+
+A pessoa escreve "às 10h, beber água" em Meu plano, e quem faz o aviso sair é
+`.github/workflows/lembretes.yml`, de 5 em 5 minutos. **Fora do `vercel.json`
+de propósito:** o plano Hobby recusa agendamento mais frequente que diário, e
+uma linha de cinco em cinco minutos ali faria o deploy inteiro falhar — a tela
+do plano cairia junto com o resto do app.
+
+Três coisas precisam acontecer, e nenhuma delas é código:
+
+- [ ] **`CRON_SECRET` no GitHub**, em Settings → Secrets and variables →
+      Actions, com o **mesmo valor** que está na Vercel. Valores diferentes dão
+      404, e 404 é exatamente o que a rota responde a quem não está autorizado:
+      não parece erro de configuração. O workflow para com mensagem explícita
+      nos dois casos — segredo ausente e 404 — em vez de ficar verde chamando
+      um endereço que recusa tudo.
+- [ ] **As migrations 0070 e 0071 aplicadas**, nesta ordem. Sem elas a função
+      não existe e a rota devolve 500 a cada cinco minutos.
+- [ ] **O workflow no branch padrão.** `schedule` do GitHub Actions **só
+      dispara a partir do branch padrão** — o arquivo num branch de trabalho
+      não agenda nada, por mais correto que esteja. O botão
+      (`workflow_dispatch`) funciona de qualquer branch e serve para conferir
+      antes.
+
+Depois de ligar: Actions → "Lembretes do plano" mostra uma execução a cada
+cinco minutos, e o log de cada uma traz `reivindicados` e `entregues`. A
+diferença entre os dois é gente com bloco vencido e sem notificação ligada no
+celular — não é falha.
+
+**Workflow agendado dorme sozinho.** O GitHub desativa agendamento em
+repositório sem atividade por 60 dias (avisa por e-mail antes). Se um dia os
+lembretes pararem sem ninguém mexer em nada, é o primeiro lugar a olhar:
+Actions → este workflow → "Enable workflow".
+
+**Atraso maior que 15 minutos descarta aquele lembrete**, e é escolha, não
+limitação: "beber água" chegando uma hora depois não é lembrete, é ruído. A
+janela de 15 contra o intervalo de 5 absorve 10 minutos de atraso sem perder
+nem repetir nada — o que torna isso possível é a 0071, que reivindica em vez de
+só ler. Ver a entrada dela no registro de migrations.
 
 ## Convite de equipe
 

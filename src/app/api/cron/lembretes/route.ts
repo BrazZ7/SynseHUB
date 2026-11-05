@@ -16,36 +16,53 @@ export const dynamic = 'force-dynamic'
  *
  * A pessoa diz "às 10h, beber água"; esta rotina é quem entrega o aviso.
  *
- * ── A janela, e por que ela é o parâmetro ───────────────────────────────────
+ * ── Chamar duas vezes não manda duas vezes ──────────────────────────────────
  *
- * Nenhum agendador acorda no segundo exato, e a maioria dos gratuitos atrasa
- * minutos. Em vez de procurar "o que vence agora", a rotina pergunta "o que
- * venceu nos últimos N minutos" — e N tem de **casar com a frequência de quem
- * chama**. Chamada a cada 15 minutos com janela de 15, todo bloco é visto uma
- * vez; com janela maior, visto duas; com janela menor, alguns ficam de fora.
+ * Esta rota já disse o contrário, e a 0071 mudou isso. Quem entrega não é mais
+ * uma leitura: `routine_reminders_due` **reivindica** — devolve o bloco e marca
+ * `last_reminded_at` na mesma instrução, atomicamente. Chamar de novo na mesma
+ * janela devolve vazio.
  *
- * O padrão é 15, e quem chama pode mudar por `?minutos=`.
+ * É o que destrava o agendador gratuito. O GitHub Actions aceita cinco minutos
+ * de intervalo e atrasa alguns, e com a 0070 isso não tinha saída: janela igual
+ * ao intervalo deixava buracos (a execução das 10h15 que sai 10h25 não cobre
+ * 10h00–10h10), e janela maior que o intervalo mandava "Hora de beber água"
+ * três vezes. Agora a janela pode ser maior que o intervalo de propósito, que
+ * é o que absorve o atraso.
  *
- * ── Chamar duas vezes manda duas vezes ──────────────────────────────────────
+ * ── A conta da janela ───────────────────────────────────────────────────────
  *
- * E isso está escrito de propósito, em vez de disfarçado. Guardar o que já foi
- * mandado exigiria uma tabela de entregas que cresce para sempre para resolver
- * um problema que a janela certa já resolve. Quem chamar fora de hora manda de
- * novo — e é por isso que o segredo existe.
+ * Chamada de 5 em 5 minutos com janela de 15, um bloco é visto por até três
+ * execuções e entregue na primeira que o alcançar: cabem 10 minutos de atraso
+ * do agendador sem perder nada.
+ *
+ * **Agendador mais de 15 minutos atrasado perde aquele lembrete**, e isso é
+ * escolha: "beber água" chegando uma hora depois não é lembrete, é ruído. Quem
+ * quiser outra régua muda por `?minutos=`, até 60 — o teto de 60 está no banco
+ * e não aqui, porque é ele que garante que a ocorrência de ontem e a de hoje
+ * nunca caiam na mesma janela.
  *
  * ── Quem dispara ────────────────────────────────────────────────────────────
  *
- * Qualquer agendador que saiba fazer um GET com cabeçalho. Vercel Cron no
- * plano pago, GitHub Actions (gratuito, mínimo de 5 minutos), ou qualquer
- * serviço de cron.
+ * `.github/workflows/lembretes.yml`, de 5 em 5 minutos — gratuito, e no mesmo
+ * lugar onde o código já está. Serve qualquer agendador que saiba fazer um GET
+ * com cabeçalho: Vercel Cron no plano pago, ou um serviço de cron externo.
  *
  * **Não está em `vercel.json` de propósito**: o plano Hobby recusa agendamento
- * mais frequente que diário, e uma expressão de quinze em quinze minutos ali
+ * mais frequente que diário, e uma expressão de cinco em cinco minutos ali
  * faria o deploy inteiro falhar — a tela do plano cairia junto com o resto do
  * app por causa de um agendamento que o plano não aceita.
  */
 
-/** O teto de avisos por chamada, para uma janela torta não virar enxurrada. */
+/**
+ * O teto de avisos por chamada, para uma janela torta não virar enxurrada.
+ *
+ * Vai **para dentro** da consulta, e isso não é detalhe de estilo: a rota
+ * cortava em memória, com `slice`, e desde que a função reivindica isso viraria
+ * perda silenciosa — o aviso 501 sairia marcado como entregue sem ninguém
+ * entregar, e não voltaria nunca. O que não cabe no teto não é reivindicado e
+ * aparece na execução seguinte.
+ */
 const TETO = 500
 
 type Linha = {
@@ -76,17 +93,30 @@ export async function GET(request: Request) {
 
   try {
     /*
-     * `routine_reminders_due` é a única leitura do projeto que atravessa
-     * pessoas, e ela é revogada de `authenticated`: a chave de serviço é a
-     * única porta, e esta rota é o único lugar que a usa.
+     * A única função do projeto que atravessa pessoas, e a única que escreve
+     * sem ser em nome de quem chamou. Ela é revogada de `authenticated`: a
+     * chave de serviço é a única porta, e esta rota é o único lugar que a usa.
+     *
+     * Chamá-la **é** entregar: o que ela devolve já saiu marcado. Se o push
+     * falhar daqui para baixo, aquele aviso é perdido em vez de repetido — a
+     * ordem contrária (entregar e marcar depois) devolveria a corrida entre
+     * duas execuções do agendador, que é o problema que a 0071 fechou.
      */
-    const { data, error } = await admin.rpc('routine_reminders_due', { p_minutos: minutos })
+    const { data, error } = await admin.rpc('routine_reminders_due', {
+      p_minutos: minutos,
+      p_teto: TETO,
+    })
     if (error) throw new Error(error.message)
 
-    const vencendo = ((data ?? []) as Linha[]).slice(0, TETO)
+    /*
+     * "Reivindicados", e não "vencendo": estes blocos já saíram marcados como
+     * avisados. O nome importa para quem ler o log depois — a diferença entre
+     * os dois números abaixo é aviso perdido, não aviso pendente.
+     */
+    const reivindicados = (data ?? []) as Linha[]
     let entregues = 0
 
-    for (const linha of vencendo) {
+    for (const linha of reivindicados) {
       const saiu = await enviarAviso(linha.user_profile_id, {
         titulo: avisoDoBloco({ kind: linha.kind, title: linha.title }),
         corpo: 'Do seu plano.',
@@ -108,11 +138,16 @@ export async function GET(request: Request) {
      * outra porta.
      */
     logger.info('cron:lembretes_enviados', {
-      vencendo: vencendo.length,
+      reivindicados: reivindicados.length,
       entregues,
       minutos,
     })
-    return NextResponse.json({ ok: true, vencendo: vencendo.length, entregues, minutos })
+    return NextResponse.json({
+      ok: true,
+      reivindicados: reivindicados.length,
+      entregues,
+      minutos,
+    })
   } catch (error) {
     logger.error('cron:lembretes_falhou', { error: String(error) })
     return NextResponse.json({ ok: false, error: 'falha ao enviar os lembretes' }, { status: 500 })
